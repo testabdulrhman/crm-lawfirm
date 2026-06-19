@@ -2,6 +2,7 @@ import { Link, useLocation } from 'wouter'
 import {
   LayoutDashboard,
   Users,
+  UserPlus,
   Inbox,
   Settings,
   Scale,
@@ -12,6 +13,7 @@ import {
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/stores/auth'
 import { usePendingRequestsCount } from '@/hooks/useRequests'
+import { usePendingApplicationsCount } from '@/hooks/useStaffApplications'
 import { fmtNumber } from '@/lib/format'
 import { COMPANY_NAME_SHORT } from '@/lib/constants'
 
@@ -19,13 +21,19 @@ interface NavItem {
   label: string
   href: string
   icon: LucideIcon
-  badge?: 'pending_requests'
+  badge?: 'pending_requests' | 'pending_applications'
 }
 
 const navItems: NavItem[] = [
   { label: 'لوحة التحكم', href: '/', icon: LayoutDashboard },
   { label: 'الطلبات الواردة', href: '/requests', icon: Inbox, badge: 'pending_requests' },
   { label: 'الموظفون', href: '/team', icon: Users },
+  {
+    label: 'طلبات التوظيف',
+    href: '/staff-applications',
+    icon: UserPlus,
+    badge: 'pending_applications',
+  },
   { label: 'الإعدادات', href: '/settings', icon: Settings },
   /* مواقع وحدات قادمة: القضايا، جهات الاتصال، الوكالات... */
 ]
@@ -34,6 +42,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const [location] = useLocation()
   const { teamMember, logout } = useAuth()
   const { data: pendingCount } = usePendingRequestsCount()
+  const { data: pendingApps } = usePendingApplicationsCount()
 
   return (
     <aside className="pt-safe pb-safe flex h-full w-64 flex-col bg-navy text-navy-50">
@@ -56,8 +65,13 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
               ? location === '/'
               : location.startsWith(item.href)
           const Icon = item.icon
-          const showBadge =
-            item.badge === 'pending_requests' && (pendingCount ?? 0) > 0
+          const badgeCount =
+            item.badge === 'pending_requests'
+              ? (pendingCount ?? 0)
+              : item.badge === 'pending_applications'
+                ? (pendingApps ?? 0)
+                : 0
+          const showBadge = !!item.badge && badgeCount > 0
           return (
             <Link
               key={item.href}
@@ -79,7 +93,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                     active ? 'bg-navy text-gold' : 'bg-gold text-navy'
                   )}
                 >
-                  {fmtNumber(pendingCount)}
+                  {fmtNumber(badgeCount)}
                 </span>
               )}
             </Link>

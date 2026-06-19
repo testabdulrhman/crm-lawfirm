@@ -11,6 +11,8 @@ import { SettingsPage } from '@/features/settings/SettingsPage'
 import { TeamPage } from '@/features/team/TeamPage'
 import { RequestsPage } from '@/features/requests/RequestsPage'
 import { RequestDetail } from '@/features/requests/RequestDetail'
+import { StaffApplicationsPage } from '@/features/staff-applications/StaffApplicationsPage'
+import { ApplicationDetail } from '@/features/staff-applications/ApplicationDetail'
 
 function FullScreenLoader() {
   return (
@@ -31,6 +33,10 @@ function ProtectedRoutes() {
           {(params) => <RequestDetail id={params.id} />}
         </Route>
         <Route path="/requests" component={RequestsPage} />
+        <Route path="/staff-applications/:id">
+          {(params) => <ApplicationDetail id={params.id} />}
+        </Route>
+        <Route path="/staff-applications" component={StaffApplicationsPage} />
         <Route path="/settings" component={SettingsPage} />
         {/* أي مسار غير معروف → لوحة التحكم */}
         <Route>

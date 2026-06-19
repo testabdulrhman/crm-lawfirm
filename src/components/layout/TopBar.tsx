@@ -15,6 +15,9 @@ export function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
   const title =
     ROUTE_TITLES[location] ??
     (location.startsWith('/requests') ? ROUTE_TITLES['/requests'] : undefined) ??
+    (location.startsWith('/staff-applications')
+      ? ROUTE_TITLES['/staff-applications']
+      : undefined) ??
     'لوحة التحكم'
 
   return (
