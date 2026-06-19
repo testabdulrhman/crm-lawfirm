@@ -77,6 +77,17 @@
   html {
     font-family: 'Noto Sans Arabic', system-ui, sans-serif;
   }
+  /* ضمان أرقام لاتينية (lining) — احتياط مع الاعتماد الأساسي على format.ts */
+  :root {
+    font-feature-settings: normal;
+  }
+  body,
+  input,
+  textarea,
+  button,
+  table {
+    font-variant-numeric: lining-nums;
+  }
   body {
     @apply bg-background text-foreground;
     -webkit-font-smoothing: antialiased;

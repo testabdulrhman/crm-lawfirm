@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 
 import { supabase } from '@/lib/supabase'
+import { fmtNumber } from '@/lib/format'
 import { useAuth } from '@/stores/auth'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -84,7 +85,7 @@ function StatCard({ stat }: { stat: StatDef }) {
             <Skeleton className="mt-2 h-8 w-16" />
           ) : (
             <p className="mt-1 text-3xl font-bold text-foreground">
-              {isError ? '—' : (data ?? 0).toLocaleString('ar-SA')}
+              {isError ? '—' : fmtNumber(data ?? 0)}
             </p>
           )}
         </div>
