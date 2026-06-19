@@ -11,7 +11,11 @@ export function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
   const { theme, toggle } = useTheme()
   const { teamMember } = useAuth()
 
-  const title = ROUTE_TITLES[location] ?? 'لوحة التحكم'
+  // طابق المسار الدقيق، وإلا أطول بادئة مطابقة (لمسارات التفاصيل مثل /requests/:id)
+  const title =
+    ROUTE_TITLES[location] ??
+    (location.startsWith('/requests') ? ROUTE_TITLES['/requests'] : undefined) ??
+    'لوحة التحكم'
 
   return (
     <header className="pt-safe pl-safe pr-safe sticky top-0 z-30 flex min-h-16 items-center justify-between gap-4 border-b bg-background/95 px-4 backdrop-blur md:px-6">

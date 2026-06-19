@@ -2,6 +2,7 @@ import { Link, useLocation } from 'wouter'
 import {
   LayoutDashboard,
   Users,
+  Inbox,
   Settings,
   Scale,
   LogOut,
@@ -10,16 +11,20 @@ import {
 
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/stores/auth'
+import { usePendingRequestsCount } from '@/hooks/useRequests'
+import { fmtNumber } from '@/lib/format'
 import { COMPANY_NAME_SHORT } from '@/lib/constants'
 
 interface NavItem {
   label: string
   href: string
   icon: LucideIcon
+  badge?: 'pending_requests'
 }
 
 const navItems: NavItem[] = [
   { label: 'لوحة التحكم', href: '/', icon: LayoutDashboard },
+  { label: 'الطلبات الواردة', href: '/requests', icon: Inbox, badge: 'pending_requests' },
   { label: 'الموظفون', href: '/team', icon: Users },
   { label: 'الإعدادات', href: '/settings', icon: Settings },
   /* مواقع وحدات قادمة: القضايا، جهات الاتصال، الوكالات... */
@@ -28,6 +33,7 @@ const navItems: NavItem[] = [
 export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const [location] = useLocation()
   const { teamMember, logout } = useAuth()
+  const { data: pendingCount } = usePendingRequestsCount()
 
   return (
     <aside className="pt-safe pb-safe flex h-full w-64 flex-col bg-navy text-navy-50">
@@ -50,6 +56,8 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
               ? location === '/'
               : location.startsWith(item.href)
           const Icon = item.icon
+          const showBadge =
+            item.badge === 'pending_requests' && (pendingCount ?? 0) > 0
           return (
             <Link
               key={item.href}
@@ -63,7 +71,17 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
               )}
             >
               <Icon className="h-5 w-5 shrink-0" />
-              <span>{item.label}</span>
+              <span className="flex-1">{item.label}</span>
+              {showBadge && (
+                <span
+                  className={cn(
+                    'min-w-5 rounded-full px-1.5 py-0.5 text-center text-xs font-bold',
+                    active ? 'bg-navy text-gold' : 'bg-gold text-navy'
+                  )}
+                >
+                  {fmtNumber(pendingCount)}
+                </span>
+              )}
             </Link>
           )
         })}
