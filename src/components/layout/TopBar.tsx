@@ -14,7 +14,7 @@ export function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
   const title = ROUTE_TITLES[location] ?? 'لوحة التحكم'
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-4 border-b bg-background/95 px-4 backdrop-blur md:px-6">
+    <header className="pt-safe pl-safe pr-safe sticky top-0 z-30 flex min-h-16 items-center justify-between gap-4 border-b bg-background/95 px-4 backdrop-blur md:px-6">
       {/* يمين: قائمة الجوال + العنوان */}
       <div className="flex items-center gap-3">
         <Button

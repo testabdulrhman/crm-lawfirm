@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
-import { Route, Switch, Redirect, useLocation } from 'wouter'
+import { Route, Switch, Redirect, Router, useLocation } from 'wouter'
+import { useHashLocation } from 'wouter/use-hash-location'
 import { Loader2 } from 'lucide-react'
 
 import { useAuth } from '@/stores/auth'
@@ -34,13 +35,10 @@ function ProtectedRoutes() {
   )
 }
 
-export default function App() {
-  const { user, loading, initialize } = useAuth()
+// المنطق الداخلي — يقرأ الموقع من Router ذي الـ hash routing
+function AppRoutes() {
+  const { user, loading } = useAuth()
   const [location] = useLocation()
-
-  useEffect(() => {
-    initialize()
-  }, [initialize])
 
   if (loading) return <FullScreenLoader />
 
@@ -53,4 +51,19 @@ export default function App() {
   if (!user) return <Redirect to="/login" />
 
   return <ProtectedRoutes />
+}
+
+export default function App() {
+  const initialize = useAuth((s) => s.initialize)
+
+  useEffect(() => {
+    initialize()
+  }, [initialize])
+
+  // hash routing ضروري لـ Capacitor (تقديم من file://)
+  return (
+    <Router hook={useHashLocation}>
+      <AppRoutes />
+    </Router>
+  )
 }

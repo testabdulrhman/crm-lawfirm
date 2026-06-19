@@ -30,7 +30,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const { teamMember, logout } = useAuth()
 
   return (
-    <aside className="flex h-full w-64 flex-col bg-navy text-navy-50">
+    <aside className="pt-safe pb-safe flex h-full w-64 flex-col bg-navy text-navy-50">
       {/* الترويسة */}
       <div className="flex items-center gap-3 border-b border-white/10 px-5 py-5">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gold/15 ring-1 ring-gold/30">

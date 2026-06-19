@@ -82,6 +82,24 @@
     -webkit-font-smoothing: antialiased;
   }
 
+  /* مناطق آمنة لـ iOS (Capacitor — القسم 1.1 بند 4) */
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
+  }
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .pr-safe {
+    padding-right: env(safe-area-inset-right);
+  }
+  .pl-safe {
+    padding-left: env(safe-area-inset-left);
+  }
+  /* ارتفاع/إزاحة علوية تحترم منطقة الحالة */
+  .h-safe-top {
+    height: env(safe-area-inset-top);
+  }
+
   /* تنسيق شريط التمرير */
   ::-webkit-scrollbar {
     width: 10px;

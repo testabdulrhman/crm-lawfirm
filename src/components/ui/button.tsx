@@ -22,10 +22,11 @@ const buttonVariants = cva(
         gold: 'bg-gold text-navy font-semibold shadow-sm hover:bg-gold-500',
       },
       size: {
-        default: 'h-10 px-4 py-2',
+        // ارتفاعات مريحة للمس (≥44px) — جاهزية iOS (القسم 1.1 بند 7)
+        default: 'h-11 px-4 py-2',
         sm: 'h-9 rounded-md px-3',
-        lg: 'h-11 rounded-md px-8',
-        icon: 'h-10 w-10',
+        lg: 'h-12 rounded-md px-8',
+        icon: 'h-11 w-11',
       },
     },
     defaultVariants: {
