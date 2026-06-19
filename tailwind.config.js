@@ -10,7 +10,7 @@ export default {
     },
     extend: {
       fontFamily: {
-        sans: ['"Noto Sans Arabic"', 'system-ui', 'sans-serif'],
+        sans: ['"IBM Plex Sans Arabic"', 'system-ui', 'sans-serif'],
       },
       colors: {
         // ألوان الهوية البصرية

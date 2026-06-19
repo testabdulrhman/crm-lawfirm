@@ -75,7 +75,7 @@
     @apply border-border;
   }
   html {
-    font-family: 'Noto Sans Arabic', system-ui, sans-serif;
+    font-family: 'IBM Plex Sans Arabic', system-ui, sans-serif;
   }
   /* ضمان أرقام لاتينية (lining) — احتياط مع الاعتماد الأساسي على format.ts */
   :root {
