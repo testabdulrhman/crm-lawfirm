@@ -158,6 +158,8 @@ export interface RequestDocument {
   name: string | null
   file_url: string | null
   created_at: string | null
+  deleted_at: string | null
+  deleted_by: string | null
 }
 
 /* جهة اتصال (مختصرة — للربط في نموذج الطلب) */

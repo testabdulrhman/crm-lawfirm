@@ -107,6 +107,7 @@ export function useRequest(id: string | null) {
           .from('request_documents')
           .select('*')
           .eq('request_id', id)
+          .is('deleted_at', null) // استبعاد المحذوفة (حذف ناعم)
           .order('created_at', { ascending: false }),
       ])
       if (reqRes.error) throw reqRes.error
@@ -344,19 +345,29 @@ export function useAddRequestDocument() {
   })
 }
 
+// حذف ناعم: نضبط deleted_at/deleted_by فقط، ولا نلمس Storage إطلاقاً.
 export function useDeleteRequestDocument() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (id: string): Promise<void> => {
+    mutationFn: async ({
+      id,
+      deletedBy,
+    }: {
+      id: string
+      deletedBy: string | null
+    }): Promise<void> => {
       const { error } = await supabase
         .from('request_documents')
-        .delete()
+        .update({
+          deleted_at: new Date().toISOString(),
+          deleted_by: deletedBy,
+        })
         .eq('id', id)
       if (error) throw error
     },
     onSuccess: () => {
       invalidateAll(qc)
-      toast({ variant: 'success', title: 'تم حذف المرفق' })
+      toast({ variant: 'success', title: 'تم حذف المرفق (يمكن استرجاعه)' })
     },
     onError: errToast('تعذّر حذف المرفق'),
   })
