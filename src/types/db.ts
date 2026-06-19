@@ -77,3 +77,93 @@ export type LookupValueInput = {
   icon?: string | null
   sort_order?: number | null
 }
+
+/* ===================== الطلبات الواردة ===================== */
+
+export type RequestStatus =
+  | 'under_review'
+  | 'accepted'
+  | 'rejected'
+  | 'deferred'
+
+export type RequestType =
+  | 'case'
+  | 'consultation'
+  | 'regulation'
+  | 'contract'
+  | 'other'
+
+export interface IncomingRequest {
+  id: string
+  client_name: string
+  client_phone: string | null
+  client_id: string | null
+  request_type: string | null
+  received_at: string | null
+  description: string | null
+  status: string | null
+  rejection_reason: string | null
+  decision_at: string | null
+  decision_by: string | null
+  converted_to_type: string | null
+  converted_to_id: string | null
+  converted_at: string | null
+  assigned_to_id: string | null
+  assigned_to_name: string | null
+  assigned_at: string | null
+  created_by: string | null
+  created_at: string | null
+  updated_at: string | null
+}
+
+export type IncomingRequestInput = {
+  client_name: string
+  client_phone?: string | null
+  client_id?: string | null
+  request_type?: string | null
+  received_at?: string | null
+  description?: string | null
+  status?: string | null
+  created_by?: string | null
+}
+
+export interface RequestEvaluation {
+  id: string
+  request_id: string | null
+  evaluator_id: string | null
+  evaluator_name: string | null
+  summary: string | null
+  strengths: string | null
+  weaknesses: string | null
+  recommendation: string | null
+  notes: string | null
+  created_at: string | null
+  updated_at: string | null
+}
+
+export type RequestEvaluationInput = {
+  request_id: string
+  evaluator_id?: string | null
+  evaluator_name?: string | null
+  summary?: string | null
+  strengths?: string | null
+  weaknesses?: string | null
+  recommendation?: string | null
+  notes?: string | null
+}
+
+export interface RequestDocument {
+  id: string
+  request_id: string | null
+  name: string | null
+  file_url: string | null
+  created_at: string | null
+}
+
+/* جهة اتصال (مختصرة — للربط في نموذج الطلب) */
+export interface Contact {
+  id: string
+  name: string
+  phone: string | null
+  type: string | null
+}
