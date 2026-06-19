@@ -43,6 +43,18 @@ npm run build   # tsc -b && vite build → dist/
 - **Build command:** `npm run build` — **Publish directory:** `dist`
 - توجيه SPA عبر `public/_redirects` و`netlify.toml`.
 
+## جاهزية iOS (Capacitor)
+
+التطبيق مبنيّ «Capacitor-ready» للتغليف لاحقاً كتطبيق iOS أصلي دون إعادة هيكلة:
+
+- **Hash routing** عبر Wouter (`useHashLocation`) — الروابط بصيغة `/#/...` لتعمل من `file://`.
+- **`base: './'`** في `vite.config.ts` — أصول بمسارات نسبية.
+- **مناطق آمنة** — `viewport-fit=cover` + utility classes (`.pt-safe` / `.pb-safe` …) مطبّقة على `TopBar` و`Sidebar`.
+- **طبقة تخزين** `src/lib/storage.ts` — تُستبدل لاحقاً بـ Capacitor Preferences (ملف واحد).
+- **طبقة ملفات** `src/lib/files.ts` — اختيار/رفع إلى Supabase Storage، تُوسّع بـ Camera/Filesystem.
+- **روابط خارجية** عبر `openExternal()` في `src/lib/external.ts` — تُستبدل بـ Capacitor Browser.
+- **مناطق لمس ≥44px** وتصميم mobile-first (~390px)؛ الجداول تتحوّل لبطاقات على الجوال.
+
 ## الوحدات الحالية
 
 - تسجيل الدخول (Supabase Auth، الربط عبر `team_members.auth_id`)
