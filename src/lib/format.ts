@@ -74,3 +74,14 @@ export const fmtDateTime = (d: string | Date | null | undefined): string => {
 
 // قيمة تاريخ لحقول <input type="date"> بصيغة YYYY-MM-DD (أرقام لاتينية)
 export const todayISO = (): string => new Date().toISOString().slice(0, 10)
+
+// تطبيع رقم جوال سعودي لصيغة Msegat (9665XXXXXXXX):
+// أزل غير الأرقام؛ إن بدأ بـ 0 استبدله بـ 966؛ إن لم يبدأ بـ 966 أضِفها.
+export const normalizeSaudiPhone = (raw: string): string => {
+  let n = (raw ?? '').replace(/\D/g, '')
+  if (!n) return ''
+  if (n.startsWith('00966')) n = n.slice(2)
+  if (n.startsWith('0')) n = '966' + n.slice(1)
+  else if (!n.startsWith('966')) n = '966' + n
+  return n
+}

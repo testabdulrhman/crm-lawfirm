@@ -169,3 +169,46 @@ export interface Contact {
   phone: string | null
   type: string | null
 }
+
+/* ===================== طلبات التوظيف ===================== */
+
+export type StaffApplicationStatus = 'pending' | 'approved' | 'rejected'
+
+export interface StaffApplication {
+  id: string
+  full_name: string | null
+  date_of_birth: string | null
+  id_number: string | null
+  id_type: string | null // 'national' | 'iqama'
+  marital_status: string | null
+  phone: string | null
+  email: string | null
+  national_address: string | null
+  cv_url: string | null
+  cv_name: string | null
+  lawyer_license_url: string | null
+  lawyer_license_name: string | null
+  qualification_doc_url: string | null
+  qualification_doc_name: string | null
+  qualifications: string | null
+  bank_name: string | null
+  bank_iban: string | null
+  emergency_contact_name: string | null
+  emergency_contact_phone: string | null
+  emergency_contact_relation: string | null
+  status: string | null
+  rejection_reason: string | null
+  reviewed_by: string | null
+  reviewed_at: string | null
+  approved_team_member_id: string | null
+  deleted_at: string | null
+  deleted_by: string | null
+  created_at: string | null
+  updated_at: string | null
+}
+
+export interface SmsConfig {
+  userName: string
+  apiKey: string
+  sender: string
+}
