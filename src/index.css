@@ -1,0 +1,103 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* الخلفية بيج فاتح #F8F7F4 */
+    --background: 40 20% 97%;
+    --foreground: 222 55% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 55% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 55% 15%;
+
+    /* الأساسي = الكحلي #111D3A */
+    --primary: 222 55% 15%;
+    --primary-foreground: 40 33% 96%;
+
+    --secondary: 40 14% 92%;
+    --secondary-foreground: 222 55% 15%;
+
+    --muted: 40 14% 92%;
+    --muted-foreground: 222 15% 45%;
+
+    /* التمييز = الذهبي #C9A84C */
+    --accent: 43 53% 54%;
+    --accent-foreground: 222 55% 15%;
+
+    --destructive: 0 72% 45%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 40 12% 86%;
+    --input: 40 12% 86%;
+    /* الحلقة = الذهبي */
+    --ring: 43 53% 54%;
+
+    --radius: 0.625rem;
+  }
+
+  .dark {
+    --background: 222 47% 11%;
+    --foreground: 40 33% 96%;
+
+    --card: 222 45% 14%;
+    --card-foreground: 40 33% 96%;
+
+    --popover: 222 45% 14%;
+    --popover-foreground: 40 33% 96%;
+
+    --primary: 40 33% 96%;
+    --primary-foreground: 222 55% 15%;
+
+    --secondary: 222 30% 20%;
+    --secondary-foreground: 40 33% 96%;
+
+    --muted: 222 30% 20%;
+    --muted-foreground: 215 18% 65%;
+
+    --accent: 43 53% 54%;
+    --accent-foreground: 222 55% 15%;
+
+    --destructive: 0 62% 46%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 222 25% 24%;
+    --input: 222 25% 24%;
+    --ring: 43 53% 54%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html {
+    font-family: 'Noto Sans Arabic', system-ui, sans-serif;
+  }
+  body {
+    @apply bg-background text-foreground;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* تنسيق شريط التمرير */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted-foreground) / 0.35);
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.55);
+    background-clip: content-box;
+  }
+}
