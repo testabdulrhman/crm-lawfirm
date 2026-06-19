@@ -7,6 +7,7 @@ import {
   UserCog,
   Paperclip,
   Upload,
+  ExternalLink,
   Trash2,
   Pencil,
   Plus,
@@ -38,11 +39,23 @@ import {
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { FilePreviewDialog } from '@/components/FilePreviewDialog'
 
 import { fmtDate } from '@/lib/format'
 import { pickFile } from '@/lib/files'
 import { openExternal } from '@/lib/external'
 import { useAuth } from '@/stores/auth'
+import { useIsDirector } from '@/hooks/useIsDirector'
 import { useTeamMembers } from '@/hooks/useTeam'
 import {
   useRequest,
@@ -54,7 +67,7 @@ import {
 } from '@/hooks/useRequests'
 import { EvaluationForm } from './EvaluationForm'
 import { statusBadgeVariant, statusLabel, typeLabel } from './labels'
-import type { RequestEvaluation } from '@/types/db'
+import type { RequestDocument, RequestEvaluation } from '@/types/db'
 
 export function RequestDetail({ id }: { id: string }) {
   const [, navigate] = useLocation()
@@ -475,14 +488,28 @@ function DocumentsSection({
   documents,
 }: {
   requestId: string
-  documents: { id: string; name: string | null; file_url: string | null }[]
+  documents: RequestDocument[]
 }) {
+  const { teamMember } = useAuth()
+  const isDirector = useIsDirector()
   const addM = useAddRequestDocument()
   const deleteM = useDeleteRequestDocument()
+
+  // معاينة
+  const [preview, setPreview] = useState<RequestDocument | null>(null)
+  // تأكيد الحذف
+  const [toDelete, setToDelete] = useState<RequestDocument | null>(null)
 
   const onUpload = async () => {
     const file = await pickFile()
     if (file) addM.mutate({ requestId, file })
+  }
+
+  const confirmDelete = () => {
+    if (toDelete) {
+      deleteM.mutate({ id: toDelete.id, deletedBy: teamMember?.name ?? null })
+      setToDelete(null)
+    }
   }
 
   return (
@@ -520,25 +547,77 @@ function DocumentsSection({
               key={d.id}
               className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2"
             >
+              {/* النقر على الاسم يفتح المعاينة داخل النظام */}
               <button
                 className="flex min-w-0 items-center gap-2 text-sm hover:text-gold"
-                onClick={() => d.file_url && openExternal(d.file_url)}
+                onClick={() => setPreview(d)}
               >
                 <FileText className="h-4 w-4 shrink-0" />
                 <span className="truncate">{d.name ?? 'ملف'}</span>
               </button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7 text-destructive"
-                onClick={() => deleteM.mutate(d.id)}
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
+              <div className="flex items-center gap-1">
+                {/* فتح في تبويب جديد كخيار ثانوي */}
+                {d.file_url && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    title="فتح في تبويب جديد"
+                    onClick={() => openExternal(d.file_url!)}
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+                {/* الحذف للمدير فقط */}
+                {isDirector && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-destructive"
+                    title="حذف"
+                    onClick={() => setToDelete(d)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+              </div>
             </div>
           ))
         )}
       </CardContent>
+
+      {/* معاينة الملف */}
+      <FilePreviewDialog
+        open={!!preview}
+        onOpenChange={(o) => !o && setPreview(null)}
+        fileUrl={preview?.file_url ?? null}
+        fileName={preview?.name ?? null}
+      />
+
+      {/* تأكيد الحذف */}
+      <AlertDialog
+        open={!!toDelete}
+        onOpenChange={(o) => !o && setToDelete(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>تأكيد حذف المرفق</AlertDialogTitle>
+            <AlertDialogDescription>
+              سيتم حذف الملف: «{toDelete?.name ?? 'ملف'}». يمكن استرجاعه لاحقاً
+              من قِبل المدير. هل أنت متأكد؟
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={confirmDelete}
+            >
+              حذف
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   )
 }
