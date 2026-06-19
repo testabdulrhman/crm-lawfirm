@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { storage } from '@/lib/storage'
 
 type Theme = 'light' | 'dark'
 
@@ -6,7 +7,7 @@ const STORAGE_KEY = 'crm-theme'
 
 function getInitialTheme(): Theme {
   if (typeof window === 'undefined') return 'light'
-  const stored = localStorage.getItem(STORAGE_KEY) as Theme | null
+  const stored = storage.getItem(STORAGE_KEY) as Theme | null
   if (stored === 'light' || stored === 'dark') return stored
   return window.matchMedia('(prefers-color-scheme: dark)').matches
     ? 'dark'
@@ -29,7 +30,7 @@ export const useTheme = create<ThemeState>((set, get) => ({
   theme: getInitialTheme(),
   setTheme: (theme) => {
     applyTheme(theme)
-    localStorage.setItem(STORAGE_KEY, theme)
+    storage.setItem(STORAGE_KEY, theme)
     set({ theme })
   },
   toggle: () => {
