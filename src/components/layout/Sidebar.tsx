@@ -3,6 +3,7 @@ import {
   LayoutDashboard,
   Users,
   UserPlus,
+  BookUser,
   Inbox,
   Settings,
   Scale,
@@ -27,6 +28,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { label: 'لوحة التحكم', href: '/', icon: LayoutDashboard },
   { label: 'الطلبات الواردة', href: '/requests', icon: Inbox, badge: 'pending_requests' },
+  { label: 'جهات الاتصال', href: '/contacts', icon: BookUser },
   { label: 'الموظفون', href: '/team', icon: Users },
   {
     label: 'طلبات التوظيف',

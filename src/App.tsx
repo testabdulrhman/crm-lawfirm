@@ -13,6 +13,8 @@ import { RequestsPage } from '@/features/requests/RequestsPage'
 import { RequestDetail } from '@/features/requests/RequestDetail'
 import { StaffApplicationsPage } from '@/features/staff-applications/StaffApplicationsPage'
 import { ApplicationDetail } from '@/features/staff-applications/ApplicationDetail'
+import { ContactsPage } from '@/features/contacts/ContactsPage'
+import { ContactDetail } from '@/features/contacts/ContactDetail'
 
 function FullScreenLoader() {
   return (
@@ -29,6 +31,10 @@ function ProtectedRoutes() {
       <Switch>
         <Route path="/" component={Dashboard} />
         <Route path="/team" component={TeamPage} />
+        <Route path="/contacts/:id">
+          {(params) => <ContactDetail id={params.id} />}
+        </Route>
+        <Route path="/contacts" component={ContactsPage} />
         <Route path="/requests/:id">
           {(params) => <RequestDetail id={params.id} />}
         </Route>
