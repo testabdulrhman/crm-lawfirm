@@ -13,6 +13,8 @@ import {
   XCircle,
   CheckCircle2,
   Users,
+  RotateCcw,
+  Loader2,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -40,6 +42,7 @@ import { useIsDirector } from '@/hooks/useIsDirector'
 import {
   useStaffApplication,
   useDeleteApplication,
+  useReopenApplication,
 } from '@/hooks/useStaffApplications'
 import { ApproveDialog } from './ApproveDialog'
 import { RejectDialog } from './RejectDialog'
@@ -52,6 +55,7 @@ export function ApplicationDetail({ id }: { id: string }) {
   const isDirector = useIsDirector()
   const { data: a, isLoading, isError } = useStaffApplication(id)
   const deleteM = useDeleteApplication()
+  const reopenM = useReopenApplication()
 
   const [preview, setPreview] = useState<{ url: string; name: string } | null>(
     null
@@ -134,6 +138,8 @@ export function ApplicationDetail({ id }: { id: string }) {
         onApprove={() => setApproveOpen(true)}
         onReject={() => setRejectOpen(true)}
         onGoTeam={() => navigate('/team')}
+        onReopen={() => reopenM.mutate(a.id)}
+        reopening={reopenM.isPending}
       />
 
       {/* الأقسام */}
@@ -216,7 +222,7 @@ export function ApplicationDetail({ id }: { id: string }) {
         />
       )}
       <RejectDialog
-        applicationId={a.id}
+        application={a}
         open={rejectOpen}
         onOpenChange={setRejectOpen}
       />
@@ -255,11 +261,15 @@ function ActionBar({
   onApprove,
   onReject,
   onGoTeam,
+  onReopen,
+  reopening,
 }: {
   app: StaffApplication
   onApprove: () => void
   onReject: () => void
   onGoTeam: () => void
+  onReopen: () => void
+  reopening: boolean
 }) {
   const status = a.status ?? 'pending'
 
@@ -302,9 +312,24 @@ function ActionBar({
     <Alert variant="destructive">
       <XCircle className="h-4 w-4" />
       <AlertTitle>تم رفض الطلب</AlertTitle>
-      <AlertDescription>
-        {a.rejection_reason ? `السبب: ${a.rejection_reason}` : 'بدون سبب مذكور'}
-        {a.reviewed_by ? ` — بواسطة ${a.reviewed_by}` : ''}
+      <AlertDescription className="space-y-2">
+        <p>
+          {a.rejection_reason ? `السبب: ${a.rejection_reason}` : 'بدون سبب مذكور'}
+          {a.reviewed_by ? ` — بواسطة ${a.reviewed_by}` : ''}
+        </p>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={onReopen}
+          disabled={reopening}
+        >
+          {reopening ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <RotateCcw className="h-4 w-4" />
+          )}
+          إعادة الطلب للمراجعة
+        </Button>
       </AlertDescription>
     </Alert>
   )
