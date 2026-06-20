@@ -1,0 +1,394 @@
+import { useMemo, useState } from 'react'
+import { useForm, Controller } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
+import { Plus, Pencil, Trash2, Phone, Loader2 } from 'lucide-react'
+
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Card, CardContent } from '@/components/ui/card'
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { fmtNumber } from '@/lib/format'
+import { openExternal } from '@/lib/external'
+import {
+  useCaseParties,
+  useAddParty,
+  useUpdateParty,
+  useDeleteParty,
+} from '@/hooks/useCaseParties'
+import {
+  PARTY_SIDE_OPTIONS,
+  partySideBadge,
+  partySideLabel,
+} from '@/lib/caseLabels'
+import type { CaseParty } from '@/types/db'
+
+export function PartiesTab({ caseId }: { caseId: string }) {
+  const { data, isLoading } = useCaseParties(caseId)
+  const deleteM = useDeleteParty(caseId)
+
+  const [formOpen, setFormOpen] = useState(false)
+  const [editing, setEditing] = useState<CaseParty | null>(null)
+  const [toDelete, setToDelete] = useState<CaseParty | null>(null)
+
+  const { plaintiffs, defendants } = useMemo(() => {
+    const list = data ?? []
+    return {
+      plaintiffs: list.filter((p) => p.party_side === 'plaintiff'),
+      defendants: list.filter((p) => p.party_side !== 'plaintiff'),
+    }
+  }, [data])
+
+  const openNew = () => {
+    setEditing(null)
+    setFormOpen(true)
+  }
+  const openEdit = (p: CaseParty) => {
+    setEditing(p)
+    setFormOpen(true)
+  }
+
+  if (isLoading) {
+    return (
+      <div className="space-y-3">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <Skeleton key={i} className="h-24 w-full" />
+        ))}
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="flex justify-end">
+        <Button variant="gold" onClick={openNew}>
+          <Plus className="h-4 w-4" />
+          إضافة طرف
+        </Button>
+      </div>
+
+      <PartySection
+        title="المدّعون"
+        parties={plaintiffs}
+        onEdit={openEdit}
+        onDelete={setToDelete}
+      />
+      <PartySection
+        title="المدّعى عليهم"
+        parties={defendants}
+        onEdit={openEdit}
+        onDelete={setToDelete}
+      />
+
+      {/* النموذج */}
+      <Dialog open={formOpen} onOpenChange={setFormOpen}>
+        <DialogContent>
+          <PartyForm
+            caseId={caseId}
+            party={editing}
+            onDone={() => setFormOpen(false)}
+          />
+        </DialogContent>
+      </Dialog>
+
+      {/* تأكيد الحذف */}
+      <AlertDialog open={!!toDelete} onOpenChange={(o) => !o && setToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>تأكيد حذف الطرف</AlertDialogTitle>
+            <AlertDialogDescription>
+              سيتم حذف الطرف «{toDelete?.name}». هل أنت متأكد؟
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (toDelete) deleteM.mutate(toDelete.id)
+                setToDelete(null)
+              }}
+            >
+              حذف
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  )
+}
+
+function PartySection({
+  title,
+  parties,
+  onEdit,
+  onDelete,
+}: {
+  title: string
+  parties: CaseParty[]
+  onEdit: (p: CaseParty) => void
+  onDelete: (p: CaseParty) => void
+}) {
+  return (
+    <div className="space-y-2">
+      <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+        {title}
+        <span className="text-xs text-muted-foreground">
+          ({fmtNumber(parties.length)})
+        </span>
+      </h3>
+      {parties.length === 0 ? (
+        <div className="rounded-lg border border-dashed py-6 text-center text-sm text-muted-foreground">
+          لا يوجد
+        </div>
+      ) : (
+        <div className="grid gap-2 sm:grid-cols-2">
+          {parties.map((p) => (
+            <PartyCard key={p.id} party={p} onEdit={onEdit} onDelete={onDelete} />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function PartyCard({
+  party: p,
+  onEdit,
+  onDelete,
+}: {
+  party: CaseParty
+  onEdit: (p: CaseParty) => void
+  onDelete: (p: CaseParty) => void
+}) {
+  return (
+    <Card>
+      <CardContent className="space-y-2 p-3">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="font-medium text-foreground">{p.name}</p>
+            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+              <Badge variant={partySideBadge(p.party_side)}>
+                {partySideLabel(p.party_side)}
+              </Badge>
+              {p.role && p.role !== 'opponent' && (
+                <span className="text-xs text-muted-foreground">{p.role}</span>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={() => onEdit(p)}
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-destructive"
+              onClick={() => onDelete(p)}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        </div>
+
+        <div className="space-y-1 text-xs text-muted-foreground">
+          {p.phone && (
+            <button
+              dir="ltr"
+              className="flex items-center justify-end gap-1 hover:text-gold"
+              onClick={() => openExternal(`tel:${p.phone}`)}
+            >
+              <span>{p.phone}</span>
+              <Phone className="h-3 w-3" />
+            </button>
+          )}
+          {p.id_number && (
+            <p dir="ltr" className="text-right">
+              هوية: {p.id_number}
+            </p>
+          )}
+          {p.nationality && <p>الجنسية: {p.nationality}</p>}
+          {p.notes && <p className="whitespace-pre-wrap">{p.notes}</p>}
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+/* ===================== النموذج ===================== */
+
+const schema = z.object({
+  name: z.string().min(1, 'الاسم مطلوب'),
+  party_side: z.string().min(1, 'الصفة مطلوبة'),
+  role: z.string().optional(),
+  phone: z.string().optional(),
+  id_number: z.string().optional(),
+  nationality: z.string().optional(),
+  notes: z.string().optional(),
+})
+type FormValues = z.infer<typeof schema>
+
+function PartyForm({
+  caseId,
+  party,
+  onDone,
+}: {
+  caseId: string
+  party: CaseParty | null
+  onDone: () => void
+}) {
+  const isEdit = Boolean(party)
+  const addM = useAddParty(caseId)
+  const updateM = useUpdateParty(caseId)
+  const pending = addM.isPending || updateM.isPending
+
+  const {
+    register,
+    handleSubmit,
+    control,
+    formState: { errors },
+  } = useForm<FormValues>({
+    resolver: zodResolver(schema),
+    defaultValues: {
+      name: party?.name ?? '',
+      party_side: party?.party_side === 'plaintiff' ? 'plaintiff' : 'defendant',
+      role: party?.role && party.role !== 'opponent' ? party.role : '',
+      phone: party?.phone ?? '',
+      id_number: party?.id_number ?? '',
+      nationality: party?.nationality ?? '',
+      notes: party?.notes ?? '',
+    },
+  })
+
+  const onSubmit = async (values: FormValues) => {
+    const t = (v: string | undefined) => (v && v.trim() !== '' ? v.trim() : null)
+    const base = {
+      name: values.name.trim(),
+      party_side: values.party_side,
+      role: t(values.role),
+      phone: t(values.phone),
+      id_number: t(values.id_number),
+      nationality: t(values.nationality),
+      notes: t(values.notes),
+    }
+    if (isEdit && party) {
+      await updateM.mutateAsync({ id: party.id, input: base })
+    } else {
+      await addM.mutateAsync({ case_id: caseId, ...base })
+    }
+    onDone()
+  }
+
+  return (
+    <form onSubmit={handleSubmit(onSubmit)}>
+      <DialogHeader>
+        <DialogTitle>{isEdit ? 'تعديل طرف' : 'إضافة طرف'}</DialogTitle>
+      </DialogHeader>
+
+      <div className="my-4 space-y-3">
+        <div className="space-y-1.5">
+          <Label htmlFor="party_name">الاسم *</Label>
+          <Input id="party_name" {...register('name')} />
+          {errors.name && (
+            <p className="text-xs text-destructive">{errors.name.message}</p>
+          )}
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label>الصفة *</Label>
+            <Controller
+              control={control}
+              name="party_side"
+              render={({ field }) => (
+                <Select value={field.value} onValueChange={field.onChange}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PARTY_SIDE_OPTIONS.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="party_role">الدور (وصفي)</Label>
+            <Input
+              id="party_role"
+              placeholder="مثل: المدّعي الأول، الوكيل…"
+              {...register('role')}
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="party_phone">الجوال</Label>
+            <Input id="party_phone" dir="ltr" {...register('phone')} />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="party_id">رقم الهوية</Label>
+            <Input id="party_id" dir="ltr" {...register('id_number')} />
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="party_nat">الجنسية</Label>
+          <Input id="party_nat" {...register('nationality')} />
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="party_notes">ملاحظات</Label>
+          <Textarea id="party_notes" rows={2} {...register('notes')} />
+        </div>
+      </div>
+
+      <DialogFooter className="gap-2">
+        <Button type="submit" variant="gold" disabled={pending}>
+          {pending && <Loader2 className="h-4 w-4 animate-spin" />}
+          {isEdit ? 'حفظ' : 'إضافة'}
+        </Button>
+        <Button type="button" variant="outline" onClick={onDone}>
+          إلغاء
+        </Button>
+      </DialogFooter>
+    </form>
+  )
+}
