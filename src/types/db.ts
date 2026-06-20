@@ -520,6 +520,63 @@ export interface POAInput {
   case_id?: string | null
 }
 
+/* ===================== الخدمات القانونية (legal_services) ===================== */
+
+export type LegalServiceType = 'consultation' | 'regulation' | 'contract'
+export type LegalServiceStatus = 'draft' | 'in_progress' | 'delivered'
+
+export interface LegalService {
+  id: string
+  type: string | null
+  title: string | null
+  client_id: string | null
+  client_name: string | null
+  service_date: string | null
+  status: string | null
+  service_kind: string | null
+  regulation_type: string | null
+  contract_type: string | null
+  party_first: string | null
+  party_second: string | null
+  file_url: string | null
+  file_name: string | null
+  assignee_id: string | null
+  assignee_name: string | null
+  received_date: string | null
+  delivered_date: string | null
+  received_at: string | null
+  delivered_at: string | null
+  notes: string | null
+  created_by: string | null
+  deleted_at: string | null
+  deleted_by: string | null
+  created_at: string | null
+  updated_at: string | null
+  assignee?: { id: string; name: string | null; short_name: string | null } | null
+}
+
+export interface LegalServiceInput {
+  type: string
+  title?: string | null
+  client_id?: string | null
+  client_name?: string | null
+  service_date?: string | null
+  status?: string | null
+  service_kind?: string | null
+  regulation_type?: string | null
+  contract_type?: string | null
+  party_first?: string | null
+  party_second?: string | null
+  file_url?: string | null
+  file_name?: string | null
+  assignee_id?: string | null
+  assignee_name?: string | null
+  received_date?: string | null
+  delivered_date?: string | null
+  notes?: string | null
+  created_by?: string | null
+}
+
 export interface HatifCall {
   id: string
   status: number | null
