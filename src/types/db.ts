@@ -162,12 +162,89 @@ export interface RequestDocument {
   deleted_by: string | null
 }
 
-/* جهة اتصال (مختصرة — للربط في نموذج الطلب) */
+/* ===================== جهات الاتصال ===================== */
+
+// التصنيف المعتمد = category (client | caller | service). type عمود قديم للتوافق فقط.
+export type ContactCategory = 'client' | 'caller' | 'service'
+export type ContactEntityType = 'فرد' | 'منشأة'
+export type ContactSource = 'manual' | 'whatsapp' | 'imported' | 'hatif'
+
 export interface Contact {
   id: string
-  name: string
+  name: string | null
   phone: string | null
-  type: string | null
+  phone2: string | null
+  email: string | null
+  city: string | null
+  nationality: string | null
+  id_number: string | null
+  gender: string | null
+  birth_date: string | null
+  occupation: string | null
+  notes: string | null
+  contract_date: string | null
+  serial_number: string | null
+  category: string | null // مصدر الحقيقة للتصنيف
+  type: string | null // قديم — للتوافق فقط
+  entity_type: string | null
+  source: string | null
+  hatif_call_id: string | null
+  created_at: string | null
+  updated_at: string | null
+}
+
+// مدخلات النموذج (نكتب category و type معاً)
+export interface ContactInput {
+  name: string
+  category: string
+  type: string
+  entity_type?: string | null
+  phone?: string | null
+  phone2?: string | null
+  email?: string | null
+  city?: string | null
+  nationality?: string | null
+  id_number?: string | null
+  gender?: string | null
+  birth_date?: string | null
+  occupation?: string | null
+  contract_date?: string | null
+  serial_number?: string | null
+  notes?: string | null
+  source?: string | null
+}
+
+export interface ContactWorkLinks {
+  contact_id: string
+  cases_count: number
+  services_count: number
+  appointments_count: number
+  requests_count: number
+  property_count: number
+  total_links: number
+}
+
+export interface HatifCall {
+  id: string
+  status: number | null
+  status_label: string | null
+  direction: number | null
+  direction_label: string | null
+  caller_number: string | null
+  callee_number: string | null
+  contact_number: string | null
+  pickup_time: string | null
+  hangup_time: string | null
+  call_length: string | null
+  handler_name: string | null
+  recording_url: string | null
+  transcription_text: string | null
+  summary: string | null
+  sentiment: number | null
+  sentiment_label: string | null
+  client_id: string | null
+  client_name: string | null
+  created_at: string | null
 }
 
 /* ===================== طلبات التوظيف ===================== */
