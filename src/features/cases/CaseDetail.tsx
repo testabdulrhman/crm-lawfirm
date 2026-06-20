@@ -29,6 +29,9 @@ import { CaseForm } from './CaseForm'
 import { OverviewTab } from './tabs/OverviewTab'
 import { PartiesTab } from './tabs/PartiesTab'
 import { SessionsTab } from './tabs/SessionsTab'
+import { RulingsTab } from './tabs/RulingsTab'
+import { TasksTab } from './tabs/TasksTab'
+import { DocumentsTab } from './tabs/DocumentsTab'
 import { PlaceholderTab } from './tabs/PlaceholderTab'
 import type { Case, CaseStatus } from '@/types/db'
 
@@ -160,18 +163,18 @@ export function CaseDetail({ id }: { id: string }) {
         <TabsContent value="sessions">
           <SessionsTab caseId={c.id} />
         </TabsContent>
-        {/* placeholders — تُملأ في الأجزاء 3–4 */}
         <TabsContent value="judgments">
-          <PlaceholderTab title="الأحكام" />
+          <RulingsTab caseId={c.id} />
         </TabsContent>
         <TabsContent value="tasks">
-          <PlaceholderTab title="المهام" />
+          <TasksTab caseId={c.id} />
         </TabsContent>
+        {/* placeholders — تُملأ في الجزء 4 */}
         <TabsContent value="memos">
           <PlaceholderTab title="المذكرات" />
         </TabsContent>
         <TabsContent value="documents">
-          <PlaceholderTab title="المستندات" />
+          <DocumentsTab caseId={c.id} />
         </TabsContent>
         <TabsContent value="notes">
           <PlaceholderTab title="الملاحظات" />
