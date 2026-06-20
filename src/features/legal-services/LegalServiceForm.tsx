@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/dialog'
 import { ContactPicker } from '@/components/ContactPicker'
 import { DualDatePicker } from '@/components/DualDatePicker'
+import { SelectOrOther } from '@/components/SelectOrOther'
 import { pickFile, uploadFile } from '@/lib/files'
 import { useAuth } from '@/stores/auth'
 import { useContacts } from '@/hooks/useContacts'
@@ -38,8 +39,6 @@ import {
   CONTRACT_TYPE_OPTIONS,
 } from '@/lib/legalServiceLabels'
 import type { Contact, LegalService, LegalServiceInput } from '@/types/db'
-
-const OTHER = '__other__'
 
 const schema = z.object({
   type: z.string().min(1, 'النوع مطلوب'),
@@ -58,58 +57,6 @@ const schema = z.object({
   notes: z.string().optional(),
 })
 type FormValues = z.infer<typeof schema>
-
-// Select بقيم شائعة + «أخرى» نص حر
-function SelectOrOther({
-  value,
-  onChange,
-  options,
-  placeholder,
-}: {
-  value: string
-  onChange: (v: string) => void
-  options: readonly string[]
-  placeholder?: string
-}) {
-  const [mode, setMode] = useState<'select' | 'other'>(
-    value && !options.includes(value) ? 'other' : 'select'
-  )
-  return (
-    <div className="space-y-2">
-      <Select
-        value={mode === 'other' ? OTHER : value || undefined}
-        onValueChange={(v) => {
-          if (v === OTHER) {
-            setMode('other')
-            onChange('')
-          } else {
-            setMode('select')
-            onChange(v)
-          }
-        }}
-      >
-        <SelectTrigger>
-          <SelectValue placeholder={placeholder} />
-        </SelectTrigger>
-        <SelectContent>
-          {options.map((o) => (
-            <SelectItem key={o} value={o}>
-              {o}
-            </SelectItem>
-          ))}
-          <SelectItem value={OTHER}>أخرى…</SelectItem>
-        </SelectContent>
-      </Select>
-      {mode === 'other' && (
-        <Input
-          placeholder="اكتب القيمة"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-        />
-      )}
-    </div>
-  )
-}
 
 export function LegalServiceForm({
   service,
