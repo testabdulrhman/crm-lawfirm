@@ -435,6 +435,55 @@ export interface CaseDocument {
   created_at: string | null
 }
 
+/* ===== القضايا: المذكرات (memos + memo_documents) ===== */
+
+export interface MemoDocument {
+  id: string
+  memo_id: string | null
+  name: string | null
+  doc_type: string | null
+  file_url: string | null
+  deleted_at: string | null
+  deleted_by: string | null
+  created_at: string | null
+}
+
+export interface Memo {
+  id: string
+  case_id: string | null
+  title: string | null
+  description: string | null
+  memo_type: string | null
+  party_side: string | null
+  submit_method: string | null
+  is_submitted: boolean | null
+  submit_date: string | null
+  created_at: string | null
+  documents?: MemoDocument[]
+}
+
+export interface MemoInput {
+  case_id: string
+  title: string
+  description?: string | null
+  memo_type?: string | null
+  party_side?: string | null
+  submit_method?: string | null
+  is_submitted?: boolean | null
+  submit_date?: string | null
+}
+
+/* ===== القضايا: الملاحظات (notes) ===== */
+
+export interface Note {
+  id: string
+  case_id: string | null
+  author_id: string | null
+  content: string | null
+  created_at: string | null
+  author?: { id: string; name: string | null; short_name: string | null } | null
+}
+
 export interface HatifCall {
   id: string
   status: number | null

@@ -157,3 +157,25 @@ export const TASK_PRIORITY_ORDER: Record<string, number> = {
 
 export const taskStatusLabel = (s: string | null | undefined): string =>
   s === 'done' ? 'مكتملة' : 'قيد التنفيذ'
+
+/* ===== المذكرات ===== */
+
+export const memoPartyLabel = (s: string | null | undefined): string =>
+  s === 'defendant' ? 'المدّعى عليه' : 'المدّعي'
+
+export const memoPartyBadge = (
+  s: string | null | undefined
+): BadgeProps['variant'] => (s === 'defendant' ? 'destructive' : 'success')
+
+export const MEMO_PARTY_OPTIONS = [
+  { value: 'plaintiff', label: 'المدّعي' },
+  { value: 'defendant', label: 'المدّعى عليه' },
+] as const
+
+export const memoMethodLabel = (m: string | null | undefined): string =>
+  m === 'electronic' ? 'إلكتروني' : 'يدوي'
+
+export const MEMO_METHOD_OPTIONS = [
+  { value: 'manual', label: 'يدوي' },
+  { value: 'electronic', label: 'إلكتروني' },
+] as const
