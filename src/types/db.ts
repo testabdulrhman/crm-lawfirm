@@ -577,6 +577,59 @@ export interface LegalServiceInput {
   created_by?: string | null
 }
 
+/* ===================== التوثيق العقاري (property_transfers) ===================== */
+
+export interface PropertyTransfer {
+  id: string
+  transfer_type: string | null
+  seller_id: string | null
+  seller_name: string | null
+  seller_id_num: string | null
+  seller_phone: string | null
+  buyer_id: string | null
+  buyer_name: string | null
+  buyer_id_num: string | null
+  buyer_phone: string | null
+  property_type: string | null
+  deed_number: string | null
+  area: number | null
+  location: string | null
+  property_notes: string | null
+  amount: number | null
+  amount_text: string | null
+  transfer_date: string | null
+  status: string | null
+  notes: string | null
+  created_by: string | null
+  deleted_at: string | null
+  deleted_by: string | null
+  created_at: string | null
+  updated_at: string | null
+}
+
+export interface PropertyTransferInput {
+  transfer_type?: string | null
+  seller_id?: string | null
+  seller_name?: string | null
+  seller_id_num?: string | null
+  seller_phone?: string | null
+  buyer_id?: string | null
+  buyer_name?: string | null
+  buyer_id_num?: string | null
+  buyer_phone?: string | null
+  property_type?: string | null
+  deed_number?: string | null
+  area?: number | null
+  location?: string | null
+  property_notes?: string | null
+  amount?: number | null
+  amount_text?: string | null
+  transfer_date?: string | null
+  status?: string | null
+  notes?: string | null
+  created_by?: string | null
+}
+
 export interface HatifCall {
   id: string
   status: number | null
