@@ -337,6 +337,104 @@ export interface CaseSessionInput {
   preparation?: string | null
 }
 
+/* ===== القضايا: الأحكام (rulings) ===== */
+
+export interface Ruling {
+  id: string
+  case_id: string | null
+  title: string | null
+  ruling_number: string | null
+  ruling_date: string | null
+  court_name: string | null
+  result: string | null
+  summary: string | null
+  document_url: string | null
+  uploaded_by_name: string | null
+  document_uploaded_at: string | null
+  is_dropped: boolean | null
+  drop_date: string | null
+  drop_reason: string | null
+  drop_document_url: string | null
+  dropped_by_name: string | null
+  drop_uploaded_at: string | null
+  created_at: string | null
+}
+
+export interface RulingInput {
+  case_id: string
+  title?: string | null
+  ruling_number?: string | null
+  ruling_date?: string | null
+  court_name?: string | null
+  result?: string | null
+  summary?: string | null
+  document_url?: string | null
+  uploaded_by_name?: string | null
+}
+
+/* ===== القضايا: المهام (tasks + task_subtasks) ===== */
+
+export type TaskStatus = 'todo' | 'done'
+export type TaskPriority = 'low' | 'med' | 'high'
+
+export interface Subtask {
+  id: string
+  task_id: string | null
+  title: string | null
+  is_done: boolean | null
+  created_at: string | null
+}
+
+export interface Task {
+  id: string
+  case_id: string | null
+  title: string | null
+  description: string | null
+  notes: string | null
+  assignee_id: string | null
+  created_by: string | null
+  priority: string | null
+  status: string | null
+  due_date: string | null
+  done_at: string | null
+  is_urgent: boolean | null
+  task_type: string | null
+  created_at: string | null
+  subtasks?: Subtask[]
+}
+
+export interface TaskInput {
+  case_id: string
+  title: string
+  description?: string | null
+  assignee_id?: string | null
+  created_by?: string | null
+  priority?: string | null
+  status?: string | null
+  due_date?: string | null
+  is_urgent?: boolean | null
+  task_type?: string | null
+}
+
+/* ===== القضايا: المستندات (documents) ===== */
+
+export interface CaseDocument {
+  id: string
+  case_id: string | null
+  name: string | null
+  file_url: string | null
+  file_path: string | null
+  file_type: string | null
+  file_size: number | null
+  document_date: string | null
+  description: string | null
+  uploaded_by: string | null
+  uploaded_by_name: string | null
+  deleted_at: string | null
+  deleted_by: string | null
+  created_at: string | null
+}
+
 export interface HatifCall {
   id: string
   status: number | null

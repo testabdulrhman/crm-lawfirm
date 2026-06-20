@@ -110,3 +110,50 @@ export const isSessionHeld = (raw: string | null | undefined): boolean =>
 
 export const isSessionUpcoming = (raw: string | null | undefined): boolean =>
   normSessionStatus(raw) === 'قادمة'
+
+/* ===== المهام: الأولوية والحالة ===== */
+
+export type TaskPriorityValue = 'low' | 'med' | 'high'
+
+export const TASK_PRIORITY_LABELS: Record<TaskPriorityValue, string> = {
+  low: 'منخفضة',
+  med: 'متوسطة',
+  high: 'عالية',
+}
+
+export const TASK_PRIORITY_BADGE: Record<
+  TaskPriorityValue,
+  BadgeProps['variant']
+> = {
+  low: 'secondary', // رمادي
+  med: 'default', // أزرق/كحلي
+  high: 'destructive', // أحمر
+}
+
+export const TASK_PRIORITY_OPTIONS: { value: TaskPriorityValue; label: string }[] =
+  (Object.keys(TASK_PRIORITY_LABELS) as TaskPriorityValue[]).map((value) => ({
+    value,
+    label: TASK_PRIORITY_LABELS[value],
+  }))
+
+export const taskPriorityLabel = (p: string | null | undefined): string =>
+  p && p in TASK_PRIORITY_LABELS
+    ? TASK_PRIORITY_LABELS[p as TaskPriorityValue]
+    : 'متوسطة'
+
+export const taskPriorityBadge = (
+  p: string | null | undefined
+): BadgeProps['variant'] =>
+  p && p in TASK_PRIORITY_BADGE
+    ? TASK_PRIORITY_BADGE[p as TaskPriorityValue]
+    : 'default'
+
+// ترتيب الأولوية للفرز (high أولاً)
+export const TASK_PRIORITY_ORDER: Record<string, number> = {
+  high: 0,
+  med: 1,
+  low: 2,
+}
+
+export const taskStatusLabel = (s: string | null | undefined): string =>
+  s === 'done' ? 'مكتملة' : 'قيد التنفيذ'

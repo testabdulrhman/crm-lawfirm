@@ -88,6 +88,15 @@ export const fmtTime = (t: string | null | undefined): string => {
   return forceLatinDigits(`${h}:${min} ${suffix}`)
 }
 
+// حجم ملف بصيغة لاتينية (B / KB / MB)
+export const fmtFileSize = (bytes: number | null | undefined): string => {
+  if (bytes == null || bytes < 0) return '—'
+  if (bytes < 1024) return forceLatinDigits(`${bytes} B`)
+  if (bytes < 1024 * 1024)
+    return forceLatinDigits(`${(bytes / 1024).toFixed(1)} KB`)
+  return forceLatinDigits(`${(bytes / (1024 * 1024)).toFixed(1)} MB`)
+}
+
 // تطبيع رقم جوال سعودي لصيغة Msegat (9665XXXXXXXX):
 // أزل غير الأرقام؛ إن بدأ بـ 0 استبدله بـ 966؛ إن لم يبدأ بـ 966 أضِفها.
 export const normalizeSaudiPhone = (raw: string): string => {
