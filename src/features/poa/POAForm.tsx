@@ -1,8 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Loader2, Paperclip, X } from 'lucide-react'
+import { Loader2, Paperclip } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -21,13 +21,14 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { ContactPicker } from '@/components/ContactPicker'
+import { CasePicker } from '@/components/CasePicker'
 import { DualDatePicker } from '@/components/DualDatePicker'
 import { pickFile, uploadFile } from '@/lib/files'
 import { useContacts } from '@/hooks/useContacts'
 import { useCases } from '@/hooks/useCases'
 import { useCreatePOA, useUpdatePOA } from '@/hooks/usePOAs'
 import { POA_STATUS_OPTIONS } from '@/lib/poaLabels'
-import type { Case, Contact, PowerOfAttorney, POAInput } from '@/types/db'
+import type { Contact, PowerOfAttorney, POAInput } from '@/types/db'
 
 const schema = z.object({
   poa_number: z.string().optional(),
@@ -250,93 +251,5 @@ export function POAForm({
         </Button>
       </DialogFooter>
     </form>
-  )
-}
-
-// منتقي قضية بحثي خفيف
-function CasePicker({
-  cases,
-  value,
-  onChange,
-}: {
-  cases: Case[]
-  value: string | null
-  onChange: (id: string | null) => void
-}) {
-  const [query, setQuery] = useState('')
-  const [open, setOpen] = useState(false)
-
-  const selected = useMemo(
-    () => cases.find((c) => c.id === value) ?? null,
-    [cases, value]
-  )
-
-  const matches = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    if (!q) return cases.slice(0, 20)
-    return cases
-      .filter((c) =>
-        [c.title, c.office_num, c.court_num]
-          .filter(Boolean)
-          .join(' ')
-          .toLowerCase()
-          .includes(q)
-      )
-      .slice(0, 20)
-  }, [cases, query])
-
-  if (selected) {
-    return (
-      <div className="flex items-center justify-between gap-2 rounded-md border px-3 py-2">
-        <span className="truncate text-sm">{selected.title || 'قضية'}</span>
-        <button
-          type="button"
-          className="shrink-0 text-muted-foreground hover:text-destructive"
-          onClick={() => onChange(null)}
-        >
-          <X className="h-4 w-4" />
-        </button>
-      </div>
-    )
-  }
-
-  return (
-    <div className="relative">
-      <Input
-        value={query}
-        placeholder="ابحث عن قضية…"
-        onChange={(e) => {
-          setQuery(e.target.value)
-          setOpen(true)
-        }}
-        onFocus={() => setOpen(true)}
-      />
-      {open && (
-        <div className="absolute z-50 mt-1 max-h-56 w-full overflow-y-auto rounded-md border bg-popover shadow-md">
-          {matches.length === 0 ? (
-            <p className="p-3 text-center text-xs text-muted-foreground">لا نتائج</p>
-          ) : (
-            matches.map((c) => (
-              <button
-                key={c.id}
-                type="button"
-                className="block w-full truncate px-3 py-2 text-right text-sm hover:bg-accent/20"
-                onClick={() => {
-                  onChange(c.id)
-                  setOpen(false)
-                }}
-              >
-                {c.title || 'قضية'}
-                {c.office_num ? (
-                  <span dir="ltr" className="mr-2 text-xs text-muted-foreground">
-                    {c.office_num}
-                  </span>
-                ) : null}
-              </button>
-            ))
-          )}
-        </div>
-      )}
-    </div>
   )
 }
