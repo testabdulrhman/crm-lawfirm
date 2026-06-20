@@ -1,0 +1,115 @@
+import { useMemo, useState } from 'react'
+import { X, Check } from 'lucide-react'
+
+import { Input } from '@/components/ui/input'
+import type { Contact } from '@/types/db'
+
+// منتقي جهة اتصال بحثي خفيف (يصلح لـ 777 جهة). يُرجع الجهة كاملة عند الاختيار.
+export function ContactPicker({
+  contacts,
+  value,
+  onSelect,
+  placeholder = 'ابحث عن جهة اتصال بالاسم أو الجوال…',
+}: {
+  contacts: Contact[]
+  value: string | null
+  onSelect: (contact: Contact | null) => void
+  placeholder?: string
+}) {
+  const [query, setQuery] = useState('')
+  const [open, setOpen] = useState(false)
+
+  const selected = useMemo(
+    () => contacts.find((c) => c.id === value) ?? null,
+    [contacts, value]
+  )
+
+  const matches = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return contacts.slice(0, 20)
+    return contacts
+      .filter((c) =>
+        [c.name, c.phone, c.phone2]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase()
+          .includes(q)
+      )
+      .slice(0, 20)
+  }, [contacts, query])
+
+  if (selected) {
+    return (
+      <div className="flex items-center justify-between gap-2 rounded-md border px-3 py-2">
+        <span className="truncate text-sm">
+          {selected.name}
+          {selected.phone ? (
+            <span dir="ltr" className="mr-2 text-xs text-muted-foreground">
+              {selected.phone}
+            </span>
+          ) : null}
+        </span>
+        <button
+          type="button"
+          className="shrink-0 text-muted-foreground hover:text-destructive"
+          title="مسح الاختيار"
+          onClick={() => {
+            onSelect(null)
+            setQuery('')
+          }}
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="relative">
+      <Input
+        value={query}
+        placeholder={placeholder}
+        onChange={(e) => {
+          setQuery(e.target.value)
+          setOpen(true)
+        }}
+        onFocus={() => setOpen(true)}
+      />
+      {open && (
+        <div className="absolute z-50 mt-1 max-h-56 w-full overflow-y-auto rounded-md border bg-popover shadow-md">
+          {matches.length === 0 ? (
+            <p className="p-3 text-center text-xs text-muted-foreground">لا نتائج</p>
+          ) : (
+            matches.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                className="flex w-full items-center justify-between gap-2 px-3 py-2 text-right text-sm hover:bg-accent/20"
+                onClick={() => {
+                  onSelect(c)
+                  setOpen(false)
+                  setQuery('')
+                }}
+              >
+                <span className="truncate">{c.name}</span>
+                {c.phone && (
+                  <span dir="ltr" className="text-xs text-muted-foreground">
+                    {c.phone}
+                  </span>
+                )}
+              </button>
+            ))
+          )}
+          <button
+            type="button"
+            className="flex w-full items-center gap-1 border-t px-3 py-2 text-xs text-muted-foreground hover:bg-accent/20"
+            onClick={() => setOpen(false)}
+          >
+            <Check className="h-3 w-3" />
+            إغلاق
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}

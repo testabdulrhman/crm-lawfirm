@@ -1,8 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Loader2, X, Check } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -25,7 +25,8 @@ import { useContacts } from '@/hooks/useContacts'
 import { useTeamMembers } from '@/hooks/useTeam'
 import { useCreateCase, useUpdateCase } from '@/hooks/useCases'
 import { CASE_STATUS_OPTIONS, CASE_TYPES } from '@/lib/caseLabels'
-import type { Case, CaseInput, Contact } from '@/types/db'
+import { ContactPicker } from '@/components/ContactPicker'
+import type { Case, CaseInput } from '@/types/db'
 
 const OTHER = '__other__'
 
@@ -223,7 +224,7 @@ export function CaseForm({
             <ContactPicker
               contacts={contacts ?? []}
               value={contactId}
-              onChange={setContactId}
+              onSelect={(c) => setContactId(c?.id ?? null)}
             />
           </div>
 
@@ -290,113 +291,5 @@ export function CaseForm({
         </Button>
       </DialogFooter>
     </form>
-  )
-}
-
-// منتقي موكّل بحثي خفيف (من 777 جهة)
-function ContactPicker({
-  contacts,
-  value,
-  onChange,
-}: {
-  contacts: Contact[]
-  value: string | null
-  onChange: (id: string | null) => void
-}) {
-  const [query, setQuery] = useState('')
-  const [open, setOpen] = useState(false)
-
-  const selected = useMemo(
-    () => contacts.find((c) => c.id === value) ?? null,
-    [contacts, value]
-  )
-
-  const matches = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    if (!q) return contacts.slice(0, 20)
-    return contacts
-      .filter((c) =>
-        [c.name, c.phone, c.phone2]
-          .filter(Boolean)
-          .join(' ')
-          .toLowerCase()
-          .includes(q)
-      )
-      .slice(0, 20)
-  }, [contacts, query])
-
-  if (selected) {
-    return (
-      <div className="flex items-center justify-between gap-2 rounded-md border px-3 py-2">
-        <span className="text-sm">
-          {selected.name}
-          {selected.phone ? (
-            <span dir="ltr" className="mr-2 text-xs text-muted-foreground">
-              {selected.phone}
-            </span>
-          ) : null}
-        </span>
-        <button
-          type="button"
-          className="text-muted-foreground hover:text-destructive"
-          onClick={() => {
-            onChange(null)
-            setQuery('')
-          }}
-        >
-          <X className="h-4 w-4" />
-        </button>
-      </div>
-    )
-  }
-
-  return (
-    <div className="relative">
-      <Input
-        value={query}
-        placeholder="ابحث عن موكّل بالاسم أو الجوال…"
-        onChange={(e) => {
-          setQuery(e.target.value)
-          setOpen(true)
-        }}
-        onFocus={() => setOpen(true)}
-      />
-      {open && (
-        <div className="absolute z-50 mt-1 max-h-56 w-full overflow-y-auto rounded-md border bg-popover shadow-md">
-          {matches.length === 0 ? (
-            <p className="p-3 text-center text-xs text-muted-foreground">
-              لا نتائج
-            </p>
-          ) : (
-            matches.map((c) => (
-              <button
-                key={c.id}
-                type="button"
-                className="flex w-full items-center justify-between gap-2 px-3 py-2 text-right text-sm hover:bg-accent/20"
-                onClick={() => {
-                  onChange(c.id)
-                  setOpen(false)
-                }}
-              >
-                <span className="truncate">{c.name}</span>
-                {c.phone && (
-                  <span dir="ltr" className="text-xs text-muted-foreground">
-                    {c.phone}
-                  </span>
-                )}
-              </button>
-            ))
-          )}
-          <button
-            type="button"
-            className="flex w-full items-center gap-1 border-t px-3 py-2 text-xs text-muted-foreground hover:bg-accent/20"
-            onClick={() => setOpen(false)}
-          >
-            <Check className="h-3 w-3" />
-            إغلاق
-          </button>
-        </div>
-      )}
-    </div>
   )
 }

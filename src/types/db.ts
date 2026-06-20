@@ -294,6 +294,7 @@ export interface CaseParty {
   id_number: string | null
   nationality: string | null
   notes: string | null
+  contact_id: string | null // ربط اختياري بجهة اتصال
   created_at: string | null
 }
 
@@ -306,6 +307,7 @@ export interface CasePartyInput {
   id_number?: string | null
   nationality?: string | null
   notes?: string | null
+  contact_id?: string | null
 }
 
 /* ===== القضايا: الجلسات (public.sessions) ===== */

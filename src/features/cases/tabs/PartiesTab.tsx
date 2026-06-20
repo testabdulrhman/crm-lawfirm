@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react'
+import { Link } from 'wouter'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Plus, Pencil, Trash2, Phone, Loader2 } from 'lucide-react'
+import { Plus, Pencil, Trash2, Phone, Loader2, BookUser } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -37,6 +38,8 @@ import {
 } from '@/components/ui/alert-dialog'
 import { fmtNumber } from '@/lib/format'
 import { openExternal } from '@/lib/external'
+import { ContactPicker } from '@/components/ContactPicker'
+import { useContacts } from '@/hooks/useContacts'
 import {
   useCaseParties,
   useAddParty,
@@ -48,7 +51,7 @@ import {
   partySideBadge,
   partySideLabel,
 } from '@/lib/caseLabels'
-import type { CaseParty } from '@/types/db'
+import type { CaseParty, Contact } from '@/types/db'
 
 export function PartiesTab({ caseId }: { caseId: string }) {
   const { data, isLoading } = useCaseParties(caseId)
@@ -201,6 +204,15 @@ function PartyCard({
               {p.role && p.role !== 'opponent' && (
                 <span className="text-xs text-muted-foreground">{p.role}</span>
               )}
+              {p.contact_id && (
+                <Link
+                  href={`/contacts/${p.contact_id}`}
+                  className="inline-flex items-center gap-1 rounded-full bg-gold/15 px-2 py-0.5 text-[11px] text-gold-700 hover:underline dark:text-gold-300"
+                >
+                  <BookUser className="h-3 w-3" />
+                  من جهات الاتصال
+                </Link>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-1">
@@ -273,11 +285,16 @@ function PartyForm({
   const addM = useAddParty(caseId)
   const updateM = useUpdateParty(caseId)
   const pending = addM.isPending || updateM.isPending
+  const { data: contacts } = useContacts()
+  const [contactId, setContactId] = useState<string | null>(
+    party?.contact_id ?? null
+  )
 
   const {
     register,
     handleSubmit,
     control,
+    setValue,
     formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -292,6 +309,17 @@ function PartyForm({
     },
   })
 
+  // عند اختيار جهة اتصال: عبّئ الحقول (تبقى قابلة للتعديل) واضبط contact_id
+  const onPickContact = (c: Contact | null) => {
+    setContactId(c?.id ?? null)
+    if (c) {
+      setValue('name', c.name ?? '', { shouldValidate: true })
+      setValue('phone', c.phone ?? '')
+      setValue('id_number', c.id_number ?? '')
+      setValue('nationality', c.nationality ?? '')
+    }
+  }
+
   const onSubmit = async (values: FormValues) => {
     const t = (v: string | undefined) => (v && v.trim() !== '' ? v.trim() : null)
     const base = {
@@ -302,6 +330,7 @@ function PartyForm({
       id_number: t(values.id_number),
       nationality: t(values.nationality),
       notes: t(values.notes),
+      contact_id: contactId,
     }
     if (isEdit && party) {
       await updateM.mutateAsync({ id: party.id, input: base })
@@ -318,6 +347,20 @@ function PartyForm({
       </DialogHeader>
 
       <div className="my-4 space-y-3">
+        {/* اختيار من جهات الاتصال (اختياري) — يعبّئ الحقول تلقائياً */}
+        <div className="space-y-1.5 rounded-lg border border-dashed p-3">
+          <Label>اختر من جهات الاتصال (اختياري)</Label>
+          <ContactPicker
+            contacts={contacts ?? []}
+            value={contactId}
+            onSelect={onPickContact}
+          />
+          <p className="text-xs text-muted-foreground">
+            للأطراف المسجّلين — يعبّئ الاسم/الجوال/الهوية/الجنسية (تبقى قابلة
+            للتعديل). اتركه فارغاً للإدخال اليدوي.
+          </p>
+        </div>
+
         <div className="space-y-1.5">
           <Label htmlFor="party_name">الاسم *</Label>
           <Input id="party_name" {...register('name')} />
