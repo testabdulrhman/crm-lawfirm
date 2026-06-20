@@ -273,25 +273,125 @@ export function useApproveApplication() {
 
 /* ===================== الرفض ===================== */
 
+// رسالة اعتذار للمتقدّم عبر قالب application_rejected (غير قاتلة).
+const DEFAULT_REJECTION =
+  'مرحباً {name}، نشكر تقديمكم على الوظيفة لدى شركة عبدالرحمن بن رضوان المشيقح للمحاماة. نعتذر عن عدم قبول طلبكم حالياً، ونتمنّى لكم التوفيق.'
+
+async function sendRejectionSms(
+  name: string,
+  phone: string,
+  sentBy: string | null
+): Promise<boolean> {
+  const numbers = normalizeSaudiPhone(phone)
+  if (!numbers) return false
+  let message = ''
+  try {
+    const cfg = await fetchSmsConfig()
+    if (!cfg) return false
+    const body = await getTemplate('application_rejected')
+    message = fillTemplate(body || DEFAULT_REJECTION, { name })
+    const { data, error } = await supabase.functions.invoke('swift-endpoint', {
+      body: {
+        userName: cfg.userName,
+        apiKey: cfg.apiKey,
+        userSender: cfg.sender,
+        numbers,
+        msg: message,
+      },
+    })
+    const ok = !error && (data?.code === '1' || data?.code === 1)
+    await supabase.from('sms_log').insert({
+      recipient_name: name,
+      phone: numbers,
+      message,
+      status: ok ? 'sent' : 'failed',
+      sent_by: sentBy,
+    })
+    return ok
+  } catch {
+    try {
+      await supabase.from('sms_log').insert({
+        recipient_name: name,
+        phone: numbers,
+        message,
+        status: 'failed',
+        sent_by: sentBy,
+      })
+    } catch {
+      /* تجاهل */
+    }
+    return false
+  }
+}
+
 export function useRejectApplication() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async ({
-      id,
+      application,
       reason,
       reviewerName,
+      sendSms,
     }: {
-      id: string
+      application: StaffApplication
       reason: string
       reviewerName: string | null
-    }): Promise<void> => {
+      sendSms: boolean
+    }): Promise<{ sendSms: boolean; hasPhone: boolean; smsSent: boolean }> => {
       const { error } = await supabase
         .from('staff_applications')
         .update({
           status: 'rejected',
-          rejection_reason: reason,
+          rejection_reason: reason, // يُحفظ داخلياً ولا يُرسل للمتقدّم
           reviewed_by: reviewerName,
           reviewed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', application.id)
+      if (error) throw error
+
+      const hasPhone =
+        !!application.phone && normalizeSaudiPhone(application.phone) !== ''
+      let smsSent = false
+      if (sendSms && hasPhone) {
+        smsSent = await sendRejectionSms(
+          application.full_name ?? 'المتقدّم',
+          application.phone!,
+          reviewerName
+        )
+      }
+      return { sendSms, hasPhone, smsSent }
+    },
+    onSuccess: (res) => {
+      invalidate(qc)
+      if (res.sendSms && res.hasPhone && !res.smsSent) {
+        toast({
+          variant: 'default',
+          title: 'تم رفض الطلب',
+          description: 'تعذّر إرسال رسالة الاعتذار — تحقّق من إعدادات SMS.',
+        })
+      } else if (res.sendSms && res.smsSent) {
+        toast({ variant: 'success', title: 'تم رفض الطلب وإرسال رسالة الاعتذار' })
+      } else {
+        toast({ variant: 'success', title: 'تم رفض الطلب' })
+      }
+    },
+    onError: errToast('تعذّر رفض الطلب'),
+  })
+}
+
+// إعادة الطلب المرفوض إلى «قيد المراجعة»
+export function useReopenApplication() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: string): Promise<void> => {
+      const { error } = await supabase
+        .from('staff_applications')
+        .update({
+          status: 'pending',
+          rejection_reason: null,
+          reviewed_by: null,
+          reviewed_at: null,
           updated_at: new Date().toISOString(),
         })
         .eq('id', id)
@@ -299,9 +399,9 @@ export function useRejectApplication() {
     },
     onSuccess: () => {
       invalidate(qc)
-      toast({ variant: 'success', title: 'تم رفض الطلب' })
+      toast({ variant: 'success', title: 'أُعيد الطلب إلى قيد المراجعة' })
     },
-    onError: errToast('تعذّر رفض الطلب'),
+    onError: errToast('تعذّر إعادة الطلب'),
   })
 }
 
