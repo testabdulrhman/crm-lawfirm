@@ -1,5 +1,6 @@
 // تنسيق موحّد للأرقام والتواريخ — أرقام لاتينية (0123456789) دائماً مع واجهة عربية.
 // قاعدة: كل عدد/تاريخ يُعرض في التطبيق يمرّ عبر هذه الدوال (لا toLocaleString('ar') مباشرة).
+import { getDateDisplay } from '@/stores/prefs'
 
 // locale عربي مع نظام أرقام لاتيني
 const NUM_LOCALE = 'ar-SA-u-nu-latn'
@@ -72,8 +73,49 @@ export const fmtDateTime = (d: string | Date | null | undefined): string => {
   )
 }
 
-// قيمة تاريخ لحقول <input type="date"> بصيغة YYYY-MM-DD (أرقام لاتينية)
+// قيمة تاريخ لحقول التاريخ بصيغة YYYY-MM-DD (أرقام لاتينية)
 export const todayISO = (): string => new Date().toISOString().slice(0, 10)
+
+/* ===== التقويم الهجري (أم القرى) — عرض فقط، الأصل ميلادي ===== */
+
+const HIJRI_LOCALE = 'ar-SA-u-ca-islamic-umalqura-nu-latn'
+
+// هجري بأرقام لاتينية + أسماء أشهر عربية + لاحقة «هـ»
+export const fmtHijri = (d: string | Date | null | undefined): string => {
+  if (!d) return '—'
+  const date = typeof d === 'string' ? new Date(d) : d
+  if (isNaN(date.getTime())) return '—'
+  return safeFormat(
+    () =>
+      new Intl.DateTimeFormat(HIJRI_LOCALE, {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      }).format(date) + ' هـ',
+    date.toISOString()
+  )
+}
+
+// ميلادي (نفس fmtDate الحالي)
+export const fmtGregorian = (d: string | Date | null | undefined): string =>
+  fmtDate(d)
+
+// مزدوج: هجري (ميلادي)
+export const fmtDual = (d: string | Date | null | undefined): string => {
+  if (!d) return '—'
+  const date = typeof d === 'string' ? new Date(d) : d
+  if (isNaN(date.getTime())) return '—'
+  return `${fmtHijri(date)} (${fmtDate(date)})`
+}
+
+// عرض حسب تفضيل المستخدم (مزدوج/هجري/ميلادي)
+export const fmtDatePref = (d: string | Date | null | undefined): string => {
+  if (!d) return '—'
+  const pref = getDateDisplay()
+  if (pref === 'hijri') return fmtHijri(d)
+  if (pref === 'gregorian') return fmtDate(d)
+  return fmtDual(d)
+}
 
 // تنسيق وقت من عمود time (مثل "10:30:00") إلى 12 ساعة عربية بأرقام لاتينية ("10:30 ص")
 export const fmtTime = (t: string | null | undefined): string => {
