@@ -1,10 +1,11 @@
 import { useLocation } from 'wouter'
-import { Menu, Moon, Sun, Search } from 'lucide-react'
+import { Menu, Moon, Sun } from 'lucide-react'
 
 import { useTheme } from '@/stores/theme'
 import { useAuth } from '@/stores/auth'
 import { ROUTE_TITLES } from '@/lib/constants'
 import { Button } from '@/components/ui/button'
+import { GlobalSearch } from './GlobalSearch'
 
 export function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
   const [location] = useLocation()
@@ -44,19 +45,15 @@ export function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
         >
           <Menu className="h-5 w-5" />
         </Button>
-        <h1 className="text-lg font-bold text-foreground">{title}</h1>
+        {/* العنوان يُخفى على الجوال لإفساح مكان للبحث */}
+        <h1 className="hidden text-lg font-bold text-foreground sm:block">
+          {title}
+        </h1>
       </div>
 
-      {/* وسط: بحث عام (placeholder — يُفعّل لاحقاً) */}
-      <div className="hidden flex-1 justify-center md:flex">
-        <div className="relative w-full max-w-md">
-          <Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <input
-            disabled
-            placeholder="بحث عام (قريباً)…"
-            className="h-9 w-full cursor-not-allowed rounded-md border border-input bg-muted/40 pr-9 text-sm text-muted-foreground placeholder:text-muted-foreground focus:outline-none"
-          />
-        </div>
+      {/* وسط: البحث العام (فعّال) */}
+      <div className="flex flex-1 justify-center">
+        <GlobalSearch />
       </div>
 
       {/* يسار: الثيم + المستخدم */}
