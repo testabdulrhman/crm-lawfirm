@@ -7,6 +7,7 @@ export const BRAND_TITLE = `CRM — ${COMPANY_NAME}`
 // عناوين الصفحات حسب المسار (تُستخدم في TopBar)
 export const ROUTE_TITLES: Record<string, string> = {
   '/': 'لوحة التحكم',
+  '/cases': 'القضايا',
   '/team': 'الموظفون',
   '/contacts': 'جهات الاتصال',
   '/requests': 'الطلبات الواردة',
