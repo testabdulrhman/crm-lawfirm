@@ -34,7 +34,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 
-import { fmtNumber, fmtDate, fmtDateTime } from '@/lib/format'
+import { fmtNumber, fmtDatePref, fmtDateTime } from '@/lib/format'
 import { openExternal } from '@/lib/external'
 import { useIsDirector } from '@/hooks/useIsDirector'
 import {
@@ -246,9 +246,9 @@ function OverviewTab({ contact: c }: { contact: Contact }) {
           <Row label="الجنسية" value={c.nationality} />
           <Row label="رقم الهوية" value={c.id_number} dir="ltr" />
           <Row label="الجنس" value={c.gender} />
-          <Row label="تاريخ الميلاد" value={c.birth_date ? fmtDate(c.birth_date) : null} />
+          <Row label="تاريخ الميلاد" value={c.birth_date ? fmtDatePref(c.birth_date) : null} />
           <Row label="المهنة" value={c.occupation} />
-          <Row label="تاريخ التعاقد" value={c.contract_date ? fmtDate(c.contract_date) : null} />
+          <Row label="تاريخ التعاقد" value={c.contract_date ? fmtDatePref(c.contract_date) : null} />
           <Row label="الرقم التسلسلي" value={c.serial_number} dir="ltr" />
           <Row label="ملاحظات" value={c.notes} full />
         </dl>
@@ -482,7 +482,7 @@ function RelationsTab({
           <RelRow
             key={x.id}
             title={x.title || x.type || 'خدمة'}
-            meta={[x.type, x.service_date ? fmtDate(x.service_date) : null, x.status]
+            meta={[x.type, x.service_date ? fmtDatePref(x.service_date) : null, x.status]
               .filter(Boolean)
               .join(' · ')}
           />
@@ -493,7 +493,7 @@ function RelationsTab({
         {data.appointments.map((x) => (
           <RelRow
             key={x.id}
-            title={fmtDate(x.appointment_date)}
+            title={fmtDatePref(x.appointment_date)}
             meta={[x.appointment_time, x.status].filter(Boolean).join(' · ')}
           />
         ))}
@@ -504,7 +504,7 @@ function RelationsTab({
           <RelRow
             key={x.id}
             title={`طلب — ${x.request_type ?? ''}`}
-            meta={[x.status, x.received_at ? fmtDate(x.received_at) : null]
+            meta={[x.status, x.received_at ? fmtDatePref(x.received_at) : null]
               .filter(Boolean)
               .join(' · ')}
             onClick={() => navigate(`/requests/${x.id}`)}
@@ -521,7 +521,7 @@ function RelationsTab({
               title={[x.property_type || 'عقار', x.deed_number ? `صك ${x.deed_number}` : null]
                 .filter(Boolean)
                 .join(' — ')}
-              meta={[role, x.status, x.transfer_date ? fmtDate(x.transfer_date) : null]
+              meta={[role, x.status, x.transfer_date ? fmtDatePref(x.transfer_date) : null]
                 .filter(Boolean)
                 .join(' · ')}
             />

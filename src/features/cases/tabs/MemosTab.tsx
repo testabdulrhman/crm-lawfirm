@@ -47,8 +47,9 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { FilePreviewDialog } from '@/components/FilePreviewDialog'
+import { DualDatePicker } from '@/components/DualDatePicker'
 
-import { fmtDate } from '@/lib/format'
+import { fmtDatePref } from '@/lib/format'
 import { pickFile } from '@/lib/files'
 import { useAuth } from '@/stores/auth'
 import { useIsDirector } from '@/hooks/useIsDirector'
@@ -224,7 +225,7 @@ function MemoCard({
 
         {submitted && m.submit_date && (
           <p className="text-xs text-muted-foreground">
-            تاريخ التقديم: {fmtDate(m.submit_date)}
+            تاريخ التقديم: {fmtDatePref(m.submit_date)}
           </p>
         )}
 
@@ -512,10 +513,17 @@ function MemoForm({
           مُقدّمة
         </label>
         {isSubmitted && (
-          <div className="space-y-1.5">
-            <Label htmlFor="m_subdate">تاريخ التقديم</Label>
-            <Input id="m_subdate" type="date" {...register('submit_date')} />
-          </div>
+          <Controller
+            control={control}
+            name="submit_date"
+            render={({ field }) => (
+              <DualDatePicker
+                label="تاريخ التقديم"
+                value={field.value || null}
+                onChange={(v) => field.onChange(v ?? '')}
+              />
+            )}
+          />
         )}
       </div>
 

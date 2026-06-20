@@ -51,7 +51,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { FilePreviewDialog } from '@/components/FilePreviewDialog'
 
-import { fmtDate } from '@/lib/format'
+import { fmtDatePref } from '@/lib/format'
 import { pickFile } from '@/lib/files'
 import { openExternal } from '@/lib/external'
 import { useAuth } from '@/stores/auth'
@@ -124,7 +124,7 @@ export function RequestDetail({ id }: { id: string }) {
                 )}
                 <span className="flex items-center gap-1">
                   <CalendarDays className="h-3.5 w-3.5" />
-                  {fmtDate(r.received_at)}
+                  {fmtDatePref(r.received_at)}
                 </span>
               </div>
             </div>
@@ -284,7 +284,7 @@ function DecisionCard({
             </p>
             {decisionAt && (
               <p className="mt-1 text-xs text-muted-foreground">
-                بتاريخ {fmtDate(decisionAt)}
+                بتاريخ {fmtDatePref(decisionAt)}
                 {decisionBy ? ` · بواسطة ${decisionBy}` : ''}
               </p>
             )}
@@ -425,7 +425,7 @@ function EvaluationsSection({
                 </div>
                 <div className="flex items-center gap-1">
                   <span className="text-xs text-muted-foreground">
-                    {fmtDate(e.created_at)}
+                    {fmtDatePref(e.created_at)}
                   </span>
                   <Button
                     variant="ghost"

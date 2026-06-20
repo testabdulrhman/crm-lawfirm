@@ -17,7 +17,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 
-import { fmtDate } from '@/lib/format'
+import { fmtDatePref } from '@/lib/format'
 import { useCase, useUpdateCaseStatus } from '@/hooks/useCases'
 import {
   CASE_STATUS_OPTIONS,
@@ -137,7 +137,7 @@ export function CaseDetail({ id }: { id: string }) {
             <HeaderInfo label="الدائرة" value={c.court_division} />
             <HeaderInfo
               label="تاريخ الفتح"
-              value={c.open_date ? fmtDate(c.open_date) : null}
+              value={c.open_date ? fmtDatePref(c.open_date) : null}
             />
           </div>
         </CardContent>

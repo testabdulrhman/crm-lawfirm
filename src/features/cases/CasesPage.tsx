@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { fmtNumber, fmtDate } from '@/lib/format'
+import { fmtNumber, fmtDatePref } from '@/lib/format'
 import { useCases } from '@/hooks/useCases'
 import { useTeamMembers } from '@/hooks/useTeam'
 import { CaseForm } from './CaseForm'
@@ -316,7 +316,7 @@ function CaseCard({
               )}
             >
               <CalendarClock className="h-3 w-3" />
-              الجلسة القادمة: {fmtDate(c.hearing_date)}
+              الجلسة القادمة: {fmtDatePref(c.hearing_date)}
             </p>
           )}
         </div>

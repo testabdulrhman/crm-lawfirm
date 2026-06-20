@@ -13,6 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { DualDatePicker } from '@/components/DualDatePicker'
 import { useCreateTeamMember, useUpdateTeamMember } from '@/hooks/useTeam'
 import type { TeamMember, TeamMemberInput } from '@/types/db'
 
@@ -197,15 +198,19 @@ export function TeamMemberForm({ member, onDone }: Props) {
 
         {/* شخصي */}
         <Section title="بيانات شخصية">
-          <Field label="تاريخ الميلاد" htmlFor="date_of_birth">
-            <Input id="date_of_birth" type="date" {...register('date_of_birth')} />
-          </Field>
+          <DualDatePicker
+            label="تاريخ الميلاد"
+            value={watch('date_of_birth') || null}
+            onChange={(v) => setValue('date_of_birth', v ?? '')}
+          />
           <Field label="رقم الهوية" htmlFor="id_number">
             <Input id="id_number" dir="ltr" {...register('id_number')} />
           </Field>
-          <Field label="تاريخ الالتحاق" htmlFor="join_date">
-            <Input id="join_date" type="date" {...register('join_date')} />
-          </Field>
+          <DualDatePicker
+            label="تاريخ الالتحاق"
+            value={watch('join_date') || null}
+            onChange={(v) => setValue('join_date', v ?? '')}
+          />
           <Field label="العنوان الوطني" htmlFor="national_address">
             <Input id="national_address" {...register('national_address')} />
           </Field>

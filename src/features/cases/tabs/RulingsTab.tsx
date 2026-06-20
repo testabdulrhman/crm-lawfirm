@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useForm } from 'react-hook-form'
+import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import {
@@ -39,9 +39,10 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { FilePreviewDialog } from '@/components/FilePreviewDialog'
+import { DualDatePicker } from '@/components/DualDatePicker'
 
 import { cn } from '@/lib/utils'
-import { fmtDate, todayISO } from '@/lib/format'
+import { fmtDatePref, todayISO } from '@/lib/format'
 import { pickFile, uploadFile } from '@/lib/files'
 import { useAuth } from '@/stores/auth'
 import {
@@ -196,7 +197,7 @@ function RulingCard({
             </p>
             <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
               {r.ruling_number && <span dir="ltr">رقم: {r.ruling_number}</span>}
-              {r.ruling_date && <span>{fmtDate(r.ruling_date)}</span>}
+              {r.ruling_date && <span>{fmtDatePref(r.ruling_date)}</span>}
               {r.court_name && <span>{r.court_name}</span>}
             </div>
           </div>
@@ -223,7 +224,7 @@ function RulingCard({
             <p className="text-xs font-semibold text-destructive">تفاصيل الإسقاط</p>
             {r.drop_date && (
               <p className="text-xs text-muted-foreground">
-                التاريخ: {fmtDate(r.drop_date)}
+                التاريخ: {fmtDatePref(r.drop_date)}
                 {r.dropped_by_name ? ` · بواسطة ${r.dropped_by_name}` : ''}
               </p>
             )}
@@ -333,6 +334,7 @@ function RulingForm({
   const {
     register,
     handleSubmit,
+    control,
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
@@ -400,10 +402,17 @@ function RulingForm({
             <Label htmlFor="r_num">رقم الحكم</Label>
             <Input id="r_num" dir="ltr" {...register('ruling_number')} />
           </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="r_date">تاريخ الحكم</Label>
-            <Input id="r_date" type="date" {...register('ruling_date')} />
-          </div>
+          <Controller
+            control={control}
+            name="ruling_date"
+            render={({ field }) => (
+              <DualDatePicker
+                label="تاريخ الحكم"
+                value={field.value || null}
+                onChange={(v) => field.onChange(v ?? '')}
+              />
+            )}
+          />
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="r_court">المحكمة المُصدِرة</Label>
@@ -505,15 +514,11 @@ function DropDialog({
               onChange={(e) => setReason(e.target.value)}
             />
           </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="drop_date">تاريخ الإسقاط</Label>
-            <Input
-              id="drop_date"
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-            />
-          </div>
+          <DualDatePicker
+            label="تاريخ الإسقاط"
+            value={date || null}
+            onChange={(v) => setDate(v ?? '')}
+          />
           <FilePicker
             label="مستند الإسقاط (اختياري)"
             file={file}

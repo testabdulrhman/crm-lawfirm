@@ -47,9 +47,10 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { FilePreviewDialog } from '@/components/FilePreviewDialog'
+import { DualDatePicker } from '@/components/DualDatePicker'
 
 import { cn } from '@/lib/utils'
-import { fmtNumber, fmtDate, fmtTime } from '@/lib/format'
+import { fmtNumber, fmtDatePref, fmtTime } from '@/lib/format'
 import {
   useCaseSessions,
   useAddSession,
@@ -192,7 +193,7 @@ export function SessionsTab({ caseId }: { caseId: string }) {
           <AlertDialogHeader>
             <AlertDialogTitle>تأكيد حذف الجلسة</AlertDialogTitle>
             <AlertDialogDescription>
-              سيتم حذف الجلسة «{toDelete?.title || fmtDate(toDelete?.session_date)}».
+              سيتم حذف الجلسة «{toDelete?.title || fmtDatePref(toDelete?.session_date)}».
               هل أنت متأكد؟
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -264,7 +265,7 @@ function SessionCard({
             <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
               <span className="flex items-center gap-1">
                 <CalendarDays className="h-3.5 w-3.5" />
-                {fmtDate(s.session_date)}
+                {fmtDatePref(s.session_date)}
               </span>
               {s.session_time && (
                 <span className="flex items-center gap-1">
@@ -510,8 +511,18 @@ function SessionForm({
 
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5">
-            <Label htmlFor="session_date">التاريخ *</Label>
-            <Input id="session_date" type="date" {...register('session_date')} />
+            <Controller
+              control={control}
+              name="session_date"
+              render={({ field }) => (
+                <DualDatePicker
+                  label="التاريخ"
+                  required
+                  value={field.value || null}
+                  onChange={(v) => field.onChange(v ?? '')}
+                />
+              )}
+            />
             {errors.session_date && (
               <p className="text-xs text-destructive">
                 {errors.session_date.message}

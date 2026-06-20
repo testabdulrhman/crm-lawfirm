@@ -46,8 +46,9 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 
+import { DualDatePicker } from '@/components/DualDatePicker'
 import { cn } from '@/lib/utils'
-import { fmtNumber, fmtDate, todayISO } from '@/lib/format'
+import { fmtNumber, fmtDatePref, todayISO } from '@/lib/format'
 import { useAuth } from '@/stores/auth'
 import { useTeamMembers } from '@/hooks/useTeam'
 import {
@@ -250,7 +251,7 @@ function TaskCard({
                   )}
                 >
                   <CalendarClock className="h-3 w-3" />
-                  {fmtDate(t.due_date)}
+                  {fmtDatePref(t.due_date)}
                 </span>
               )}
             </div>
@@ -484,10 +485,17 @@ function TaskForm({
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1.5">
-            <Label htmlFor="t_due">تاريخ الاستحقاق</Label>
-            <Input id="t_due" type="date" {...register('due_date')} />
-          </div>
+          <Controller
+            control={control}
+            name="due_date"
+            render={({ field }) => (
+              <DualDatePicker
+                label="تاريخ الاستحقاق"
+                value={field.value || null}
+                onChange={(v) => field.onChange(v ?? '')}
+              />
+            )}
+          />
           <div className="space-y-1.5">
             <Label htmlFor="t_type">النوع</Label>
             <Input id="t_type" {...register('task_type')} />

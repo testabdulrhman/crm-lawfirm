@@ -78,40 +78,42 @@ export function DualDatePicker({
 
   return (
     <div className="space-y-1.5">
-      {label && (
-        <div className="flex items-center justify-between">
+      {/* صف العنوان + مبدّل الوضع (يظهر دائماً) */}
+      <div className="flex items-center justify-between gap-2">
+        {label ? (
           <Label htmlFor={id}>
             {label} {required && <span className="text-destructive">*</span>}
           </Label>
-          {/* مبدّل الوضع */}
-          <div className="flex overflow-hidden rounded-md border text-xs">
-            <button
-              type="button"
-              onClick={() => setMode('gregorian')}
-              className={cn(
-                'px-2 py-0.5 transition-colors',
-                mode === 'gregorian'
-                  ? 'bg-gold text-navy'
-                  : 'text-muted-foreground hover:bg-muted'
-              )}
-            >
-              ميلادي
-            </button>
-            <button
-              type="button"
-              onClick={() => setMode('hijri')}
-              className={cn(
-                'px-2 py-0.5 transition-colors',
-                mode === 'hijri'
-                  ? 'bg-gold text-navy'
-                  : 'text-muted-foreground hover:bg-muted'
-              )}
-            >
-              هجري
-            </button>
-          </div>
+        ) : (
+          <span />
+        )}
+        <div className="flex overflow-hidden rounded-md border text-xs">
+          <button
+            type="button"
+            onClick={() => setMode('gregorian')}
+            className={cn(
+              'px-2 py-0.5 transition-colors',
+              mode === 'gregorian'
+                ? 'bg-gold text-navy'
+                : 'text-muted-foreground hover:bg-muted'
+            )}
+          >
+            ميلادي
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode('hijri')}
+            className={cn(
+              'px-2 py-0.5 transition-colors',
+              mode === 'hijri'
+                ? 'bg-gold text-navy'
+                : 'text-muted-foreground hover:bg-muted'
+            )}
+          >
+            هجري
+          </button>
         </div>
-      )}
+      </div>
 
       {mode === 'gregorian' ? (
         <Input

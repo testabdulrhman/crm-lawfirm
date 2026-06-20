@@ -33,7 +33,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { FilePreviewDialog } from '@/components/FilePreviewDialog'
 
-import { fmtDate, fmtDateTime } from '@/lib/format'
+import { fmtDatePref, fmtDateTime } from '@/lib/format'
 import { openExternal } from '@/lib/external'
 import { useAuth } from '@/stores/auth'
 import { useIsDirector } from '@/hooks/useIsDirector'
@@ -119,7 +119,7 @@ export function ApplicationDetail({ id }: { id: string }) {
                   {a.phone}
                 </span>
               )}
-              <span>قُدّم في {fmtDate(a.created_at)}</span>
+              <span>قُدّم في {fmtDatePref(a.created_at)}</span>
             </div>
           </div>
           <Badge variant={appStatusBadge(status)}>
@@ -139,7 +139,7 @@ export function ApplicationDetail({ id }: { id: string }) {
       {/* الأقسام */}
       <Section title="بيانات شخصية">
         <Row label="الاسم الكامل" value={a.full_name} />
-        <Row label="تاريخ الميلاد" value={fmtDate(a.date_of_birth)} />
+        <Row label="تاريخ الميلاد" value={fmtDatePref(a.date_of_birth)} />
         <Row label="نوع الهوية" value={idTypeLabel(a.id_type)} />
         <Row label="رقم الهوية" value={a.id_number} dir="ltr" />
         <Row label="الحالة الاجتماعية" value={a.marital_status} />

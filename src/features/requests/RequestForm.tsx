@@ -23,6 +23,7 @@ import { useAuth } from '@/stores/auth'
 import { todayISO } from '@/lib/format'
 import { useContacts } from '@/hooks/useContacts'
 import { useCreateRequest, useUpdateRequest } from '@/hooks/useRequests'
+import { DualDatePicker } from '@/components/DualDatePicker'
 import { TYPE_OPTIONS } from './labels'
 import type { IncomingRequest, IncomingRequestInput } from '@/types/db'
 
@@ -139,15 +140,18 @@ export function RequestForm({
               )}
             />
           </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="received_at">تاريخ الاستلام *</Label>
-            <Input id="received_at" type="date" {...register('received_at')} />
-            {errors.received_at && (
-              <p className="text-xs text-destructive">
-                {errors.received_at.message}
-              </p>
+          <Controller
+            control={control}
+            name="received_at"
+            render={({ field }) => (
+              <DualDatePicker
+                label="تاريخ الاستلام"
+                required
+                value={field.value || null}
+                onChange={(v) => field.onChange(v ?? '')}
+              />
             )}
-          </div>
+          />
 
           {/* ربط بجهة اتصال (اختياري). لاحقاً: بحث متقدّم في contacts. */}
           <div className="space-y-1.5 sm:col-span-2">

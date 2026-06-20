@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Card, CardContent } from '@/components/ui/card'
-import { fmtDate } from '@/lib/format'
+import { fmtDatePref } from '@/lib/format'
 import { useStaffApplications } from '@/hooks/useStaffApplications'
 import {
   APP_STATUS_OPTIONS,
@@ -165,7 +165,7 @@ function ApplicationCard({
 
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <Badge variant="outline">{idTypeLabel(a.id_type)}</Badge>
-          <span className="text-muted-foreground">{fmtDate(a.created_at)}</span>
+          <span className="text-muted-foreground">{fmtDatePref(a.created_at)}</span>
         </div>
 
         <div className="flex flex-wrap gap-1.5">

@@ -1,9 +1,12 @@
-import { Building2, Tags, Palette, Moon, Sun } from 'lucide-react'
+import { Building2, Tags, Palette, Moon, Sun, CalendarDays } from 'lucide-react'
 
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Card, CardContent } from '@/components/ui/card'
 import { Switch } from '@/components/ui/switch'
+import { Button } from '@/components/ui/button'
 import { useTheme } from '@/stores/theme'
+import { usePrefs, type DateDisplay } from '@/stores/prefs'
+import { fmtDatePref, todayISO } from '@/lib/format'
 import { OfficeInfoTab } from './OfficeInfoTab'
 import { LookupsTab } from './LookupsTab'
 
@@ -50,13 +53,21 @@ export function SettingsPage() {
   )
 }
 
+const DATE_DISPLAY_OPTIONS: { value: DateDisplay; label: string }[] = [
+  { value: 'dual', label: 'ميلادي + هجري' },
+  { value: 'hijri', label: 'هجري فقط' },
+  { value: 'gregorian', label: 'ميلادي فقط' },
+]
+
 function AppearanceTab() {
   const { theme, toggle } = useTheme()
   const isDark = theme === 'dark'
+  const dateDisplay = usePrefs((s) => s.dateDisplay)
+  const setDateDisplay = usePrefs((s) => s.setDateDisplay)
 
   return (
     <Card>
-      <CardContent className="pt-6">
+      <CardContent className="space-y-6 pt-6">
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
@@ -75,7 +86,36 @@ function AppearanceTab() {
           </div>
           <Switch checked={isDark} onCheckedChange={toggle} />
         </div>
-        {/* placeholder للمزيد لاحقاً: حجم الخط، كثافة الجداول، لون التمييز... */}
+
+        {/* عرض التاريخ */}
+        <div className="border-t pt-5">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
+              <CalendarDays className="h-5 w-5 text-gold" />
+            </div>
+            <div>
+              <p className="font-medium text-foreground">عرض التاريخ</p>
+              <p className="text-sm text-muted-foreground">
+                التخزين ميلادي دائماً؛ هذا للعرض فقط (يُحفظ تلقائياً)
+              </p>
+            </div>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {DATE_DISPLAY_OPTIONS.map((o) => (
+              <Button
+                key={o.value}
+                size="sm"
+                variant={dateDisplay === o.value ? 'default' : 'outline'}
+                onClick={() => setDateDisplay(o.value)}
+              >
+                {o.label}
+              </Button>
+            ))}
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">
+            مثال: {fmtDatePref(todayISO())}
+          </p>
+        </div>
       </CardContent>
     </Card>
   )

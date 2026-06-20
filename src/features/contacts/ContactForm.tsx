@@ -19,6 +19,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { DualDatePicker } from '@/components/DualDatePicker'
 import { useCreateContact, useUpdateContact } from '@/hooks/useContacts'
 import { CATEGORY_OPTIONS, ENTITY_OPTIONS } from '@/lib/contactLabels'
 import type { Contact, ContactInput } from '@/types/db'
@@ -219,15 +220,31 @@ export function ContactForm({
           <Field label="الجنس" htmlFor="gender">
             <Input id="gender" {...register('gender')} />
           </Field>
-          <Field label="تاريخ الميلاد" htmlFor="birth_date">
-            <Input id="birth_date" type="date" {...register('birth_date')} />
-          </Field>
+          <Controller
+            control={control}
+            name="birth_date"
+            render={({ field }) => (
+              <DualDatePicker
+                label="تاريخ الميلاد"
+                value={field.value || null}
+                onChange={(v) => field.onChange(v ?? '')}
+              />
+            )}
+          />
           <Field label="المهنة" htmlFor="occupation">
             <Input id="occupation" {...register('occupation')} />
           </Field>
-          <Field label="تاريخ التعاقد" htmlFor="contract_date">
-            <Input id="contract_date" type="date" {...register('contract_date')} />
-          </Field>
+          <Controller
+            control={control}
+            name="contract_date"
+            render={({ field }) => (
+              <DualDatePicker
+                label="تاريخ التعاقد"
+                value={field.value || null}
+                onChange={(v) => field.onChange(v ?? '')}
+              />
+            )}
+          />
           <Field label="الرقم التسلسلي" htmlFor="serial_number">
             <Input id="serial_number" dir="ltr" {...register('serial_number')} />
           </Field>

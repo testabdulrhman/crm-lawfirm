@@ -3,7 +3,7 @@ import { Phone, ExternalLink, UserCog } from 'lucide-react'
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { openExternal } from '@/lib/external'
-import { fmtDate, fmtNumber } from '@/lib/format'
+import { fmtDatePref, fmtNumber } from '@/lib/format'
 import { caseStatusLabel, caseTypeLabel } from '@/lib/caseLabels'
 import type { Case } from '@/types/db'
 
@@ -23,11 +23,11 @@ export function OverviewTab({ caseData: c }: { caseData: Case }) {
             <Row label="الدائرة" value={c.court_division} />
             <Row label="رقم المكتب" value={c.office_num} dir="ltr" />
             <Row label="رقم المحكمة" value={c.court_num} dir="ltr" />
-            <Row label="تاريخ الفتح" value={c.open_date ? fmtDate(c.open_date) : null} />
+            <Row label="تاريخ الفتح" value={c.open_date ? fmtDatePref(c.open_date) : null} />
             {c.status === 'muntahia' && (
               <Row
                 label="تاريخ الإغلاق"
-                value={c.close_date ? fmtDate(c.close_date) : null}
+                value={c.close_date ? fmtDatePref(c.close_date) : null}
               />
             )}
           </dl>

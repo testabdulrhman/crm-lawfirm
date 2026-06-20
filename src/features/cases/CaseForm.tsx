@@ -26,6 +26,7 @@ import { useTeamMembers } from '@/hooks/useTeam'
 import { useCreateCase, useUpdateCase } from '@/hooks/useCases'
 import { CASE_STATUS_OPTIONS, CASE_TYPES } from '@/lib/caseLabels'
 import { ContactPicker } from '@/components/ContactPicker'
+import { DualDatePicker } from '@/components/DualDatePicker'
 import type { Case, CaseInput } from '@/types/db'
 
 const OTHER = '__other__'
@@ -254,10 +255,17 @@ export function CaseForm({
             />
           </div>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="open_date">تاريخ الفتح</Label>
-            <Input id="open_date" type="date" {...register('open_date')} />
-          </div>
+          <Controller
+            control={control}
+            name="open_date"
+            render={({ field }) => (
+              <DualDatePicker
+                label="تاريخ الفتح"
+                value={field.value || null}
+                onChange={(v) => field.onChange(v ?? '')}
+              />
+            )}
+          />
 
           <div className="space-y-1.5">
             <Label htmlFor="progress">نسبة الإنجاز (٪)</Label>

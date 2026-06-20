@@ -35,8 +35,9 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { FilePreviewDialog } from '@/components/FilePreviewDialog'
+import { DualDatePicker } from '@/components/DualDatePicker'
 
-import { fmtDate, fmtFileSize, todayISO } from '@/lib/format'
+import { fmtDatePref, fmtFileSize, todayISO } from '@/lib/format'
 import { pickFile } from '@/lib/files'
 import { useAuth } from '@/stores/auth'
 import { useIsDirector } from '@/hooks/useIsDirector'
@@ -105,7 +106,7 @@ export function DocumentsTab({ caseId }: { caseId: string }) {
                       </p>
                       <p className="truncate text-xs text-muted-foreground">
                         {[
-                          d.document_date ? fmtDate(d.document_date) : null,
+                          d.document_date ? fmtDatePref(d.document_date) : null,
                           fmtFileSize(d.file_size),
                           d.uploaded_by_name ? `رفعه: ${d.uploaded_by_name}` : null,
                         ]
@@ -290,15 +291,11 @@ function UploadDialog({
               onChange={(e) => setName(e.target.value)}
             />
           </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="d_date">تاريخ المستند</Label>
-            <Input
-              id="d_date"
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-            />
-          </div>
+          <DualDatePicker
+            label="تاريخ المستند"
+            value={date || null}
+            onChange={(v) => setDate(v ?? '')}
+          />
           <div className="space-y-1.5">
             <Label htmlFor="d_desc">الوصف</Label>
             <Textarea
