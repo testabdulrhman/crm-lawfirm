@@ -650,6 +650,7 @@ export interface Appointment {
   status: string | null
   confirmation_sent_at: string | null
   thank_you_sent_at: string | null
+  gcal_event_id: string | null
   created_by: string | null
   created_at: string | null
   updated_at: string | null

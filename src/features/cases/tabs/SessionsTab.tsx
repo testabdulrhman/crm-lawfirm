@@ -13,6 +13,7 @@ import {
   FileText,
   CheckCircle2,
   CalendarOff,
+  CalendarCheck,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -285,6 +286,12 @@ function SessionCard({
             <Badge variant={sessionStatusBadge(s.status)}>
               {sessionStatusLabel(s.status)}
             </Badge>
+            {s.gcal_event_id && (
+              <span className="flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400">
+                <CalendarCheck className="h-3 w-3" />
+                في التقويم
+              </span>
+            )}
             {cd && (
               <span
                 className={cn(
