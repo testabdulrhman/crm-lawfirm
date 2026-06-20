@@ -27,6 +27,8 @@ import {
 } from '@/lib/caseLabels'
 import { CaseForm } from './CaseForm'
 import { OverviewTab } from './tabs/OverviewTab'
+import { PartiesTab } from './tabs/PartiesTab'
+import { SessionsTab } from './tabs/SessionsTab'
 import { PlaceholderTab } from './tabs/PlaceholderTab'
 import type { Case, CaseStatus } from '@/types/db'
 
@@ -152,13 +154,13 @@ export function CaseDetail({ id }: { id: string }) {
         <TabsContent value="overview">
           <OverviewTab caseData={c} />
         </TabsContent>
-        {/* placeholders — تُملأ في الأجزاء 2–4 */}
         <TabsContent value="parties">
-          <PlaceholderTab title="الأطراف" />
+          <PartiesTab caseId={c.id} />
         </TabsContent>
         <TabsContent value="sessions">
-          <PlaceholderTab title="الجلسات" />
+          <SessionsTab caseId={c.id} />
         </TabsContent>
+        {/* placeholders — تُملأ في الأجزاء 3–4 */}
         <TabsContent value="judgments">
           <PlaceholderTab title="الأحكام" />
         </TabsContent>
