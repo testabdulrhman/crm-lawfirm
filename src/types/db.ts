@@ -630,6 +630,44 @@ export interface PropertyTransferInput {
   created_by?: string | null
 }
 
+/* ===================== المواعيد (appointments) ===================== */
+
+export type AppointmentStatus =
+  | 'confirmed'
+  | 'completed'
+  | 'cancelled'
+  | 'no_show'
+
+export interface Appointment {
+  id: string
+  client_id: string | null
+  client_name: string | null
+  client_phone: string | null
+  appointment_date: string | null
+  appointment_time: string | null
+  duration_minutes: number | null
+  notes: string | null
+  status: string | null
+  confirmation_sent_at: string | null
+  thank_you_sent_at: string | null
+  created_by: string | null
+  created_at: string | null
+  updated_at: string | null
+  client?: { id: string; name: string | null; phone: string | null } | null
+}
+
+export interface AppointmentInput {
+  client_id?: string | null
+  client_name?: string | null
+  client_phone?: string | null
+  appointment_date?: string | null
+  appointment_time?: string | null
+  duration_minutes?: number | null
+  notes?: string | null
+  status?: string | null
+  created_by?: string | null
+}
+
 export interface HatifCall {
   id: string
   status: number | null
