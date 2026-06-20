@@ -9,7 +9,6 @@ import { toast } from '@/hooks/use-toast'
 import { uploadFile } from '@/lib/files'
 import { todayISO } from '@/lib/format'
 import type {
-  Contact,
   IncomingRequest,
   IncomingRequestInput,
   RequestDocument,
@@ -64,21 +63,6 @@ export function usePendingRequestsCount() {
         .eq('status', 'under_review')
       if (error) throw error
       return count ?? 0
-    },
-  })
-}
-
-// جهات الاتصال (للربط الاختياري في نموذج الطلب)
-export function useContacts() {
-  return useQuery({
-    queryKey: ['contacts', 'min'],
-    queryFn: async (): Promise<Contact[]> => {
-      const { data, error } = await supabase
-        .from('contacts')
-        .select('id, name, phone, type')
-        .order('name', { ascending: true })
-      if (error) throw error
-      return (data ?? []) as Contact[]
     },
   })
 }

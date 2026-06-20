@@ -21,11 +21,8 @@ import {
 } from '@/components/ui/dialog'
 import { useAuth } from '@/stores/auth'
 import { todayISO } from '@/lib/format'
-import {
-  useContacts,
-  useCreateRequest,
-  useUpdateRequest,
-} from '@/hooks/useRequests'
+import { useContacts } from '@/hooks/useContacts'
+import { useCreateRequest, useUpdateRequest } from '@/hooks/useRequests'
 import { TYPE_OPTIONS } from './labels'
 import type { IncomingRequest, IncomingRequestInput } from '@/types/db'
 
