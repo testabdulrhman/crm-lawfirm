@@ -32,7 +32,8 @@ import { SessionsTab } from './tabs/SessionsTab'
 import { RulingsTab } from './tabs/RulingsTab'
 import { TasksTab } from './tabs/TasksTab'
 import { DocumentsTab } from './tabs/DocumentsTab'
-import { PlaceholderTab } from './tabs/PlaceholderTab'
+import { MemosTab } from './tabs/MemosTab'
+import { NotesTab } from './tabs/NotesTab'
 import type { Case, CaseStatus } from '@/types/db'
 
 // ترتيب التبويبات المعتمد
@@ -169,15 +170,14 @@ export function CaseDetail({ id }: { id: string }) {
         <TabsContent value="tasks">
           <TasksTab caseId={c.id} />
         </TabsContent>
-        {/* placeholders — تُملأ في الجزء 4 */}
         <TabsContent value="memos">
-          <PlaceholderTab title="المذكرات" />
+          <MemosTab caseId={c.id} />
         </TabsContent>
         <TabsContent value="documents">
           <DocumentsTab caseId={c.id} />
         </TabsContent>
         <TabsContent value="notes">
-          <PlaceholderTab title="الملاحظات" />
+          <NotesTab caseId={c.id} />
         </TabsContent>
       </Tabs>
 
