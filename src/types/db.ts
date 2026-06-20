@@ -697,6 +697,39 @@ export interface OutgoingLetterInput {
   created_by?: string | null
 }
 
+/* ===================== التقارير (RPC) ===================== */
+
+export interface NameValue {
+  name: string
+  value: number
+}
+
+export interface ReportsOverview {
+  cases_total: number
+  cases_active: number
+  cases_suspended: number
+  cases_closed: number
+  cases_by_type: NameValue[] | null
+  cases_by_month: { month: string; value: number }[] | null
+  contacts_total: number
+  contacts_by_category: NameValue[] | null
+  upcoming_sessions: number
+  open_tasks: number
+  urgent_tasks: number
+  active_poas: number
+  expiring_poas: number
+  upcoming_appointments: number
+  legal_services: number
+  pending_requests: number
+  total_documents: number
+}
+
+export interface AssigneePerformance {
+  assignee_name: string | null
+  cases_count: number
+  open_tasks: number
+}
+
 export interface HatifCall {
   id: string
   status: number | null
