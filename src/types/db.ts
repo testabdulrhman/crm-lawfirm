@@ -484,6 +484,42 @@ export interface Note {
   author?: { id: string; name: string | null; short_name: string | null } | null
 }
 
+/* ===================== الوكالات (powers_of_attorney) ===================== */
+
+export type POAStatus = 'active' | 'expired' | 'cancelled'
+
+export interface PowerOfAttorney {
+  id: string
+  poa_number: string | null
+  poa_date: string | null
+  expiry_date: string | null
+  status: string | null
+  client_id: string | null
+  client_name: string | null
+  agent_name: string | null
+  document_url: string | null
+  notes: string | null
+  case_id: string | null
+  deleted_at: string | null
+  deleted_by: string | null
+  created_at: string | null
+  // علاقة القضية (FK موجود). لا embed لجهة الاتصال (لا FK) — نعتمد client_id/client_name.
+  case?: { id: string; title: string | null; office_num: string | null } | null
+}
+
+export interface POAInput {
+  poa_number?: string | null
+  poa_date?: string | null
+  expiry_date?: string | null
+  status?: string | null
+  client_id?: string | null
+  client_name?: string | null
+  agent_name?: string | null
+  document_url?: string | null
+  notes?: string | null
+  case_id?: string | null
+}
+
 export interface HatifCall {
   id: string
   status: number | null
