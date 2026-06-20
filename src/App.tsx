@@ -25,6 +25,8 @@ import { PropertyTransfersPage } from '@/features/property/PropertyTransfersPage
 import { PropertyTransferDetail } from '@/features/property/PropertyTransferDetail'
 import { AppointmentsPage } from '@/features/appointments/AppointmentsPage'
 import { AppointmentDetail } from '@/features/appointments/AppointmentDetail'
+import { OutgoingLettersPage } from '@/features/outgoing/OutgoingLettersPage'
+import { OutgoingLetterDetail } from '@/features/outgoing/OutgoingLetterDetail'
 
 function FullScreenLoader() {
   return (
@@ -60,6 +62,10 @@ function ProtectedRoutes() {
           {(params) => <AppointmentDetail id={params.id} />}
         </Route>
         <Route path="/appointments" component={AppointmentsPage} />
+        <Route path="/outgoing/:id">
+          {(params) => <OutgoingLetterDetail id={params.id} />}
+        </Route>
+        <Route path="/outgoing" component={OutgoingLettersPage} />
         <Route path="/team" component={TeamPage} />
         <Route path="/contacts/:id">
           {(params) => <ContactDetail id={params.id} />}

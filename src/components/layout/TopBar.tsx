@@ -28,6 +28,7 @@ export function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
     (location.startsWith('/appointments')
       ? ROUTE_TITLES['/appointments']
       : undefined) ??
+    (location.startsWith('/outgoing') ? ROUTE_TITLES['/outgoing'] : undefined) ??
     'لوحة التحكم'
 
   return (

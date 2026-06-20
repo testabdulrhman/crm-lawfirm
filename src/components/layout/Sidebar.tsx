@@ -11,6 +11,7 @@ import {
   BookOpen,
   Landmark,
   CalendarClock,
+  Send,
   LogOut,
   type LucideIcon,
 } from 'lucide-react'
@@ -47,6 +48,7 @@ const navItems: NavItem[] = [
     icon: CalendarClock,
     badge: 'upcoming_appointments',
   },
+  { label: 'الصادر', href: '/outgoing', icon: Send },
   { label: 'الطلبات الواردة', href: '/requests', icon: Inbox, badge: 'pending_requests' },
   { label: 'جهات الاتصال', href: '/contacts', icon: BookUser },
   { label: 'الموظفون', href: '/team', icon: Users },
