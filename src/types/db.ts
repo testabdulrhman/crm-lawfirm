@@ -668,6 +668,35 @@ export interface AppointmentInput {
   created_by?: string | null
 }
 
+/* ===================== الصادر (outgoing_letters) ===================== */
+
+export interface OutgoingLetter {
+  id: string
+  letter_number: string | null
+  subject: string | null
+  letter_date: string | null
+  recipient: string | null
+  case_id: string | null
+  notes: string | null
+  file_url: string | null
+  created_by: string | null
+  deleted_at: string | null
+  deleted_by: string | null
+  created_at: string | null
+  case?: { id: string; title: string | null; office_num: string | null } | null
+}
+
+export interface OutgoingLetterInput {
+  letter_number?: string | null
+  subject?: string | null
+  letter_date?: string | null
+  recipient?: string | null
+  case_id?: string | null
+  notes?: string | null
+  file_url?: string | null
+  created_by?: string | null
+}
+
 export interface HatifCall {
   id: string
   status: number | null
