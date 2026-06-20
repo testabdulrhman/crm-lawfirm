@@ -9,6 +9,7 @@ import {
   Scale,
   FileSignature,
   BookOpen,
+  Landmark,
   LogOut,
   type LucideIcon,
 } from 'lucide-react'
@@ -33,6 +34,7 @@ const navItems: NavItem[] = [
   { label: 'القضايا', href: '/cases', icon: Scale },
   { label: 'الوكالات', href: '/poa', icon: FileSignature, badge: 'expiring_poas' },
   { label: 'الاستشارات واللوائح', href: '/legal-services', icon: BookOpen },
+  { label: 'التوثيق العقاري', href: '/property', icon: Landmark },
   { label: 'الطلبات الواردة', href: '/requests', icon: Inbox, badge: 'pending_requests' },
   { label: 'جهات الاتصال', href: '/contacts', icon: BookUser },
   { label: 'الموظفون', href: '/team', icon: Users },

@@ -24,6 +24,7 @@ export function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
     (location.startsWith('/legal-services')
       ? ROUTE_TITLES['/legal-services']
       : undefined) ??
+    (location.startsWith('/property') ? ROUTE_TITLES['/property'] : undefined) ??
     'لوحة التحكم'
 
   return (
