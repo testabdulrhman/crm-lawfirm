@@ -27,6 +27,7 @@ import { AppointmentsPage } from '@/features/appointments/AppointmentsPage'
 import { AppointmentDetail } from '@/features/appointments/AppointmentDetail'
 import { OutgoingLettersPage } from '@/features/outgoing/OutgoingLettersPage'
 import { OutgoingLetterDetail } from '@/features/outgoing/OutgoingLetterDetail'
+import { ReportsPage } from '@/features/reports/ReportsPage'
 
 function FullScreenLoader() {
   return (
@@ -66,6 +67,7 @@ function ProtectedRoutes() {
           {(params) => <OutgoingLetterDetail id={params.id} />}
         </Route>
         <Route path="/outgoing" component={OutgoingLettersPage} />
+        <Route path="/reports" component={ReportsPage} />
         <Route path="/team" component={TeamPage} />
         <Route path="/contacts/:id">
           {(params) => <ContactDetail id={params.id} />}

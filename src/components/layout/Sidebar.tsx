@@ -12,6 +12,7 @@ import {
   Landmark,
   CalendarClock,
   Send,
+  BarChart3,
   LogOut,
   type LucideIcon,
 } from 'lucide-react'
@@ -58,6 +59,7 @@ const navItems: NavItem[] = [
     icon: UserPlus,
     badge: 'pending_applications',
   },
+  { label: 'التقارير', href: '/reports', icon: BarChart3 },
   { label: 'الإعدادات', href: '/settings', icon: Settings },
   /* مواقع وحدات قادمة: القضايا، جهات الاتصال، الوكالات... */
 ]

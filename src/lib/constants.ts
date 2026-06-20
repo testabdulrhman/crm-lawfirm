@@ -13,6 +13,7 @@ export const ROUTE_TITLES: Record<string, string> = {
   '/property': 'التوثيق العقاري',
   '/appointments': 'المواعيد',
   '/outgoing': 'الصادر',
+  '/reports': 'التقارير والإحصاءات',
   '/team': 'الموظفون',
   '/contacts': 'جهات الاتصال',
   '/requests': 'الطلبات الواردة',
