@@ -10,6 +10,7 @@ import {
   FileSignature,
   BookOpen,
   Landmark,
+  CalendarClock,
   LogOut,
   type LucideIcon,
 } from 'lucide-react'
@@ -19,6 +20,7 @@ import { useAuth } from '@/stores/auth'
 import { usePendingRequestsCount } from '@/hooks/useRequests'
 import { usePendingApplicationsCount } from '@/hooks/useStaffApplications'
 import { useExpiringPOAsCount } from '@/hooks/usePOAs'
+import { useUpcomingAppointmentsCount } from '@/hooks/useAppointments'
 import { fmtNumber } from '@/lib/format'
 import { COMPANY_NAME_SHORT } from '@/lib/constants'
 
@@ -26,7 +28,11 @@ interface NavItem {
   label: string
   href: string
   icon: LucideIcon
-  badge?: 'pending_requests' | 'pending_applications' | 'expiring_poas'
+  badge?:
+    | 'pending_requests'
+    | 'pending_applications'
+    | 'expiring_poas'
+    | 'upcoming_appointments'
 }
 
 const navItems: NavItem[] = [
@@ -35,6 +41,12 @@ const navItems: NavItem[] = [
   { label: 'الوكالات', href: '/poa', icon: FileSignature, badge: 'expiring_poas' },
   { label: 'الاستشارات واللوائح', href: '/legal-services', icon: BookOpen },
   { label: 'التوثيق العقاري', href: '/property', icon: Landmark },
+  {
+    label: 'المواعيد',
+    href: '/appointments',
+    icon: CalendarClock,
+    badge: 'upcoming_appointments',
+  },
   { label: 'الطلبات الواردة', href: '/requests', icon: Inbox, badge: 'pending_requests' },
   { label: 'جهات الاتصال', href: '/contacts', icon: BookUser },
   { label: 'الموظفون', href: '/team', icon: Users },
@@ -54,6 +66,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const { data: pendingCount } = usePendingRequestsCount()
   const { data: pendingApps } = usePendingApplicationsCount()
   const { data: expiringPOAs } = useExpiringPOAsCount()
+  const { data: upcomingAppts } = useUpcomingAppointmentsCount()
 
   return (
     <aside className="pt-safe pb-safe flex h-full w-64 flex-col bg-navy text-navy-50">
@@ -83,7 +96,9 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                 ? (pendingApps ?? 0)
                 : item.badge === 'expiring_poas'
                   ? (expiringPOAs ?? 0)
-                  : 0
+                  : item.badge === 'upcoming_appointments'
+                    ? (upcomingAppts ?? 0)
+                    : 0
           const showBadge = !!item.badge && badgeCount > 0
           return (
             <Link

@@ -23,6 +23,8 @@ import { LegalServicesPage } from '@/features/legal-services/LegalServicesPage'
 import { LegalServiceDetail } from '@/features/legal-services/LegalServiceDetail'
 import { PropertyTransfersPage } from '@/features/property/PropertyTransfersPage'
 import { PropertyTransferDetail } from '@/features/property/PropertyTransferDetail'
+import { AppointmentsPage } from '@/features/appointments/AppointmentsPage'
+import { AppointmentDetail } from '@/features/appointments/AppointmentDetail'
 
 function FullScreenLoader() {
   return (
@@ -54,6 +56,10 @@ function ProtectedRoutes() {
           {(params) => <PropertyTransferDetail id={params.id} />}
         </Route>
         <Route path="/property" component={PropertyTransfersPage} />
+        <Route path="/appointments/:id">
+          {(params) => <AppointmentDetail id={params.id} />}
+        </Route>
+        <Route path="/appointments" component={AppointmentsPage} />
         <Route path="/team" component={TeamPage} />
         <Route path="/contacts/:id">
           {(params) => <ContactDetail id={params.id} />}
