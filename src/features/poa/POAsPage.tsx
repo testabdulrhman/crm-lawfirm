@@ -27,7 +27,6 @@ import {
   isExpiringSoon,
   isActuallyExpired,
   expirySoonText,
-  poaSortKey,
 } from '@/lib/poaLabels'
 import type { PowerOfAttorney } from '@/types/db'
 
@@ -69,12 +68,15 @@ export function POAsPage() {
       if (soonOnly && !isExpiringSoon(p)) return false
       return true
     })
+    // الترتيب حسب تاريخ الإصدار تنازلياً (الأحدث أولاً)، والفارغ في الأسفل
     return list
       .map((p, i) => ({ p, i }))
       .sort((a, b) => {
-        const ka = poaSortKey(a.p)
-        const kb = poaSortKey(b.p)
-        return ka[0] - kb[0] || ka[1] - kb[1] || a.i - b.i
+        const da = a.p.poa_date ?? ''
+        const db = b.p.poa_date ?? ''
+        if (da && db) return db.localeCompare(da) || a.i - b.i
+        if (!da && !db) return a.i - b.i
+        return da ? -1 : 1 // الفارغ في الأسفل
       })
       .map((x) => x.p)
   }, [data, search, status, soonOnly])

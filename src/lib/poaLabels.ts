@@ -1,6 +1,6 @@
 // تسميات وألوان حالة الوكالة + منطق التنبيه قرب الانتهاء
 import type { BadgeProps } from '@/components/ui/badge'
-import type { POAStatus, PowerOfAttorney } from '@/types/db'
+import type { POAStatus } from '@/types/db'
 import { todayISO } from '@/lib/format'
 
 export const POA_STATUS_LABELS: Record<POAStatus, string> = {
@@ -69,16 +69,7 @@ export function expirySoonText(expiry: string | null | undefined): string {
   return `تنتهي خلال ${days} يوماً`
 }
 
-// ترتيب القائمة الافتراضي: سارية أولاً، والأقرب انتهاءً بالأعلى ضمن السارية
-export function poaSortKey(poa: PowerOfAttorney): [number, number] {
-  const statusRank =
-    poa.status === 'active' ? 0 : poa.status === 'expired' ? 1 : 2
-  // ضمن السارية: الأقرب انتهاءً أولاً
-  const days = daysUntilExpiry(poa.expiry_date)
-  const expiryRank =
-    poa.status === 'active' && days != null ? days : Number.MAX_SAFE_INTEGER
-  return [statusRank, expiryRank]
-}
+// ملاحظة: الترتيب الافتراضي للقائمة الآن حسب تاريخ الإصدار (poa_date) تنازلياً — انظر POAsPage.
 
 // تاريخ اليوم (لإعادة الاستخدام)
 export { todayISO }
