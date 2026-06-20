@@ -75,6 +75,19 @@ export const fmtDateTime = (d: string | Date | null | undefined): string => {
 // قيمة تاريخ لحقول <input type="date"> بصيغة YYYY-MM-DD (أرقام لاتينية)
 export const todayISO = (): string => new Date().toISOString().slice(0, 10)
 
+// تنسيق وقت من عمود time (مثل "10:30:00") إلى 12 ساعة عربية بأرقام لاتينية ("10:30 ص")
+export const fmtTime = (t: string | null | undefined): string => {
+  if (!t) return '—'
+  const m = /^(\d{1,2}):(\d{2})/.exec(t.trim())
+  if (!m) return forceLatinDigits(t)
+  let h = parseInt(m[1], 10)
+  const min = m[2]
+  const suffix = h < 12 ? 'ص' : 'م'
+  h = h % 12
+  if (h === 0) h = 12
+  return forceLatinDigits(`${h}:${min} ${suffix}`)
+}
+
 // تطبيع رقم جوال سعودي لصيغة Msegat (9665XXXXXXXX):
 // أزل غير الأرقام؛ إن بدأ بـ 0 استبدله بـ 966؛ إن لم يبدأ بـ 966 أضِفها.
 export const normalizeSaudiPhone = (raw: string): string => {

@@ -280,6 +280,61 @@ export interface CaseInput {
   progress?: number | null
 }
 
+/* ===== القضايا: الأطراف ===== */
+
+export type PartySide = 'plaintiff' | 'defendant'
+
+export interface CaseParty {
+  id: string
+  case_id: string | null
+  name: string | null
+  role: string | null
+  party_side: string | null
+  phone: string | null
+  id_number: string | null
+  nationality: string | null
+  notes: string | null
+  created_at: string | null
+}
+
+export interface CasePartyInput {
+  case_id: string
+  name: string
+  party_side: string
+  role?: string | null
+  phone?: string | null
+  id_number?: string | null
+  nationality?: string | null
+  notes?: string | null
+}
+
+/* ===== القضايا: الجلسات (public.sessions) ===== */
+
+export interface CaseSession {
+  id: string
+  case_id: string | null
+  title: string | null
+  session_date: string | null
+  session_time: string | null
+  court: string | null
+  status: string | null
+  preparation: string | null
+  outcome: string | null
+  minutes_url: string | null
+  gcal_event_id: string | null // للتكامل لاحقاً — لا تلمسه
+  created_at: string | null
+}
+
+export interface CaseSessionInput {
+  case_id: string
+  title?: string | null
+  session_date: string
+  session_time?: string | null
+  court?: string | null
+  status?: string | null
+  preparation?: string | null
+}
+
 export interface HatifCall {
   id: string
   status: number | null

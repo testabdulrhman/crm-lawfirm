@@ -48,3 +48,65 @@ export const CASE_TYPES = [
 
 export const caseTypeLabel = (t: string | null | undefined): string =>
   t && t.trim() !== '' ? t : 'غير محدّد'
+
+/* ===== الأطراف: الصفة (party_side) ===== */
+
+export type PartySideValue = 'plaintiff' | 'defendant'
+
+export const PARTY_SIDE_LABELS: Record<PartySideValue, string> = {
+  plaintiff: 'مدّعٍ',
+  defendant: 'مدّعى عليه',
+}
+
+export const PARTY_SIDE_BADGE: Record<PartySideValue, BadgeProps['variant']> = {
+  plaintiff: 'success', // أخضر
+  defendant: 'destructive', // أحمر
+}
+
+export const PARTY_SIDE_OPTIONS: { value: PartySideValue; label: string }[] = (
+  Object.keys(PARTY_SIDE_LABELS) as PartySideValue[]
+).map((value) => ({ value, label: PARTY_SIDE_LABELS[value] }))
+
+export const partySideLabel = (s: string | null | undefined): string =>
+  s && s in PARTY_SIDE_LABELS ? PARTY_SIDE_LABELS[s as PartySideValue] : (s ?? '—')
+
+export const partySideBadge = (
+  s: string | null | undefined
+): BadgeProps['variant'] =>
+  s && s in PARTY_SIDE_BADGE ? PARTY_SIDE_BADGE[s as PartySideValue] : 'secondary'
+
+/* ===== الجلسات: تطبيع الحالة (مختلطة عربي/إنجليزي) ===== */
+
+// نطبّع الحالة الخام إلى: 'قادمة' | 'منعقدة' | 'مؤجّلة'
+export type SessionStatusNorm = 'قادمة' | 'منعقدة' | 'مؤجّلة'
+
+function normSessionStatus(raw: string | null | undefined): SessionStatusNorm {
+  const v = (raw ?? '').trim().toLowerCase()
+  if (v === 'held' || v === 'منعقدة') return 'منعقدة'
+  if (v === 'postponed' || v === 'مؤجّلة' || v === 'مؤجلة') return 'مؤجّلة'
+  return 'قادمة' // upcoming / قادمة / الافتراضي
+}
+
+export const SESSION_STATUS_OPTIONS: { value: SessionStatusNorm; label: string }[] = [
+  { value: 'قادمة', label: 'قادمة' },
+  { value: 'منعقدة', label: 'منعقدة' },
+  { value: 'مؤجّلة', label: 'مؤجّلة' },
+]
+
+export const sessionStatusLabel = (raw: string | null | undefined): string =>
+  normSessionStatus(raw)
+
+export const sessionStatusBadge = (
+  raw: string | null | undefined
+): BadgeProps['variant'] => {
+  const s = normSessionStatus(raw)
+  if (s === 'منعقدة') return 'success' // أخضر
+  if (s === 'مؤجّلة') return 'secondary'
+  return 'warning' // قادمة = كهرماني
+}
+
+export const isSessionHeld = (raw: string | null | undefined): boolean =>
+  normSessionStatus(raw) === 'منعقدة'
+
+export const isSessionUpcoming = (raw: string | null | undefined): boolean =>
+  normSessionStatus(raw) === 'قادمة'
