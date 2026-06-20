@@ -9,6 +9,7 @@ export const ROUTE_TITLES: Record<string, string> = {
   '/': 'لوحة التحكم',
   '/cases': 'القضايا',
   '/poa': 'الوكالات',
+  '/legal-services': 'الاستشارات واللوائح',
   '/team': 'الموظفون',
   '/contacts': 'جهات الاتصال',
   '/requests': 'الطلبات الواردة',

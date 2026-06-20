@@ -19,6 +19,8 @@ import { CasesPage } from '@/features/cases/CasesPage'
 import { CaseDetail } from '@/features/cases/CaseDetail'
 import { POAsPage } from '@/features/poa/POAsPage'
 import { POADetail } from '@/features/poa/POADetail'
+import { LegalServicesPage } from '@/features/legal-services/LegalServicesPage'
+import { LegalServiceDetail } from '@/features/legal-services/LegalServiceDetail'
 
 function FullScreenLoader() {
   return (
@@ -42,6 +44,10 @@ function ProtectedRoutes() {
           {(params) => <POADetail id={params.id} />}
         </Route>
         <Route path="/poa" component={POAsPage} />
+        <Route path="/legal-services/:id">
+          {(params) => <LegalServiceDetail id={params.id} />}
+        </Route>
+        <Route path="/legal-services" component={LegalServicesPage} />
         <Route path="/team" component={TeamPage} />
         <Route path="/contacts/:id">
           {(params) => <ContactDetail id={params.id} />}
