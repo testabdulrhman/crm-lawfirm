@@ -4,7 +4,16 @@ import { supabase } from '@/lib/supabase'
 import { toast } from '@/hooks/use-toast'
 import { getTemplate, fillTemplate } from '@/lib/templates'
 import { normalizeSaudiPhone, todayISO, fmtDatePref, fmtTime } from '@/lib/format'
+import { addAppointmentEvent, deleteCalendarEvent } from '@/lib/calendar'
 import type { Appointment, AppointmentInput, SmsConfig } from '@/types/db'
+
+function calendarWarn() {
+  toast({
+    variant: 'default',
+    title: 'تعذّرت مزامنة التقويم',
+    description: 'حُفظ الموعد، لكن لم يُنشأ/يُحدّث حدث التقويم.',
+  })
+}
 
 const SELECT = '*, client:contacts(id,name,phone)'
 
@@ -81,18 +90,30 @@ export function useUpcomingAppointmentsCount() {
 export function useCreateAppointment() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (input: AppointmentInput): Promise<Appointment> => {
+    mutationFn: async (input: AppointmentInput): Promise<{ calOk: boolean }> => {
       const { data, error } = await supabase
         .from('appointments')
         .insert({ status: 'confirmed', duration_minutes: 60, ...input })
         .select(SELECT)
         .single()
       if (error) throw error
-      return data as unknown as Appointment
+      const appt = data as unknown as Appointment
+
+      // مزامنة التقويم (غير قاتلة)
+      const eventId = await addAppointmentEvent(appt)
+      if (eventId) {
+        await supabase
+          .from('appointments')
+          .update({ gcal_event_id: eventId })
+          .eq('id', appt.id)
+        return { calOk: true }
+      }
+      return { calOk: false }
     },
-    onSuccess: () => {
+    onSuccess: (res) => {
       invalidate(qc)
       toast({ variant: 'success', title: 'تمت إضافة الموعد' })
+      if (!res.calOk) calendarWarn()
     },
     onError: errToast('تعذّرت إضافة الموعد'),
   })
@@ -107,20 +128,45 @@ export function useUpdateAppointment() {
     }: {
       id: string
       input: Partial<AppointmentInput>
-    }): Promise<Appointment> => {
-      const { data, error } = await supabase
+    }): Promise<{ calWarn: boolean }> => {
+      // اجلب الصف الحالي لمقارنة التاريخ/الوقت ومعرّف التقويم
+      const { data: existing } = await supabase
+        .from('appointments')
+        .select(SELECT)
+        .eq('id', id)
+        .single()
+      const old = existing as unknown as Appointment | null
+
+      const { error } = await supabase
         .from('appointments')
         .update({ ...input, updated_at: new Date().toISOString() })
         .eq('id', id)
-        .select(SELECT)
-        .single()
       if (error) throw error
-      return data as unknown as Appointment
+
+      const dateChanged =
+        input.appointment_date !== undefined &&
+        input.appointment_date !== old?.appointment_date
+      const timeChanged =
+        input.appointment_time !== undefined &&
+        input.appointment_time !== old?.appointment_time
+
+      if (dateChanged || timeChanged) {
+        await deleteCalendarEvent(old?.gcal_event_id)
+        const merged = { ...(old as Appointment), ...input } as Appointment
+        const eventId = await addAppointmentEvent(merged)
+        await supabase
+          .from('appointments')
+          .update({ gcal_event_id: eventId })
+          .eq('id', id)
+        return { calWarn: !eventId }
+      }
+      return { calWarn: false }
     },
-    onSuccess: (_d, vars) => {
+    onSuccess: (res, vars) => {
       invalidate(qc)
       qc.invalidateQueries({ queryKey: ['appointment', vars.id] })
       toast({ variant: 'success', title: 'تم تحديث الموعد' })
+      if (res.calWarn) calendarWarn()
     },
     onError: errToast('تعذّر تحديث الموعد'),
   })
@@ -155,6 +201,16 @@ export function useDeleteAppointment() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (id: string): Promise<void> => {
+      // احذف حدث التقويم أولاً إن وُجد (غير قاتل)
+      const { data: existing } = await supabase
+        .from('appointments')
+        .select('gcal_event_id')
+        .eq('id', id)
+        .maybeSingle()
+      await deleteCalendarEvent(
+        (existing as { gcal_event_id: string | null } | null)?.gcal_event_id
+      )
+
       const { error } = await supabase.from('appointments').delete().eq('id', id)
       if (error) throw error
     },

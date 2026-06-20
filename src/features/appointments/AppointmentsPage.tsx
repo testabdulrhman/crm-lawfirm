@@ -9,6 +9,7 @@ import {
   Timer,
   CheckCircle2,
   MessageSquare,
+  CalendarCheck,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -242,9 +243,15 @@ function AppointmentCard({
           )}
         </div>
 
-        {/* مؤشّرات SMS */}
-        {(a.confirmation_sent_at || a.thank_you_sent_at) && (
+        {/* مؤشّرات SMS + التقويم */}
+        {(a.confirmation_sent_at || a.thank_you_sent_at || a.gcal_event_id) && (
           <div className="flex flex-wrap gap-1.5">
+            {a.gcal_event_id && (
+              <span className="flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] text-emerald-700 dark:text-emerald-300">
+                <CalendarCheck className="h-3 w-3" />
+                في التقويم
+              </span>
+            )}
             {a.confirmation_sent_at && (
               <span className="flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] text-emerald-700 dark:text-emerald-300">
                 <CheckCircle2 className="h-3 w-3" />
