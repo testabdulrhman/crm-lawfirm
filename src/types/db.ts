@@ -224,6 +224,62 @@ export interface ContactWorkLinks {
   total_links: number
 }
 
+/* ===================== القضايا ===================== */
+
+export type CaseStatus = 'jarri' | 'muntahia' | 'muallaq'
+
+// شكل الـ join المختصر
+export interface CaseContactRef {
+  id: string
+  name: string | null
+  phone: string | null
+}
+export interface CaseAssigneeRef {
+  id: string
+  name: string | null
+  short_name: string | null
+}
+
+export interface Case {
+  id: string
+  office_num: string | null
+  court_num: string | null
+  title: string | null
+  type: string | null
+  status: string | null
+  court: string | null
+  court_division: string | null
+  subject: string | null
+  assignee_id: string | null
+  contact_id: string | null
+  progress: number | null
+  hearing_date: string | null
+  hearing_label: string | null
+  docs_count: number | null
+  open_date: string | null
+  close_date: string | null
+  created_at: string | null
+  updated_at: string | null
+  // علاقات (join)
+  contact?: CaseContactRef | null
+  assignee?: CaseAssigneeRef | null
+}
+
+export interface CaseInput {
+  title: string
+  type?: string | null
+  status?: string | null
+  office_num?: string | null
+  court_num?: string | null
+  court?: string | null
+  court_division?: string | null
+  contact_id?: string | null
+  assignee_id?: string | null
+  subject?: string | null
+  open_date?: string | null
+  progress?: number | null
+}
+
 export interface HatifCall {
   id: string
   status: number | null
