@@ -6,6 +6,7 @@ import {
   Sun,
   CalendarDays,
   CalendarCheck,
+  MessageSquareText,
 } from 'lucide-react'
 
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
@@ -17,6 +18,7 @@ import { usePrefs, type DateDisplay } from '@/stores/prefs'
 import { fmtDatePref, todayISO } from '@/lib/format'
 import { OfficeInfoTab } from './OfficeInfoTab'
 import { LookupsTab } from './LookupsTab'
+import { TemplatesTab } from './TemplatesTab'
 
 export function SettingsPage() {
   return (
@@ -38,6 +40,10 @@ export function SettingsPage() {
             <Tags className="h-4 w-4" />
             التصنيفات
           </TabsTrigger>
+          <TabsTrigger value="templates" className="gap-2">
+            <MessageSquareText className="h-4 w-4" />
+            قوالب الرسائل
+          </TabsTrigger>
           <TabsTrigger value="appearance" className="gap-2">
             <Palette className="h-4 w-4" />
             المظهر
@@ -55,6 +61,10 @@ export function SettingsPage() {
 
         <TabsContent value="lookups">
           <LookupsTab />
+        </TabsContent>
+
+        <TabsContent value="templates">
+          <TemplatesTab />
         </TabsContent>
 
         <TabsContent value="appearance">
