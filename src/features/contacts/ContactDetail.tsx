@@ -142,7 +142,7 @@ export function ContactDetail({ id }: { id: string }) {
         </CardContent>
       </Card>
 
-      <Tabs value={tab} onValueChange={setTab}>
+      <Tabs value={tab} onValueChange={setTab} dir="rtl">
         <TabsList className="flex w-full flex-wrap justify-start gap-1 sm:w-auto">
           <TabsTrigger value="overview">نظرة عامة</TabsTrigger>
           <TabsTrigger value="calls">سجل التواصل</TabsTrigger>

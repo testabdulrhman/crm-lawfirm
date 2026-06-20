@@ -17,7 +17,7 @@ export function SettingsPage() {
         </p>
       </div>
 
-      <Tabs defaultValue="office">
+      <Tabs defaultValue="office" dir="rtl">
         <TabsList className="flex w-full flex-wrap justify-start gap-1 sm:w-auto">
           <TabsTrigger value="office" className="gap-2">
             <Building2 className="h-4 w-4" />

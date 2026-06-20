@@ -139,10 +139,10 @@ export function CaseDetail({ id }: { id: string }) {
         </CardContent>
       </Card>
 
-      {/* التبويبات */}
-      <Tabs defaultValue="overview">
+      {/* التبويبات (RTL — تبدأ من اليمين) */}
+      <Tabs defaultValue="overview" dir="rtl">
         <div className="overflow-x-auto">
-          <TabsList className="inline-flex w-max">
+          <TabsList className="inline-flex w-max justify-start">
             {TABS.map((t) => (
               <TabsTrigger key={t.value} value={t.value}>
                 {t.label}
