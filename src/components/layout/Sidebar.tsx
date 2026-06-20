@@ -7,6 +7,7 @@ import {
   Inbox,
   Settings,
   Scale,
+  FileSignature,
   LogOut,
   type LucideIcon,
 } from 'lucide-react'
@@ -15,6 +16,7 @@ import { cn } from '@/lib/utils'
 import { useAuth } from '@/stores/auth'
 import { usePendingRequestsCount } from '@/hooks/useRequests'
 import { usePendingApplicationsCount } from '@/hooks/useStaffApplications'
+import { useExpiringPOAsCount } from '@/hooks/usePOAs'
 import { fmtNumber } from '@/lib/format'
 import { COMPANY_NAME_SHORT } from '@/lib/constants'
 
@@ -22,12 +24,13 @@ interface NavItem {
   label: string
   href: string
   icon: LucideIcon
-  badge?: 'pending_requests' | 'pending_applications'
+  badge?: 'pending_requests' | 'pending_applications' | 'expiring_poas'
 }
 
 const navItems: NavItem[] = [
   { label: 'لوحة التحكم', href: '/', icon: LayoutDashboard },
   { label: 'القضايا', href: '/cases', icon: Scale },
+  { label: 'الوكالات', href: '/poa', icon: FileSignature, badge: 'expiring_poas' },
   { label: 'الطلبات الواردة', href: '/requests', icon: Inbox, badge: 'pending_requests' },
   { label: 'جهات الاتصال', href: '/contacts', icon: BookUser },
   { label: 'الموظفون', href: '/team', icon: Users },
@@ -46,6 +49,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const { teamMember, logout } = useAuth()
   const { data: pendingCount } = usePendingRequestsCount()
   const { data: pendingApps } = usePendingApplicationsCount()
+  const { data: expiringPOAs } = useExpiringPOAsCount()
 
   return (
     <aside className="pt-safe pb-safe flex h-full w-64 flex-col bg-navy text-navy-50">
@@ -73,7 +77,9 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
               ? (pendingCount ?? 0)
               : item.badge === 'pending_applications'
                 ? (pendingApps ?? 0)
-                : 0
+                : item.badge === 'expiring_poas'
+                  ? (expiringPOAs ?? 0)
+                  : 0
           const showBadge = !!item.badge && badgeCount > 0
           return (
             <Link

@@ -17,6 +17,8 @@ import { ContactsPage } from '@/features/contacts/ContactsPage'
 import { ContactDetail } from '@/features/contacts/ContactDetail'
 import { CasesPage } from '@/features/cases/CasesPage'
 import { CaseDetail } from '@/features/cases/CaseDetail'
+import { POAsPage } from '@/features/poa/POAsPage'
+import { POADetail } from '@/features/poa/POADetail'
 
 function FullScreenLoader() {
   return (
@@ -36,6 +38,10 @@ function ProtectedRoutes() {
           {(params) => <CaseDetail id={params.id} />}
         </Route>
         <Route path="/cases" component={CasesPage} />
+        <Route path="/poa/:id">
+          {(params) => <POADetail id={params.id} />}
+        </Route>
+        <Route path="/poa" component={POAsPage} />
         <Route path="/team" component={TeamPage} />
         <Route path="/contacts/:id">
           {(params) => <ContactDetail id={params.id} />}

@@ -20,6 +20,7 @@ export function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
       : undefined) ??
     (location.startsWith('/contacts') ? ROUTE_TITLES['/contacts'] : undefined) ??
     (location.startsWith('/cases') ? ROUTE_TITLES['/cases'] : undefined) ??
+    (location.startsWith('/poa') ? ROUTE_TITLES['/poa'] : undefined) ??
     'لوحة التحكم'
 
   return (
