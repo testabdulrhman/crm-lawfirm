@@ -4,7 +4,6 @@ import {
   Plus,
   Search,
   Scale,
-  ChevronLeft,
   CalendarClock,
   User,
   UserCog,
@@ -272,79 +271,82 @@ function CaseRow({
   const soon = isHearingSoon(c.hearing_date)
   const progress = Math.min(100, Math.max(0, c.progress ?? 0))
 
-  // سطر الأرقام/المحكمة (أرقام لاتينية)
-  const metaParts: string[] = []
-  if (c.office_num) metaParts.push(`مكتب ${c.office_num}`)
-  if (c.court_num) metaParts.push(`محكمة ${c.court_num}`)
-  const courtLine = [c.court, c.court_division].filter(Boolean).join(' — ')
-  if (courtLine) metaParts.push(courtLine)
+  // أرقام المكتب/المحكمة (لاتينية)
+  const nums: string[] = []
+  if (c.office_num) nums.push(`مكتب ${c.office_num}`)
+  if (c.court_num) nums.push(`محكمة ${c.court_num}`)
 
   return (
     <button
       onClick={onOpen}
-      className="flex w-full flex-col gap-2 px-4 py-3 text-right transition-colors hover:bg-accent/10 sm:flex-row sm:items-center sm:gap-4"
+      className="block w-full px-4 py-3 text-right transition-colors hover:bg-accent/10"
     >
-      {/* العنوان + الأرقام */}
-      <div className="min-w-0 flex-1">
-        <p className="truncate font-semibold leading-snug text-foreground">
+      {/* السطر العلوي: العنوان + الحالة/النوع */}
+      <div className="flex items-center gap-2">
+        <h3 className="min-w-0 flex-1 truncate font-semibold leading-snug text-foreground">
           {c.title || 'بدون عنوان'}
-        </p>
-        {metaParts.length > 0 && (
-          <p className="mt-0.5 truncate text-xs text-muted-foreground">
-            {metaParts.join(' · ')}
-          </p>
+        </h3>
+        {soon && c.hearing_date && (
+          <span className="hidden shrink-0 items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-600 dark:text-amber-400 sm:flex">
+            <CalendarClock className="h-3 w-3" />
+            {fmtDatePref(c.hearing_date)}
+          </span>
         )}
+        <Badge variant={caseStatusBadge(c.status)} className="shrink-0">
+          {caseStatusLabel(c.status)}
+        </Badge>
+        <Badge variant="outline" className="hidden shrink-0 sm:inline-flex">
+          {caseTypeLabel(c.type)}
+        </Badge>
       </div>
 
-      {/* الموكّل + المسؤول */}
-      <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground sm:w-44 sm:flex-col sm:items-start">
+      {/* السطر السفلي: ميتا هادئة */}
+      <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
         {c.contact?.name && (
-          <span className="flex items-center gap-1 truncate">
+          <span className="flex min-w-0 items-center gap-1">
             <User className="h-3 w-3 shrink-0" />
             <span className="truncate">{c.contact.name}</span>
           </span>
         )}
         {(c.assignee?.short_name || c.assignee?.name) && (
-          <span className="flex items-center gap-1 truncate">
+          <span className="flex items-center gap-1">
             <UserCog className="h-3 w-3 shrink-0" />
             <span className="truncate">
               {c.assignee?.short_name || c.assignee?.name}
             </span>
           </span>
         )}
-      </div>
-
-      {/* الحالة + النوع + الجلسة + التقدّم */}
-      <div className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 sm:w-56 sm:justify-end">
-        <Badge variant={caseStatusBadge(c.status)}>
-          {caseStatusLabel(c.status)}
-        </Badge>
-        <Badge variant="outline">{caseTypeLabel(c.type)}</Badge>
+        {nums.length > 0 && (
+          <span dir="ltr" className="text-right">
+            {nums.join(' · ')}
+          </span>
+        )}
+        {/* الجلسة على الجوال (أو غير القريبة) */}
         {c.hearing_date && (
           <span
             className={cn(
-              'flex items-center gap-1 text-xs',
+              'flex items-center gap-1',
               soon
-                ? 'font-medium text-amber-600 dark:text-amber-400'
-                : 'text-muted-foreground'
+                ? 'font-medium text-amber-600 dark:text-amber-400 sm:hidden'
+                : ''
             )}
           >
             <CalendarClock className="h-3 w-3" />
             {fmtDatePref(c.hearing_date)}
           </span>
         )}
-        <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-          <span className="h-1.5 w-14 overflow-hidden rounded-full bg-muted">
+
+        {/* التقدّم — في طرف السطر */}
+        <span className="mr-auto flex shrink-0 items-center gap-1.5">
+          <span className="h-1 w-16 overflow-hidden rounded-full bg-muted">
             <span
               className="block h-full rounded-full bg-gold"
               style={{ width: `${progress}%` }}
             />
           </span>
-          {fmtNumber(progress)}٪
+          <span className="tabular-nums">{fmtNumber(progress)}٪</span>
         </span>
       </div>
-
-      <ChevronLeft className="hidden h-4 w-4 shrink-0 text-muted-foreground sm:block" />
     </button>
   )
 }
