@@ -7,13 +7,13 @@ import {
   ChevronLeft,
   CalendarClock,
   User,
+  UserCog,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import {
   Select,
@@ -197,20 +197,20 @@ export function CasesPage() {
         </p>
       )}
 
-      {/* المحتوى */}
+      {/* المحتوى — قائمة صفوف */}
       {isLoading ? (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {Array.from({ length: 9 }).map((_, i) => (
-            <Skeleton key={i} className="h-52 w-full" />
+        <div className="divide-y overflow-hidden rounded-xl border bg-card">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <Skeleton key={i} className="h-16 w-full rounded-none" />
           ))}
         </div>
       ) : filtered.length === 0 ? (
         <EmptyState />
       ) : (
         <>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="divide-y overflow-hidden rounded-xl border bg-card">
             {shown.map((c) => (
-              <CaseCard
+              <CaseRow
                 key={c.id}
                 caseItem={c}
                 onOpen={() => navigate(`/cases/${c.id}`)}
@@ -262,7 +262,7 @@ function StatusChip({
   )
 }
 
-function CaseCard({
+function CaseRow({
   caseItem: c,
   onOpen,
 }: {
@@ -270,82 +270,82 @@ function CaseCard({
   onOpen: () => void
 }) {
   const soon = isHearingSoon(c.hearing_date)
+  const progress = Math.min(100, Math.max(0, c.progress ?? 0))
+
+  // سطر الأرقام/المحكمة (أرقام لاتينية)
+  const metaParts: string[] = []
+  if (c.office_num) metaParts.push(`مكتب ${c.office_num}`)
+  if (c.court_num) metaParts.push(`محكمة ${c.court_num}`)
+  const courtLine = [c.court, c.court_division].filter(Boolean).join(' — ')
+  if (courtLine) metaParts.push(courtLine)
+
   return (
-    <Card className="flex flex-col">
-      <CardContent className="flex flex-1 flex-col gap-3 p-4">
-        <div className="flex items-start justify-between gap-2">
-          <p className="min-w-0 flex-1 font-semibold leading-snug text-foreground">
-            {c.title || 'بدون عنوان'}
+    <button
+      onClick={onOpen}
+      className="flex w-full flex-col gap-2 px-4 py-3 text-right transition-colors hover:bg-accent/10 sm:flex-row sm:items-center sm:gap-4"
+    >
+      {/* العنوان + الأرقام */}
+      <div className="min-w-0 flex-1">
+        <p className="truncate font-semibold leading-snug text-foreground">
+          {c.title || 'بدون عنوان'}
+        </p>
+        {metaParts.length > 0 && (
+          <p className="mt-0.5 truncate text-xs text-muted-foreground">
+            {metaParts.join(' · ')}
           </p>
-          <Badge variant={caseStatusBadge(c.status)}>
-            {caseStatusLabel(c.status)}
-          </Badge>
-        </div>
+        )}
+      </div>
 
-        <div className="flex flex-wrap items-center gap-1.5 text-xs">
-          <Badge variant="outline">{caseTypeLabel(c.type)}</Badge>
-          {c.office_num && (
-            <span dir="ltr" className="text-muted-foreground">
-              مكتب: {c.office_num}
-            </span>
-          )}
-          {c.court_num && (
-            <span dir="ltr" className="text-muted-foreground">
-              محكمة: {c.court_num}
-            </span>
-          )}
-        </div>
-
-        <div className="space-y-1 text-xs text-muted-foreground">
-          {c.contact?.name && (
-            <p className="flex items-center gap-1">
-              <User className="h-3 w-3" />
-              {c.contact.name}
-            </p>
-          )}
-          {(c.court || c.court_division) && (
-            <p className="truncate">
-              {[c.court, c.court_division].filter(Boolean).join(' — ')}
-            </p>
-          )}
-          {c.hearing_date && (
-            <p
-              className={cn(
-                'flex items-center gap-1',
-                soon && 'font-medium text-amber-600 dark:text-amber-400'
-              )}
-            >
-              <CalendarClock className="h-3 w-3" />
-              الجلسة القادمة: {fmtDatePref(c.hearing_date)}
-            </p>
-          )}
-        </div>
-
-        {/* شريط التقدّم */}
-        <div>
-          <div className="mb-1 flex items-center justify-between text-[11px] text-muted-foreground">
-            <span>الإنجاز</span>
-            <span>{fmtNumber(c.progress ?? 0)}٪</span>
-          </div>
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-            <div
-              className="h-full rounded-full bg-gold"
-              style={{ width: `${Math.min(100, Math.max(0, c.progress ?? 0))}%` }}
-            />
-          </div>
-        </div>
-
-        <div className="mt-auto flex items-center justify-between gap-2 pt-1">
-          <span className="text-xs text-muted-foreground">
-            {c.assignee?.short_name || c.assignee?.name || 'غير مُسند'}
+      {/* الموكّل + المسؤول */}
+      <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground sm:w-44 sm:flex-col sm:items-start">
+        {c.contact?.name && (
+          <span className="flex items-center gap-1 truncate">
+            <User className="h-3 w-3 shrink-0" />
+            <span className="truncate">{c.contact.name}</span>
           </span>
-          <Button size="sm" variant="ghost" onClick={onOpen}>
-            عرض
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+        )}
+        {(c.assignee?.short_name || c.assignee?.name) && (
+          <span className="flex items-center gap-1 truncate">
+            <UserCog className="h-3 w-3 shrink-0" />
+            <span className="truncate">
+              {c.assignee?.short_name || c.assignee?.name}
+            </span>
+          </span>
+        )}
+      </div>
+
+      {/* الحالة + النوع + الجلسة + التقدّم */}
+      <div className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 sm:w-56 sm:justify-end">
+        <Badge variant={caseStatusBadge(c.status)}>
+          {caseStatusLabel(c.status)}
+        </Badge>
+        <Badge variant="outline">{caseTypeLabel(c.type)}</Badge>
+        {c.hearing_date && (
+          <span
+            className={cn(
+              'flex items-center gap-1 text-xs',
+              soon
+                ? 'font-medium text-amber-600 dark:text-amber-400'
+                : 'text-muted-foreground'
+            )}
+          >
+            <CalendarClock className="h-3 w-3" />
+            {fmtDatePref(c.hearing_date)}
+          </span>
+        )}
+        <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <span className="h-1.5 w-14 overflow-hidden rounded-full bg-muted">
+            <span
+              className="block h-full rounded-full bg-gold"
+              style={{ width: `${progress}%` }}
+            />
+          </span>
+          {fmtNumber(progress)}٪
+        </span>
+      </div>
+
+      <ChevronLeft className="hidden h-4 w-4 shrink-0 text-muted-foreground sm:block" />
+    </button>
   )
 }
 
