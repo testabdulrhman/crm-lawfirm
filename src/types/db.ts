@@ -731,6 +731,86 @@ export interface AssigneePerformance {
   open_tasks: number
 }
 
+/* ===================== لوحة التحكم (dashboard_overview RPC) ===================== */
+
+export interface DashboardStats {
+  cases_total: number
+  cases_active: number
+  contacts: number
+  staff_active: number
+  open_tasks: number
+  overdue_tasks: number
+  upcoming_sessions: number
+  upcoming_appointments: number
+  pending_applications: number
+  pending_requests: number
+  expiring_poas: number
+}
+
+export interface DashSession {
+  id: string
+  case_id: string | null
+  title: string | null
+  session_date: string | null
+  session_time: string | null
+  court: string | null
+  case_title: string | null
+  office_num: string | null
+}
+
+export interface DashTask {
+  id: string
+  case_id: string | null
+  title: string | null
+  due_date: string | null
+  priority: string | null
+  is_urgent: boolean | null
+  overdue: boolean | null
+  case_title: string | null
+}
+
+export interface DashAppointment {
+  id: string
+  client_name: string | null
+  appointment_date: string | null
+  appointment_time: string | null
+  status: string | null
+}
+
+export interface DashApplication {
+  id: string
+  full_name: string | null
+  qualifications: string | null
+  created_at: string | null
+  has_cv: boolean | null
+}
+
+export interface DashRequest {
+  id: string
+  client_name: string | null
+  request_type: string | null
+  description: string | null
+  created_at: string | null
+}
+
+export interface DashPOA {
+  id: string
+  poa_number: string | null
+  client_name: string | null
+  expiry_date: string | null
+  days_left: number | null
+}
+
+export interface DashboardOverview {
+  stats: DashboardStats
+  upcoming_sessions: DashSession[] | null
+  tasks: DashTask[] | null
+  appointments: DashAppointment[] | null
+  applications: DashApplication[] | null
+  requests: DashRequest[] | null
+  expiring_poas: DashPOA[] | null
+}
+
 export interface HatifCall {
   id: string
   status: number | null
