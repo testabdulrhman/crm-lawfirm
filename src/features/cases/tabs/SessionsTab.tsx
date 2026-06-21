@@ -61,9 +61,9 @@ import {
 } from '@/hooks/useCaseSessions'
 import {
   SESSION_STATUS_OPTIONS,
-  sessionStatusBadge,
   sessionStatusLabel,
-  isSessionUpcoming,
+  sessionDisplayStatus,
+  sessionDisplayBadge,
 } from '@/lib/caseLabels'
 import type { CaseSession } from '@/types/db'
 
@@ -93,13 +93,19 @@ export function SessionsTab({ caseId }: { caseId: string }) {
   const [preview, setPreview] = useState<CaseSession | null>(null)
 
   const { upcoming, past } = useMemo(() => {
-    const list = data ?? []
-    const up = list
-      .filter((s) => isSessionUpcoming(s.status))
-      .sort((a, b) => (a.session_date ?? '').localeCompare(b.session_date ?? ''))
-    const pa = list
-      .filter((s) => !isSessionUpcoming(s.status))
-      .sort((a, b) => (b.session_date ?? '').localeCompare(a.session_date ?? ''))
+    const grp = (data ?? []).map((s) => ({ s, st: sessionDisplayStatus(s) }))
+    const up = grp
+      .filter((x) => x.st === 'قادمة' || x.st === 'منعقدة')
+      .sort((a, b) =>
+        (a.s.session_date ?? '').localeCompare(b.s.session_date ?? '')
+      )
+      .map((x) => x.s)
+    const pa = grp
+      .filter((x) => x.st === 'منتهية' || x.st === 'مؤجّلة')
+      .sort((a, b) =>
+        (b.s.session_date ?? '').localeCompare(a.s.session_date ?? '')
+      )
+      .map((x) => x.s)
     return { upcoming: up, past: pa }
   }, [data])
 
@@ -147,7 +153,7 @@ export function SessionsTab({ caseId }: { caseId: string }) {
               />
             ))}
           </Section>
-          <Section title="الجلسات المنعقدة / السابقة" count={past.length}>
+          <Section title="الجلسات السابقة" count={past.length}>
             {past.map((s) => (
               <SessionCard
                 key={s.id}
@@ -252,8 +258,17 @@ function SessionCard({
   onOutcome: (s: CaseSession) => void
   onPreview: (s: CaseSession) => void
 }) {
-  const upcoming = isSessionUpcoming(s.status)
-  const cd = upcoming ? countdown(s.session_date) : null
+  const st = sessionDisplayStatus(s)
+  // عدّاد تنازلي للقادمة فقط؛ «منعقدة الآن» للمنعقدة
+  const cd =
+    st === 'قادمة'
+      ? countdown(s.session_date)
+      : st === 'منعقدة'
+        ? { text: 'منعقدة الآن', soon: true }
+        : null
+  // زر تسجيل النتيجة يظهر للمنعقدة أو المنتهية ما لم تُسجَّل نتيجة بعد
+  const canRecordOutcome =
+    (st === 'منعقدة' || st === 'منتهية') && !(s.outcome && s.outcome.trim())
 
   return (
     <Card>
@@ -283,9 +298,7 @@ function SessionCard({
             </div>
           </div>
           <div className="flex flex-col items-end gap-1.5">
-            <Badge variant={sessionStatusBadge(s.status)}>
-              {sessionStatusLabel(s.status)}
-            </Badge>
+            <Badge variant={sessionDisplayBadge(st)}>{st}</Badge>
             {s.gcal_event_id && (
               <span className="flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400">
                 <CalendarCheck className="h-3 w-3" />
@@ -328,7 +341,7 @@ function SessionCard({
               المحضر
             </Button>
           )}
-          {upcoming && (
+          {canRecordOutcome && (
             <Button variant="outline" size="sm" onClick={() => onOutcome(s)}>
               <CheckCircle2 className="h-4 w-4" />
               تسجيل نتيجة

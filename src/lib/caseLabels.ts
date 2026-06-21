@@ -111,6 +111,54 @@ export const isSessionHeld = (raw: string | null | undefined): boolean =>
 export const isSessionUpcoming = (raw: string | null | undefined): boolean =>
   normSessionStatus(raw) === 'قادمة'
 
+/* الحالة التلقائية حسب الوقت (عرض فقط، لا تُخزَّن):
+   - فات الموعد بأكثر من ساعة → «منتهية»
+   - خلال ساعة قبل/بعد وقت الجلسة → «منعقدة»
+   - قبل ذلك → «قادمة»
+   مع احترام «مؤجّلة» المخزّنة، واعتبار أي جلسة لها نتيجة مسجّلة «منتهية». */
+export type SessionDisplayStatus = 'قادمة' | 'منعقدة' | 'منتهية' | 'مؤجّلة'
+
+const SESSION_WINDOW_MS = 60 * 60 * 1000 // ساعة
+
+export function sessionDisplayStatus(s: {
+  status: string | null
+  session_date: string | null
+  session_time: string | null
+  outcome?: string | null
+}): SessionDisplayStatus {
+  if (normSessionStatus(s.status) === 'مؤجّلة') return 'مؤجّلة'
+  if (s.outcome && s.outcome.trim() !== '') return 'منتهية'
+  if (!s.session_date) {
+    return normSessionStatus(s.status) === 'منعقدة' ? 'منتهية' : 'قادمة'
+  }
+  const time = s.session_time ? s.session_time.slice(0, 5) : null
+  const now = Date.now()
+  if (time) {
+    const start = new Date(`${s.session_date}T${time}:00`).getTime()
+    if (!isNaN(start)) {
+      if (now < start - SESSION_WINDOW_MS) return 'قادمة'
+      if (now <= start + SESSION_WINDOW_MS) return 'منعقدة'
+      return 'منتهية'
+    }
+  }
+  // بدون وقت: على مستوى اليوم
+  const d = new Date(s.session_date)
+  d.setHours(0, 0, 0, 0)
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  if (d.getTime() > today.getTime()) return 'قادمة'
+  if (d.getTime() === today.getTime()) return 'منعقدة'
+  return 'منتهية'
+}
+
+export function sessionDisplayBadge(
+  st: SessionDisplayStatus
+): BadgeProps['variant'] {
+  if (st === 'منعقدة') return 'success' // أخضر — منعقدة الآن
+  if (st === 'قادمة') return 'warning' // كهرماني
+  return 'secondary' // منتهية / مؤجّلة — رمادي
+}
+
 /* ===== المهام: الأولوية والحالة ===== */
 
 export type TaskPriorityValue = 'low' | 'med' | 'high'
