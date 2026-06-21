@@ -269,7 +269,6 @@ function CaseRow({
   onOpen: () => void
 }) {
   const soon = isHearingSoon(c.hearing_date)
-  const progress = Math.min(100, Math.max(0, c.progress ?? 0))
 
   // أرقام المكتب/المحكمة (لاتينية)
   const nums: string[] = []
@@ -335,17 +334,6 @@ function CaseRow({
             {fmtDatePref(c.hearing_date)}
           </span>
         )}
-
-        {/* التقدّم — في طرف السطر */}
-        <span className="mr-auto flex shrink-0 items-center gap-1.5">
-          <span className="h-1 w-16 overflow-hidden rounded-full bg-muted">
-            <span
-              className="block h-full rounded-full bg-gold"
-              style={{ width: `${progress}%` }}
-            />
-          </span>
-          <span className="tabular-nums">{fmtNumber(progress)}٪</span>
-        </span>
       </div>
     </button>
   )
