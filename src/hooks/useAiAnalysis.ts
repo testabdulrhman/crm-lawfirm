@@ -9,6 +9,7 @@ export interface ApplicantAnalysis {
   suggested_role: string
   strengths: string[]
   concerns: string[]
+  experience_years?: string | null
   fit_score: number
   recommendation: string
 }
@@ -16,12 +17,14 @@ export interface ApplicantAnalysis {
 export interface AnalyzeResult {
   parsed: ApplicantAnalysis | null
   text: string
+  used_cv: boolean
 }
 
 interface AnalyzeArgs {
   full_name?: string | null
   qualifications?: string | null
   email?: string | null
+  cv_url?: string | null
 }
 
 /**
@@ -38,7 +41,7 @@ export function useAnalyzeApplicant() {
             full_name: args.full_name ?? '',
             qualifications: args.qualifications ?? '',
             email: args.email ?? '',
-            // cv_text غير مُرسَل في هذه المرحلة (لا نستخرج نص PDF)
+            cv_url: args.cv_url || undefined, // يُرسل فقط إن وُجدت سيرة ذاتية
           },
         },
       })
@@ -47,6 +50,7 @@ export function useAnalyzeApplicant() {
       return {
         parsed: (data?.parsed ?? null) as ApplicantAnalysis | null,
         text: (data?.text ?? '') as string,
+        used_cv: !!data?.used_cv,
       }
     },
     onError: () =>

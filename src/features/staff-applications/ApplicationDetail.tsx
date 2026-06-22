@@ -349,12 +349,14 @@ function AiAnalysisCard({ app: a }: { app: StaffApplication }) {
   const analyzeM = useAnalyzeApplicant()
   const result = analyzeM.data
   const hasResult = !!result
+  const hasCv = !!a.cv_url
 
   const run = () =>
     analyzeM.mutate({
       full_name: a.full_name,
       qualifications: a.qualifications,
       email: a.email,
+      cv_url: a.cv_url,
     })
 
   return (
@@ -401,12 +403,27 @@ function AiAnalysisCard({ app: a }: { app: StaffApplication }) {
         {analyzeM.isPending && (
           <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
             <Loader2 className="h-5 w-5 animate-spin text-violet-500" />
-            جارٍ التحليل...
+            {hasCv ? 'جارٍ قراءة السيرة الذاتية وتحليلها...' : 'جارٍ التحليل...'}
           </div>
         )}
 
         {hasResult && !analyzeM.isPending && (
           <>
+            {/* مؤشّر مصدر التحليل */}
+            <div>
+              {result.used_cv ? (
+                <Badge className="gap-1 bg-emerald-600 text-white hover:bg-emerald-600">
+                  <FileText className="h-3 w-3" />
+                  حُلّلت السيرة الذاتية
+                </Badge>
+              ) : (
+                <Badge variant="secondary" className="gap-1">
+                  <FileText className="h-3 w-3" />
+                  بدون سيرة ذاتية
+                </Badge>
+              )}
+            </div>
+
             {result.parsed ? (
               <AnalysisResult data={result.parsed} />
             ) : (
@@ -454,6 +471,10 @@ function AnalysisResult({ data }: { data: ApplicantAnalysis }) {
   const score = Math.max(0, Math.min(10, Number(data.fit_score) || 0))
   const tone = scoreTone(score)
 
+  // الخبرة التقريبية — تُعرض فقط إن كانت مفيدة (ليست «غير مذكور»)
+  const exp = (data.experience_years ?? '').toString().trim()
+  const showExp = exp !== '' && !exp.includes('غير مذكور')
+
   return (
     <div className="space-y-4">
       {/* مؤشّر الملاءمة + الوظيفة المقترحة */}
@@ -481,6 +502,14 @@ function AnalysisResult({ data }: { data: ApplicantAnalysis }) {
           </div>
         )}
       </div>
+
+      {/* الخبرة التقريبية */}
+      {showExp && (
+        <p className="text-sm">
+          <span className="text-muted-foreground">الخبرة التقريبية: </span>
+          <span className="font-medium text-foreground">{exp}</span>
+        </p>
+      )}
 
       {/* الملخّص */}
       {data.summary && (
