@@ -96,7 +96,7 @@ export default function Dashboard() {
           <Kpi label="القضايا الجارية" value={s.cases_active} icon={Scale} tone="green" onClick={() => navigate('/cases')} />
           <Kpi label="جهات الاتصال" value={s.contacts} icon={BookUser} tone="gold" onClick={() => navigate('/contacts')} />
           <Kpi label="الموظفون النشطون" value={s.staff_active} icon={Users} tone="navy" onClick={() => navigate('/team')} />
-          <Kpi label="الجلسات القادمة" value={s.upcoming_sessions} icon={CalendarDays} tone="gold" onClick={() => navigate('/cases')} />
+          <Kpi label="الجلسات القادمة" value={s.upcoming_sessions} icon={CalendarDays} tone="gold" onClick={() => navigate('/sessions')} />
           <Kpi
             label="المهام المفتوحة"
             value={s.open_tasks}

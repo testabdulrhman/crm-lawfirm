@@ -17,6 +17,7 @@ import { ContactsPage } from '@/features/contacts/ContactsPage'
 import { ContactDetail } from '@/features/contacts/ContactDetail'
 import { CasesPage } from '@/features/cases/CasesPage'
 import { CaseDetail } from '@/features/cases/CaseDetail'
+import { SessionsPage } from '@/features/sessions/SessionsPage'
 import { POAsPage } from '@/features/poa/POAsPage'
 import { POADetail } from '@/features/poa/POADetail'
 import { LegalServicesPage } from '@/features/legal-services/LegalServicesPage'
@@ -47,6 +48,7 @@ function ProtectedRoutes() {
           {(params) => <CaseDetail id={params.id} />}
         </Route>
         <Route path="/cases" component={CasesPage} />
+        <Route path="/sessions" component={SessionsPage} />
         <Route path="/poa/:id">
           {(params) => <POADetail id={params.id} />}
         </Route>

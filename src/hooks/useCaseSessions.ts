@@ -38,6 +38,27 @@ function calendarWarn() {
   })
 }
 
+// جلسة مع عنوان قضيتها (لصفحة «جميع الجلسات»)
+export interface SessionWithCase extends CaseSession {
+  case: { id: string; title: string | null } | null
+}
+
+// كل الجلسات عبر جميع القضايا (لصفحة الجلسات الشاملة)
+export function useAllSessions() {
+  return useQuery({
+    queryKey: ['all_sessions'],
+    queryFn: async (): Promise<SessionWithCase[]> => {
+      const { data, error } = await supabase
+        .from('sessions')
+        .select('*, case:cases!sessions_case_id_fkey(id, title)')
+        .order('session_date', { ascending: false })
+        .order('session_time', { ascending: false })
+      if (error) throw error
+      return (data ?? []) as SessionWithCase[]
+    },
+  })
+}
+
 export function useCaseSessions(caseId: string) {
   return useQuery({
     queryKey: ['case_sessions', caseId],

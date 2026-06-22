@@ -11,6 +11,7 @@ import {
   BookOpen,
   Landmark,
   CalendarClock,
+  CalendarDays,
   Send,
   BarChart3,
   LogOut,
@@ -40,6 +41,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { label: 'لوحة التحكم', href: '/', icon: LayoutDashboard },
   { label: 'القضايا', href: '/cases', icon: Scale },
+  { label: 'الجلسات', href: '/sessions', icon: CalendarDays },
   { label: 'الوكالات', href: '/poa', icon: FileSignature, badge: 'expiring_poas' },
   { label: 'الاستشارات واللوائح', href: '/legal-services', icon: BookOpen },
   { label: 'التوثيق العقاري', href: '/property', icon: Landmark },
