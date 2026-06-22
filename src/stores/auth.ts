@@ -13,6 +13,10 @@ interface AuthState {
     email: string,
     password: string
   ) => Promise<{ ok: boolean; error?: string }>
+  loginWithSession: (
+    accessToken: string,
+    refreshToken: string
+  ) => Promise<{ ok: boolean; error?: string }>
   logout: () => Promise<void>
   fetchTeamMember: (userId: string) => Promise<void>
 }
@@ -44,6 +48,17 @@ export const useAuth = create<AuthState>((set, get) => ({
     if (error) return { ok: false, error: error.message }
     set({ session: data.session, user: data.user })
     await get().fetchTeamMember(data.user.id)
+    return { ok: true }
+  },
+  // إرساء جلسة قادمة من دخول OTP (الرموز من Edge Function)
+  loginWithSession: async (accessToken, refreshToken) => {
+    const { data, error } = await supabase.auth.setSession({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    })
+    if (error || !data.session) return { ok: false, error: error?.message }
+    set({ session: data.session, user: data.session.user })
+    await get().fetchTeamMember(data.session.user.id)
     return { ok: true }
   },
   logout: async () => {
