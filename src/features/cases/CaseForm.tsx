@@ -36,14 +36,12 @@ const schema = z.object({
   type: z.string().optional(),
   typeOther: z.string().optional(),
   status: z.string().min(1),
-  office_num: z.string().optional(),
   court_num: z.string().optional(),
   court: z.string().optional(),
   court_division: z.string().optional(),
   assignee_id: z.string().optional(),
   subject: z.string().optional(),
   open_date: z.string().optional(),
-  progress: z.coerce.number().int().min(0).max(100).optional(),
 })
 
 type FormValues = z.infer<typeof schema>
@@ -89,14 +87,12 @@ export function CaseForm({
           ? caseItem.type
           : '',
       status: caseItem?.status ?? 'jarri',
-      office_num: caseItem?.office_num ?? '',
       court_num: caseItem?.court_num ?? '',
       court: caseItem?.court ?? '',
       court_division: caseItem?.court_division ?? '',
       assignee_id: caseItem?.assignee_id ?? '',
       subject: caseItem?.subject ?? '',
       open_date: caseItem?.open_date ?? todayISO(),
-      progress: caseItem?.progress ?? 0,
     },
   })
 
@@ -109,11 +105,12 @@ export function CaseForm({
         ? t(values.typeOther)
         : t(values.type)
 
+    // ملاحظة: لا نرسل office_num (يولّده trigger في قاعدة البيانات تلقائياً)
+    // ولا progress (يُترك للقيمة الافتراضية عند الإنشاء، ولا يُمسّ عند التعديل)
     const input: CaseInput = {
       title: values.title.trim(),
       type: resolvedType,
       status: values.status,
-      office_num: t(values.office_num),
       court_num: t(values.court_num),
       court: t(values.court),
       court_division: t(values.court_division),
@@ -121,7 +118,6 @@ export function CaseForm({
       contact_id: contactId,
       subject: t(values.subject),
       open_date: values.open_date || null,
-      progress: values.progress ?? 0,
     }
     if (isEdit && caseItem) {
       await updateM.mutateAsync({ id: caseItem.id, input })
@@ -203,10 +199,6 @@ export function CaseForm({
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="office_num">رقم المكتب</Label>
-            <Input id="office_num" dir="ltr" {...register('office_num')} />
-          </div>
-          <div className="space-y-1.5">
             <Label htmlFor="court_num">رقم المحكمة</Label>
             <Input id="court_num" dir="ltr" {...register('court_num')} />
           </div>
@@ -266,21 +258,6 @@ export function CaseForm({
               />
             )}
           />
-
-          <div className="space-y-1.5">
-            <Label htmlFor="progress">نسبة الإنجاز (٪)</Label>
-            <Input
-              id="progress"
-              type="number"
-              min={0}
-              max={100}
-              dir="ltr"
-              {...register('progress')}
-            />
-            {errors.progress && (
-              <p className="text-xs text-destructive">من 0 إلى 100</p>
-            )}
-          </div>
 
           <div className="space-y-1.5 sm:col-span-2">
             <Label htmlFor="subject">الموضوع / التفاصيل</Label>
