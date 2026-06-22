@@ -41,9 +41,10 @@ import {
   useContact,
   useContactWorkLinks,
   useContactCalls,
-  useContactRelations,
+  useContactLinkedItems,
   useDeleteContact,
 } from '@/hooks/useContacts'
+import type { ContactLinkedItem, ContactLinkedKind } from '@/hooks/useContacts'
 import { ContactForm } from './ContactForm'
 import {
   categoryBadge,
@@ -51,6 +52,7 @@ import {
   sentimentBadge,
   sourceLabel,
 } from '@/lib/contactLabels'
+import { caseStatusBadge, caseStatusLabel } from '@/lib/caseLabels'
 import type { Contact, HatifCall } from '@/types/db'
 
 export function ContactDetail({ id }: { id: string }) {
@@ -428,6 +430,42 @@ function CallCard({ call }: { call: HatifCall }) {
 
 /* ===================== الارتباطات ===================== */
 
+// إعدادات كل نوع: الترتيب + العنوان + الأيقونة + مسار الصفحة
+const KIND_META: Record<
+  ContactLinkedKind,
+  { title: string; icon: typeof Scale; route: (id: string) => string }
+> = {
+  case: { title: 'القضايا', icon: Scale, route: (id) => `/cases/${id}` },
+  legal_service: {
+    title: 'الاستشارات واللوائح',
+    icon: FileText,
+    route: (id) => `/legal-services/${id}`,
+  },
+  appointment: {
+    title: 'المواعيد',
+    icon: CalendarDays,
+    route: (id) => `/appointments/${id}`,
+  },
+  request: {
+    title: 'الطلبات الواردة',
+    icon: Inbox,
+    route: (id) => `/requests/${id}`,
+  },
+  property: {
+    title: 'التوثيق العقاري',
+    icon: Building2,
+    route: (id) => `/property/${id}`,
+  },
+}
+
+const KIND_ORDER: ContactLinkedKind[] = [
+  'case',
+  'legal_service',
+  'appointment',
+  'request',
+  'property',
+]
+
 function RelationsTab({
   contactId,
   active,
@@ -436,7 +474,7 @@ function RelationsTab({
   active: boolean
 }) {
   const [, navigate] = useLocation()
-  const { data, isLoading } = useContactRelations(contactId, active)
+  const { data, isLoading } = useContactLinkedItems(contactId, active)
 
   if (isLoading) {
     return (
@@ -448,16 +486,7 @@ function RelationsTab({
     )
   }
 
-  if (!data) return null
-
-  const empty =
-    data.cases.length === 0 &&
-    data.services.length === 0 &&
-    data.appointments.length === 0 &&
-    data.requests.length === 0 &&
-    data.properties.length === 0
-
-  if (empty) {
+  if (!data || data.length === 0) {
     return (
       <div className="rounded-xl border border-dashed py-12 text-center text-sm text-muted-foreground">
         لا توجد ارتباطات عمل لهذه الجهة.
@@ -465,69 +494,37 @@ function RelationsTab({
     )
   }
 
+  // تجميع حسب النوع مع الحفاظ على الترتيب الثابت
+  const groups = new Map<ContactLinkedKind, ContactLinkedItem[]>()
+  for (const item of data) {
+    const arr = groups.get(item.kind) ?? []
+    arr.push(item)
+    groups.set(item.kind, arr)
+  }
+
   return (
     <div className="space-y-4">
-      <RelGroup icon={Scale} title="القضايا" count={data.cases.length}>
-        {data.cases.map((x) => (
-          <RelRow
-            key={x.id}
-            title={x.title || x.office_num || x.court_num || 'قضية'}
-            meta={x.status}
-          />
-        ))}
-      </RelGroup>
-
-      <RelGroup icon={FileText} title="الاستشارات والخدمات" count={data.services.length}>
-        {data.services.map((x) => (
-          <RelRow
-            key={x.id}
-            title={x.title || x.type || 'خدمة'}
-            meta={[x.type, x.service_date ? fmtDatePref(x.service_date) : null, x.status]
-              .filter(Boolean)
-              .join(' · ')}
-          />
-        ))}
-      </RelGroup>
-
-      <RelGroup icon={CalendarDays} title="المواعيد" count={data.appointments.length}>
-        {data.appointments.map((x) => (
-          <RelRow
-            key={x.id}
-            title={fmtDatePref(x.appointment_date)}
-            meta={[x.appointment_time, x.status].filter(Boolean).join(' · ')}
-          />
-        ))}
-      </RelGroup>
-
-      <RelGroup icon={Inbox} title="الطلبات الواردة" count={data.requests.length}>
-        {data.requests.map((x) => (
-          <RelRow
-            key={x.id}
-            title={`طلب — ${x.request_type ?? ''}`}
-            meta={[x.status, x.received_at ? fmtDatePref(x.received_at) : null]
-              .filter(Boolean)
-              .join(' · ')}
-            onClick={() => navigate(`/requests/${x.id}`)}
-          />
-        ))}
-      </RelGroup>
-
-      <RelGroup icon={Building2} title="الإفراغات العقارية" count={data.properties.length}>
-        {data.properties.map((x) => {
-          const role = x.seller_id === contactId ? 'بائع' : 'مشترٍ'
-          return (
-            <RelRow
-              key={x.id}
-              title={[x.property_type || 'عقار', x.deed_number ? `صك ${x.deed_number}` : null]
-                .filter(Boolean)
-                .join(' — ')}
-              meta={[role, x.status, x.transfer_date ? fmtDatePref(x.transfer_date) : null]
-                .filter(Boolean)
-                .join(' · ')}
-            />
-          )
-        })}
-      </RelGroup>
+      {KIND_ORDER.map((kind) => {
+        const items = groups.get(kind)
+        if (!items || items.length === 0) return null
+        const meta = KIND_META[kind]
+        return (
+          <RelGroup
+            key={kind}
+            icon={meta.icon}
+            title={meta.title}
+            count={items.length}
+          >
+            {items.map((x) => (
+              <RelRow
+                key={x.id}
+                item={x}
+                onClick={() => navigate(meta.route(x.id))}
+              />
+            ))}
+          </RelGroup>
+        )
+      })}
     </div>
   )
 }
@@ -561,30 +558,39 @@ function RelGroup({
 }
 
 function RelRow({
-  title,
-  meta,
+  item,
   onClick,
 }: {
-  title: string
-  meta?: string | null
-  onClick?: () => void
+  item: ContactLinkedItem
+  onClick: () => void
 }) {
-  const inner = (
-    <div className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2">
-      <span className="truncate text-sm font-medium text-foreground">
-        {title}
-      </span>
-      {meta && (
-        <span className="shrink-0 text-xs text-muted-foreground">{meta}</span>
-      )}
-    </div>
+  return (
+    <button
+      onClick={onClick}
+      className="block w-full cursor-pointer text-right transition-colors"
+    >
+      <div className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2 hover:border-gold/40 hover:bg-accent/10">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium text-foreground">
+            {item.title}
+          </p>
+          {item.subtitle && (
+            <p className="truncate text-xs text-muted-foreground">
+              {item.subtitle}
+            </p>
+          )}
+        </div>
+        {item.status && (
+          <Badge
+            variant={
+              item.kind === 'case' ? caseStatusBadge(item.status) : 'outline'
+            }
+            className="shrink-0"
+          >
+            {item.kind === 'case' ? caseStatusLabel(item.status) : item.status}
+          </Badge>
+        )}
+      </div>
+    </button>
   )
-  if (onClick) {
-    return (
-      <button onClick={onClick} className="block w-full text-right hover:opacity-80">
-        {inner}
-      </button>
-    )
-  }
-  return inner
 }

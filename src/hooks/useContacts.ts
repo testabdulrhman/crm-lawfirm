@@ -88,53 +88,32 @@ export function useContactCalls(id: string | null, enabled: boolean) {
 
 /* ===================== الارتباطات (تبويب الارتباطات) ===================== */
 
-export interface ContactRelations {
-  cases: { id: string; title: string | null; office_num: string | null; court_num: string | null; status: string | null }[]
-  services: { id: string; title: string | null; type: string | null; service_date: string | null; status: string | null }[]
-  appointments: { id: string; appointment_date: string | null; appointment_time: string | null; status: string | null }[]
-  requests: { id: string; request_type: string | null; status: string | null; received_at: string | null }[]
-  properties: { id: string; transfer_type: string | null; property_type: string | null; deed_number: string | null; transfer_date: string | null; status: string | null; seller_id: string | null; buyer_id: string | null }[]
+// عنصر مرتبط قابل للنقر (من دالة contact_linked_items مع المعرّفات)
+export type ContactLinkedKind =
+  | 'case'
+  | 'legal_service'
+  | 'appointment'
+  | 'request'
+  | 'property'
+
+export interface ContactLinkedItem {
+  kind: ContactLinkedKind
+  id: string
+  title: string
+  subtitle: string | null
+  status: string | null
 }
 
-export function useContactRelations(id: string | null, enabled: boolean) {
+export function useContactLinkedItems(id: string | null, enabled: boolean) {
   return useQuery({
-    queryKey: ['contact_relations', id],
+    queryKey: ['contact_linked_items', id],
     enabled: !!id && enabled,
-    queryFn: async (): Promise<ContactRelations> => {
-      const [cases, services, appts, requests, props] = await Promise.all([
-        supabase
-          .from('cases')
-          .select('id, title, office_num, court_num, status')
-          .eq('contact_id', id),
-        supabase
-          .from('legal_services')
-          .select('id, title, type, service_date, status')
-          .eq('client_id', id),
-        supabase
-          .from('appointments')
-          .select('id, appointment_date, appointment_time, status')
-          .eq('client_id', id),
-        supabase
-          .from('incoming_requests')
-          .select('id, request_type, status, received_at')
-          .eq('client_id', id),
-        supabase
-          .from('property_transfers')
-          .select(
-            'id, transfer_type, property_type, deed_number, transfer_date, status, seller_id, buyer_id'
-          )
-          .or(`seller_id.eq.${id},buyer_id.eq.${id}`),
-      ])
-      const firstErr =
-        cases.error || services.error || appts.error || requests.error || props.error
-      if (firstErr) throw firstErr
-      return {
-        cases: (cases.data ?? []) as ContactRelations['cases'],
-        services: (services.data ?? []) as ContactRelations['services'],
-        appointments: (appts.data ?? []) as ContactRelations['appointments'],
-        requests: (requests.data ?? []) as ContactRelations['requests'],
-        properties: (props.data ?? []) as ContactRelations['properties'],
-      }
+    queryFn: async (): Promise<ContactLinkedItem[]> => {
+      const { data, error } = await supabase.rpc('contact_linked_items', {
+        p_contact_id: id,
+      })
+      if (error) throw error
+      return (data ?? []) as ContactLinkedItem[]
     },
   })
 }
