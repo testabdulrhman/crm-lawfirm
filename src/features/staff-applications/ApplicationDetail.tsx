@@ -15,6 +15,9 @@ import {
   Users,
   RotateCcw,
   Loader2,
+  Sparkles,
+  Check,
+  AlertTriangle,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -35,10 +38,12 @@ import {
 } from '@/components/ui/alert-dialog'
 import { FilePreviewDialog } from '@/components/FilePreviewDialog'
 
-import { fmtDatePref, fmtDateTime } from '@/lib/format'
+import { fmtDatePref, fmtDateTime, fmtNumber } from '@/lib/format'
 import { openExternal } from '@/lib/external'
 import { useAuth } from '@/stores/auth'
 import { useIsDirector } from '@/hooks/useIsDirector'
+import { useAnalyzeApplicant } from '@/hooks/useAiAnalysis'
+import type { ApplicantAnalysis } from '@/hooks/useAiAnalysis'
 import {
   useStaffApplication,
   useDeleteApplication,
@@ -141,6 +146,9 @@ export function ApplicationDetail({ id }: { id: string }) {
         onReopen={() => reopenM.mutate(a.id)}
         reopening={reopenM.isPending}
       />
+
+      {/* تحليل بالذكاء الاصطناعي */}
+      <AiAnalysisCard app={a} />
 
       {/* الأقسام */}
       <Section title="بيانات شخصية">
@@ -332,6 +340,208 @@ function ActionBar({
         </Button>
       </AlertDescription>
     </Alert>
+  )
+}
+
+/* ===================== تحليل بالذكاء الاصطناعي ===================== */
+
+function AiAnalysisCard({ app: a }: { app: StaffApplication }) {
+  const analyzeM = useAnalyzeApplicant()
+  const result = analyzeM.data
+  const hasResult = !!result
+
+  const run = () =>
+    analyzeM.mutate({
+      full_name: a.full_name,
+      qualifications: a.qualifications,
+      email: a.email,
+    })
+
+  return (
+    <Card className="border-violet-200 bg-violet-50/50 dark:border-violet-900/40 dark:bg-violet-950/20">
+      <CardHeader className="flex-row items-center justify-between gap-2 space-y-0">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Sparkles className="h-4 w-4 text-violet-500" />
+          تحليل بالذكاء الاصطناعي
+        </CardTitle>
+        {hasResult && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={run}
+            disabled={analyzeM.isPending}
+          >
+            {analyzeM.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <RotateCcw className="h-4 w-4" />
+            )}
+            إعادة التحليل
+          </Button>
+        )}
+      </CardHeader>
+
+      <CardContent className="space-y-4">
+        {!hasResult && !analyzeM.isPending && (
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              احصل على تحليل سريع لمساعدتك في فرز هذا المتقدّم.
+            </p>
+            <Button
+              variant="gold"
+              onClick={run}
+              className="bg-violet-600 text-white hover:bg-violet-700"
+            >
+              <Sparkles className="h-4 w-4" />
+              تحليل بالذكاء الاصطناعي
+            </Button>
+          </div>
+        )}
+
+        {analyzeM.isPending && (
+          <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
+            <Loader2 className="h-5 w-5 animate-spin text-violet-500" />
+            جارٍ التحليل...
+          </div>
+        )}
+
+        {hasResult && !analyzeM.isPending && (
+          <>
+            {result.parsed ? (
+              <AnalysisResult data={result.parsed} />
+            ) : (
+              <div className="whitespace-pre-wrap rounded-lg border bg-background/60 p-3 text-sm leading-relaxed text-foreground">
+                {result.text || 'لا توجد نتيجة.'}
+              </div>
+            )}
+
+            <p className="border-t pt-3 text-xs text-muted-foreground">
+              هذا تحليل مبدئي بالذكاء الاصطناعي للمساعدة في الفرز، والقرار النهائي
+              لك.
+            </p>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+function scoreTone(score: number): {
+  bar: string
+  track: string
+  text: string
+} {
+  if (score < 4)
+    return {
+      bar: 'bg-red-500',
+      track: 'bg-red-500/15',
+      text: 'text-red-600 dark:text-red-400',
+    }
+  if (score <= 6)
+    return {
+      bar: 'bg-amber-500',
+      track: 'bg-amber-500/15',
+      text: 'text-amber-600 dark:text-amber-400',
+    }
+  return {
+    bar: 'bg-emerald-500',
+    track: 'bg-emerald-500/15',
+    text: 'text-emerald-600 dark:text-emerald-400',
+  }
+}
+
+function AnalysisResult({ data }: { data: ApplicantAnalysis }) {
+  const score = Math.max(0, Math.min(10, Number(data.fit_score) || 0))
+  const tone = scoreTone(score)
+
+  return (
+    <div className="space-y-4">
+      {/* مؤشّر الملاءمة + الوظيفة المقترحة */}
+      <div className="flex flex-wrap items-center gap-4">
+        <div className="min-w-[10rem] flex-1">
+          <div className="mb-1 flex items-center justify-between text-xs text-muted-foreground">
+            <span>مؤشّر الملاءمة</span>
+            <span className={'font-bold ' + tone.text} dir="ltr">
+              {fmtNumber(score)}/10
+            </span>
+          </div>
+          <div className={'h-2.5 w-full overflow-hidden rounded-full ' + tone.track}>
+            <div
+              className={'h-full rounded-full transition-all ' + tone.bar}
+              style={{ width: `${score * 10}%` }}
+            />
+          </div>
+        </div>
+        {data.suggested_role && (
+          <div className="shrink-0">
+            <p className="mb-1 text-xs text-muted-foreground">الوظيفة المقترحة</p>
+            <Badge className="bg-violet-600 text-white hover:bg-violet-600">
+              {data.suggested_role}
+            </Badge>
+          </div>
+        )}
+      </div>
+
+      {/* الملخّص */}
+      {data.summary && (
+        <div>
+          <p className="mb-1 text-xs font-semibold text-muted-foreground">
+            الملخّص
+          </p>
+          <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
+            {data.summary}
+          </p>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {/* نقاط القوة */}
+        {data.strengths?.length > 0 && (
+          <div>
+            <p className="mb-1.5 text-xs font-semibold text-muted-foreground">
+              نقاط القوة
+            </p>
+            <ul className="space-y-1.5">
+              {data.strengths.map((s, i) => (
+                <li key={i} className="flex items-start gap-1.5 text-sm">
+                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
+                  <span className="text-foreground">{s}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* ملاحظات */}
+        {data.concerns?.length > 0 && (
+          <div>
+            <p className="mb-1.5 text-xs font-semibold text-muted-foreground">
+              ملاحظات
+            </p>
+            <ul className="space-y-1.5">
+              {data.concerns.map((s, i) => (
+                <li key={i} className="flex items-start gap-1.5 text-sm">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+                  <span className="text-foreground">{s}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+
+      {/* التوصية */}
+      {data.recommendation && (
+        <div className="rounded-lg border border-violet-200 bg-violet-100/50 p-3 dark:border-violet-900/40 dark:bg-violet-950/30">
+          <p className="mb-0.5 text-xs font-semibold text-violet-600 dark:text-violet-300">
+            التوصية
+          </p>
+          <p className="text-sm font-medium text-foreground">
+            {data.recommendation}
+          </p>
+        </div>
+      )}
+    </div>
   )
 }
 
