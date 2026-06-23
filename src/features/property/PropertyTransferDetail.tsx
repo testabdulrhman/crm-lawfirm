@@ -10,6 +10,13 @@ import {
   User,
   UserCheck,
   Coins,
+  Plus,
+  Eye,
+  Loader2,
+  FileText,
+  FileImage,
+  File as FileIcon,
+  Paperclip,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -36,7 +43,10 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 
-import { fmtDatePref, fmtNumber, fmtCurrency } from '@/lib/format'
+import { FilePreviewDialog } from '@/components/FilePreviewDialog'
+import { toast } from '@/hooks/use-toast'
+import { fmtDatePref, fmtNumber, fmtCurrency, fmtFileSize } from '@/lib/format'
+import { pickFile } from '@/lib/files'
 import { openExternal } from '@/lib/external'
 import { useAuth } from '@/stores/auth'
 import { useIsDirector } from '@/hooks/useIsDirector'
@@ -45,6 +55,13 @@ import {
   useUpdatePropertyTransferStatus,
   useDeletePropertyTransfer,
 } from '@/hooks/usePropertyTransfers'
+import {
+  usePropertyDocuments,
+  useUploadPropertyDocument,
+  useDeletePropertyDocument,
+  MAX_DOC_SIZE,
+  type PropertyDocument,
+} from '@/hooks/usePropertyDocuments'
 import { PropertyTransferForm } from './PropertyTransferForm'
 import {
   PROPERTY_STATUS_OPTIONS,
@@ -220,6 +237,9 @@ export function PropertyTransferDetail({ id }: { id: string }) {
         </Card>
       )}
 
+      {/* المرفقات */}
+      <PropertyDocumentsSection transferId={p.id} />
+
       <div className="flex justify-end">
         <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
           <Pencil className="h-4 w-4" />
@@ -310,6 +330,213 @@ function PartyCard({
             ملف جهة الاتصال
           </Link>
         )}
+      </CardContent>
+    </Card>
+  )
+}
+
+/* ===================== المرفقات ===================== */
+
+function docIcon(d: PropertyDocument) {
+  const s = `${d.file_type ?? ''} ${d.name ?? ''}`.toLowerCase()
+  if (s.includes('pdf')) return FileText
+  if (/(image|jpg|jpeg|png|webp|gif)/.test(s)) return FileImage
+  return FileIcon
+}
+
+function PropertyDocumentsSection({ transferId }: { transferId: string }) {
+  const { user, teamMember } = useAuth()
+  const isDirector = useIsDirector()
+  const { data, isLoading } = usePropertyDocuments(transferId)
+  const uploadM = useUploadPropertyDocument(transferId)
+  const deleteM = useDeletePropertyDocument(transferId)
+
+  const [preview, setPreview] = useState<PropertyDocument | null>(null)
+  const [toDelete, setToDelete] = useState<PropertyDocument | null>(null)
+
+  const onUpload = async () => {
+    const file = await pickFile()
+    if (!file) return
+    // حدّ الحجم — رسالة عربية واضحة (تحقّق مبكر قبل الرفع)
+    if (file.size > MAX_DOC_SIZE) {
+      toast({
+        variant: 'destructive',
+        title: 'الملف كبير جداً',
+        description: 'حجم الملف يتجاوز 10 ميجابايت. اختر ملفاً أصغر.',
+      })
+      return
+    }
+    uploadM.mutate({ file, uploadedBy: teamMember?.name ?? null })
+  }
+
+  const docs = data ?? []
+
+  return (
+    <Card>
+      <CardHeader className="flex-row items-center justify-between gap-2 space-y-0">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Paperclip className="h-4 w-4 text-gold" />
+          المرفقات
+          {docs.length > 0 && (
+            <span className="text-sm font-normal text-muted-foreground">
+              ({fmtNumber(docs.length)})
+            </span>
+          )}
+        </CardTitle>
+        <Button
+          variant="gold"
+          size="sm"
+          onClick={onUpload}
+          disabled={uploadM.isPending}
+        >
+          {uploadM.isPending ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Plus className="h-4 w-4" />
+          )}
+          رفع مرفق
+        </Button>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <Skeleton key={i} className="h-36 w-full" />
+            ))}
+          </div>
+        ) : docs.length === 0 ? (
+          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-12 text-center">
+            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+              <Paperclip className="h-6 w-6 text-muted-foreground" />
+            </div>
+            <p className="font-medium text-foreground">لا مرفقات</p>
+            <p className="text-sm text-muted-foreground">
+              ارفع أول مرفق (صك، هوية، عقد…) عبر «رفع مرفق».
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {docs.map((d) => (
+              <PropertyDocCard
+                key={d.id}
+                doc={d}
+                isDirector={isDirector}
+                onPreview={() => setPreview(d)}
+                onDelete={() => setToDelete(d)}
+              />
+            ))}
+          </div>
+        )}
+      </CardContent>
+
+      <FilePreviewDialog
+        open={!!preview}
+        onOpenChange={(o) => !o && setPreview(null)}
+        fileUrl={preview?.file_url ?? null}
+        fileName={preview?.name ?? null}
+      />
+
+      <AlertDialog open={!!toDelete} onOpenChange={(o) => !o && setToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>تأكيد حذف المرفق</AlertDialogTitle>
+            <AlertDialogDescription>
+              هل تريد حذف هذا المرفق «{toDelete?.name}»؟ يمكن استرجاعه لاحقاً من
+              قِبل المدير.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (toDelete)
+                  deleteM.mutate({
+                    id: toDelete.id,
+                    deletedBy: user?.id ?? null,
+                  })
+                setToDelete(null)
+              }}
+            >
+              حذف
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </Card>
+  )
+}
+
+function PropertyDocCard({
+  doc: d,
+  isDirector,
+  onPreview,
+  onDelete,
+}: {
+  doc: PropertyDocument
+  isDirector: boolean
+  onPreview: () => void
+  onDelete: () => void
+}) {
+  const Icon = docIcon(d)
+  const meta = [
+    d.created_at ? fmtDatePref(d.created_at) : null,
+    fmtFileSize(d.file_size),
+  ]
+    .filter(Boolean)
+    .join(' · ')
+
+  return (
+    <Card className="flex flex-col">
+      <CardContent className="flex flex-1 flex-col gap-3 p-4">
+        <button
+          className="flex flex-1 flex-col items-center gap-2 text-center"
+          onClick={onPreview}
+          title="معاينة"
+        >
+          <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-gold/10">
+            <Icon className="h-6 w-6 text-gold" />
+          </span>
+          <p
+            title={d.name}
+            className="w-full truncate text-sm font-medium text-foreground"
+          >
+            {d.name}
+          </p>
+          {meta && (
+            <p className="w-full truncate text-[11px] text-muted-foreground">
+              {meta}
+            </p>
+          )}
+          {d.uploaded_by && (
+            <p className="w-full truncate text-[11px] text-muted-foreground">
+              رفعه: {d.uploaded_by}
+            </p>
+          )}
+        </button>
+
+        <div className="mt-auto flex items-center justify-center gap-1 border-t pt-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            title="معاينة"
+            onClick={onPreview}
+          >
+            <Eye className="h-4 w-4" />
+          </Button>
+          {isDirector && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-destructive"
+              title="حذف"
+              onClick={onDelete}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
       </CardContent>
     </Card>
   )
