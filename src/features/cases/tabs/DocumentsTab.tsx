@@ -67,9 +67,9 @@ export function DocumentsTab({ caseId }: { caseId: string }) {
 
   if (isLoading) {
     return (
-      <div className="space-y-2">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <Skeleton key={i} className="h-16 w-full" />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <Skeleton key={i} className="h-36 w-full" />
         ))}
       </div>
     )
@@ -89,59 +89,16 @@ export function DocumentsTab({ caseId }: { caseId: string }) {
       {docs.length === 0 ? (
         <EmptyState />
       ) : (
-        <div className="space-y-2">
-          {docs.map((d) => {
-            const Icon = docIcon(d)
-            return (
-              <Card key={d.id}>
-                <CardContent className="flex items-center justify-between gap-3 p-3">
-                  <button
-                    className="flex min-w-0 items-center gap-3 text-right"
-                    onClick={() => setPreview(d)}
-                  >
-                    <Icon className="h-5 w-5 shrink-0 text-gold" />
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-foreground">
-                        {d.name ?? 'ملف'}
-                      </p>
-                      <p className="truncate text-xs text-muted-foreground">
-                        {[
-                          d.document_date ? fmtDatePref(d.document_date) : null,
-                          fmtFileSize(d.file_size),
-                          d.uploaded_by_name ? `رفعه: ${d.uploaded_by_name}` : null,
-                        ]
-                          .filter(Boolean)
-                          .join(' · ')}
-                      </p>
-                    </div>
-                  </button>
-                  <div className="flex shrink-0 items-center gap-1">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      title="معاينة"
-                      onClick={() => setPreview(d)}
-                    >
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                    {/* الحذف للمدير فقط */}
-                    {isDirector && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-destructive"
-                        title="حذف"
-                        onClick={() => setToDelete(d)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            )
-          })}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {docs.map((d) => (
+            <DocCard
+              key={d.id}
+              doc={d}
+              isDirector={isDirector}
+              onPreview={() => setPreview(d)}
+              onDelete={() => setToDelete(d)}
+            />
+          ))}
         </div>
       )}
 
@@ -186,6 +143,85 @@ export function DocumentsTab({ caseId }: { caseId: string }) {
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  )
+}
+
+function DocCard({
+  doc: d,
+  isDirector,
+  onPreview,
+  onDelete,
+}: {
+  doc: CaseDocument
+  isDirector: boolean
+  onPreview: () => void
+  onDelete: () => void
+}) {
+  const Icon = docIcon(d)
+  const name = d.name ?? 'ملف'
+  const meta = [
+    d.document_date ? fmtDatePref(d.document_date) : null,
+    fmtFileSize(d.file_size),
+  ]
+    .filter(Boolean)
+    .join(' · ')
+
+  return (
+    <Card className="flex flex-col">
+      <CardContent className="flex flex-1 flex-col gap-3 p-4">
+        {/* الأيقونة + الاسم (قابلة للنقر للمعاينة) */}
+        <button
+          className="flex flex-1 flex-col items-center gap-2 text-center"
+          onClick={onPreview}
+          title="معاينة"
+        >
+          <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-gold/10">
+            <Icon className="h-6 w-6 text-gold" />
+          </span>
+          <p
+            title={name}
+            className="w-full truncate text-sm font-medium text-foreground"
+          >
+            {name}
+          </p>
+          {meta && (
+            <p className="w-full truncate text-[11px] text-muted-foreground">
+              {meta}
+            </p>
+          )}
+          {d.uploaded_by_name && (
+            <p className="w-full truncate text-[11px] text-muted-foreground">
+              رفعه: {d.uploaded_by_name}
+            </p>
+          )}
+        </button>
+
+        {/* الإجراءات */}
+        <div className="mt-auto flex items-center justify-center gap-1 border-t pt-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            title="معاينة"
+            onClick={onPreview}
+          >
+            <Eye className="h-4 w-4" />
+          </Button>
+          {/* الحذف للمدير فقط */}
+          {isDirector && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-destructive"
+              title="حذف"
+              onClick={onDelete}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+      </CardContent>
+    </Card>
   )
 }
 
