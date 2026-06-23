@@ -14,6 +14,7 @@ import {
   CheckCircle2,
   CalendarOff,
   CalendarCheck,
+  AlertTriangle,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -454,6 +455,63 @@ function OutcomeDialog({
 
 /* ===================== نموذج الجلسة ===================== */
 
+// تحقّق لحظي على تاريخ الجلسة (تنبيه فقط — لا يمنع الحفظ).
+// يعمل على القيمة الميلادية المخزّنة (session_date) بغضّ النظر عن واجهة الإدخال.
+const pad2 = (n: number) => String(n).padStart(2, '0')
+const toIso = (d: Date) =>
+  `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
+
+interface SessionDateWarning {
+  message: string
+  suggestionIso?: string
+  suggestionYear?: number
+}
+
+function getSessionDateWarning(
+  dateStr: string | undefined
+): SessionDateWarning | null {
+  if (!dateStr) return null
+  const parts = dateStr.split('-').map(Number)
+  if (parts.length !== 3 || parts.some((n) => isNaN(n))) return null
+  const [y, m, d] = parts
+  const date = new Date(y, m - 1, d)
+  if (isNaN(date.getTime())) return null
+  date.setHours(0, 0, 0, 0)
+
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const DAY = 86400000
+  const diff = Math.round((date.getTime() - today.getTime()) / DAY)
+
+  // 1+2) التاريخ في الماضي — مع اقتراح تصحيح السنة إن لزم
+  if (diff < 0) {
+    const n = -diff
+    const suggested = new Date(y + 1, m - 1, d)
+    suggested.setHours(0, 0, 0, 0)
+    const sdiff = Math.round((suggested.getTime() - today.getTime()) / DAY)
+    if (sdiff >= 0 && sdiff <= 400) {
+      return {
+        message: `تاريخ الجلسة في الماضي (قبل ${fmtNumber(n)} يوم). هل تقصد ${fmtDatePref(toIso(suggested))}؟`,
+        suggestionIso: toIso(suggested),
+        suggestionYear: y + 1,
+      }
+    }
+    return {
+      message: `تاريخ الجلسة في الماضي (قبل ${fmtNumber(n)} يوم). تأكّد من صحة التاريخ — هل تقصد سنة ${String(today.getFullYear())}؟`,
+    }
+  }
+
+  // 3) تاريخ بعيد جداً (أكثر من سنتين)
+  if (diff > 730) {
+    const years = Math.max(2, Math.floor(diff / 365))
+    return {
+      message: `التاريخ بعيد جداً (بعد ${fmtNumber(years)} سنة تقريباً). تأكّد من صحته.`,
+    }
+  }
+
+  return null
+}
+
 const schema = z.object({
   title: z.string().optional(),
   session_date: z.string().min(1, 'تاريخ الجلسة مطلوب'),
@@ -482,6 +540,8 @@ function SessionForm({
     register,
     handleSubmit,
     control,
+    watch,
+    setValue,
     formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -494,6 +554,9 @@ function SessionForm({
       preparation: session?.preparation ?? '',
     },
   })
+
+  // تنبيه لحظي على التاريخ (يظهر/يختفي تلقائياً)
+  const dateWarn = getSessionDateWarning(watch('session_date'))
 
   const onSubmit = async (values: FormValues) => {
     const t = (v: string | undefined) => (v && v.trim() !== '' ? v.trim() : null)
@@ -554,6 +617,31 @@ function SessionForm({
             <Input id="session_time" type="time" {...register('session_time')} />
           </div>
         </div>
+
+        {/* تنبيه ذكي على تاريخ الجلسة (لا يمنع الحفظ) */}
+        {dateWarn && (
+          <div className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <div className="space-y-1.5">
+              <p className="leading-relaxed">{dateWarn.message}</p>
+              {dateWarn.suggestionIso && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-7 border-amber-400 text-amber-700 hover:bg-amber-100 dark:border-amber-700 dark:text-amber-300 dark:hover:bg-amber-900/40"
+                  onClick={() =>
+                    setValue('session_date', dateWarn.suggestionIso!, {
+                      shouldValidate: true,
+                    })
+                  }
+                >
+                  تصحيح إلى {String(dateWarn.suggestionYear)}
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5">
