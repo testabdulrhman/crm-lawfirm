@@ -97,18 +97,22 @@ export function PartiesTab({ caseId }: { caseId: string }) {
         </Button>
       </div>
 
-      <PartySection
-        title="المدّعون"
-        parties={plaintiffs}
-        onEdit={openEdit}
-        onDelete={setToDelete}
-      />
-      <PartySection
-        title="المدّعى عليهم"
-        parties={defendants}
-        onEdit={openEdit}
-        onDelete={setToDelete}
-      />
+      {/* عمودان متقابلان: بحكم RTL المدّعون على اليمين والمدّعى عليهم على اليسار.
+          ينهاران إلى عمود واحد على الجوال. */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <PartySection
+          title="المدّعون"
+          parties={plaintiffs}
+          onEdit={openEdit}
+          onDelete={setToDelete}
+        />
+        <PartySection
+          title="المدّعى عليهم"
+          parties={defendants}
+          onEdit={openEdit}
+          onDelete={setToDelete}
+        />
+      </div>
 
       {/* النموذج */}
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
@@ -172,7 +176,7 @@ function PartySection({
           لا يوجد
         </div>
       ) : (
-        <div className="grid gap-2 sm:grid-cols-2">
+        <div className="space-y-2">
           {parties.map((p) => (
             <PartyCard key={p.id} party={p} onEdit={onEdit} onDelete={onDelete} />
           ))}
