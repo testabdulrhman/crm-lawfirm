@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useLocation } from 'wouter'
 import {
   Scale,
@@ -13,6 +14,9 @@ import {
   ChevronLeft,
   Paperclip,
   Flame,
+  Circle,
+  CheckCircle2,
+  Loader2,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -26,6 +30,12 @@ import { fmtNumber, fmtDatePref, fmtTime } from '@/lib/format'
 import { taskPriorityBadge, taskPriorityLabel } from '@/lib/caseLabels'
 import { typeLabel as requestTypeLabel } from '@/features/requests/labels'
 import { useDashboardOverview } from '@/hooks/useDashboard'
+import {
+  useMyTasks,
+  useMyTasksStats,
+  useCompleteTask,
+  type MyTask,
+} from '@/hooks/useMyTasks'
 import type {
   DashApplication,
   DashPOA,
@@ -128,6 +138,9 @@ export default function Dashboard() {
           />
         </div>
       )}
+
+      {/* مهامي */}
+      <MyTasksSection />
 
       {/* البطاقات التفصيلية */}
       <div className="grid gap-4 lg:grid-cols-2">
@@ -301,6 +314,159 @@ function RowShell({
 function Empty({ text }: { text: string }) {
   return (
     <p className="py-6 text-center text-sm text-muted-foreground">{text}</p>
+  )
+}
+
+/* ===================== مهامي ===================== */
+
+const MY_TASKS_PREVIEW = 8
+
+function MyTasksSection() {
+  const [, navigate] = useLocation()
+  const { data: tasks, isLoading } = useMyTasks('todo')
+  const { data: stats } = useMyTasksStats()
+  const completeM = useCompleteTask()
+  const [showAll, setShowAll] = useState(false)
+
+  const list = tasks ?? []
+  const shown = showAll ? list : list.slice(0, MY_TASKS_PREVIEW)
+
+  return (
+    <Card>
+      <CardHeader className="flex-row items-center justify-between gap-2 space-y-0">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <ListTodo className="h-4 w-4 text-gold" />
+          مهامي
+          {stats && stats.todo > 0 && (
+            <span className="text-sm font-normal text-muted-foreground">
+              {fmtNumber(stats.todo)} مهمة
+              {stats.overdue > 0 && (
+                <>
+                  {' · '}
+                  <span className="font-medium text-destructive">
+                    {fmtNumber(stats.overdue)} متأخّرة
+                  </span>
+                </>
+              )}
+            </span>
+          )}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {isLoading ? (
+          Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-14 w-full rounded-lg" />
+          ))
+        ) : list.length === 0 ? (
+          <p className="py-8 text-center text-sm text-muted-foreground">
+            لا مهام عليك حاليّاً 🎉
+          </p>
+        ) : (
+          <>
+            {shown.map((t) => (
+              <MyTaskRow
+                key={t.id}
+                t={t}
+                completing={
+                  completeM.isPending && completeM.variables === t.id
+                }
+                onComplete={() => completeM.mutate(t.id)}
+                onOpen={() => t.case_id && navigate(`/cases/${t.case_id}`)}
+              />
+            ))}
+            {list.length > MY_TASKS_PREVIEW && (
+              <div className="pt-1 text-center">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowAll((v) => !v)}
+                >
+                  {showAll
+                    ? 'عرض أقل'
+                    : `عرض كل مهامي (${fmtNumber(list.length)})`}
+                </Button>
+              </div>
+            )}
+          </>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+function MyTaskRow({
+  t,
+  completing,
+  onComplete,
+  onOpen,
+}: {
+  t: MyTask
+  completing: boolean
+  onComplete: () => void
+  onOpen: () => void
+}) {
+  const days = daysFromToday(t.due_date)
+  return (
+    <div className="flex items-center gap-2 rounded-lg border px-3 py-2 transition-colors hover:bg-accent/10">
+      {/* مربّع الإكمال */}
+      <button
+        type="button"
+        title="إنجاز المهمة"
+        disabled={completing}
+        onClick={onComplete}
+        className="group shrink-0 text-muted-foreground transition-colors hover:text-emerald-600 disabled:opacity-60"
+      >
+        {completing ? (
+          <Loader2 className="h-5 w-5 animate-spin" />
+        ) : (
+          <>
+            <Circle className="h-5 w-5 group-hover:hidden" />
+            <CheckCircle2 className="hidden h-5 w-5 text-emerald-600 group-hover:block" />
+          </>
+        )}
+      </button>
+
+      {/* محتوى المهمة (قابل للنقر) */}
+      <button
+        onClick={onOpen}
+        className="min-w-0 flex-1 text-right"
+      >
+        <p className="truncate text-sm font-medium text-foreground">
+          {t.title || 'مهمة'}
+        </p>
+        {t.case_title && (
+          <p className="truncate text-xs text-muted-foreground">
+            {t.case_title}
+          </p>
+        )}
+        <div className="mt-1 flex flex-wrap items-center gap-1.5">
+          {t.is_urgent && (
+            <Badge variant="destructive" className="gap-1">
+              <Flame className="h-3 w-3" />
+              عاجلة
+            </Badge>
+          )}
+          <Badge variant={taskPriorityBadge(t.priority)}>
+            {taskPriorityLabel(t.priority)}
+          </Badge>
+          {t.due_date && (
+            <span
+              className={cn(
+                'text-xs',
+                t.overdue
+                  ? 'font-medium text-destructive'
+                  : 'text-muted-foreground'
+              )}
+            >
+              {fmtDatePref(t.due_date)}
+              {t.overdue
+                ? ` · متأخّرة ${fmtNumber(Math.abs(days ?? 0))} يوم`
+                : ''}
+            </span>
+          )}
+        </div>
+      </button>
+    </div>
   )
 }
 
