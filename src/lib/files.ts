@@ -25,6 +25,20 @@ export function pickFile(options: PickFileOptions = {}): Promise<File | null> {
   })
 }
 
+// اختيار عدّة ملفات دفعة واحدة (multiple). يُرجع مصفوفة (فارغة إن أُلغي).
+export function pickFiles(options: PickFileOptions = {}): Promise<File[]> {
+  return new Promise((resolve) => {
+    const input = document.createElement('input')
+    input.type = 'file'
+    if (options.accept) input.accept = options.accept
+    input.multiple = true
+    input.onchange = () => {
+      resolve(input.files ? Array.from(input.files) : [])
+    }
+    input.click()
+  })
+}
+
 export interface UploadResult {
   path: string
   publicUrl: string
