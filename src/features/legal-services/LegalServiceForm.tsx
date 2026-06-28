@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Loader2, Paperclip } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -23,7 +23,6 @@ import {
 import { ContactPicker } from '@/components/ContactPicker'
 import { DualDatePicker } from '@/components/DualDatePicker'
 import { SelectOrOther } from '@/components/SelectOrOther'
-import { pickFile, uploadFile } from '@/lib/files'
 import { useAuth } from '@/stores/auth'
 import { useContacts } from '@/hooks/useContacts'
 import { useTeamMembers } from '@/hooks/useTeam'
@@ -74,9 +73,7 @@ export function LegalServiceForm({
   const activeMembers = (members ?? []).filter((m) => m.is_active)
 
   const [clientId, setClientId] = useState<string | null>(service?.client_id ?? null)
-  const [file, setFile] = useState<File | null>(null)
-  const [uploading, setUploading] = useState(false)
-  const pending = createM.isPending || updateM.isPending || uploading
+  const pending = createM.isPending || updateM.isPending
 
   const {
     register,
@@ -111,19 +108,6 @@ export function LegalServiceForm({
   const onSubmit = async (values: FormValues) => {
     const t = (v: string | undefined) => (v && v.trim() !== '' ? v.trim() : null)
 
-    let fileUrl: string | null | undefined
-    let fileName: string | null | undefined
-    if (file) {
-      setUploading(true)
-      try {
-        const { publicUrl } = await uploadFile(file, { folder: 'legal_services' })
-        fileUrl = publicUrl
-        fileName = file.name
-      } finally {
-        setUploading(false)
-      }
-    }
-
     const assignee = activeMembers.find((m) => m.id === values.assignee_id)
     const input: LegalServiceInput = {
       type: values.type,
@@ -143,10 +127,6 @@ export function LegalServiceForm({
       assignee_name: assignee?.name ?? null,
       status: values.status,
       notes: t(values.notes),
-    }
-    if (fileUrl) {
-      input.file_url = fileUrl
-      input.file_name = fileName
     }
 
     if (isEdit && service) {
@@ -363,42 +343,11 @@ export function LegalServiceForm({
           <Textarea id="ls_notes" rows={2} {...register('notes')} />
         </div>
 
-        {/* الملف */}
-        <div className="space-y-1.5">
-          <Label>ملف الخدمة</Label>
-          <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={async () => {
-                const f = await pickFile()
-                if (f) setFile(f)
-              }}
-            >
-              <Paperclip className="h-4 w-4" />
-              اختيار ملف
-            </Button>
-            {file ? (
-              <span className="truncate text-xs text-muted-foreground">
-                {file.name}
-              </span>
-            ) : service?.file_url ? (
-              <span className="text-xs text-muted-foreground">
-                {service.file_name || 'يوجد ملف مرفق'}
-              </span>
-            ) : null}
-            {file && (
-              <button
-                type="button"
-                className="text-xs text-destructive"
-                onClick={() => setFile(null)}
-              >
-                إزالة
-              </button>
-            )}
-          </div>
-        </div>
+        {/* المرفقات تُدار في صفحة التفاصيل (تدعم ملفات متعددة) */}
+        <p className="rounded-lg border border-dashed bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+          📎 المرفقات (ملفات متعددة) تُرفع وتُدار من قسم «المرفقات» في صفحة
+          تفاصيل الخدمة بعد الحفظ.
+        </p>
       </div>
 
       <DialogFooter className="gap-2">

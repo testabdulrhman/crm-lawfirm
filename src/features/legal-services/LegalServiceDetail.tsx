@@ -5,14 +5,19 @@ import {
   Pencil,
   Trash2,
   FileText,
+  FileImage,
+  File as FileIcon,
   BookUser,
-  ExternalLink,
+  Paperclip,
+  Plus,
+  Eye,
+  Loader2,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Card, CardContent } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertTitle } from '@/components/ui/alert'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import {
@@ -34,7 +39,9 @@ import {
 } from '@/components/ui/alert-dialog'
 import { FilePreviewDialog } from '@/components/FilePreviewDialog'
 
-import { fmtDatePref } from '@/lib/format'
+import { toast } from '@/hooks/use-toast'
+import { fmtDatePref, fmtNumber, fmtFileSize } from '@/lib/format'
+import { pickFiles } from '@/lib/files'
 import { useAuth } from '@/stores/auth'
 import { useIsDirector } from '@/hooks/useIsDirector'
 import {
@@ -42,6 +49,13 @@ import {
   useUpdateLegalServiceStatus,
   useDeleteLegalService,
 } from '@/hooks/useLegalServices'
+import {
+  useLegalServiceDocuments,
+  useUploadLegalServiceDocuments,
+  useDeleteLegalServiceDocument,
+  MAX_LS_DOC_SIZE,
+  type LegalServiceDocument,
+} from '@/hooks/useLegalServiceDocuments'
 import { LegalServiceForm } from './LegalServiceForm'
 import {
   LS_STATUS_OPTIONS,
@@ -60,7 +74,6 @@ export function LegalServiceDetail({ id }: { id: string }) {
   const deleteM = useDeleteLegalService()
 
   const [editOpen, setEditOpen] = useState(false)
-  const [previewOpen, setPreviewOpen] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
 
   if (isLoading) {
@@ -156,7 +169,7 @@ export function LegalServiceDetail({ id }: { id: string }) {
             <Row label="ملاحظات" value={s.notes} full />
           </dl>
 
-          {/* روابط + ملف */}
+          {/* روابط */}
           <div className="flex flex-wrap gap-2 border-t pt-4">
             {s.client_id && (
               <Button variant="outline" size="sm" asChild>
@@ -165,20 +178,6 @@ export function LegalServiceDetail({ id }: { id: string }) {
                   ملف الموكّل
                 </Link>
               </Button>
-            )}
-            {s.file_url && (
-              <>
-                <Button variant="outline" size="sm" onClick={() => setPreviewOpen(true)}>
-                  <FileText className="h-4 w-4" />
-                  معاينة الملف
-                </Button>
-                <Button variant="ghost" size="sm" asChild>
-                  <a href={s.file_url} target="_blank" rel="noopener noreferrer">
-                    <ExternalLink className="h-4 w-4" />
-                    فتح/تنزيل
-                  </a>
-                </Button>
-              </>
             )}
             <Button
               variant="outline"
@@ -193,18 +192,14 @@ export function LegalServiceDetail({ id }: { id: string }) {
         </CardContent>
       </Card>
 
+      {/* المرفقات (متعددة) */}
+      <LegalServiceDocumentsSection serviceId={s.id} />
+
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent className="max-w-xl">
           <LegalServiceForm service={s} onDone={() => setEditOpen(false)} />
         </DialogContent>
       </Dialog>
-
-      <FilePreviewDialog
-        open={previewOpen}
-        onOpenChange={setPreviewOpen}
-        fileUrl={s.file_url}
-        fileName={s.file_name || s.title}
-      />
 
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <AlertDialogContent>
@@ -232,6 +227,206 @@ export function LegalServiceDetail({ id }: { id: string }) {
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  )
+}
+
+/* ===================== المرفقات (متعددة) ===================== */
+
+function docIcon(d: LegalServiceDocument) {
+  const t = `${d.file_type ?? ''} ${d.name ?? ''}`.toLowerCase()
+  if (t.includes('pdf')) return FileText
+  if (/(image|jpg|jpeg|png|webp|gif)/.test(t)) return FileImage
+  return FileIcon
+}
+
+function LegalServiceDocumentsSection({ serviceId }: { serviceId: string }) {
+  const { user } = useAuth()
+  const isDirector = useIsDirector()
+  const { data, isLoading } = useLegalServiceDocuments(serviceId)
+  const uploadM = useUploadLegalServiceDocuments(serviceId)
+  const deleteM = useDeleteLegalServiceDocument(serviceId)
+
+  const [preview, setPreview] = useState<LegalServiceDocument | null>(null)
+  const [toDelete, setToDelete] = useState<LegalServiceDocument | null>(null)
+
+  const onUpload = async () => {
+    const files = await pickFiles()
+    if (files.length === 0) return
+    // حدّ الحجم — استبعاد الكبيرة مع رسالة عربية
+    const valid = files.filter((f) => f.size <= MAX_LS_DOC_SIZE)
+    if (valid.length < files.length) {
+      toast({
+        variant: 'destructive',
+        title: 'بعض الملفات كبيرة جداً',
+        description: 'تم تجاهل ملفات تتجاوز 10 ميجابايت.',
+      })
+    }
+    if (valid.length === 0) return
+    uploadM.mutate({ files: valid, uploadedBy: user?.id ?? null })
+  }
+
+  const docs = data ?? []
+
+  return (
+    <Card>
+      <CardHeader className="flex-row items-center justify-between gap-2 space-y-0">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Paperclip className="h-4 w-4 text-gold" />
+          المرفقات
+          {docs.length > 0 && (
+            <span className="text-sm font-normal text-muted-foreground">
+              ({fmtNumber(docs.length)})
+            </span>
+          )}
+        </CardTitle>
+        <Button
+          variant="gold"
+          size="sm"
+          onClick={onUpload}
+          disabled={uploadM.isPending}
+        >
+          {uploadM.isPending ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Plus className="h-4 w-4" />
+          )}
+          رفع مرفقات
+        </Button>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <Skeleton key={i} className="h-36 w-full" />
+            ))}
+          </div>
+        ) : docs.length === 0 ? (
+          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-12 text-center">
+            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+              <Paperclip className="h-6 w-6 text-muted-foreground" />
+            </div>
+            <p className="font-medium text-foreground">لا مرفقات</p>
+            <p className="text-sm text-muted-foreground">
+              ارفع مستندات العمل عبر «رفع مرفقات».
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {docs.map((d) => (
+              <LsDocCard
+                key={d.id}
+                doc={d}
+                isDirector={isDirector}
+                onPreview={() => setPreview(d)}
+                onDelete={() => setToDelete(d)}
+              />
+            ))}
+          </div>
+        )}
+      </CardContent>
+
+      <FilePreviewDialog
+        open={!!preview}
+        onOpenChange={(o) => !o && setPreview(null)}
+        fileUrl={preview?.file_url ?? null}
+        fileName={preview?.name ?? null}
+      />
+
+      <AlertDialog open={!!toDelete} onOpenChange={(o) => !o && setToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>تأكيد حذف المرفق</AlertDialogTitle>
+            <AlertDialogDescription>
+              هل تريد حذف هذا المرفق «{toDelete?.name}»؟ يمكن استرجاعه لاحقاً من
+              قِبل المدير.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (toDelete)
+                  deleteM.mutate({ id: toDelete.id, deletedBy: user?.id ?? null })
+                setToDelete(null)
+              }}
+            >
+              حذف
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </Card>
+  )
+}
+
+function LsDocCard({
+  doc: d,
+  isDirector,
+  onPreview,
+  onDelete,
+}: {
+  doc: LegalServiceDocument
+  isDirector: boolean
+  onPreview: () => void
+  onDelete: () => void
+}) {
+  const Icon = docIcon(d)
+  const meta = [
+    d.created_at ? fmtDatePref(d.created_at) : null,
+    fmtFileSize(d.file_size),
+  ]
+    .filter(Boolean)
+    .join(' · ')
+
+  return (
+    <Card className="flex flex-col">
+      <CardContent className="flex flex-1 flex-col gap-3 p-4">
+        <button
+          className="flex flex-1 flex-col items-center gap-2 text-center"
+          onClick={onPreview}
+          title="معاينة"
+        >
+          <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-gold/10">
+            <Icon className="h-6 w-6 text-gold" />
+          </span>
+          <p
+            title={d.name}
+            className="w-full truncate text-sm font-medium text-foreground"
+          >
+            {d.name}
+          </p>
+          {meta && (
+            <p className="w-full truncate text-[11px] text-muted-foreground">
+              {meta}
+            </p>
+          )}
+        </button>
+
+        <div className="mt-auto flex items-center justify-center gap-1 border-t pt-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            title="معاينة"
+            onClick={onPreview}
+          >
+            <Eye className="h-4 w-4" />
+          </Button>
+          {isDirector && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-destructive"
+              title="حذف"
+              onClick={onDelete}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+      </CardContent>
+    </Card>
   )
 }
 
