@@ -162,7 +162,12 @@ export function CaseDetail({ id }: { id: string }) {
           <PartiesTab caseId={c.id} />
         </TabsContent>
         <TabsContent value="sessions">
-          <SessionsTab caseId={c.id} />
+          <SessionsTab
+            caseId={c.id}
+            caseTitle={c.title}
+            clientName={c.contact?.name}
+            clientPhone={c.contact?.phone}
+          />
         </TabsContent>
         <TabsContent value="judgments">
           <RulingsTab caseId={c.id} />

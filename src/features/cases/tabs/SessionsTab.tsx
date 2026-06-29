@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -15,6 +15,12 @@ import {
   CalendarOff,
   CalendarCheck,
   AlertTriangle,
+  Paperclip,
+  Send,
+  MessageCircle,
+  Gavel,
+  Lock,
+  CalendarPlus,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -50,15 +56,22 @@ import {
 } from '@/components/ui/alert-dialog'
 import { FilePreviewDialog } from '@/components/FilePreviewDialog'
 import { DualDatePicker } from '@/components/DualDatePicker'
+import { Switch } from '@/components/ui/switch'
 
 import { cn } from '@/lib/utils'
-import { fmtNumber, fmtDatePref, fmtTime } from '@/lib/format'
+import { fmtNumber, fmtDatePref, fmtTime, normalizeSaudiPhone } from '@/lib/format'
+import { pickFile, uploadFile } from '@/lib/files'
+import { getTemplate, fillTemplate } from '@/lib/templates'
+import { openExternal } from '@/lib/external'
+import { toast } from '@/hooks/use-toast'
 import {
   useCaseSessions,
   useAddSession,
   useUpdateSession,
   useDeleteSession,
-  useSetSessionOutcome,
+  useCloseSession,
+  sendSessionReportSms,
+  markSessionReportSent,
 } from '@/hooks/useCaseSessions'
 import {
   SESSION_STATUS_OPTIONS,
@@ -83,14 +96,24 @@ function countdown(dateStr: string | null): { text: string; soon: boolean } | nu
   return { text: `بعد ${fmtNumber(days)} أيام`, soon: days <= 3 }
 }
 
-export function SessionsTab({ caseId }: { caseId: string }) {
+export function SessionsTab({
+  caseId,
+  caseTitle,
+  clientName,
+  clientPhone,
+}: {
+  caseId: string
+  caseTitle?: string | null
+  clientName?: string | null
+  clientPhone?: string | null
+}) {
   const { data, isLoading } = useCaseSessions(caseId)
   const deleteM = useDeleteSession(caseId)
 
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<CaseSession | null>(null)
   const [toDelete, setToDelete] = useState<CaseSession | null>(null)
-  const [outcomeFor, setOutcomeFor] = useState<CaseSession | null>(null)
+  const [closeFor, setCloseFor] = useState<CaseSession | null>(null)
   const [preview, setPreview] = useState<CaseSession | null>(null)
 
   const { upcoming, past } = useMemo(() => {
@@ -149,7 +172,7 @@ export function SessionsTab({ caseId }: { caseId: string }) {
                 session={s}
                 onEdit={openEdit}
                 onDelete={setToDelete}
-                onOutcome={setOutcomeFor}
+                onClose={setCloseFor}
                 onPreview={setPreview}
               />
             ))}
@@ -161,7 +184,7 @@ export function SessionsTab({ caseId }: { caseId: string }) {
                 session={s}
                 onEdit={openEdit}
                 onDelete={setToDelete}
-                onOutcome={setOutcomeFor}
+                onClose={setCloseFor}
                 onPreview={setPreview}
               />
             ))}
@@ -180,11 +203,14 @@ export function SessionsTab({ caseId }: { caseId: string }) {
         </DialogContent>
       </Dialog>
 
-      {/* تسجيل نتيجة */}
-      <OutcomeDialog
+      {/* إغلاق الجلسة */}
+      <CloseSessionDialog
         caseId={caseId}
-        session={outcomeFor}
-        onClose={() => setOutcomeFor(null)}
+        caseTitle={caseTitle}
+        clientName={clientName}
+        clientPhone={clientPhone}
+        session={closeFor}
+        onClose={() => setCloseFor(null)}
       />
 
       {/* معاينة المحضر */}
@@ -250,16 +276,17 @@ function SessionCard({
   session: s,
   onEdit,
   onDelete,
-  onOutcome,
+  onClose,
   onPreview,
 }: {
   session: CaseSession
   onEdit: (s: CaseSession) => void
   onDelete: (s: CaseSession) => void
-  onOutcome: (s: CaseSession) => void
+  onClose: (s: CaseSession) => void
   onPreview: (s: CaseSession) => void
 }) {
   const st = sessionDisplayStatus(s)
+  const isClosed = !!s.closed_at
   // عدّاد تنازلي للقادمة فقط؛ «منعقدة الآن» للمنعقدة
   const cd =
     st === 'قادمة'
@@ -267,9 +294,8 @@ function SessionCard({
       : st === 'منعقدة'
         ? { text: 'منعقدة الآن', soon: true }
         : null
-  // زر تسجيل النتيجة يظهر للمنعقدة أو المنتهية ما لم تُسجَّل نتيجة بعد
-  const canRecordOutcome =
-    (st === 'منعقدة' || st === 'منتهية') && !(s.outcome && s.outcome.trim())
+  // الجلسة بحاجة إغلاق: منعقدة/منتهية وغير مُغلقة
+  const needsClosure = !isClosed && (st === 'منعقدة' || st === 'منتهية')
 
   return (
     <Card>
@@ -299,7 +325,20 @@ function SessionCard({
             </div>
           </div>
           <div className="flex flex-col items-end gap-1.5">
-            <Badge variant={sessionDisplayBadge(st)}>{st}</Badge>
+            {isClosed ? (
+              <Badge variant="success" className="gap-1">
+                <CheckCircle2 className="h-3 w-3" />
+                مُغلقة
+              </Badge>
+            ) : (
+              <Badge variant={sessionDisplayBadge(st)}>{st}</Badge>
+            )}
+            {needsClosure && (
+              <span className="flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-medium text-amber-600 dark:text-amber-400">
+                <AlertTriangle className="h-3 w-3" />
+                بحاجة إغلاق
+              </span>
+            )}
             {s.gcal_event_id && (
               <span className="flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400">
                 <CalendarCheck className="h-3 w-3" />
@@ -335,6 +374,26 @@ function SessionCard({
           </div>
         )}
 
+        {/* الخطوة القادمة + وسم إرسال التقرير (للجلسات المُغلقة) */}
+        {isClosed && (s.next_action || s.report_sent_at) && (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+            {s.next_action && s.next_action !== 'none' && (
+              <span className="flex items-center gap-1 font-medium text-foreground">
+                {nextActionLabel(s.next_action)}
+                {s.ruling_due_date &&
+                  s.next_action === 'await_ruling' &&
+                  ` — ${fmtDatePref(s.ruling_due_date)}`}
+              </span>
+            )}
+            {s.report_sent_at && (
+              <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                <Send className="h-3 w-3" />
+                أُرسل التقرير
+              </span>
+            )}
+          </div>
+        )}
+
         <div className="flex flex-wrap items-center gap-1.5 border-t pt-2">
           {s.minutes_url && (
             <Button variant="outline" size="sm" onClick={() => onPreview(s)}>
@@ -342,10 +401,16 @@ function SessionCard({
               المحضر
             </Button>
           )}
-          {canRecordOutcome && (
-            <Button variant="outline" size="sm" onClick={() => onOutcome(s)}>
+          {needsClosure && (
+            <Button variant="gold" size="sm" onClick={() => onClose(s)}>
               <CheckCircle2 className="h-4 w-4" />
-              تسجيل نتيجة
+              تسجيل نتيجة الجلسة
+            </Button>
+          )}
+          {isClosed && (
+            <Button variant="outline" size="sm" onClick={() => onClose(s)}>
+              <Pencil className="h-4 w-4" />
+              تعديل الإغلاق
             </Button>
           )}
           <Button variant="ghost" size="sm" onClick={() => onEdit(s)}>
@@ -379,72 +444,350 @@ function EmptyState() {
   )
 }
 
-/* ===================== تسجيل النتيجة ===================== */
+/* ===================== إغلاق الجلسة ===================== */
 
-function OutcomeDialog({
+type NextAction = 'none' | 'next_session' | 'await_ruling' | 'case_closed'
+
+function nextActionLabel(a: string): string {
+  if (a === 'next_session') return 'الخطوة: جلسة قادمة'
+  if (a === 'await_ruling') return 'الخطوة: انتظار الحكم'
+  if (a === 'case_closed') return 'الخطوة: انتهت القضية'
+  return ''
+}
+
+const NEXT_OPTIONS: { value: NextAction; label: string; icon: typeof CalendarPlus }[] = [
+  { value: 'none', label: 'لا شيء الآن', icon: CheckCircle2 },
+  { value: 'next_session', label: 'جلسة قادمة', icon: CalendarPlus },
+  { value: 'await_ruling', label: 'محكوم فيها (انتظار الحكم)', icon: Gavel },
+  { value: 'case_closed', label: 'انتهت القضية', icon: Lock },
+]
+
+const REPORT_FALLBACK =
+  'عميلنا الكريم {client_name}\nنفيدكم بشأن قضيتكم ({case_title}):\n{outcome}\nمكتب المشيقح للمحاماة'
+
+function CloseSessionDialog({
   caseId,
+  caseTitle,
+  clientName,
+  clientPhone,
   session,
   onClose,
 }: {
   caseId: string
+  caseTitle?: string | null
+  clientName?: string | null
+  clientPhone?: string | null
   session: CaseSession | null
   onClose: () => void
 }) {
-  const setOutcomeM = useSetSessionOutcome(caseId)
-  const [outcome, setOutcome] = useState('')
-
-  // إعادة تهيئة عند فتح جلسة جديدة
+  const closeM = useCloseSession(caseId)
   const open = !!session
+  const hasPhone = !!(clientPhone && clientPhone.trim())
+
+  const [outcome, setOutcome] = useState('')
+  const [file, setFile] = useState<File | null>(null)
+  const [uploading, setUploading] = useState(false)
+  const [sendSms, setSendSms] = useState(false)
+  const [sendWa, setSendWa] = useState(false)
+  const [tpl, setTpl] = useState<string>(REPORT_FALLBACK)
+  const [reportMsg, setReportMsg] = useState('')
+  const [reportTouched, setReportTouched] = useState(false)
+  const [next, setNext] = useState<NextAction>('none')
+  const [nextDate, setNextDate] = useState('')
+  const [nextTime, setNextTime] = useState('')
+  const [rulingDate, setRulingDate] = useState('')
+  const [confirmClose, setConfirmClose] = useState(false)
+  const [busy, setBusy] = useState(false)
+
+  // إعادة تهيئة + جلب القالب عند فتح جلسة
+  useEffect(() => {
+    if (!session) return
+    setOutcome(session.outcome ?? '')
+    setFile(null)
+    setSendSms(false)
+    setSendWa(false)
+    setReportTouched(false)
+    setReportMsg('')
+    setNext((session.next_action as NextAction) || 'none')
+    setNextDate('')
+    setNextTime('')
+    setRulingDate(session.ruling_due_date ?? '')
+    setConfirmClose(false)
+    getTemplate('session_report')
+      .then((b) => setTpl(b || REPORT_FALLBACK))
+      .catch(() => setTpl(REPORT_FALLBACK))
+  }, [session])
+
+  // نص التقرير الافتراضي من القالب + النتيجة الحالية
+  const defaultReport = fillTemplate(tpl, {
+    client_name: clientName ?? 'عميلنا',
+    case_title: caseTitle ?? '',
+    outcome: outcome.trim(),
+  })
+  const reportValue = reportTouched ? reportMsg : defaultReport
+
+  const canSave =
+    outcome.trim() !== '' &&
+    (next !== 'case_closed' || confirmClose) &&
+    (next !== 'next_session' || nextDate !== '') &&
+    (next !== 'await_ruling' || rulingDate !== '')
+
+  const handleSave = async () => {
+    if (!session || !canSave) return
+    setBusy(true)
+    try {
+      // 1) رفع المحضر إن وُجد
+      let minutesUrl: string | null = null
+      if (file) {
+        setUploading(true)
+        try {
+          const { publicUrl } = await uploadFile(file, {
+            folder: `sessions/${caseId}`,
+          })
+          minutesUrl = publicUrl
+        } finally {
+          setUploading(false)
+        }
+      }
+
+      // 2) إغلاق الجلسة عبر الدالة
+      const res = await closeM.mutateAsync({
+        sessionId: session.id,
+        outcome: outcome.trim(),
+        minutesUrl,
+        nextAction: next,
+        nextSessionDate: next === 'next_session' ? nextDate || null : null,
+        nextSessionTime: next === 'next_session' ? nextTime || null : null,
+        rulingDueDate: next === 'await_ruling' ? rulingDate || null : null,
+      })
+
+      // 3) إرسال التقرير المختار
+      const phone = res.client_phone || clientPhone || ''
+      const channels: string[] = []
+      if (hasPhone || phone) {
+        if (sendWa && phone) {
+          const intl = normalizeSaudiPhone(phone)
+          openExternal(
+            `https://wa.me/${intl}?text=${encodeURIComponent(reportValue)}`
+          )
+          channels.push('whatsapp')
+        }
+        if (sendSms && phone) {
+          const ok = await sendSessionReportSms({
+            sessionId: session.id,
+            phone,
+            clientName: res.client_name || clientName || null,
+            message: reportValue,
+            sentBy: null,
+          })
+          if (ok) channels.push('sms')
+        }
+      }
+      if (channels.length > 0) {
+        await markSessionReportSent(session.id, channels.join(','))
+      }
+
+      // 4) رسالة نجاح حسب الخطوة
+      let extra = ''
+      if (next === 'next_session') extra = ' · أُنشئت الجلسة القادمة'
+      else if (next === 'await_ruling') extra = ' · سُجّل موعد استلام الحكم'
+      else if (next === 'case_closed') extra = ' · أُقفلت القضية'
+      toast({ variant: 'success', title: `تم إغلاق الجلسة${extra}` })
+      onClose()
+    } catch {
+      // أخطاء الإغلاق يعرضها الهوك؛ نُبقي الحوار مفتوحاً
+    } finally {
+      setBusy(false)
+    }
+  }
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(o) => {
-        if (!o) {
-          setOutcome('')
-          onClose()
-        }
-      }}
-    >
-      <DialogContent>
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-h-[88vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>تسجيل نتيجة الجلسة</DialogTitle>
+          <DialogTitle>إغلاق الجلسة</DialogTitle>
         </DialogHeader>
-        <div className="my-3 space-y-1.5">
-          <Label htmlFor="outcome">نتيجة / محضر الجلسة *</Label>
-          <Textarea
-            id="outcome"
-            rows={4}
-            value={outcome}
-            onChange={(e) => setOutcome(e.target.value)}
-            placeholder="اكتب ما تمّ في الجلسة…"
-          />
-          <p className="text-xs text-muted-foreground">
-            سيتم تحويل حالة الجلسة إلى «منعقدة».
-          </p>
-        </div>
-        <DialogFooter className="gap-2">
-          <Button
-            variant="gold"
-            disabled={setOutcomeM.isPending || outcome.trim() === ''}
-            onClick={() => {
-              if (session) {
-                setOutcomeM.mutate(
-                  { id: session.id, outcome: outcome.trim() },
-                  {
-                    onSuccess: () => {
-                      setOutcome('')
-                      onClose()
-                    },
-                  }
+
+        <div className="my-3 space-y-4">
+          {/* 1) المحضر/النتيجة */}
+          <div className="space-y-1.5">
+            <Label htmlFor="close_outcome">محضر / نتيجة الجلسة *</Label>
+            <Textarea
+              id="close_outcome"
+              rows={4}
+              value={outcome}
+              onChange={(e) => setOutcome(e.target.value)}
+              placeholder="اكتب ما تمّ في الجلسة…"
+            />
+          </div>
+
+          {/* 2) مرفق المحضر */}
+          <div className="space-y-1.5">
+            <Label>مرفق المحضر (اختياري)</Label>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  const f = await pickFile()
+                  if (f) setFile(f)
+                }}
+              >
+                <Paperclip className="h-4 w-4" />
+                اختيار ملف
+              </Button>
+              {file && (
+                <span className="truncate text-xs text-muted-foreground">
+                  {file.name}
+                </span>
+              )}
+              {file && (
+                <button
+                  type="button"
+                  className="text-xs text-destructive"
+                  onClick={() => setFile(null)}
+                >
+                  إزالة
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* 3) إرسال تقرير للعميل */}
+          <div className="space-y-2 rounded-lg border p-3">
+            <p className="text-sm font-semibold text-foreground">
+              إرسال تقرير للعميل
+            </p>
+            {!hasPhone && (
+              <p className="text-xs text-amber-600 dark:text-amber-400">
+                لا يوجد هاتف للعميل — الإرسال معطّل.
+              </p>
+            )}
+            <div className="flex flex-wrap gap-4">
+              <label className="flex items-center gap-2 text-sm">
+                <Switch
+                  checked={sendSms}
+                  onCheckedChange={setSendSms}
+                  disabled={!hasPhone}
+                />
+                <span className="flex items-center gap-1">
+                  <Send className="h-3.5 w-3.5" /> SMS
+                </span>
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <Switch
+                  checked={sendWa}
+                  onCheckedChange={setSendWa}
+                  disabled={!hasPhone}
+                />
+                <span className="flex items-center gap-1">
+                  <MessageCircle className="h-3.5 w-3.5" /> واتساب
+                </span>
+              </label>
+            </div>
+            {(sendSms || sendWa) && (
+              <div className="space-y-1.5">
+                <Label htmlFor="report_msg" className="text-xs">
+                  نص التقرير (قابل للتعديل)
+                </Label>
+                <Textarea
+                  id="report_msg"
+                  rows={4}
+                  value={reportValue}
+                  onChange={(e) => {
+                    setReportMsg(e.target.value)
+                    setReportTouched(true)
+                  }}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* 4) الخطوة القادمة */}
+          <div className="space-y-2">
+            <Label>الخطوة القادمة (اختيارية)</Label>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {NEXT_OPTIONS.map((o) => {
+                const active = next === o.value
+                const Icon = o.icon
+                return (
+                  <button
+                    key={o.value}
+                    type="button"
+                    onClick={() => setNext(o.value)}
+                    className={cn(
+                      'flex items-center gap-2 rounded-lg border px-3 py-2 text-right text-sm transition-colors',
+                      active
+                        ? 'border-gold bg-gold/10 font-medium text-foreground'
+                        : 'text-muted-foreground hover:bg-accent/10'
+                    )}
+                  >
+                    <Icon className="h-4 w-4 shrink-0 text-gold" />
+                    {o.label}
+                  </button>
                 )
-              }
-            }}
-          >
-            {setOutcomeM.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-            حفظ النتيجة
+              })}
+            </div>
+
+            {next === 'next_session' && (
+              <div className="grid grid-cols-2 gap-3 rounded-lg border border-dashed p-3">
+                <DualDatePicker
+                  label="تاريخ الجلسة القادمة *"
+                  required
+                  value={nextDate || null}
+                  onChange={(v) => setNextDate(v ?? '')}
+                />
+                <div className="space-y-1.5">
+                  <Label htmlFor="next_time">الوقت (اختياري)</Label>
+                  <Input
+                    id="next_time"
+                    type="time"
+                    value={nextTime}
+                    onChange={(e) => setNextTime(e.target.value)}
+                  />
+                </div>
+              </div>
+            )}
+
+            {next === 'await_ruling' && (
+              <div className="rounded-lg border border-dashed p-3">
+                <DualDatePicker
+                  label="موعد استلام الحكم *"
+                  required
+                  value={rulingDate || null}
+                  onChange={(v) => setRulingDate(v ?? '')}
+                />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  ستُنشأ مهمة تذكير «استلام الحكم» بأولوية عالية.
+                </p>
+              </div>
+            )}
+
+            {next === 'case_closed' && (
+              <label className="flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm">
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={confirmClose}
+                  onChange={(e) => setConfirmClose(e.target.checked)}
+                />
+                <span className="text-foreground">
+                  أؤكّد إقفال القضية نهائيّاً بعد هذه الجلسة.
+                </span>
+              </label>
+            )}
+          </div>
+        </div>
+
+        <DialogFooter className="gap-2">
+          <Button variant="gold" disabled={!canSave || busy} onClick={handleSave}>
+            {(busy || closeM.isPending || uploading) && (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            )}
+            حفظ وإغلاق الجلسة
           </Button>
-          <Button variant="outline" onClick={onClose}>
+          <Button variant="outline" onClick={onClose} disabled={busy}>
             إلغاء
           </Button>
         </DialogFooter>
