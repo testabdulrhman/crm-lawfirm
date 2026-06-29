@@ -325,6 +325,33 @@ export interface CaseSession {
   minutes_url: string | null
   gcal_event_id: string | null // للتكامل لاحقاً — لا تلمسه
   created_at: string | null
+  // دورة حياة الإغلاق (أعمدة جاهزة في الخادم)
+  closed_at: string | null
+  report_sent_at: string | null
+  report_sent_via: string | null
+  next_action: string | null
+  next_session_id: string | null
+  ruling_due_date: string | null
+}
+
+// نتيجة دالة close_session
+export interface CloseSessionResult {
+  session_id: string
+  case_id: string
+  new_session_id: string | null
+  client_name: string | null
+  client_phone: string | null
+  case_title: string | null
+}
+
+// عنصر «جلسة تحتاج إغلاق» (sessions_need_closure)
+export interface SessionNeedingClosure {
+  id: string
+  case_id: string
+  case_title: string | null
+  title: string | null
+  session_date: string | null
+  days_ago: number
 }
 
 export interface CaseSessionInput {

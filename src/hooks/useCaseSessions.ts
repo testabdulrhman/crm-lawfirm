@@ -3,7 +3,14 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { toast } from '@/hooks/use-toast'
 import { addSessionEvent, deleteCalendarEvent } from '@/lib/calendar'
-import type { CaseSession, CaseSessionInput } from '@/types/db'
+import { normalizeSaudiPhone } from '@/lib/format'
+import type {
+  CaseSession,
+  CaseSessionInput,
+  CloseSessionResult,
+  SessionNeedingClosure,
+  SmsConfig,
+} from '@/types/db'
 
 function errToast(title: string) {
   return (e: unknown) =>
@@ -211,4 +218,117 @@ export function useDeleteSession(caseId: string) {
     },
     onError: errToast('تعذّر حذف الجلسة'),
   })
+}
+
+/* ===================== إغلاق الجلسة ===================== */
+
+export interface CloseSessionArgs {
+  sessionId: string
+  outcome: string
+  minutesUrl?: string | null
+  nextAction: 'none' | 'next_session' | 'await_ruling' | 'case_closed'
+  nextSessionDate?: string | null
+  nextSessionTime?: string | null
+  rulingDueDate?: string | null
+}
+
+export function useCloseSession(caseId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (args: CloseSessionArgs): Promise<CloseSessionResult> => {
+      const { data, error } = await supabase.rpc('close_session', {
+        p_session_id: args.sessionId,
+        p_outcome: args.outcome,
+        p_minutes_url: args.minutesUrl ?? null,
+        p_next_action: args.nextAction,
+        p_next_session_date: args.nextSessionDate ?? null,
+        p_next_session_time: args.nextSessionTime ?? null,
+        p_ruling_due_date: args.rulingDueDate ?? null,
+      })
+      if (error) throw error
+      return data as CloseSessionResult
+    },
+    onSuccess: () => {
+      invalidate(qc, caseId)
+      qc.invalidateQueries({ queryKey: ['dashboard_overview'] })
+      qc.invalidateQueries({ queryKey: ['sessions_need_closure'] })
+      qc.invalidateQueries({ queryKey: ['all_sessions'] })
+    },
+    onError: errToast('تعذّر إغلاق الجلسة'),
+  })
+}
+
+export function useSessionsNeedClosure(scope: 'all' | 'mine' = 'all') {
+  return useQuery({
+    queryKey: ['sessions_need_closure', scope],
+    queryFn: async (): Promise<SessionNeedingClosure[]> => {
+      const { data, error } = await supabase.rpc('sessions_need_closure', {
+        p_scope: scope,
+      })
+      if (error) throw error
+      return (data ?? []) as SessionNeedingClosure[]
+    },
+  })
+}
+
+// إرسال تقرير الجلسة عبر SMS (يعيد استخدام Msegat) ويُسجّل report_sent_at/via.
+// لا يرمي أخطاء قاتلة — يُرجع true عند النجاح.
+async function fetchSmsConfig(): Promise<SmsConfig | null> {
+  const { data } = await supabase
+    .from('lookup_values')
+    .select('value')
+    .eq('type', 'sms_config')
+    .maybeSingle()
+  if (!data?.value) return null
+  try {
+    return JSON.parse(data.value as string) as SmsConfig
+  } catch {
+    return null
+  }
+}
+
+export async function sendSessionReportSms(args: {
+  sessionId: string
+  phone: string
+  clientName: string | null
+  message: string
+  sentBy: string | null
+}): Promise<boolean> {
+  const numbers = normalizeSaudiPhone(args.phone)
+  if (!numbers) return false
+  try {
+    const cfg = await fetchSmsConfig()
+    if (!cfg) return false
+    const { data, error } = await supabase.functions.invoke('swift-endpoint', {
+      body: {
+        userName: cfg.userName,
+        apiKey: cfg.apiKey,
+        userSender: cfg.sender,
+        numbers,
+        msg: args.message,
+      },
+    })
+    const ok = !error && (data?.code === '1' || data?.code === 1)
+    await supabase.from('sms_log').insert({
+      recipient_name: args.clientName ?? 'عميل',
+      phone: numbers,
+      message: args.message,
+      status: ok ? 'sent' : 'failed',
+      sent_by: args.sentBy,
+    })
+    return ok
+  } catch {
+    return false
+  }
+}
+
+// تحديث وسم إرسال التقرير على الجلسة (بعد الإرسال)
+export async function markSessionReportSent(
+  sessionId: string,
+  via: string
+): Promise<void> {
+  await supabase
+    .from('sessions')
+    .update({ report_sent_at: new Date().toISOString(), report_sent_via: via })
+    .eq('id', sessionId)
 }
