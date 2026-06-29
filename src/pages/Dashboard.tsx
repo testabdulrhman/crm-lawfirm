@@ -17,6 +17,7 @@ import {
   Circle,
   CheckCircle2,
   Loader2,
+  AlertTriangle,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -36,6 +37,7 @@ import {
   useCompleteTask,
   type MyTask,
 } from '@/hooks/useMyTasks'
+import { useSessionsNeedClosure } from '@/hooks/useCaseSessions'
 import type {
   DashApplication,
   DashPOA,
@@ -138,6 +140,9 @@ export default function Dashboard() {
           />
         </div>
       )}
+
+      {/* جلسات تحتاج إغلاق */}
+      <SessionsNeedClosureSection />
 
       {/* مهامي */}
       <MyTasksSection />
@@ -314,6 +319,45 @@ function RowShell({
 function Empty({ text }: { text: string }) {
   return (
     <p className="py-6 text-center text-sm text-muted-foreground">{text}</p>
+  )
+}
+
+/* ===================== جلسات تحتاج إغلاق ===================== */
+
+function SessionsNeedClosureSection() {
+  const [, navigate] = useLocation()
+  const { data } = useSessionsNeedClosure('all')
+  const list = data ?? []
+  if (list.length === 0) return null // تنبيه يظهر فقط عند وجود جلسات
+
+  return (
+    <Card className="border-amber-300 bg-amber-50/50 dark:border-amber-900/40 dark:bg-amber-950/20">
+      <CardHeader className="flex-row items-center gap-2 space-y-0">
+        <AlertTriangle className="h-4 w-4 text-amber-500" />
+        <CardTitle className="text-base">
+          جلسات تحتاج إغلاق{' '}
+          <span className="text-sm font-normal text-muted-foreground">
+            ({fmtNumber(list.length)})
+          </span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {list.map((x) => (
+          <RowShell
+            key={x.id}
+            onClick={() => navigate(`/cases/${x.case_id}`)}
+          >
+            <p className="truncate text-sm font-medium text-foreground">
+              {x.case_title || x.title || 'جلسة'}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {fmtDatePref(x.session_date)} · فات موعدها منذ{' '}
+              {fmtNumber(x.days_ago)} يوم
+            </p>
+          </RowShell>
+        ))}
+      </CardContent>
+    </Card>
   )
 }
 
