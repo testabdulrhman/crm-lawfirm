@@ -7,7 +7,6 @@ import { normalizeSaudiPhone } from '@/lib/format'
 import type {
   StaffApplication,
   StaffApplicationStatus,
-  SmsConfig,
 } from '@/types/db'
 
 const LIST_KEY = 'staff_applications'
@@ -79,21 +78,7 @@ export function usePendingApplicationsCount() {
 }
 
 /* ===================== مساعد SMS ===================== */
-
-async function fetchSmsConfig(): Promise<SmsConfig | null> {
-  const { data, error } = await supabase
-    .from('lookup_values')
-    .select('value')
-    .eq('type', 'sms_config')
-    .maybeSingle()
-  if (error) throw error
-  if (!data?.value) return null
-  try {
-    return JSON.parse(data.value as string) as SmsConfig
-  } catch {
-    return null
-  }
-}
+// بيانات Msegat تُحلّ خادميّاً داخل swift-endpoint (لا تُرسل من المتصفّح).
 
 interface SendCredentialsArgs {
   name: string
@@ -111,9 +96,6 @@ async function sendCredentialsSms(args: SendCredentialsArgs): Promise<boolean> {
 
   let message = ''
   try {
-    const cfg = await fetchSmsConfig()
-    if (!cfg) return false
-
     const body = await getTemplate('staff_credentials')
     message = body
       ? fillTemplate(body, {
@@ -125,13 +107,7 @@ async function sendCredentialsSms(args: SendCredentialsArgs): Promise<boolean> {
       : `مرحباً ${args.name}، رابط الدخول: ${LOGIN_URL} — البريد: ${args.email} — كلمة المرور: ${args.password}`
 
     const { data, error } = await supabase.functions.invoke('swift-endpoint', {
-      body: {
-        userName: cfg.userName,
-        apiKey: cfg.apiKey,
-        userSender: cfg.sender,
-        numbers,
-        msg: message,
-      },
+      body: { numbers, msg: message },
     })
     const ok = !error && (data?.code === '1' || data?.code === 1)
 
@@ -286,18 +262,10 @@ async function sendRejectionSms(
   if (!numbers) return false
   let message = ''
   try {
-    const cfg = await fetchSmsConfig()
-    if (!cfg) return false
     const body = await getTemplate('application_rejected')
     message = fillTemplate(body || DEFAULT_REJECTION, { name })
     const { data, error } = await supabase.functions.invoke('swift-endpoint', {
-      body: {
-        userName: cfg.userName,
-        apiKey: cfg.apiKey,
-        userSender: cfg.sender,
-        numbers,
-        msg: message,
-      },
+      body: { numbers, msg: message },
     })
     const ok = !error && (data?.code === '1' || data?.code === 1)
     await supabase.from('sms_log').insert({

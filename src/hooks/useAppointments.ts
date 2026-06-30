@@ -5,7 +5,7 @@ import { toast } from '@/hooks/use-toast'
 import { getTemplate, fillTemplate } from '@/lib/templates'
 import { normalizeSaudiPhone, todayISO, fmtDatePref, fmtTime } from '@/lib/format'
 import { addAppointmentEvent, deleteCalendarEvent } from '@/lib/calendar'
-import type { Appointment, AppointmentInput, SmsConfig } from '@/types/db'
+import type { Appointment, AppointmentInput } from '@/types/db'
 
 function calendarWarn() {
   toast({
@@ -224,22 +224,8 @@ export function useDeleteAppointment() {
 
 /* ===================== SMS ===================== */
 
-async function fetchSmsConfig(): Promise<SmsConfig | null> {
-  const { data, error } = await supabase
-    .from('lookup_values')
-    .select('value')
-    .eq('type', 'sms_config')
-    .maybeSingle()
-  if (error) throw error
-  if (!data?.value) return null
-  try {
-    return JSON.parse(data.value as string) as SmsConfig
-  } catch {
-    return null
-  }
-}
-
 // يرسل SMS للموعد ويُسجّل في sms_log. يُرجع true عند النجاح. لا يرمي أخطاء قاتلة.
+// بيانات Msegat تُحلّ خادميّاً داخل swift-endpoint (لا تُرسل من المتصفّح).
 async function sendAppointmentSms(
   appt: Appointment,
   templateKey: string,
@@ -253,9 +239,6 @@ async function sendAppointmentSms(
   const name = appt.client_name || appt.client?.name || 'عميلنا'
   let message = ''
   try {
-    const cfg = await fetchSmsConfig()
-    if (!cfg) return false
-
     const body = (await getTemplate(templateKey)) || fallback
     message = fillTemplate(body, {
       name,
@@ -264,13 +247,7 @@ async function sendAppointmentSms(
     })
 
     const { data, error } = await supabase.functions.invoke('swift-endpoint', {
-      body: {
-        userName: cfg.userName,
-        apiKey: cfg.apiKey,
-        userSender: cfg.sender,
-        numbers,
-        msg: message,
-      },
+      body: { numbers, msg: message },
     })
     const ok = !error && (data?.code === '1' || data?.code === 1)
 

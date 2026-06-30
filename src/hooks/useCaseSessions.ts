@@ -9,7 +9,6 @@ import type {
   CaseSessionInput,
   CloseSessionResult,
   SessionNeedingClosure,
-  SmsConfig,
 } from '@/types/db'
 
 function errToast(title: string) {
@@ -271,22 +270,8 @@ export function useSessionsNeedClosure(scope: 'all' | 'mine' = 'all') {
   })
 }
 
-// إرسال تقرير الجلسة عبر SMS (يعيد استخدام Msegat) ويُسجّل report_sent_at/via.
+// إرسال تقرير الجلسة عبر SMS (Msegat عبر swift-endpoint — البيانات تُحلّ خادميّاً).
 // لا يرمي أخطاء قاتلة — يُرجع true عند النجاح.
-async function fetchSmsConfig(): Promise<SmsConfig | null> {
-  const { data } = await supabase
-    .from('lookup_values')
-    .select('value')
-    .eq('type', 'sms_config')
-    .maybeSingle()
-  if (!data?.value) return null
-  try {
-    return JSON.parse(data.value as string) as SmsConfig
-  } catch {
-    return null
-  }
-}
-
 export async function sendSessionReportSms(args: {
   sessionId: string
   phone: string
@@ -297,16 +282,9 @@ export async function sendSessionReportSms(args: {
   const numbers = normalizeSaudiPhone(args.phone)
   if (!numbers) return false
   try {
-    const cfg = await fetchSmsConfig()
-    if (!cfg) return false
+    // بيانات Msegat تُحلّ خادميّاً داخل swift-endpoint (لا تُرسل من المتصفّح)
     const { data, error } = await supabase.functions.invoke('swift-endpoint', {
-      body: {
-        userName: cfg.userName,
-        apiKey: cfg.apiKey,
-        userSender: cfg.sender,
-        numbers,
-        msg: args.message,
-      },
+      body: { numbers, msg: args.message },
     })
     const ok = !error && (data?.code === '1' || data?.code === 1)
     await supabase.from('sms_log').insert({
