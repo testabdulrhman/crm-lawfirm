@@ -13,11 +13,20 @@ import { openExternal } from '@/lib/external'
 
 type FileKind = 'pdf' | 'image' | 'other'
 
-function detectKind(name: string): FileKind {
-  const ext = name.split('?')[0].split('.').pop()?.toLowerCase() ?? ''
+function kindFromExt(s: string): FileKind {
+  const ext = s.split('?')[0].split('#')[0].split('.').pop()?.toLowerCase() ?? ''
   if (ext === 'pdf') return 'pdf'
-  if (['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(ext)) return 'image'
+  if (['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp', 'svg'].includes(ext))
+    return 'image'
   return 'other'
+}
+
+// نعتمد على رابط الملف أولاً (يحمل الامتداد الحقيقي)، ثم على الاسم.
+// (بعض المنادين يمرّرون عنواناً وصفيّاً كاسم بلا امتداد — مثل صك الحكم.)
+function detectKind(url: string | null, name: string | null): FileKind {
+  const fromUrl = url ? kindFromExt(url) : 'other'
+  if (fromUrl !== 'other') return fromUrl
+  return name ? kindFromExt(name) : 'other'
 }
 
 export interface FilePreviewDialogProps {
@@ -34,7 +43,7 @@ export function FilePreviewDialog({
   fileName,
 }: FilePreviewDialogProps) {
   const name = fileName || fileUrl || 'ملف'
-  const kind = fileUrl ? detectKind(fileName || fileUrl) : 'other'
+  const kind = fileUrl ? detectKind(fileUrl, fileName) : 'other'
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
