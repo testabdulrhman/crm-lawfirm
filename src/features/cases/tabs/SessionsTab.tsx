@@ -74,6 +74,7 @@ import {
   useCloseSession,
   sendSessionReportSms,
   markSessionReportSent,
+  updateSessionNumber,
 } from '@/hooks/useCaseSessions'
 import {
   SESSION_STATUS_OPTIONS,
@@ -503,6 +504,7 @@ function CloseSessionDialog({
   const hasPhone = !!(clientPhone && clientPhone.trim())
 
   const [outcome, setOutcome] = useState('')
+  const [sessionNum, setSessionNum] = useState('')
   const [file, setFile] = useState<File | null>(null)
   const [uploadedUrl, setUploadedUrl] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
@@ -522,6 +524,9 @@ function CloseSessionDialog({
   useEffect(() => {
     if (!session) return
     setOutcome(session.outcome ?? '')
+    setSessionNum(
+      session.session_number != null ? String(session.session_number) : ''
+    )
     setFile(null)
     setUploadedUrl(null)
     setSendSms(false)
@@ -589,6 +594,9 @@ function CloseSessionDialog({
     if (parsed.outcome && parsed.outcome.trim() !== '') {
       setOutcome(parsed.outcome.trim())
     }
+    if (parsed.session_number != null && Number.isFinite(parsed.session_number)) {
+      setSessionNum(String(parsed.session_number))
+    }
     // الخطوة القادمة + تواريخها (إن استُنتجت من المحضر)
     const na = parsed.next_action
     if (na === 'next_session' || na === 'await_ruling' || na === 'case_closed') {
@@ -609,6 +617,13 @@ function CloseSessionDialog({
     if (!session || !canSave) return
     setBusy(true)
     try {
+      // 0) حفظ رقم الجلسة إن تغيّر (مستقل عن دالة الإغلاق)
+      const numRaw = sessionNum.trim()
+      const numToSave = numRaw && /^\d+$/.test(numRaw) ? parseInt(numRaw, 10) : null
+      if (numToSave !== (session.session_number ?? null)) {
+        await updateSessionNumber(session.id, numToSave)
+      }
+
       // 1) رفع المحضر إن وُجد (يُعاد استخدام رابط الاستخراج إن سبق رفعه)
       const minutesUrl = await ensureMinutesUrl()
 
@@ -700,6 +715,22 @@ function CloseSessionDialog({
                   ? 'استخراج البيانات من المحضر'
                   : 'إرفاق المحضر واستخراج البيانات'}
             </Button>
+          </div>
+
+          {/* رقم الجلسة (يُملأ تلقائياً من المحضر إن ذُكر) */}
+          <div className="grid grid-cols-[8rem_1fr] gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="close_num">رقم الجلسة</Label>
+              <Input
+                id="close_num"
+                type="number"
+                min={1}
+                dir="ltr"
+                className="text-center"
+                value={sessionNum}
+                onChange={(e) => setSessionNum(e.target.value)}
+              />
+            </div>
           </div>
 
           {/* 1) المحضر/النتيجة */}

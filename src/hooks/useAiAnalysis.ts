@@ -89,6 +89,7 @@ export function useExtractRuling() {
 /* ===================== استخراج بيانات الجلسة من المحضر ===================== */
 
 export interface SessionMinutesExtraction {
+  session_number: number | null
   outcome: string | null
   next_action: 'none' | 'next_session' | 'await_ruling' | 'case_closed' | null
   next_session_date: string | null // ميلادي YYYY-MM-DD

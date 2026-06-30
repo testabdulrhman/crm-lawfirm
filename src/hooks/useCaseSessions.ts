@@ -300,6 +300,14 @@ export async function sendSessionReportSms(args: {
   }
 }
 
+// تحديث رقم الجلسة (يُستخدم عند تعبئته من المحضر أثناء الإغلاق)
+export async function updateSessionNumber(
+  id: string,
+  num: number | null
+): Promise<void> {
+  await supabase.from('sessions').update({ session_number: num }).eq('id', id)
+}
+
 // تحديث وسم إرسال التقرير على الجلسة (بعد الإرسال)
 export async function markSessionReportSent(
   sessionId: string,
