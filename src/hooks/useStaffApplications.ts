@@ -10,7 +10,7 @@ import type {
 } from '@/types/db'
 
 const LIST_KEY = 'staff_applications'
-const LOGIN_URL = 'https://app2.redwan.sa'
+const LOGIN_URL = 'https://app.redwan.sa'
 
 function invalidate(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: [LIST_KEY] })
