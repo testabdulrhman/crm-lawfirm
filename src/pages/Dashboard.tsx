@@ -22,6 +22,7 @@ import {
 } from 'lucide-react'
 
 import { useAuth } from '@/stores/auth'
+import { useIsDirector } from '@/hooks/useIsDirector'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -30,13 +31,11 @@ import { cn } from '@/lib/utils'
 import { fmtNumber, fmtDatePref, fmtTime } from '@/lib/format'
 import { taskPriorityBadge, taskPriorityLabel } from '@/lib/caseLabels'
 import { typeLabel as requestTypeLabel } from '@/features/requests/labels'
-import { useDashboardOverview } from '@/hooks/useDashboard'
 import {
-  useMyTasks,
-  useMyTasksStats,
+  useDashboardOverview,
   useCompleteTask,
-  type MyTask,
-} from '@/hooks/useMyTasks'
+  type DashboardScope,
+} from '@/hooks/useDashboard'
 import { useSessionsNeedClosure } from '@/hooks/useCaseSessions'
 import type {
   DashApplication,
@@ -68,9 +67,18 @@ function countdownText(days: number | null): string {
 
 export default function Dashboard() {
   const { teamMember } = useAuth()
+  const isDirector = useIsDirector()
   const [, navigate] = useLocation()
-  const { data, isLoading, isFetching, refetch } = useDashboardOverview()
+
+  // النطاق: «متطلباتي» افتراضياً؛ «المكتب» للمدير فقط
+  const [scope, setScope] = useState<DashboardScope>('mine')
+  const effectiveScope: DashboardScope = isDirector ? scope : 'mine'
+  const isAll = effectiveScope === 'all'
+
+  const { data, isLoading, isFetching, refetch } =
+    useDashboardOverview(effectiveScope)
   const s = data?.stats
+  const completeM = useCompleteTask()
 
   return (
     <div className="space-y-6">
@@ -81,7 +89,9 @@ export default function Dashboard() {
             مرحباً، {teamMember?.name ?? 'بك'} 👋
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            نظرة شاملة على مهام اليوم ونشاط المكتب
+            {isAll
+              ? 'نظرة شاملة على أعمال المكتب'
+              : 'متطلباتك القادمة: جلساتك ومهامك'}
           </p>
         </div>
         <Button
@@ -95,122 +105,185 @@ export default function Dashboard() {
         </Button>
       </div>
 
+      {/* مبدّل النطاق — للمدير فقط */}
+      {isDirector && (
+        <div className="inline-flex rounded-lg border bg-muted p-1 text-sm">
+          <ScopeBtn
+            active={scope === 'mine'}
+            onClick={() => setScope('mine')}
+            label="متطلباتي"
+          />
+          <ScopeBtn
+            active={scope === 'all'}
+            onClick={() => setScope('all')}
+            label="المكتب"
+          />
+        </div>
+      )}
+
       {/* بطاقات KPI */}
       {isLoading || !s ? (
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-5">
-          {Array.from({ length: 9 }).map((_, i) => (
+          {Array.from({ length: isAll ? 8 : 2 }).map((_, i) => (
             <Skeleton key={i} className="h-24 w-full" />
           ))}
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-5">
-          <Kpi label="إجمالي القضايا" value={s.cases_total} icon={Scale} tone="navy" onClick={() => navigate('/cases')} />
-          <Kpi label="القضايا الجارية" value={s.cases_active} icon={Scale} tone="green" onClick={() => navigate('/cases')} />
-          <Kpi label="جهات الاتصال" value={s.contacts} icon={BookUser} tone="gold" onClick={() => navigate('/contacts')} />
-          <Kpi label="الموظفون النشطون" value={s.staff_active} icon={Users} tone="navy" onClick={() => navigate('/team')} />
-          <Kpi label="الجلسات القادمة" value={s.upcoming_sessions} icon={CalendarDays} tone="gold" onClick={() => navigate('/sessions')} />
+          {/* الأهم دائماً: الجلسات + المهام */}
+          <Kpi
+            label="الجلسات القادمة"
+            value={s.upcoming_sessions}
+            icon={CalendarDays}
+            tone="gold"
+            onClick={() => navigate('/sessions')}
+          />
           <Kpi
             label="المهام المفتوحة"
             value={s.open_tasks}
             icon={ListTodo}
             tone={s.overdue_tasks > 0 ? 'red' : 'blue'}
-            note={s.overdue_tasks > 0 ? `منها ${fmtNumber(s.overdue_tasks)} متأخرة` : undefined}
+            note={
+              s.overdue_tasks > 0
+                ? `منها ${fmtNumber(s.overdue_tasks)} متأخرة`
+                : undefined
+            }
             onClick={() => navigate('/cases')}
           />
-          <Kpi
-            label="طلبات التوظيف"
-            value={s.pending_applications}
-            icon={UserPlus}
-            tone={s.pending_applications > 0 ? 'gold' : 'navy'}
-            onClick={() => navigate('/staff-applications')}
-          />
-          <Kpi
-            label="الطلبات الواردة"
-            value={s.pending_requests}
-            icon={Inbox}
-            tone={s.pending_requests > 0 ? 'blue' : 'navy'}
-            onClick={() => navigate('/requests')}
-          />
-          <Kpi
-            label="وكالات تنتهي قريباً"
-            value={s.expiring_poas}
-            icon={FileSignature}
-            tone={s.expiring_poas > 0 ? 'amber' : 'navy'}
-            onClick={() => navigate('/poa')}
-          />
+
+          {/* بطاقات إدارية — وضع «المكتب» (المدير) فقط */}
+          {isAll && (
+            <>
+              <Kpi label="إجمالي القضايا" value={s.cases_total} icon={Scale} tone="navy" onClick={() => navigate('/cases')} />
+              <Kpi label="القضايا الجارية" value={s.cases_active} icon={Scale} tone="green" onClick={() => navigate('/cases')} />
+              <Kpi label="جهات الاتصال" value={s.contacts} icon={BookUser} tone="gold" onClick={() => navigate('/contacts')} />
+              <Kpi label="الموظفون النشطون" value={s.staff_active} icon={Users} tone="navy" onClick={() => navigate('/team')} />
+              <Kpi
+                label="طلبات التوظيف"
+                value={s.pending_applications}
+                icon={UserPlus}
+                tone={s.pending_applications > 0 ? 'gold' : 'navy'}
+                onClick={() => navigate('/staff-applications')}
+              />
+              <Kpi
+                label="الطلبات الواردة"
+                value={s.pending_requests}
+                icon={Inbox}
+                tone={s.pending_requests > 0 ? 'blue' : 'navy'}
+                onClick={() => navigate('/requests')}
+              />
+              <Kpi
+                label="وكالات تنتهي قريباً"
+                value={s.expiring_poas}
+                icon={FileSignature}
+                tone={s.expiring_poas > 0 ? 'amber' : 'navy'}
+                onClick={() => navigate('/poa')}
+              />
+            </>
+          )}
         </div>
       )}
 
-      {/* جلسات تحتاج إغلاق */}
-      <SessionsNeedClosureSection />
+      {/* جلسات تحتاج إغلاق (حسب النطاق) */}
+      <SessionsNeedClosureSection scope={effectiveScope} />
 
-      {/* مهامي */}
-      <MyTasksSection />
-
-      {/* البطاقات التفصيلية */}
+      {/* القسمان الأبرز: الجلسات + المهام */}
       <div className="grid gap-4 lg:grid-cols-2">
-        {/* الجلسات القادمة */}
-        <SectionCard icon={CalendarDays} title="الجلسات القادمة" loading={isLoading}>
+        {/* 📅 الجلسات القادمة */}
+        <SectionCard
+          icon={CalendarDays}
+          title="الجلسات القادمة"
+          count={data?.upcoming_sessions?.length}
+          loading={isLoading}
+        >
           {(data?.upcoming_sessions ?? []).length === 0 ? (
             <Empty text="لا جلسات قادمة" />
           ) : (
             (data?.upcoming_sessions ?? []).map((x) => (
-              <SessionRow key={x.id} s={x} onClick={() => x.case_id && navigate(`/cases/${x.case_id}`)} />
+              <SessionRow
+                key={x.id}
+                s={x}
+                onClick={() => x.case_id && navigate(`/cases/${x.case_id}`)}
+              />
             ))
           )}
         </SectionCard>
 
-        {/* المهام */}
-        <SectionCard icon={ListTodo} title="المهام العاجلة والمتأخرة" loading={isLoading}>
+        {/* ✅ المهام */}
+        <SectionCard
+          icon={ListTodo}
+          title="المهام"
+          count={data?.tasks?.length}
+          loading={isLoading}
+        >
           {(data?.tasks ?? []).length === 0 ? (
-            <Empty text="لا مهام مفتوحة" />
+            <Empty text="لا مهام عليك 🎉" />
           ) : (
             (data?.tasks ?? []).map((t) => (
-              <TaskRow key={t.id} t={t} onClick={() => t.case_id && navigate(`/cases/${t.case_id}`)} />
+              <CompletableTaskRow
+                key={t.id}
+                t={t}
+                completing={completeM.isPending && completeM.variables === t.id}
+                onComplete={() => completeM.mutate(t.id)}
+                onOpen={() => t.case_id && navigate(`/cases/${t.case_id}`)}
+              />
             ))
           )}
         </SectionCard>
+      </div>
 
-        {/* وكالات تنتهي قريباً */}
-        <SectionCard icon={FileSignature} title="وكالات تنتهي قريباً" loading={isLoading}>
-          {(data?.expiring_poas ?? []).length === 0 ? (
-            <Empty text="لا وكالات تنتهي قريباً" />
-          ) : (
-            (data?.expiring_poas ?? []).map((p) => (
-              <PoaRow key={p.id} p={p} onClick={() => navigate('/poa')} />
-            ))
-          )}
-        </SectionCard>
-
-        {/* آخر طلبات التوظيف */}
-        <SectionCard icon={UserPlus} title="آخر طلبات التوظيف" loading={isLoading}>
-          {(data?.applications ?? []).length === 0 ? (
-            <Empty text="لا طلبات جديدة" />
-          ) : (
-            (data?.applications ?? []).map((a) => (
-              <ApplicationRow key={a.id} a={a} onClick={() => navigate('/staff-applications')} />
-            ))
-          )}
-        </SectionCard>
-
-        {/* الطلبات الواردة */}
-        <SectionCard icon={Inbox} title="الطلبات الواردة" loading={isLoading}>
-          {(data?.requests ?? []).length === 0 ? (
-            <Empty text="لا طلبات واردة" />
-          ) : (
-            (data?.requests ?? []).map((r) => (
-              <RequestRow key={r.id} r={r} onClick={() => navigate('/requests')} />
-            ))
-          )}
-        </SectionCard>
-
-        {/* المواعيد القادمة — تظهر فقط إن وُجدت */}
+      {/* أقسام ثانوية */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        {/* المواعيد القادمة — تظهر إن وُجدت (في كلا النطاقين) */}
         {(data?.appointments ?? []).length > 0 && (
           <SectionCard icon={CalendarClock} title="المواعيد القادمة" loading={false}>
             {(data?.appointments ?? []).map((ap) => (
-              <AppointmentRow key={ap.id} ap={ap} onClick={() => navigate('/appointments')} />
+              <AppointmentRow
+                key={ap.id}
+                ap={ap}
+                onClick={() => navigate('/appointments')}
+              />
             ))}
           </SectionCard>
+        )}
+
+        {/* الإدارية — «المكتب» (المدير) فقط */}
+        {isAll && (
+          <>
+            <SectionCard icon={FileSignature} title="وكالات تنتهي قريباً" loading={isLoading}>
+              {(data?.expiring_poas ?? []).length === 0 ? (
+                <Empty text="لا وكالات تنتهي قريباً" />
+              ) : (
+                (data?.expiring_poas ?? []).map((p) => (
+                  <PoaRow key={p.id} p={p} onClick={() => navigate('/poa')} />
+                ))
+              )}
+            </SectionCard>
+
+            <SectionCard icon={UserPlus} title="آخر طلبات التوظيف" loading={isLoading}>
+              {(data?.applications ?? []).length === 0 ? (
+                <Empty text="لا طلبات جديدة" />
+              ) : (
+                (data?.applications ?? []).map((a) => (
+                  <ApplicationRow
+                    key={a.id}
+                    a={a}
+                    onClick={() => navigate('/staff-applications')}
+                  />
+                ))
+              )}
+            </SectionCard>
+
+            <SectionCard icon={Inbox} title="الطلبات الواردة" loading={isLoading}>
+              {(data?.requests ?? []).length === 0 ? (
+                <Empty text="لا طلبات واردة" />
+              ) : (
+                (data?.requests ?? []).map((r) => (
+                  <RequestRow key={r.id} r={r} onClick={() => navigate('/requests')} />
+                ))
+              )}
+            </SectionCard>
+          </>
         )}
       </div>
     </div>
@@ -218,6 +291,31 @@ export default function Dashboard() {
 }
 
 /* ===================== مكوّنات ===================== */
+
+function ScopeBtn({
+  active,
+  onClick,
+  label,
+}: {
+  active: boolean
+  onClick: () => void
+  label: string
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'rounded-md px-4 py-1.5 transition-colors',
+        active
+          ? 'bg-card font-medium text-foreground shadow-sm'
+          : 'text-muted-foreground hover:text-foreground'
+      )}
+    >
+      {label}
+    </button>
+  )
+}
 
 const TONES: Record<string, string> = {
   navy: 'text-navy bg-navy/10 dark:text-navy-100 dark:bg-navy-100/10',
@@ -269,11 +367,13 @@ function Kpi({
 function SectionCard({
   icon: Icon,
   title,
+  count,
   loading,
   children,
 }: {
   icon: LucideIcon
   title: string
+  count?: number
   loading: boolean
   children: React.ReactNode
 }) {
@@ -281,7 +381,14 @@ function SectionCard({
     <Card>
       <CardHeader className="flex-row items-center gap-2 space-y-0">
         <Icon className="h-4 w-4 text-gold" />
-        <CardTitle className="text-base">{title}</CardTitle>
+        <CardTitle className="text-base">
+          {title}
+          {count != null && count > 0 && (
+            <span className="mr-1 text-sm font-normal text-muted-foreground">
+              ({fmtNumber(count)})
+            </span>
+          )}
+        </CardTitle>
       </CardHeader>
       <CardContent className="space-y-1.5">
         {loading ? (
@@ -324,9 +431,9 @@ function Empty({ text }: { text: string }) {
 
 /* ===================== جلسات تحتاج إغلاق ===================== */
 
-function SessionsNeedClosureSection() {
+function SessionsNeedClosureSection({ scope }: { scope: DashboardScope }) {
   const [, navigate] = useLocation()
-  const { data } = useSessionsNeedClosure('all')
+  const { data } = useSessionsNeedClosure(scope)
   const list = data ?? []
   if (list.length === 0) return null // تنبيه يظهر فقط عند وجود جلسات
 
@@ -343,10 +450,7 @@ function SessionsNeedClosureSection() {
       </CardHeader>
       <CardContent className="space-y-2">
         {list.map((x) => (
-          <RowShell
-            key={x.id}
-            onClick={() => navigate(`/cases/${x.case_id}`)}
-          >
+          <RowShell key={x.id} onClick={() => navigate(`/cases/${x.case_id}`)}>
             <p className="truncate text-sm font-medium text-foreground">
               {x.case_title || x.title || 'جلسة'}
             </p>
@@ -361,90 +465,35 @@ function SessionsNeedClosureSection() {
   )
 }
 
-/* ===================== مهامي ===================== */
+/* ===================== صفوف ===================== */
 
-const MY_TASKS_PREVIEW = 8
-
-function MyTasksSection() {
-  const [, navigate] = useLocation()
-  const { data: tasks, isLoading } = useMyTasks('todo')
-  const { data: stats } = useMyTasksStats()
-  const completeM = useCompleteTask()
-  const [showAll, setShowAll] = useState(false)
-
-  const list = tasks ?? []
-  const shown = showAll ? list : list.slice(0, MY_TASKS_PREVIEW)
-
+function SessionRow({ s, onClick }: { s: DashSession; onClick: () => void }) {
+  const days = daysFromToday(s.session_date)
+  const soon = days != null && days <= 2
   return (
-    <Card>
-      <CardHeader className="flex-row items-center justify-between gap-2 space-y-0">
-        <CardTitle className="flex items-center gap-2 text-base">
-          <ListTodo className="h-4 w-4 text-gold" />
-          مهامي
-          {stats && stats.todo > 0 && (
-            <span className="text-sm font-normal text-muted-foreground">
-              {fmtNumber(stats.todo)} مهمة
-              {stats.overdue > 0 && (
-                <>
-                  {' · '}
-                  <span className="font-medium text-destructive">
-                    {fmtNumber(stats.overdue)} متأخّرة
-                  </span>
-                </>
-              )}
-            </span>
-          )}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-2">
-        {isLoading ? (
-          Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-14 w-full rounded-lg" />
-          ))
-        ) : list.length === 0 ? (
-          <p className="py-8 text-center text-sm text-muted-foreground">
-            لا مهام عليك حاليّاً 🎉
-          </p>
-        ) : (
-          <>
-            {shown.map((t) => (
-              <MyTaskRow
-                key={t.id}
-                t={t}
-                completing={
-                  completeM.isPending && completeM.variables === t.id
-                }
-                onComplete={() => completeM.mutate(t.id)}
-                onOpen={() => t.case_id && navigate(`/cases/${t.case_id}`)}
-              />
-            ))}
-            {list.length > MY_TASKS_PREVIEW && (
-              <div className="pt-1 text-center">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowAll((v) => !v)}
-                >
-                  {showAll
-                    ? 'عرض أقل'
-                    : `عرض كل مهامي (${fmtNumber(list.length)})`}
-                </Button>
-              </div>
-            )}
-          </>
-        )}
-      </CardContent>
-    </Card>
+    <RowShell onClick={onClick}>
+      <p className="truncate text-sm font-medium text-foreground">
+        {s.case_title || s.title || 'جلسة'}
+      </p>
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+        <span>{fmtDatePref(s.session_date)}</span>
+        {s.session_time && <span>{fmtTime(s.session_time)}</span>}
+        <span className={cn('font-medium', soon ? 'text-destructive' : 'text-amber-600 dark:text-amber-400')}>
+          {countdownText(days)}
+        </span>
+      </div>
+    </RowShell>
   )
 }
 
-function MyTaskRow({
+// صف مهمة قابل للإكمال (مربّع إكمال + نقر على المهمة لفتح قضيتها)
+function CompletableTaskRow({
   t,
   completing,
   onComplete,
   onOpen,
 }: {
-  t: MyTask
+  t: DashTask
   completing: boolean
   onComplete: () => void
   onOpen: () => void
@@ -470,18 +519,13 @@ function MyTaskRow({
         )}
       </button>
 
-      {/* محتوى المهمة (قابل للنقر) */}
-      <button
-        onClick={onOpen}
-        className="min-w-0 flex-1 text-right"
-      >
+      {/* محتوى المهمة */}
+      <button onClick={onOpen} className="min-w-0 flex-1 text-right">
         <p className="truncate text-sm font-medium text-foreground">
           {t.title || 'مهمة'}
         </p>
         {t.case_title && (
-          <p className="truncate text-xs text-muted-foreground">
-            {t.case_title}
-          </p>
+          <p className="truncate text-xs text-muted-foreground">{t.case_title}</p>
         )}
         <div className="mt-1 flex flex-wrap items-center gap-1.5">
           {t.is_urgent && (
@@ -497,66 +541,16 @@ function MyTaskRow({
             <span
               className={cn(
                 'text-xs',
-                t.overdue
-                  ? 'font-medium text-destructive'
-                  : 'text-muted-foreground'
+                t.overdue ? 'font-medium text-destructive' : 'text-muted-foreground'
               )}
             >
               {fmtDatePref(t.due_date)}
-              {t.overdue
-                ? ` · متأخّرة ${fmtNumber(Math.abs(days ?? 0))} يوم`
-                : ''}
+              {t.overdue ? ` · متأخّرة ${fmtNumber(Math.abs(days ?? 0))} يوم` : ''}
             </span>
           )}
         </div>
       </button>
     </div>
-  )
-}
-
-function SessionRow({ s, onClick }: { s: DashSession; onClick: () => void }) {
-  const days = daysFromToday(s.session_date)
-  const soon = days != null && days <= 3
-  return (
-    <RowShell onClick={onClick}>
-      <p className="truncate text-sm font-medium text-foreground">
-        {s.case_title || s.title || 'جلسة'}
-      </p>
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
-        <span>{fmtDatePref(s.session_date)}</span>
-        {s.session_time && <span>{fmtTime(s.session_time)}</span>}
-        <span className={cn('font-medium', soon ? 'text-destructive' : 'text-amber-600 dark:text-amber-400')}>
-          {countdownText(days)}
-        </span>
-      </div>
-    </RowShell>
-  )
-}
-
-function TaskRow({ t, onClick }: { t: DashTask; onClick: () => void }) {
-  return (
-    <RowShell onClick={onClick}>
-      <div className="flex items-center gap-2">
-        <p className="truncate text-sm font-medium text-foreground">{t.title}</p>
-        {t.is_urgent && (
-          <Badge variant="destructive" className="gap-0.5 px-1.5 py-0 text-[10px]">
-            <Flame className="h-2.5 w-2.5" />
-            عاجلة
-          </Badge>
-        )}
-      </div>
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
-        <Badge variant={taskPriorityBadge(t.priority)} className="px-1.5 py-0 text-[10px]">
-          {taskPriorityLabel(t.priority)}
-        </Badge>
-        {t.case_title && <span className="truncate">{t.case_title}</span>}
-        {t.due_date && (
-          <span className={cn('font-medium', t.overdue && 'text-destructive')}>
-            {fmtDatePref(t.due_date)}
-          </span>
-        )}
-      </div>
-    </RowShell>
   )
 }
 
