@@ -12,6 +12,7 @@ import {
   Paperclip,
   Ban,
   RotateCcw,
+  Sparkles,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -45,6 +46,7 @@ import { cn } from '@/lib/utils'
 import { fmtDatePref, todayISO } from '@/lib/format'
 import { pickFile, uploadFile } from '@/lib/files'
 import { useAuth } from '@/stores/auth'
+import { useExtractRuling } from '@/hooks/useAiAnalysis'
 import {
   useCaseRulings,
   useAddRuling,
@@ -327,14 +329,19 @@ function RulingForm({
   const { teamMember } = useAuth()
   const addM = useAddRuling(caseId)
   const updateM = useUpdateRuling(caseId)
+  const extractM = useExtractRuling()
   const [file, setFile] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
+  // رابط الصك المرفوع (يُعاد استخدامه بين الاستخراج والحفظ لتفادي رفع مزدوج)
+  const [uploadedUrl, setUploadedUrl] = useState<string | null>(null)
+  const [hijriHint, setHijriHint] = useState<string | null>(null)
   const pending = addM.isPending || updateM.isPending || uploading
 
   const {
     register,
     handleSubmit,
     control,
+    setValue,
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
@@ -347,12 +354,67 @@ function RulingForm({
     },
   })
 
+  // عند اختيار ملف جديد: ألغِ رابط الرفع السابق
+  const onPickFile = (f: File | null) => {
+    setFile(f)
+    setUploadedUrl(null)
+  }
+
+  // يضمن وجود رابط للصك (يرفع الملف إن لزم) للاستخراج/الحفظ
+  const ensureDocUrl = async (f?: File | null): Promise<string | null> => {
+    if (uploadedUrl) return uploadedUrl
+    const theFile = f ?? file
+    if (theFile) {
+      setUploading(true)
+      try {
+        const { publicUrl } = await uploadFile(theFile, {
+          folder: `case_rulings/${caseId}`,
+        })
+        setUploadedUrl(publicUrl)
+        return publicUrl
+      } finally {
+        setUploading(false)
+      }
+    }
+    return ruling?.document_url ?? null
+  }
+
+  // تعبئة الحقول من نتيجة الاستخراج (قيم غير فارغة فقط).
+  // يفتح منتقي الملفات إن لم يُرفق صكّ بعد.
+  const handleExtract = async () => {
+    let f = file
+    if (!f && !uploadedUrl && !ruling?.document_url) {
+      f = await pickFile()
+      if (!f) return
+      setFile(f)
+      setUploadedUrl(null)
+    }
+    const url = await ensureDocUrl(f)
+    if (!url) return
+    const parsed = await extractM.mutateAsync(url)
+    if (!parsed) return
+    const set = (k: keyof FormValues, v: string | null | undefined) => {
+      if (v && String(v).trim() !== '') setValue(k, String(v).trim())
+    }
+    set('title', parsed.title)
+    set('ruling_number', parsed.ruling_number)
+    set('court_name', parsed.court_name)
+    set('result', parsed.result)
+    set('summary', parsed.summary)
+    // التاريخ: نقبل صيغة YYYY-MM-DD فقط (التقويم المزدوج يخزّن ميلادي)
+    if (parsed.ruling_date && /^\d{4}-\d{2}-\d{2}$/.test(parsed.ruling_date.trim())) {
+      setValue('ruling_date', parsed.ruling_date.trim())
+    }
+    setHijriHint(parsed.ruling_date_hijri ?? null)
+  }
+
   const onSubmit = async (values: FormValues) => {
     const t = (v: string | undefined) => (v && v.trim() !== '' ? v.trim() : null)
-    let documentUrl: string | null | undefined
-    let uploadedByName: string | null | undefined
+    let documentUrl: string | null | undefined = uploadedUrl ?? undefined
+    let uploadedByName: string | null | undefined =
+      uploadedUrl ? (teamMember?.name ?? null) : undefined
 
-    if (file) {
+    if (!documentUrl && file) {
       setUploading(true)
       try {
         const { publicUrl } = await uploadFile(file, {
@@ -393,6 +455,42 @@ function RulingForm({
       </DialogHeader>
 
       <div className="my-4 max-h-[60vh] space-y-3 overflow-y-auto pl-1 pr-1">
+        {/* تعبئة تلقائية من الصك بالذكاء الاصطناعي */}
+        <div className="space-y-2 rounded-lg border border-violet-200 bg-violet-50/50 p-3 dark:border-violet-900/40 dark:bg-violet-950/20">
+          <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+            <Sparkles className="h-4 w-4 text-violet-500" />
+            تعبئة تلقائية من الصك
+          </div>
+          <p className="text-xs text-muted-foreground">
+            أرفق صورة/ملف الحكم أو الصك، والنظام يقرأه ويملأ الحقول. راجِعها قبل
+            الحفظ.
+          </p>
+          <Button
+            type="button"
+            size="sm"
+            className="bg-violet-600 text-white hover:bg-violet-700"
+            disabled={extractM.isPending || uploading}
+            onClick={handleExtract}
+          >
+            {extractM.isPending || uploading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Sparkles className="h-4 w-4" />
+            )}
+            {extractM.isPending || uploading
+              ? 'جارٍ قراءة الصك وتعبئة الحقول...'
+              : file || uploadedUrl || ruling?.document_url
+                ? 'استخراج البيانات من المرفق'
+                : 'إرفاق الصك واستخراج البيانات'}
+          </Button>
+          {hijriHint && (
+            <p className="text-xs text-muted-foreground">
+              التاريخ الهجري المقروء: <span className="font-medium">{hijriHint}</span>{' '}
+              — تأكّد من التاريخ الميلادي في الحقل.
+            </p>
+          )}
+        </div>
+
         <div className="space-y-1.5">
           <Label htmlFor="r_title">العنوان</Label>
           <Input id="r_title" {...register('title')} />
@@ -431,7 +529,7 @@ function RulingForm({
           label="صك الحكم (اختياري)"
           file={file}
           existing={ruling?.document_url}
-          onPick={setFile}
+          onPick={onPickFile}
         />
       </div>
 

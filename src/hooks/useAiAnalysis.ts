@@ -57,3 +57,31 @@ export function useAnalyzeApplicant() {
       toast({ variant: 'destructive', title: 'تعذّر التحليل، حاول مرة أخرى' }),
   })
 }
+
+/* ===================== استخراج بيانات الحكم من الصك ===================== */
+
+export interface RulingExtraction {
+  title: string | null
+  ruling_number: string | null
+  ruling_date: string | null // ميلادي YYYY-MM-DD (تحويل تقريبي من الهجري)
+  ruling_date_hijri: string | null
+  court_name: string | null
+  result: string | null
+  summary: string | null
+}
+
+// يقرأ صك/حكم (PDF أو صورة) عبر رابطه ويُرجع الحقول المستخرَجة (أو null).
+export function useExtractRuling() {
+  return useMutation({
+    mutationFn: async (docUrl: string): Promise<RulingExtraction | null> => {
+      const { data, error } = await supabase.functions.invoke('ai-assistant', {
+        body: { task: 'extract_ruling', payload: { doc_url: docUrl } },
+      })
+      if (error) throw error
+      if (data?.error) throw new Error(data.error)
+      return (data?.parsed ?? null) as RulingExtraction | null
+    },
+    onError: () =>
+      toast({ variant: 'destructive', title: 'تعذّر قراءة الصك، حاول مرة أخرى' }),
+  })
+}
