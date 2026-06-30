@@ -85,3 +85,32 @@ export function useExtractRuling() {
       toast({ variant: 'destructive', title: 'تعذّر قراءة الصك، حاول مرة أخرى' }),
   })
 }
+
+/* ===================== استخراج بيانات الجلسة من المحضر ===================== */
+
+export interface SessionMinutesExtraction {
+  outcome: string | null
+  next_action: 'none' | 'next_session' | 'await_ruling' | 'case_closed' | null
+  next_session_date: string | null // ميلادي YYYY-MM-DD
+  next_session_time: string | null // HH:MM
+  ruling_due_date: string | null // ميلادي YYYY-MM-DD
+  hijri_note: string | null
+}
+
+// يقرأ محضر جلسة (PDF أو صورة) عبر رابطه ويُرجع ما تمّ + الخطوة القادمة (أو null).
+export function useExtractSessionMinutes() {
+  return useMutation({
+    mutationFn: async (
+      docUrl: string
+    ): Promise<SessionMinutesExtraction | null> => {
+      const { data, error } = await supabase.functions.invoke('ai-assistant', {
+        body: { task: 'extract_session_minutes', payload: { doc_url: docUrl } },
+      })
+      if (error) throw error
+      if (data?.error) throw new Error(data.error)
+      return (data?.parsed ?? null) as SessionMinutesExtraction | null
+    },
+    onError: () =>
+      toast({ variant: 'destructive', title: 'تعذّر قراءة المحضر، حاول مرة أخرى' }),
+  })
+}

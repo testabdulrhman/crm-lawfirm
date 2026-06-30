@@ -21,6 +21,7 @@ import {
   Gavel,
   Lock,
   CalendarPlus,
+  Sparkles,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -63,6 +64,7 @@ import { fmtNumber, fmtDatePref, fmtTime, normalizeSaudiPhone } from '@/lib/form
 import { pickFile, uploadFile } from '@/lib/files'
 import { getTemplate, fillTemplate } from '@/lib/templates'
 import { openExternal } from '@/lib/external'
+import { useExtractSessionMinutes } from '@/hooks/useAiAnalysis'
 import { toast } from '@/hooks/use-toast'
 import {
   useCaseSessions,
@@ -481,11 +483,13 @@ function CloseSessionDialog({
   onClose: () => void
 }) {
   const closeM = useCloseSession(caseId)
+  const extractM = useExtractSessionMinutes()
   const open = !!session
   const hasPhone = !!(clientPhone && clientPhone.trim())
 
   const [outcome, setOutcome] = useState('')
   const [file, setFile] = useState<File | null>(null)
+  const [uploadedUrl, setUploadedUrl] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const [sendSms, setSendSms] = useState(false)
   const [sendWa, setSendWa] = useState(false)
@@ -504,6 +508,7 @@ function CloseSessionDialog({
     if (!session) return
     setOutcome(session.outcome ?? '')
     setFile(null)
+    setUploadedUrl(null)
     setSendSms(false)
     setSendWa(false)
     setReportTouched(false)
@@ -532,23 +537,65 @@ function CloseSessionDialog({
     (next !== 'next_session' || nextDate !== '') &&
     (next !== 'await_ruling' || rulingDate !== '')
 
+  // يضمن رابطاً لمحضر الجلسة (يرفع الملف إن لزم) للاستخراج/الحفظ
+  const ensureMinutesUrl = async (f?: File | null): Promise<string | null> => {
+    if (uploadedUrl) return uploadedUrl
+    const theFile = f ?? file
+    if (theFile) {
+      setUploading(true)
+      try {
+        const { publicUrl } = await uploadFile(theFile, {
+          folder: `sessions/${caseId}`,
+        })
+        setUploadedUrl(publicUrl)
+        return publicUrl
+      } finally {
+        setUploading(false)
+      }
+    }
+    return null
+  }
+
+  // قراءة المحضر بالذكاء الاصطناعي وتعبئة النتيجة/الخطوة القادمة (يفتح المنتقي إن لزم)
+  const handleExtractMinutes = async () => {
+    let f = file
+    if (!f && !uploadedUrl) {
+      f = await pickFile()
+      if (!f) return
+      setFile(f)
+      setUploadedUrl(null)
+    }
+    const url = await ensureMinutesUrl(f)
+    if (!url) return
+    const parsed = await extractM.mutateAsync(url)
+    if (!parsed) return
+    const isISO = (v: string | null | undefined) =>
+      !!v && /^\d{4}-\d{2}-\d{2}$/.test(v.trim())
+    if (parsed.outcome && parsed.outcome.trim() !== '') {
+      setOutcome(parsed.outcome.trim())
+    }
+    // الخطوة القادمة + تواريخها (إن استُنتجت من المحضر)
+    const na = parsed.next_action
+    if (na === 'next_session' || na === 'await_ruling' || na === 'case_closed') {
+      setNext(na)
+      if (na === 'next_session' && isISO(parsed.next_session_date)) {
+        setNextDate(parsed.next_session_date!.trim())
+        if (parsed.next_session_time && /^\d{2}:\d{2}/.test(parsed.next_session_time)) {
+          setNextTime(parsed.next_session_time.slice(0, 5))
+        }
+      }
+      if (na === 'await_ruling' && isISO(parsed.ruling_due_date)) {
+        setRulingDate(parsed.ruling_due_date!.trim())
+      }
+    }
+  }
+
   const handleSave = async () => {
     if (!session || !canSave) return
     setBusy(true)
     try {
-      // 1) رفع المحضر إن وُجد
-      let minutesUrl: string | null = null
-      if (file) {
-        setUploading(true)
-        try {
-          const { publicUrl } = await uploadFile(file, {
-            folder: `sessions/${caseId}`,
-          })
-          minutesUrl = publicUrl
-        } finally {
-          setUploading(false)
-        }
-      }
+      // 1) رفع المحضر إن وُجد (يُعاد استخدام رابط الاستخراج إن سبق رفعه)
+      const minutesUrl = await ensureMinutesUrl()
 
       // 2) إغلاق الجلسة عبر الدالة
       const res = await closeM.mutateAsync({
@@ -610,6 +657,37 @@ function CloseSessionDialog({
 
         <div className="my-3 space-y-4">
           {/* 1) المحضر/النتيجة */}
+          {/* تعبئة تلقائية من المحضر بالذكاء الاصطناعي */}
+          <div className="space-y-2 rounded-lg border border-violet-200 bg-violet-50/50 p-3 dark:border-violet-900/40 dark:bg-violet-950/20">
+            <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+              <Sparkles className="h-4 w-4 text-violet-500" />
+              تعبئة تلقائية من المحضر
+            </div>
+            <p className="text-xs text-muted-foreground">
+              أرفق صورة/ملف محضر الجلسة، والنظام يقرأه ويملأ النتيجة والخطوة
+              القادمة. راجِعها قبل الحفظ.
+            </p>
+            <Button
+              type="button"
+              size="sm"
+              className="bg-violet-600 text-white hover:bg-violet-700"
+              disabled={extractM.isPending || uploading}
+              onClick={handleExtractMinutes}
+            >
+              {extractM.isPending || uploading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Sparkles className="h-4 w-4" />
+              )}
+              {extractM.isPending || uploading
+                ? 'جارٍ قراءة المحضر وتعبئة الحقول...'
+                : file || uploadedUrl
+                  ? 'استخراج البيانات من المحضر'
+                  : 'إرفاق المحضر واستخراج البيانات'}
+            </Button>
+          </div>
+
+          {/* 1) المحضر/النتيجة */}
           <div className="space-y-1.5">
             <Label htmlFor="close_outcome">محضر / نتيجة الجلسة *</Label>
             <Textarea
@@ -631,7 +709,10 @@ function CloseSessionDialog({
                 size="sm"
                 onClick={async () => {
                   const f = await pickFile()
-                  if (f) setFile(f)
+                  if (f) {
+                    setFile(f)
+                    setUploadedUrl(null)
+                  }
                 }}
               >
                 <Paperclip className="h-4 w-4" />
@@ -646,7 +727,10 @@ function CloseSessionDialog({
                 <button
                   type="button"
                   className="text-xs text-destructive"
-                  onClick={() => setFile(null)}
+                  onClick={() => {
+                    setFile(null)
+                    setUploadedUrl(null)
+                  }}
                 >
                   إزالة
                 </button>
