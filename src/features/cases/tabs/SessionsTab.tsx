@@ -135,6 +135,13 @@ export function SessionsTab({
     return { upcoming: up, past: pa }
   }, [data])
 
+  // رقم الجلسة المقترَح للجلسة الجديدة (أكبر رقم موجود + 1)
+  const nextSessionNumber = useMemo(
+    () =>
+      (data ?? []).reduce((m, s) => Math.max(m, s.session_number ?? 0), 0) + 1,
+    [data]
+  )
+
   const openNew = () => {
     setEditing(null)
     setFormOpen(true)
@@ -200,6 +207,7 @@ export function SessionsTab({
           <SessionForm
             caseId={caseId}
             session={editing}
+            suggestedNumber={editing ? undefined : nextSessionNumber}
             onDone={() => setFormOpen(false)}
           />
         </DialogContent>
@@ -304,9 +312,16 @@ function SessionCard({
       <CardContent className="space-y-3 p-4">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="min-w-0">
-            <p className="font-medium text-foreground">
-              {s.title || 'جلسة'}
-            </p>
+            <div className="flex items-center gap-2">
+              {s.session_number != null && (
+                <Badge variant="outline" className="shrink-0">
+                  رقم {fmtNumber(s.session_number)}
+                </Badge>
+              )}
+              <p className="min-w-0 truncate font-medium text-foreground">
+                {s.title || 'جلسة'}
+              </p>
+            </div>
             <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
               <span className="flex items-center gap-1">
                 <CalendarDays className="h-3.5 w-3.5" />
@@ -941,6 +956,7 @@ function getSessionDateWarning(
 
 const schema = z.object({
   title: z.string().optional(),
+  session_number: z.string().optional(),
   session_date: z.string().min(1, 'تاريخ الجلسة مطلوب'),
   session_time: z.string().optional(),
   court: z.string().optional(),
@@ -952,10 +968,12 @@ type FormValues = z.infer<typeof schema>
 function SessionForm({
   caseId,
   session,
+  suggestedNumber,
   onDone,
 }: {
   caseId: string
   session: CaseSession | null
+  suggestedNumber?: number
   onDone: () => void
 }) {
   const isEdit = Boolean(session)
@@ -974,6 +992,12 @@ function SessionForm({
     resolver: zodResolver(schema),
     defaultValues: {
       title: session?.title ?? '',
+      session_number:
+        session?.session_number != null
+          ? String(session.session_number)
+          : suggestedNumber
+            ? String(suggestedNumber)
+            : '',
       session_date: session?.session_date ?? '',
       session_time: session?.session_time ? session.session_time.slice(0, 5) : '',
       court: session?.court ?? '',
@@ -987,8 +1011,12 @@ function SessionForm({
 
   const onSubmit = async (values: FormValues) => {
     const t = (v: string | undefined) => (v && v.trim() !== '' ? v.trim() : null)
+    const numRaw = values.session_number?.trim()
+    const sessionNumber =
+      numRaw && /^\d+$/.test(numRaw) ? parseInt(numRaw, 10) : null
     const base = {
       title: t(values.title),
+      session_number: sessionNumber,
       session_date: values.session_date,
       session_time: t(values.session_time),
       court: t(values.court),
@@ -1010,13 +1038,26 @@ function SessionForm({
       </DialogHeader>
 
       <div className="my-4 space-y-3">
-        <div className="space-y-1.5">
-          <Label htmlFor="session_title">العنوان</Label>
-          <Input
-            id="session_title"
-            placeholder="مثل: جلسة المرافعة"
-            {...register('title')}
-          />
+        <div className="grid grid-cols-[6rem_1fr] gap-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="session_number">رقم الجلسة</Label>
+            <Input
+              id="session_number"
+              type="number"
+              min={1}
+              dir="ltr"
+              className="text-center"
+              {...register('session_number')}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="session_title">العنوان</Label>
+            <Input
+              id="session_title"
+              placeholder="مثل: جلسة المرافعة"
+              {...register('title')}
+            />
+          </div>
         </div>
 
         <div className="grid grid-cols-2 gap-3">

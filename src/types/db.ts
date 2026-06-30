@@ -316,6 +316,7 @@ export interface CaseSession {
   id: string
   case_id: string | null
   title: string | null
+  session_number: number | null
   session_date: string | null
   session_time: string | null
   court: string | null
@@ -357,6 +358,7 @@ export interface SessionNeedingClosure {
 export interface CaseSessionInput {
   case_id: string
   title?: string | null
+  session_number?: number | null
   session_date: string
   session_time?: string | null
   court?: string | null

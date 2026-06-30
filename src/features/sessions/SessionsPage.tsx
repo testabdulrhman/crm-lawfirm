@@ -239,6 +239,11 @@ function SessionRow({
 
       {/* السطر السفلي: التاريخ/الوقت/المحكمة */}
       <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+        {s.session_number != null && (
+          <span className="font-medium text-foreground">
+            جلسة رقم {fmtNumber(s.session_number)}
+          </span>
+        )}
         {s.session_date && (
           <span className="flex items-center gap-1">
             <CalendarDays className="h-3 w-3 shrink-0" />
