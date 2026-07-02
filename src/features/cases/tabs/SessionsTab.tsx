@@ -143,6 +143,14 @@ export function SessionsTab({
     [data]
   )
 
+  // الأرقام المستخدمة (رقم ← معرّف جلسته) للتحقق اللحظي في النموذج
+  const usedNumbers = useMemo(() => {
+    const m = new Map<number, string>()
+    for (const s of data ?? [])
+      if (s.session_number != null) m.set(s.session_number, s.id)
+    return m
+  }, [data])
+
   const openNew = () => {
     setEditing(null)
     setFormOpen(true)
@@ -209,6 +217,7 @@ export function SessionsTab({
             caseId={caseId}
             session={editing}
             suggestedNumber={editing ? undefined : nextSessionNumber}
+            usedNumbers={usedNumbers}
             onDone={() => setFormOpen(false)}
           />
         </DialogContent>
@@ -621,7 +630,15 @@ function CloseSessionDialog({
       const numRaw = sessionNum.trim()
       const numToSave = numRaw && /^\d+$/.test(numRaw) ? parseInt(numRaw, 10) : null
       if (numToSave !== (session.session_number ?? null)) {
-        await updateSessionNumber(session.id, numToSave)
+        const numErr = await updateSessionNumber(session.id, numToSave)
+        if (numErr) {
+          // لا يوقف الإغلاق — لكن يوضّح السبب
+          toast({
+            variant: 'destructive',
+            title: 'لم يُحفظ رقم الجلسة',
+            description: numErr,
+          })
+        }
       }
 
       // 1) رفع المحضر إن وُجد (يُعاد استخدام رابط الاستخراج إن سبق رفعه)
@@ -1000,11 +1017,13 @@ function SessionForm({
   caseId,
   session,
   suggestedNumber,
+  usedNumbers,
   onDone,
 }: {
   caseId: string
   session: CaseSession | null
   suggestedNumber?: number
+  usedNumbers?: Map<number, string>
   onDone: () => void
 }) {
   const isEdit = Boolean(session)
@@ -1040,7 +1059,15 @@ function SessionForm({
   // تنبيه لحظي على التاريخ (يظهر/يختفي تلقائياً)
   const dateWarn = getSessionDateWarning(watch('session_date'))
 
+  // تحقّق لحظي: هل رقم الجلسة مستخدم في جلسة أخرى بنفس القضية؟
+  const numWatch = (watch('session_number') ?? '').trim()
+  const numParsed = /^\d+$/.test(numWatch) ? parseInt(numWatch, 10) : null
+  const numTakenBy =
+    numParsed != null ? usedNumbers?.get(numParsed) : undefined
+  const numDuplicate = !!numTakenBy && numTakenBy !== session?.id
+
   const onSubmit = async (values: FormValues) => {
+    if (numDuplicate) return // ممنوع الحفظ برقم مكرّر — الرسالة ظاهرة تحت الحقل
     const t = (v: string | undefined) => (v && v.trim() !== '' ? v.trim() : null)
     const numRaw = values.session_number?.trim()
     const sessionNumber =
@@ -1077,7 +1104,10 @@ function SessionForm({
               type="number"
               min={1}
               dir="ltr"
-              className="text-center"
+              className={cn(
+                'text-center',
+                numDuplicate && 'border-destructive focus-visible:ring-destructive'
+              )}
               {...register('session_number')}
             />
           </div>
@@ -1090,6 +1120,13 @@ function SessionForm({
             />
           </div>
         </div>
+        {numDuplicate && (
+          <p className="flex items-center gap-1 text-xs text-destructive">
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+            رقم الجلسة {fmtNumber(numParsed ?? 0)} مستخدم مسبقاً في هذه القضية —
+            اختر رقماً آخر.
+          </p>
+        )}
 
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5">

@@ -11,12 +11,22 @@ import type {
   SessionNeedingClosure,
 } from '@/types/db'
 
+// ترجمة أخطاء القاعدة المعروفة إلى رسائل عربية واضحة
+function friendlyDbError(e: unknown): string | undefined {
+  const m = e instanceof Error ? e.message : String(e ?? '')
+  if (m.includes('sessions_case_number_unique'))
+    return 'رقم الجلسة مستخدم مسبقاً في هذه القضية — اختر رقماً آخر.'
+  if (m.includes('schema cache'))
+    return 'خطأ مؤقت في الخادم — أعد المحاولة بعد لحظات.'
+  return e instanceof Error ? e.message : undefined
+}
+
 function errToast(title: string) {
   return (e: unknown) =>
     toast({
       variant: 'destructive',
       title,
-      description: e instanceof Error ? e.message : undefined,
+      description: friendlyDbError(e),
     })
 }
 
@@ -301,11 +311,21 @@ export async function sendSessionReportSms(args: {
 }
 
 // تحديث رقم الجلسة (يُستخدم عند تعبئته من المحضر أثناء الإغلاق)
+// يُرجع رسالة خطأ عربية عند الفشل (مثل تكرار الرقم)، أو null عند النجاح.
 export async function updateSessionNumber(
   id: string,
   num: number | null
-): Promise<void> {
-  await supabase.from('sessions').update({ session_number: num }).eq('id', id)
+): Promise<string | null> {
+  const { error } = await supabase
+    .from('sessions')
+    .update({ session_number: num })
+    .eq('id', id)
+  if (error) {
+    return error.message.includes('sessions_case_number_unique')
+      ? 'رقم الجلسة مستخدم مسبقاً في هذه القضية.'
+      : error.message
+  }
+  return null
 }
 
 // تحديث وسم إرسال التقرير على الجلسة (بعد الإرسال)
