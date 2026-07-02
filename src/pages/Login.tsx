@@ -120,6 +120,8 @@ function PasswordForm() {
     setServerError(null)
     const res = await login(values.email, values.password)
     if (res.ok) navigate('/')
+    else if (res.error === 'account_disabled')
+      setServerError('هذا الحساب موقوف. تواصل مع إدارة المكتب.')
     else setServerError('تعذّر تسجيل الدخول. تحقّق من البريد وكلمة المرور.')
   }
 
@@ -231,6 +233,8 @@ function OtpForm() {
       }
       const res = await loginWithSession(data.access_token, data.refresh_token)
       if (res.ok) navigate('/')
+      else if (res.error === 'account_disabled')
+        setError('هذا الحساب موقوف. تواصل مع إدارة المكتب.')
       else setError('تعذّر إكمال الدخول. حاول مرة أخرى.')
     } catch {
       setError('تعذّر التحقّق من الرمز. حاول مرة أخرى.')

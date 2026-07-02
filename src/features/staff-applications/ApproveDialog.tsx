@@ -26,20 +26,34 @@ import { ROLE_OPTIONS } from './labels'
 import type { StaffApplication } from '@/types/db'
 
 // توليد كلمة مرور قوية (أحرف كبيرة/صغيرة/أرقام/رموز)
+// عشوائية مشفّرة عبر crypto.getRandomValues — لا تستخدم Math.random (غير آمن).
+function randomInt(maxExclusive: number): number {
+  // رفض العيّنات المنحازة (rejection sampling) لتوزيع منتظم
+  const limit = Math.floor(0x100000000 / maxExclusive) * maxExclusive
+  const buf = new Uint32Array(1)
+  let v: number
+  do {
+    crypto.getRandomValues(buf)
+    v = buf[0]
+  } while (v >= limit)
+  return v % maxExclusive
+}
+
 function generatePassword(len = 12): string {
   const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ'
   const lower = 'abcdefghijkmnpqrstuvwxyz'
   const digits = '23456789'
   const symbols = '!@#$%*?'
   const all = upper + lower + digits + symbols
-  const pick = (s: string) => s[Math.floor(Math.random() * s.length)]
-  let pwd = pick(upper) + pick(lower) + pick(digits) + pick(symbols)
-  for (let i = pwd.length; i < len; i++) pwd += pick(all)
-  // خلط
-  return pwd
-    .split('')
-    .sort(() => Math.random() - 0.5)
-    .join('')
+  const pick = (s: string) => s[randomInt(s.length)]
+  const chars = [pick(upper), pick(lower), pick(digits), pick(symbols)]
+  for (let i = chars.length; i < len; i++) chars.push(pick(all))
+  // خلط Fisher–Yates بعشوائية مشفّرة
+  for (let i = chars.length - 1; i > 0; i--) {
+    const j = randomInt(i + 1)
+    ;[chars[i], chars[j]] = [chars[j], chars[i]]
+  }
+  return chars.join('')
 }
 
 const schema = z.object({

@@ -18,7 +18,8 @@ interface AuthState {
     refreshToken: string
   ) => Promise<{ ok: boolean; error?: string }>
   logout: () => Promise<void>
-  fetchTeamMember: (userId: string) => Promise<void>
+  // يجلب سجلّ الموظف؛ يُرجع false إن كان الحساب موقوفاً (ويُنهي الجلسة)
+  fetchTeamMember: (userId: string) => Promise<boolean>
 }
 
 export const useAuth = create<AuthState>((set, get) => ({
@@ -47,7 +48,8 @@ export const useAuth = create<AuthState>((set, get) => ({
     })
     if (error) return { ok: false, error: error.message }
     set({ session: data.session, user: data.user })
-    await get().fetchTeamMember(data.user.id)
+    const active = await get().fetchTeamMember(data.user.id)
+    if (!active) return { ok: false, error: 'account_disabled' }
     return { ok: true }
   },
   // إرساء جلسة قادمة من دخول OTP (الرموز من Edge Function)
@@ -58,7 +60,8 @@ export const useAuth = create<AuthState>((set, get) => ({
     })
     if (error || !data.session) return { ok: false, error: error?.message }
     set({ session: data.session, user: data.session.user })
-    await get().fetchTeamMember(data.session.user.id)
+    const active = await get().fetchTeamMember(data.session.user.id)
+    if (!active) return { ok: false, error: 'account_disabled' }
     return { ok: true }
   },
   logout: async () => {
@@ -72,6 +75,14 @@ export const useAuth = create<AuthState>((set, get) => ({
       .select('*')
       .eq('auth_id', userId)
       .maybeSingle()
-    if (data) set({ teamMember: data as TeamMember })
+    const member = data as TeamMember | null
+    // الموظف الموقوف (is_active=false) لا يدخل — إنهاء الجلسة فوراً
+    if (member && member.is_active === false) {
+      await supabase.auth.signOut()
+      set({ user: null, session: null, teamMember: null })
+      return false
+    }
+    if (member) set({ teamMember: member })
+    return true
   },
 }))

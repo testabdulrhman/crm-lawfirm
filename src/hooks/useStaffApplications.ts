@@ -95,6 +95,9 @@ async function sendCredentialsSms(args: SendCredentialsArgs): Promise<boolean> {
   if (!numbers) return false
 
   let message = ''
+  // نسخة السجلّ: كلمة المرور مموّهة — لا تُخزَّن نصّاً أبداً (أمان)
+  const redact = (m: string) =>
+    args.password ? m.split(args.password).join('••••••') : m
   try {
     const body = await getTemplate('staff_credentials')
     message = body
@@ -111,22 +114,22 @@ async function sendCredentialsSms(args: SendCredentialsArgs): Promise<boolean> {
     })
     const ok = !error && (data?.code === '1' || data?.code === 1)
 
-    // سجّل النتيجة
+    // سجّل النتيجة (بالنسخة المموّهة)
     await supabase.from('sms_log').insert({
       recipient_name: args.name,
       phone: numbers,
-      message,
+      message: redact(message),
       status: ok ? 'sent' : 'failed',
       sent_by: args.sentBy,
     })
     return ok
   } catch {
-    // سجّل الفشل إن أمكن
+    // سجّل الفشل إن أمكن (بالنسخة المموّهة)
     try {
       await supabase.from('sms_log').insert({
         recipient_name: args.name,
         phone: numbers,
-        message,
+        message: redact(message),
         status: 'failed',
         sent_by: args.sentBy,
       })
