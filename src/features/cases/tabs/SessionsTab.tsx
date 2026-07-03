@@ -65,6 +65,7 @@ import {
   useUpdateSession,
   useDeleteSession,
   useCloseSession,
+  usePostponeSession,
   sendSessionReportSms,
   markSessionReportSent,
   updateSessionNumber,
@@ -108,6 +109,7 @@ export function SessionsTab({
   const [editing, setEditing] = useState<CaseSession | null>(null)
   const [toDelete, setToDelete] = useState<CaseSession | null>(null)
   const [closeFor, setCloseFor] = useState<CaseSession | null>(null)
+  const [postponeFor, setPostponeFor] = useState<CaseSession | null>(null)
   const [preview, setPreview] = useState<CaseSession | null>(null)
 
   const { upcoming, past } = useMemo(() => {
@@ -182,6 +184,7 @@ export function SessionsTab({
                 onEdit={openEdit}
                 onDelete={setToDelete}
                 onClose={setCloseFor}
+                onPostpone={setPostponeFor}
                 onPreview={setPreview}
               />
             ))}
@@ -194,6 +197,7 @@ export function SessionsTab({
                 onEdit={openEdit}
                 onDelete={setToDelete}
                 onClose={setCloseFor}
+                onPostpone={setPostponeFor}
                 onPreview={setPreview}
               />
             ))}
@@ -213,6 +217,14 @@ export function SessionsTab({
           />
         </DialogContent>
       </Dialog>
+
+      {/* تأجيل الجلسة */}
+      <PostponeDialog
+        caseId={caseId}
+        session={postponeFor}
+        nextNumber={nextSessionNumber}
+        onClose={() => setPostponeFor(null)}
+      />
 
       {/* إغلاق الجلسة */}
       <CloseSessionDialog
@@ -288,16 +300,20 @@ function SessionCard({
   onEdit,
   onDelete,
   onClose,
+  onPostpone,
   onPreview,
 }: {
   session: CaseSession
   onEdit: (s: CaseSession) => void
   onDelete: (s: CaseSession) => void
   onClose: (s: CaseSession) => void
+  onPostpone: (s: CaseSession) => void
   onPreview: (s: CaseSession) => void
 }) {
   const st = sessionDisplayStatus(s)
   const isClosed = !!s.closed_at
+  // التأجيل متاح للجلسات غير المُغلقة وغير المؤجّلة أصلاً
+  const canPostpone = !isClosed && (st === 'قادمة' || st === 'منعقدة')
   // عدّاد تنازلي للقادمة فقط؛ «منعقدة الآن» للمنعقدة
   const cd =
     st === 'قادمة'
@@ -425,6 +441,12 @@ function SessionCard({
               تسجيل نتيجة الجلسة
             </Button>
           )}
+          {canPostpone && (
+            <Button variant="outline" size="sm" onClick={() => onPostpone(s)}>
+              <CalendarOff className="h-4 w-4" />
+              تأجيل
+            </Button>
+          )}
           {isClosed && (
             <Button variant="outline" size="sm" onClick={() => onClose(s)}>
               <Pencil className="h-4 w-4" />
@@ -459,6 +481,97 @@ function EmptyState() {
       <p className="font-medium text-foreground">لا توجد جلسات</p>
       <p className="text-sm text-muted-foreground">أضِف أول جلسة عبر «جلسة جديدة».</p>
     </div>
+  )
+}
+
+/* ===================== تأجيل الجلسة ===================== */
+
+function PostponeDialog({
+  caseId,
+  session,
+  nextNumber,
+  onClose,
+}: {
+  caseId: string
+  session: CaseSession | null
+  nextNumber: number
+  onClose: () => void
+}) {
+  const postponeM = usePostponeSession(caseId)
+  const [newDate, setNewDate] = useState('')
+  const [newTime, setNewTime] = useState('')
+
+  // إعادة تهيئة عند فتح جلسة
+  useEffect(() => {
+    if (!session) return
+    setNewDate('')
+    setNewTime('')
+  }, [session])
+
+  const submit = () => {
+    if (!session) return
+    postponeM.mutate(
+      {
+        id: session.id,
+        newDate: newDate || null,
+        newTime: newDate ? newTime || null : null,
+        nextNumber: newDate ? nextNumber : null,
+      },
+      { onSuccess: () => onClose() }
+    )
+  }
+
+  return (
+    <Dialog open={!!session} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>تأجيل الجلسة</DialogTitle>
+        </DialogHeader>
+
+        <div className="my-3 space-y-4">
+          <p className="text-sm text-muted-foreground">
+            ستُوسم الجلسة «{session?.title || 'جلسة'}» (
+            {fmtDatePref(session?.session_date)}) بأنها <b>مؤجّلة</b> وتنتقل إلى
+            «الجلسات السابقة».
+          </p>
+
+          <div className="space-y-2 rounded-lg border border-dashed p-3">
+            <div className="grid grid-cols-2 gap-3">
+              <DualDatePicker
+                label="التاريخ الجديد (اختياري)"
+                value={newDate || null}
+                onChange={(v) => setNewDate(v ?? '')}
+              />
+              <div className="space-y-1.5">
+                <Label htmlFor="postpone_time">الوقت (اختياري)</Label>
+                <Input
+                  id="postpone_time"
+                  type="time"
+                  value={newTime}
+                  onChange={(e) => setNewTime(e.target.value)}
+                  disabled={!newDate}
+                />
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {newDate
+                ? `ستُنشأ جلسة جديدة برقم ${fmtNumber(nextNumber)} بنفس العنوان والمحكمة في ${fmtDatePref(newDate)}، وتُزامَن مع التقويم.`
+                : 'اترك التاريخ فارغاً إن لم يتحدّد الموعد الجديد بعد — يمكنك إضافة الجلسة الجديدة لاحقاً.'}
+            </p>
+          </div>
+        </div>
+
+        <DialogFooter className="gap-2">
+          <Button variant="gold" disabled={postponeM.isPending} onClick={submit}>
+            {postponeM.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+            {newDate ? 'تأجيل وإنشاء الجلسة الجديدة' : 'تأجيل'}
+          </Button>
+          <Button variant="outline" onClick={onClose} disabled={postponeM.isPending}>
+            إلغاء
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 

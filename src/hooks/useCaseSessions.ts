@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { toast } from '@/hooks/use-toast'
 import { addSessionEvent, deleteCalendarEvent } from '@/lib/calendar'
-import { normalizeSaudiPhone } from '@/lib/format'
+import { normalizeSaudiPhone, fmtDatePref } from '@/lib/format'
 import type {
   CaseSession,
   CaseSessionInput,
@@ -226,6 +226,102 @@ export function useDeleteSession(caseId: string) {
       toast({ variant: 'success', title: 'تم حذف الجلسة' })
     },
     onError: errToast('تعذّر حذف الجلسة'),
+  })
+}
+
+/* ===================== تأجيل الجلسة ===================== */
+
+// يوسم الجلسة «مؤجّلة»، يحذف حدث تقويمها، وإن أُعطي تاريخ جديد
+// يُنشئ جلسة بديلة (نفس العنوان/المحكمة) ويزامنها مع التقويم.
+export function usePostponeSession(caseId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      id,
+      newDate,
+      newTime,
+      nextNumber,
+    }: {
+      id: string
+      newDate?: string | null
+      newTime?: string | null
+      nextNumber?: number | null
+    }): Promise<{ createdNew: boolean; calWarn: boolean }> => {
+      const { data: existing } = await supabase
+        .from('sessions')
+        .select('*')
+        .eq('id', id)
+        .single()
+      const old = existing as CaseSession | null
+
+      // وسم مؤجّلة + ملاحظة في النتيجة (إن لم تكن مسجّلة)
+      const note = newDate
+        ? `أُجّلت الجلسة إلى ${fmtDatePref(newDate)}`
+        : 'أُجّلت الجلسة'
+      const { error } = await supabase
+        .from('sessions')
+        .update({
+          status: 'مؤجّلة',
+          outcome: old?.outcome && old.outcome.trim() ? old.outcome : note,
+        })
+        .eq('id', id)
+      if (error) throw error
+
+      // حذف حدث التقويم للجلسة المؤجّلة (غير قاتل — لن تُعقد بموعدها)
+      if (old?.gcal_event_id) {
+        await deleteCalendarEvent(old.gcal_event_id)
+        await supabase
+          .from('sessions')
+          .update({ gcal_event_id: null })
+          .eq('id', id)
+      }
+
+      // جلسة بديلة بالتاريخ الجديد (اختياري)
+      let createdNew = false
+      let calWarn = false
+      if (newDate) {
+        const { data: created, error: insErr } = await supabase
+          .from('sessions')
+          .insert({
+            case_id: caseId,
+            title: old?.title ?? 'جلسة',
+            session_number: nextNumber ?? null,
+            session_date: newDate,
+            session_time: newTime || null,
+            court: old?.court ?? null,
+            status: 'قادمة',
+          })
+          .select('*')
+          .single()
+        if (insErr) throw insErr
+        createdNew = true
+
+        const caseTitle = await getCaseTitle(caseId)
+        const eventId = await addSessionEvent(created as CaseSession, caseTitle)
+        if (eventId) {
+          await supabase
+            .from('sessions')
+            .update({ gcal_event_id: eventId })
+            .eq('id', (created as CaseSession).id)
+        } else {
+          calWarn = true
+        }
+      }
+      return { createdNew, calWarn }
+    },
+    onSuccess: (res) => {
+      invalidate(qc, caseId)
+      qc.invalidateQueries({ queryKey: ['all_sessions'] })
+      qc.invalidateQueries({ queryKey: ['dashboard_overview'] })
+      toast({
+        variant: 'success',
+        title: res.createdNew
+          ? 'أُجّلت الجلسة وأُنشئت جلسة بالتاريخ الجديد'
+          : 'أُجّلت الجلسة',
+      })
+      if (res.calWarn) calendarWarn()
+    },
+    onError: errToast('تعذّر تأجيل الجلسة'),
   })
 }
 
