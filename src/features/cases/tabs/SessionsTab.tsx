@@ -39,13 +39,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -77,8 +70,6 @@ import {
   updateSessionNumber,
 } from '@/hooks/useCaseSessions'
 import {
-  SESSION_STATUS_OPTIONS,
-  sessionStatusLabel,
   sessionDisplayStatus,
   sessionDisplayBadge,
 } from '@/lib/caseLabels'
@@ -1003,12 +994,11 @@ function getSessionDateWarning(
 }
 
 const schema = z.object({
-  title: z.string().optional(),
+  title: z.string().trim().min(1, 'يلزم إدخال عنوان للجلسة'),
   session_number: z.string().optional(),
   session_date: z.string().min(1, 'تاريخ الجلسة مطلوب'),
   session_time: z.string().optional(),
   court: z.string().optional(),
-  status: z.string().min(1),
   preparation: z.string().optional(),
 })
 type FormValues = z.infer<typeof schema>
@@ -1051,7 +1041,6 @@ function SessionForm({
       session_date: session?.session_date ?? '',
       session_time: session?.session_time ? session.session_time.slice(0, 5) : '',
       court: session?.court ?? '',
-      status: isEdit ? sessionStatusLabel(session?.status) : 'قادمة',
       preparation: session?.preparation ?? '',
     },
   })
@@ -1072,13 +1061,13 @@ function SessionForm({
     const numRaw = values.session_number?.trim()
     const sessionNumber =
       numRaw && /^\d+$/.test(numRaw) ? parseInt(numRaw, 10) : null
+    // الحالة لا تُرسل: تلقائية حسب الوقت (والإضافة تبدأ «قادمة» من الهوك)
     const base = {
-      title: t(values.title),
+      title: values.title.trim(),
       session_number: sessionNumber,
       session_date: values.session_date,
       session_time: t(values.session_time),
       court: t(values.court),
-      status: values.status, // قيم عربية
       preparation: t(values.preparation),
     }
     if (isEdit && session) {
@@ -1112,14 +1101,25 @@ function SessionForm({
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="session_title">العنوان</Label>
+            <Label htmlFor="session_title">
+              العنوان <span className="text-destructive">*</span>
+            </Label>
             <Input
               id="session_title"
               placeholder="مثل: جلسة المرافعة"
+              className={cn(
+                errors.title && 'border-destructive focus-visible:ring-destructive'
+              )}
               {...register('title')}
             />
           </div>
         </div>
+        {errors.title && (
+          <p className="flex items-center gap-1 text-xs text-destructive">
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+            {errors.title.message}
+          </p>
+        )}
         {numDuplicate && (
           <p className="flex items-center gap-1 text-xs text-destructive">
             <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
@@ -1179,32 +1179,10 @@ function SessionForm({
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1.5">
-            <Label htmlFor="session_court">المحكمة / القاعة</Label>
-            <Input id="session_court" {...register('court')} />
-          </div>
-          <div className="space-y-1.5">
-            <Label>الحالة</Label>
-            <Controller
-              control={control}
-              name="status"
-              render={({ field }) => (
-                <Select value={field.value} onValueChange={field.onChange}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {SESSION_STATUS_OPTIONS.map((o) => (
-                      <SelectItem key={o.value} value={o.value}>
-                        {o.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            />
-          </div>
+        {/* الحالة تلقائية حسب الوقت — لا حاجة لحقلها هنا */}
+        <div className="space-y-1.5">
+          <Label htmlFor="session_court">المحكمة / القاعة</Label>
+          <Input id="session_court" {...register('court')} />
         </div>
 
         <div className="space-y-1.5">
