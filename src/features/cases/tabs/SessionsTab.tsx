@@ -600,7 +600,7 @@ const NEXT_OPTIONS: { value: NextAction; label: string; icon: typeof CalendarPlu
 ]
 
 const REPORT_FALLBACK =
-  'عميلنا الكريم {client_name}\nنفيدكم بشأن قضيتكم ({case_title}):\n{outcome}\nمكتب المشيقح للمحاماة'
+  'عميلنا الكريم {client_name}\nنفيدكم بشأن قضيتكم ({case_title}):\n{outcome}\nشركة عبدالرحمن بن رضوان المشيقح للمحاماة وإدارة إجراءات الإفلاس'
 
 function CloseSessionDialog({
   caseId,
