@@ -347,7 +347,7 @@ function RulingForm({
     defaultValues: {
       title: ruling?.title ?? '',
       ruling_number: ruling?.ruling_number ?? '',
-      ruling_date: ruling?.ruling_date ?? '',
+      ruling_date: ruling?.ruling_date ?? todayISO(), // الافتراضي: اليوم
       court_name: ruling?.court_name ?? '',
       result: ruling?.result ?? '',
       summary: ruling?.summary ?? '',

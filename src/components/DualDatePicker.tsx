@@ -51,9 +51,11 @@ export function DualDatePicker({
     return gregorianToHijri(d)
   }, [value])
 
-  const [hy, setHy] = useState<number>(hijri?.y ?? 1447)
-  const [hm, setHm] = useState<number>(hijri?.m ?? 1)
-  const [hd, setHd] = useState<number>(hijri?.d ?? 1)
+  // عند غياب قيمة: تبدأ قوائم أم القرى من تاريخ اليوم (لا من بداية سنة ثابتة)
+  const todayHijri = useMemo(() => gregorianToHijri(new Date()), [])
+  const [hy, setHy] = useState<number>(hijri?.y ?? todayHijri.y)
+  const [hm, setHm] = useState<number>(hijri?.m ?? todayHijri.m)
+  const [hd, setHd] = useState<number>(hijri?.d ?? todayHijri.d)
 
   // مزامنة القوائم الهجرية عند تغيّر القيمة من الخارج
   const syncedKey = `${value ?? ''}`

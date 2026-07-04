@@ -53,7 +53,13 @@ import { DualDatePicker } from '@/components/DualDatePicker'
 import { Switch } from '@/components/ui/switch'
 
 import { cn } from '@/lib/utils'
-import { fmtNumber, fmtDatePref, fmtTime, normalizeSaudiPhone } from '@/lib/format'
+import {
+  fmtNumber,
+  fmtDatePref,
+  fmtTime,
+  normalizeSaudiPhone,
+  todayISO,
+} from '@/lib/format'
 import { pickFile, uploadFile } from '@/lib/files'
 import { getTemplate, fillTemplate } from '@/lib/templates'
 import { openExternal } from '@/lib/external'
@@ -1151,7 +1157,7 @@ function SessionForm({
           : suggestedNumber
             ? String(suggestedNumber)
             : '',
-      session_date: session?.session_date ?? '',
+      session_date: session?.session_date ?? todayISO(), // الافتراضي: اليوم
       session_time: session?.session_time ? session.session_time.slice(0, 5) : '',
       court: session?.court ?? '',
       preparation: session?.preparation ?? '',
