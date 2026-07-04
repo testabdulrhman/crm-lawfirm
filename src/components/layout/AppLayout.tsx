@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils'
 import { usePrefs } from '@/stores/prefs'
 import { Sidebar } from './Sidebar'
 import { TopBar } from './TopBar'
+import { AiAssistant } from '@/components/AiAssistant'
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -45,6 +46,9 @@ export function AppLayout({ children }: { children: ReactNode }) {
           {children}
         </main>
       </div>
+
+      {/* المساعد الذكي — زر عائم متاح في كل الصفحات */}
+      <AiAssistant />
     </div>
   )
 }
