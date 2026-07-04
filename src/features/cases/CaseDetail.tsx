@@ -182,7 +182,7 @@ export function CaseDetail({ id }: { id: string }) {
           <DocumentsTab caseId={c.id} />
         </TabsContent>
         <TabsContent value="notes">
-          <NotesTab caseId={c.id} />
+          <NotesTab caseId={c.id} caseTitle={c.title} />
         </TabsContent>
       </Tabs>
 
