@@ -81,24 +81,25 @@ export default function Dashboard() {
   const completeM = useCompleteTask()
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-6xl space-y-8">
       {/* الترحيب */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-bold text-foreground">
+          <h2 className="text-2xl font-bold tracking-tight text-foreground">
             مرحباً، {teamMember?.name ?? 'بك'} 👋
           </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="mt-1.5 text-sm text-muted-foreground">
             {isAll
               ? 'نظرة شاملة على أعمال المكتب'
               : 'متطلباتك القادمة: جلساتك ومهامك'}
           </p>
         </div>
         <Button
-          variant="outline"
+          variant="ghost"
           size="sm"
           onClick={() => refetch()}
           disabled={isFetching}
+          className="text-muted-foreground"
         >
           <RefreshCw className={cn('h-4 w-4', isFetching && 'animate-spin')} />
           تحديث
@@ -107,7 +108,7 @@ export default function Dashboard() {
 
       {/* مبدّل النطاق — للمدير فقط */}
       {isDirector && (
-        <div className="inline-flex rounded-lg border bg-muted p-1 text-sm">
+        <div className="inline-flex rounded-full bg-muted p-1 text-sm">
           <ScopeBtn
             active={scope === 'mine'}
             onClick={() => setScope('mine')}
@@ -123,13 +124,13 @@ export default function Dashboard() {
 
       {/* بطاقات KPI */}
       {isLoading || !s ? (
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-5">
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-4">
           {Array.from({ length: isAll ? 8 : 2 }).map((_, i) => (
-            <Skeleton key={i} className="h-24 w-full" />
+            <Skeleton key={i} className="h-[92px] w-full rounded-2xl" />
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-5">
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-4">
           {/* الأهم دائماً: الجلسات + المهام */}
           <Kpi
             label="الجلسات القادمة"
@@ -188,7 +189,7 @@ export default function Dashboard() {
       <SessionsNeedClosureSection scope={effectiveScope} />
 
       {/* القسمان الأبرز: الجلسات + المهام */}
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-5 lg:grid-cols-2">
         {/* 📅 الجلسات القادمة */}
         <SectionCard
           icon={CalendarDays}
@@ -233,7 +234,7 @@ export default function Dashboard() {
       </div>
 
       {/* أقسام ثانوية */}
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-5 lg:grid-cols-2">
         {/* المواعيد القادمة — تظهر إن وُجدت (في كلا النطاقين) */}
         {(data?.appointments ?? []).length > 0 && (
           <SectionCard icon={CalendarClock} title="المواعيد القادمة" loading={false}>
@@ -306,9 +307,9 @@ function ScopeBtn({
       type="button"
       onClick={onClick}
       className={cn(
-        'rounded-md px-4 py-1.5 transition-colors',
+        'rounded-full px-5 py-1.5 transition-colors',
         active
-          ? 'bg-card font-medium text-foreground shadow-sm'
+          ? 'bg-card font-semibold text-foreground shadow-sm'
           : 'text-muted-foreground hover:text-foreground'
       )}
     >
@@ -346,18 +347,20 @@ function Kpi({
     <button
       onClick={onClick}
       className={cn(
-        'rounded-xl border bg-card p-4 text-right shadow-sm transition-colors hover:bg-accent/5',
-        highlight && (tone === 'red' ? 'border-destructive/40' : 'border-amber-400/40')
+        'group rounded-2xl border border-border/70 bg-card p-5 text-right transition-all hover:border-gold/50 hover:shadow-sm',
+        highlight && (tone === 'red' ? 'border-destructive/30' : 'border-amber-400/30')
       )}
     >
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center gap-3.5">
+        <span className={cn('flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl', TONES[tone])}>
+          <Icon className="h-[22px] w-[22px]" />
+        </span>
         <div className="min-w-0">
-          <p className="truncate text-xs text-muted-foreground">{label}</p>
-          <p className="mt-1 text-2xl font-bold text-foreground">{fmtNumber(value)}</p>
-          {note && <p className="text-[11px] font-medium text-destructive">{note}</p>}
-        </div>
-        <div className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-xl', TONES[tone])}>
-          <Icon className="h-5 w-5" />
+          <p className="truncate text-[13px] text-muted-foreground">{label}</p>
+          <p className="mt-0.5 text-[28px] font-bold leading-none text-foreground">
+            {fmtNumber(value)}
+          </p>
+          {note && <p className="mt-1 text-xs font-medium text-destructive">{note}</p>}
         </div>
       </div>
     </button>
@@ -379,26 +382,28 @@ function SectionCard({
 }) {
   return (
     <Card>
-      <CardHeader className="flex-row items-center gap-2 space-y-0">
-        <Icon className="h-4 w-4 text-gold" />
-        <CardTitle className="text-base">
+      <CardHeader className="flex-row items-center gap-2.5 space-y-0 px-5 pb-3 pt-5">
+        <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gold/10">
+          <Icon className="h-[18px] w-[18px] text-gold" />
+        </span>
+        <CardTitle className="text-[15px] font-semibold">
           {title}
           {count != null && count > 0 && (
-            <span className="mr-1 text-sm font-normal text-muted-foreground">
-              ({fmtNumber(count)})
+            <span className="mr-1.5 text-sm font-normal text-muted-foreground">
+              {fmtNumber(count)}
             </span>
           )}
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-1.5">
+      <CardContent className="px-2.5 pb-2.5">
         {loading ? (
-          <div className="space-y-2">
+          <div className="space-y-2 px-1.5">
             {Array.from({ length: 3 }).map((_, i) => (
-              <Skeleton key={i} className="h-12 w-full" />
+              <Skeleton key={i} className="h-12 w-full rounded-xl" />
             ))}
           </div>
         ) : (
-          children
+          <div className="divide-y divide-border/60">{children}</div>
         )}
       </CardContent>
     </Card>
@@ -415,10 +420,10 @@ function RowShell({
   return (
     <button
       onClick={onClick}
-      className="flex w-full items-center justify-between gap-2 rounded-lg border px-3 py-2 text-right transition-colors hover:bg-accent/10"
+      className="group flex w-full items-center justify-between gap-2 rounded-xl px-3 py-3 text-right transition-colors hover:bg-muted/60"
     >
       <div className="min-w-0 flex-1">{children}</div>
-      <ChevronLeft className="h-4 w-4 shrink-0 text-muted-foreground" />
+      <ChevronLeft className="h-4 w-4 shrink-0 text-muted-foreground/40 transition-transform group-hover:-translate-x-0.5 group-hover:text-gold" />
     </button>
   )
 }
@@ -438,28 +443,32 @@ function SessionsNeedClosureSection({ scope }: { scope: DashboardScope }) {
   if (list.length === 0) return null // تنبيه يظهر فقط عند وجود جلسات
 
   return (
-    <Card className="border-amber-300 bg-amber-50/50 dark:border-amber-900/40 dark:bg-amber-950/20">
-      <CardHeader className="flex-row items-center gap-2 space-y-0">
-        <AlertTriangle className="h-4 w-4 text-amber-500" />
-        <CardTitle className="text-base">
+    <Card className="border-amber-300/70 bg-amber-50/50 dark:border-amber-900/40 dark:bg-amber-950/20">
+      <CardHeader className="flex-row items-center gap-2.5 space-y-0 px-5 pb-3 pt-5">
+        <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-amber-400/20">
+          <AlertTriangle className="h-[18px] w-[18px] text-amber-500" />
+        </span>
+        <CardTitle className="text-[15px] font-semibold">
           جلسات تحتاج إغلاق{' '}
-          <span className="text-sm font-normal text-muted-foreground">
-            ({fmtNumber(list.length)})
+          <span className="mr-1 text-sm font-normal text-muted-foreground">
+            {fmtNumber(list.length)}
           </span>
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-2">
-        {list.map((x) => (
-          <RowShell key={x.id} onClick={() => navigate(`/cases/${x.case_id}`)}>
-            <p className="truncate text-sm font-medium text-foreground">
-              {x.case_title || x.title || 'جلسة'}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {fmtDatePref(x.session_date)} · فات موعدها منذ{' '}
-              {fmtNumber(x.days_ago)} يوم
-            </p>
-          </RowShell>
-        ))}
+      <CardContent className="px-2.5 pb-2.5">
+        <div className="divide-y divide-amber-300/30">
+          {list.map((x) => (
+            <RowShell key={x.id} onClick={() => navigate(`/cases/${x.case_id}`)}>
+              <p className="truncate text-sm font-medium text-foreground">
+                {x.case_title || x.title || 'جلسة'}
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {fmtDatePref(x.session_date)} · فات موعدها منذ{' '}
+                {fmtNumber(x.days_ago)} يوم
+              </p>
+            </RowShell>
+          ))}
+        </div>
       </CardContent>
     </Card>
   )
@@ -500,7 +509,7 @@ function CompletableTaskRow({
 }) {
   const days = daysFromToday(t.due_date)
   return (
-    <div className="flex items-center gap-2 rounded-lg border px-3 py-2 transition-colors hover:bg-accent/10">
+    <div className="flex items-center gap-2.5 rounded-xl px-3 py-3 transition-colors hover:bg-muted/60">
       {/* مربّع الإكمال */}
       <button
         type="button"
