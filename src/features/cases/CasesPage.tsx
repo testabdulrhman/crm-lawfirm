@@ -113,9 +113,9 @@ export function CasesPage() {
   const shown = filtered.slice(0, visible)
 
   return (
-    <div className="space-y-5">
+    <div className="mx-auto max-w-6xl space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-2xl font-bold text-foreground">
+        <h2 className="text-2xl font-bold tracking-tight text-foreground">
           القضايا{' '}
           <span className="text-base font-normal text-muted-foreground">
             ({fmtNumber(data?.length ?? 0)})
@@ -286,7 +286,7 @@ function CaseRow({
           {c.title || 'بدون عنوان'}
         </h3>
         {soon && c.hearing_date && (
-          <span className="hidden shrink-0 items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-600 dark:text-amber-400 sm:flex">
+          <span className="hidden shrink-0 items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-600 dark:text-amber-400 sm:flex">
             <CalendarClock className="h-3 w-3" />
             {fmtDatePref(c.hearing_date)}
           </span>

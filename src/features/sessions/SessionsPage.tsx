@@ -91,8 +91,8 @@ export function SessionsPage() {
   }, [filtered])
 
   return (
-    <div className="space-y-5">
-      <h2 className="text-2xl font-bold text-foreground">
+    <div className="mx-auto max-w-6xl space-y-6">
+      <h2 className="text-2xl font-bold tracking-tight text-foreground">
         الجلسات{' '}
         <span className="text-base font-normal text-muted-foreground">
           ({fmtNumber(data?.length ?? 0)})
@@ -221,7 +221,7 @@ function SessionRow({
         {cd && (
           <span
             className={cn(
-              'shrink-0 text-[11px] font-medium',
+              'shrink-0 text-xs font-medium',
               st === 'منعقدة'
                 ? 'text-emerald-600 dark:text-emerald-400'
                 : soon

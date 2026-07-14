@@ -45,8 +45,8 @@ export function StaffApplicationsPage() {
   }, [data, filter])
 
   return (
-    <div className="space-y-5">
-      <h2 className="text-2xl font-bold text-foreground">طلبات التوظيف</h2>
+    <div className="mx-auto max-w-6xl space-y-6">
+      <h2 className="text-2xl font-bold tracking-tight text-foreground">طلبات التوظيف</h2>
 
       <div className="flex flex-wrap gap-2">
         <FilterButton
@@ -67,7 +67,7 @@ export function StaffApplicationsPage() {
       </div>
 
       {isLoading ? (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => (
             <Skeleton key={i} className="h-44 w-full" />
           ))}
@@ -75,7 +75,7 @@ export function StaffApplicationsPage() {
       ) : list.length === 0 ? (
         <EmptyState />
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {list.map((a) => (
             <ApplicationCard
               key={a.id}
@@ -126,7 +126,7 @@ function DocChip({
 }) {
   if (!has) return null
   return (
-    <span className="flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+    <span className="flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
       <Icon className="h-3 w-3" />
       {label}
     </span>

@@ -504,12 +504,12 @@ function PropertyDocCard({
             {d.name}
           </p>
           {meta && (
-            <p className="w-full truncate text-[11px] text-muted-foreground">
+            <p className="w-full truncate text-xs text-muted-foreground">
               {meta}
             </p>
           )}
           {d.uploaded_by && (
-            <p className="w-full truncate text-[11px] text-muted-foreground">
+            <p className="w-full truncate text-xs text-muted-foreground">
               رفعه: {d.uploaded_by}
             </p>
           )}

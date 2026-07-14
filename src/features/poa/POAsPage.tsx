@@ -84,9 +84,9 @@ export function POAsPage() {
   const shown = filtered.slice(0, visible)
 
   return (
-    <div className="space-y-5">
+    <div className="mx-auto max-w-6xl space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-2xl font-bold text-foreground">
+        <h2 className="text-2xl font-bold tracking-tight text-foreground">
           الوكالات{' '}
           <span className="text-base font-normal text-muted-foreground">
             ({fmtNumber(data?.length ?? 0)})
@@ -144,7 +144,7 @@ export function POAsPage() {
       )}
 
       {isLoading ? (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {Array.from({ length: 9 }).map((_, i) => (
             <Skeleton key={i} className="h-44 w-full" />
           ))}
@@ -153,7 +153,7 @@ export function POAsPage() {
         <EmptyState />
       ) : (
         <>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {shown.map((p) => (
               <POACard key={p.id} poa={p} onOpen={() => navigate(`/poa/${p.id}`)} />
             ))}

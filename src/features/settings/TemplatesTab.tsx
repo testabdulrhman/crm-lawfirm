@@ -54,7 +54,7 @@ function TemplateCard({ template }: { template: MessageTemplate }) {
               {template.name || template.key}
             </span>
             {template.key && (
-              <Badge variant="outline" className="font-mono text-[10px]">
+              <Badge variant="outline" className="font-mono text-xs">
                 {template.key}
               </Badge>
             )}

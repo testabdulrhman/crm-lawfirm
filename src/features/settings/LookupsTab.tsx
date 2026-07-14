@@ -124,7 +124,7 @@ export function LookupsTab() {
                         />
                       )}
                       <span className="text-sm font-medium">{l.label}</span>
-                      <Badge variant="outline" className="font-mono text-[10px]">
+                      <Badge variant="outline" className="font-mono text-xs">
                         {l.value}
                       </Badge>
                     </div>

@@ -81,9 +81,9 @@ export function AppointmentsPage() {
   }, [filtered])
 
   return (
-    <div className="space-y-5">
+    <div className="mx-auto max-w-6xl space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-2xl font-bold text-foreground">المواعيد</h2>
+        <h2 className="text-2xl font-bold tracking-tight text-foreground">المواعيد</h2>
         <Button variant="gold" onClick={() => setDialogOpen(true)}>
           <Plus className="h-4 w-4" />
           موعد جديد
@@ -113,7 +113,7 @@ export function AppointmentsPage() {
       </div>
 
       {isLoading ? (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => (
             <Skeleton key={i} className="h-40 w-full" />
           ))}
@@ -185,7 +185,7 @@ function Section({
         {title}
         <span className="text-xs text-muted-foreground">({fmtNumber(count)})</span>
       </h3>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{children}</div>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{children}</div>
     </div>
   )
 }
@@ -247,19 +247,19 @@ function AppointmentCard({
         {(a.confirmation_sent_at || a.thank_you_sent_at || a.gcal_event_id) && (
           <div className="flex flex-wrap gap-1.5">
             {a.gcal_event_id && (
-              <span className="flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] text-emerald-700 dark:text-emerald-300">
+              <span className="flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs text-emerald-700 dark:text-emerald-300">
                 <CalendarCheck className="h-3 w-3" />
                 في التقويم
               </span>
             )}
             {a.confirmation_sent_at && (
-              <span className="flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] text-emerald-700 dark:text-emerald-300">
+              <span className="flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs text-emerald-700 dark:text-emerald-300">
                 <CheckCircle2 className="h-3 w-3" />
                 تم التأكيد
               </span>
             )}
             {a.thank_you_sent_at && (
-              <span className="flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+              <span className="flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
                 <MessageSquare className="h-3 w-3" />
                 تم الشكر
               </span>

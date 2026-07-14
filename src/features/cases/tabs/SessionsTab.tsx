@@ -170,7 +170,7 @@ export function SessionsTab({
   }
 
   return (
-    <div className="space-y-5">
+    <div className="mx-auto max-w-6xl space-y-6">
       <div className="flex justify-end">
         <Button variant="gold" onClick={openNew}>
           <Plus className="h-4 w-4" />
@@ -374,13 +374,13 @@ function SessionCard({
               <Badge variant={sessionDisplayBadge(st)}>{st}</Badge>
             )}
             {needsClosure && (
-              <span className="flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-medium text-amber-600 dark:text-amber-400">
+              <span className="flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-600 dark:text-amber-400">
                 <AlertTriangle className="h-3 w-3" />
                 بحاجة إغلاق
               </span>
             )}
             {s.gcal_event_id && (
-              <span className="flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400">
+              <span className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
                 <CalendarCheck className="h-3 w-3" />
                 في التقويم
               </span>

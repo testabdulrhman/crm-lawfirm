@@ -397,7 +397,7 @@ function LsDocCard({
             {d.name}
           </p>
           {meta && (
-            <p className="w-full truncate text-[11px] text-muted-foreground">
+            <p className="w-full truncate text-xs text-muted-foreground">
               {meta}
             </p>
           )}

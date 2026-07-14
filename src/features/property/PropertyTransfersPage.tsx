@@ -82,9 +82,9 @@ export function PropertyTransfersPage() {
   }, [data, search, status, propType])
 
   return (
-    <div className="space-y-5">
+    <div className="mx-auto max-w-6xl space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-2xl font-bold text-foreground">
+        <h2 className="text-2xl font-bold tracking-tight text-foreground">
           التوثيق العقاري{' '}
           <span className="text-base font-normal text-muted-foreground">
             ({fmtNumber(data?.length ?? 0)})
@@ -147,7 +147,7 @@ export function PropertyTransfersPage() {
       )}
 
       {isLoading ? (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => (
             <Skeleton key={i} className="h-48 w-full" />
           ))}
@@ -155,7 +155,7 @@ export function PropertyTransfersPage() {
       ) : filtered.length === 0 ? (
         <EmptyState />
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {filtered.map((p) => (
             <TransferCard
               key={p.id}

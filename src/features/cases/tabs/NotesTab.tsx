@@ -164,7 +164,7 @@ export function NotesTab({
             )}
           </div>
           <div className="flex items-center justify-between gap-2">
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               المذكور بـ @ يصله تنبيه SMS برابط القضية.
             </p>
             <Button

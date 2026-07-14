@@ -31,9 +31,9 @@ export function OutgoingLettersPage() {
   }, [data, search])
 
   return (
-    <div className="space-y-5">
+    <div className="mx-auto max-w-6xl space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-2xl font-bold text-foreground">
+        <h2 className="text-2xl font-bold tracking-tight text-foreground">
           الصادر{' '}
           <span className="text-base font-normal text-muted-foreground">
             ({fmtNumber(data?.length ?? 0)})
@@ -62,7 +62,7 @@ export function OutgoingLettersPage() {
       )}
 
       {isLoading ? (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => (
             <Skeleton key={i} className="h-40 w-full" />
           ))}
@@ -70,7 +70,7 @@ export function OutgoingLettersPage() {
       ) : filtered.length === 0 ? (
         <EmptyState />
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {filtered.map((l) => (
             <LetterCard
               key={l.id}

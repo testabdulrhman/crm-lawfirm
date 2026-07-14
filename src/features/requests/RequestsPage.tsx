@@ -41,9 +41,9 @@ export function RequestsPage() {
   }, [data, filter])
 
   return (
-    <div className="space-y-5">
+    <div className="mx-auto max-w-6xl space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-2xl font-bold text-foreground">الطلبات الواردة</h2>
+        <h2 className="text-2xl font-bold tracking-tight text-foreground">الطلبات الواردة</h2>
         <Button variant="gold" onClick={() => setDialogOpen(true)}>
           <Plus className="h-4 w-4" />
           طلب جديد
@@ -71,7 +71,7 @@ export function RequestsPage() {
 
       {/* المحتوى */}
       {isLoading ? (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => (
             <Skeleton key={i} className="h-44 w-full" />
           ))}
@@ -79,7 +79,7 @@ export function RequestsPage() {
       ) : list.length === 0 ? (
         <EmptyState />
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {list.map((r) => (
             <RequestCard
               key={r.id}

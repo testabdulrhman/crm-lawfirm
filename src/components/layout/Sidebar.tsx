@@ -112,9 +112,9 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
               href={item.href}
               onClick={onNavigate}
               className={cn(
-                'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+                'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors',
                 active
-                  ? 'bg-gold text-navy'
+                  ? 'bg-gold text-navy shadow-sm'
                   : 'text-navy-100 hover:bg-white/10 hover:text-white'
               )}
             >

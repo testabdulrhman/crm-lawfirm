@@ -89,7 +89,7 @@ export function PartiesTab({ caseId }: { caseId: string }) {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="mx-auto max-w-6xl space-y-6">
       <div className="flex justify-end">
         <Button variant="gold" onClick={openNew}>
           <Plus className="h-4 w-4" />
@@ -211,7 +211,7 @@ function PartyCard({
               {p.contact_id && (
                 <Link
                   href={`/contacts/${p.contact_id}`}
-                  className="inline-flex items-center gap-1 rounded-full bg-gold/15 px-2 py-0.5 text-[11px] text-gold-700 hover:underline dark:text-gold-300"
+                  className="inline-flex items-center gap-1 rounded-full bg-gold/15 px-2 py-0.5 text-xs text-gold-700 hover:underline dark:text-gold-300"
                 >
                   <BookUser className="h-3 w-3" />
                   من جهات الاتصال

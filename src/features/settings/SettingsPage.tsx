@@ -22,9 +22,9 @@ import { TemplatesTab } from './TemplatesTab'
 
 export function SettingsPage() {
   return (
-    <div className="space-y-5">
+    <div className="mx-auto max-w-6xl space-y-6">
       <div>
-        <h2 className="text-2xl font-bold text-foreground">الإعدادات</h2>
+        <h2 className="text-2xl font-bold tracking-tight text-foreground">الإعدادات</h2>
         <p className="mt-1 text-sm text-muted-foreground">
           إدارة بيانات المكتب والتصنيفات ومظهر النظام
         </p>

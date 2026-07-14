@@ -66,10 +66,10 @@ export function TeamPage() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="mx-auto max-w-6xl space-y-6">
       {/* الترويسة */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-2xl font-bold text-foreground">الموظفون</h2>
+        <h2 className="text-2xl font-bold tracking-tight text-foreground">الموظفون</h2>
         <Button variant="gold" onClick={openNew}>
           <Plus className="h-4 w-4" />
           موظف جديد

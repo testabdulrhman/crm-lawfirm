@@ -100,9 +100,9 @@ export function ContactsPage() {
   const resetPage = () => setVisible(PAGE)
 
   return (
-    <div className="space-y-5">
+    <div className="mx-auto max-w-6xl space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-2xl font-bold text-foreground">
+        <h2 className="text-2xl font-bold tracking-tight text-foreground">
           جهات الاتصال{' '}
           <span className="text-base font-normal text-muted-foreground">
             ({fmtNumber(data?.length ?? 0)})
@@ -168,7 +168,7 @@ export function ContactsPage() {
 
       {/* المحتوى */}
       {isLoading ? (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {Array.from({ length: 9 }).map((_, i) => (
             <Skeleton key={i} className="h-36 w-full" />
           ))}
@@ -177,7 +177,7 @@ export function ContactsPage() {
         <EmptyState />
       ) : (
         <>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {shown.map((c) => (
               <ContactCard
                 key={c.id}
@@ -266,7 +266,7 @@ function ContactCard({
             </div>
           </div>
           <span
-            className="flex items-center gap-1 text-[11px] text-muted-foreground"
+            className="flex items-center gap-1 text-xs text-muted-foreground"
             title={`المصدر: ${sourceLabel(c.source)}`}
           >
             <SourceIcon className="h-3.5 w-3.5" />
@@ -285,7 +285,7 @@ function ContactCard({
         )}
 
         {total > 0 && (
-          <div className="flex items-start gap-1.5 rounded-lg bg-emerald-500/10 px-2 py-1.5 text-[11px] text-emerald-700 dark:text-emerald-300">
+          <div className="flex items-start gap-1.5 rounded-lg bg-emerald-500/10 px-2 py-1.5 text-xs text-emerald-700 dark:text-emerald-300">
             <Link2 className="mt-0.5 h-3 w-3 shrink-0" />
             <span>
               مرتبطة بعمل{links ? ` — ${linkSummary(links)}` : ''}
