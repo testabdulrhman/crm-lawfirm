@@ -27,7 +27,6 @@ import { usePendingApplicationsCount } from '@/hooks/useStaffApplications'
 import { useExpiringPOAsCount } from '@/hooks/usePOAs'
 import { useUpcomingAppointmentsCount } from '@/hooks/useAppointments'
 import { fmtNumber } from '@/lib/format'
-import { COMPANY_NAME_SHORT } from '@/lib/constants'
 
 interface NavItem {
   label: string
@@ -101,23 +100,21 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
 
   return (
     <aside className="pt-safe pb-safe flex h-full w-64 flex-col bg-navy text-navy-50">
-      {/* الترويسة: شعار المكتب (من الإعدادات ← بيانات المكتب)، وإلا الأيقونة */}
-      <div className="flex items-center gap-3 border-b border-white/10 px-5 py-5">
+      {/* الترويسة: شعار المكتب بكامل العرض (يُرفع من الإعدادات ← بيانات المكتب) */}
+      <div className="border-b border-white/10 px-4 py-4">
         {office?.logo_url ? (
           <img
             src={office.logo_url}
             alt="شعار المكتب"
-            className="h-11 w-11 shrink-0 rounded-xl bg-white object-contain p-1 ring-1 ring-gold/30"
+            className="max-h-28 w-full object-contain"
           />
         ) : (
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gold/15 ring-1 ring-gold/30">
-            <Scale className="h-5 w-5 text-gold" />
+          <div className="flex justify-center py-1">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gold/15 ring-1 ring-gold/30">
+              <Scale className="h-6 w-6 text-gold" />
+            </div>
           </div>
         )}
-        <div className="min-w-0">
-          <p className="truncate text-sm font-bold text-gold">CRM</p>
-          <p className="truncate text-xs text-navy-200">{COMPANY_NAME_SHORT}</p>
-        </div>
       </div>
 
       {/* التنقل */}
