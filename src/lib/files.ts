@@ -60,7 +60,7 @@ export async function uploadFile(
   })
   if (error) throw error
 
-  return { path, publicUrl: publicUrl(path) }
+  return { path, publicUrl: publicUrl(path, bucket) }
 }
 
 // اختيار + رفع في خطوة واحدة. يُرجع null إن لم يُختر ملف.

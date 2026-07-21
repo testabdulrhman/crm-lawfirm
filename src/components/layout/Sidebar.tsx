@@ -20,6 +20,8 @@ import {
 
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/stores/auth'
+import { useOfficeInfo } from '@/hooks/useSettings'
+import { UserAvatar } from '@/components/UserAvatar'
 import { usePendingRequestsCount } from '@/hooks/useRequests'
 import { usePendingApplicationsCount } from '@/hooks/useStaffApplications'
 import { useExpiringPOAsCount } from '@/hooks/usePOAs'
@@ -91,6 +93,7 @@ const navSections: { title?: string; items: NavItem[] }[] = [
 export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const [location] = useLocation()
   const { teamMember, logout } = useAuth()
+  const { data: office } = useOfficeInfo()
   const { data: pendingCount } = usePendingRequestsCount()
   const { data: pendingApps } = usePendingApplicationsCount()
   const { data: expiringPOAs } = useExpiringPOAsCount()
@@ -98,11 +101,19 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
 
   return (
     <aside className="pt-safe pb-safe flex h-full w-64 flex-col bg-navy text-navy-50">
-      {/* الترويسة */}
+      {/* الترويسة: شعار المكتب (من الإعدادات ← بيانات المكتب)، وإلا الأيقونة */}
       <div className="flex items-center gap-3 border-b border-white/10 px-5 py-5">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gold/15 ring-1 ring-gold/30">
-          <Scale className="h-5 w-5 text-gold" />
-        </div>
+        {office?.logo_url ? (
+          <img
+            src={office.logo_url}
+            alt="شعار المكتب"
+            className="h-11 w-11 shrink-0 rounded-xl bg-white object-contain p-1 ring-1 ring-gold/30"
+          />
+        ) : (
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gold/15 ring-1 ring-gold/30">
+            <Scale className="h-5 w-5 text-gold" />
+          </div>
+        )}
         <div className="min-w-0">
           <p className="truncate text-sm font-bold text-gold">CRM</p>
           <p className="truncate text-xs text-navy-200">{COMPANY_NAME_SHORT}</p>
@@ -171,11 +182,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       {/* المستخدم الحالي + خروج */}
       <div className="border-t border-white/10 p-3">
         <div className="flex items-center gap-3 rounded-lg px-2 py-2">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gold text-sm font-bold text-navy">
-            {teamMember?.avatar_initial ||
-              teamMember?.name?.charAt(0) ||
-              '؟'}
-          </div>
+          <UserAvatar member={teamMember} className="h-9 w-9 shrink-0" />
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium text-white">
               {teamMember?.name ?? 'مستخدم'}

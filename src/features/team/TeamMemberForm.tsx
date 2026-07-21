@@ -1,7 +1,8 @@
+import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Loader2 } from 'lucide-react'
+import { Loader2, ImagePlus, Trash2 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -14,7 +15,10 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { DualDatePicker } from '@/components/DualDatePicker'
+import { UserAvatar } from '@/components/UserAvatar'
 import { useCreateTeamMember, useUpdateTeamMember } from '@/hooks/useTeam'
+import { pickFile, uploadFile } from '@/lib/files'
+import { toast } from '@/hooks/use-toast'
 import type { TeamMember, TeamMemberInput } from '@/types/db'
 
 // حقل نصي اختياري: يقبل الفراغ
@@ -126,6 +130,30 @@ export function TeamMemberForm({ member, onDone }: Props) {
   const updateM = useUpdateTeamMember()
   const pending = createM.isPending || updateM.isPending
 
+  // الصورة الشخصية: تُرفع لمخزن avatars وتُحفظ مع النموذج
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(
+    member?.avatar_url ?? null
+  )
+  const [uploadingPhoto, setUploadingPhoto] = useState(false)
+
+  const onPickPhoto = async () => {
+    const f = await pickFile({ accept: 'image/*' })
+    if (!f) return
+    setUploadingPhoto(true)
+    try {
+      const res = await uploadFile(f, { bucket: 'avatars', folder: 'team' })
+      setAvatarUrl(res.publicUrl)
+    } catch (e) {
+      toast({
+        variant: 'destructive',
+        title: 'تعذّر رفع الصورة',
+        description: e instanceof Error ? e.message : undefined,
+      })
+    } finally {
+      setUploadingPhoto(false)
+    }
+  }
+
   const {
     register,
     handleSubmit,
@@ -141,7 +169,7 @@ export function TeamMemberForm({ member, onDone }: Props) {
   const isActive = watch('is_active')
 
   const onSubmit = async (values: FormValues) => {
-    const input = clean(values)
+    const input = { ...clean(values), avatar_url: avatarUrl }
     if (isEdit && member) {
       await updateM.mutateAsync({ id: member.id, input })
     } else {
@@ -157,6 +185,47 @@ export function TeamMemberForm({ member, onDone }: Props) {
       </DialogHeader>
 
       <div className="my-4 max-h-[60vh] space-y-6 overflow-y-auto pl-1 pr-1">
+        {/* الصورة الشخصية */}
+        <div className="flex items-center gap-4">
+          <UserAvatar
+            member={{
+              name: member?.name ?? '',
+              avatar_initial: member?.avatar_initial ?? null,
+              avatar_url: avatarUrl,
+            }}
+            className="h-16 w-16"
+            fallbackClassName="text-xl"
+          />
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onPickPhoto}
+              disabled={uploadingPhoto}
+            >
+              {uploadingPhoto ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <ImagePlus className="h-4 w-4" />
+              )}
+              {avatarUrl ? 'تغيير الصورة' : 'رفع صورة'}
+            </Button>
+            {avatarUrl && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="text-destructive"
+                onClick={() => setAvatarUrl(null)}
+              >
+                <Trash2 className="h-4 w-4" />
+                إزالة
+              </Button>
+            )}
+          </div>
+        </div>
+
         {/* أساسي */}
         <Section title="بيانات أساسية">
           <Field label="الاسم *" htmlFor="name" error={errors.name?.message}>

@@ -1,8 +1,8 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Loader2 } from 'lucide-react'
+import { Loader2, ImagePlus, Scale } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -11,6 +11,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Card, CardContent } from '@/components/ui/card'
 import { useOfficeInfo, useUpdateOfficeInfo } from '@/hooks/useSettings'
+import { pickFile, uploadFile } from '@/lib/files'
+import { toast } from '@/hooks/use-toast'
 import type { OfficeInfo, OfficeInfoInput } from '@/types/db'
 
 const schema = z.object({
@@ -56,6 +58,26 @@ function clean(values: FormValues): OfficeInfoInput {
 export function OfficeInfoTab() {
   const { data, isLoading } = useOfficeInfo()
   const updateM = useUpdateOfficeInfo()
+  const [uploadingLogo, setUploadingLogo] = useState(false)
+
+  // رفع الشعار: يُحفظ فوراً في logo_url ويظهر في القائمة الجانبية
+  const onPickLogo = async () => {
+    const f = await pickFile({ accept: 'image/*' })
+    if (!f) return
+    setUploadingLogo(true)
+    try {
+      const res = await uploadFile(f, { bucket: 'avatars', folder: 'branding' })
+      updateM.mutate({ id: data?.id ?? null, input: { logo_url: res.publicUrl } })
+    } catch (e) {
+      toast({
+        variant: 'destructive',
+        title: 'تعذّر رفع الشعار',
+        description: e instanceof Error ? e.message : undefined,
+      })
+    } finally {
+      setUploadingLogo(false)
+    }
+  }
 
   const {
     register,
@@ -89,6 +111,41 @@ export function OfficeInfoTab() {
   return (
     <Card>
       <CardContent className="pt-6">
+        {/* الشعار */}
+        <div className="mb-6 flex items-center gap-4 rounded-xl border border-border/70 bg-muted/30 p-4">
+          {data?.logo_url ? (
+            <img
+              src={data.logo_url}
+              alt="شعار المكتب"
+              className="h-16 w-16 shrink-0 rounded-xl bg-white object-contain p-1 ring-1 ring-border"
+            />
+          ) : (
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-gold/10">
+              <Scale className="h-7 w-7 text-gold" />
+            </div>
+          )}
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-foreground">شعار المكتب</p>
+            <p className="text-xs text-muted-foreground">
+              يظهر في القائمة الجانبية. يُفضَّل PNG بخلفية شفافة.
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onPickLogo}
+            disabled={uploadingLogo || updateM.isPending}
+          >
+            {uploadingLogo || updateM.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <ImagePlus className="h-4 w-4" />
+            )}
+            {data?.logo_url ? 'تغيير الشعار' : 'رفع الشعار'}
+          </Button>
+        </div>
+
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <FormField label="اسم المكتب" id="office_name">

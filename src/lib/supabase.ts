@@ -9,5 +9,5 @@ export const supabase = createClient(url, key, {
 })
 
 export const DOCS_BUCKET = 'documents'
-export const publicUrl = (path: string) =>
-  `${url}/storage/v1/object/public/${DOCS_BUCKET}/${path}`
+export const publicUrl = (path: string, bucket: string = DOCS_BUCKET) =>
+  `${url}/storage/v1/object/public/${bucket}/${path}`
