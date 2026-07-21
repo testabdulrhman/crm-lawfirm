@@ -37,6 +37,7 @@ import {
 import { fmtNumber, fmtDatePref, fmtDateTime } from '@/lib/format'
 import { openExternal } from '@/lib/external'
 import { useIsDirector } from '@/hooks/useIsDirector'
+import { usePageState } from '@/hooks/usePageState'
 import {
   useContact,
   useContactWorkLinks,
@@ -62,7 +63,7 @@ export function ContactDetail({ id }: { id: string }) {
   const isDirector = useIsDirector()
   const deleteM = useDeleteContact()
 
-  const [tab, setTab] = useState('overview')
+  const [tab, setTab] = usePageState('contact-tab:' + id, 'overview')
   const [editOpen, setEditOpen] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
 

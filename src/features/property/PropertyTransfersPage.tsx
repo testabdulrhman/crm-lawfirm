@@ -25,6 +25,7 @@ import {
 import { cn } from '@/lib/utils'
 import { fmtNumber, fmtCurrency, fmtDatePref } from '@/lib/format'
 import { usePropertyTransfers } from '@/hooks/usePropertyTransfers'
+import { usePageState } from '@/hooks/usePageState'
 import { PropertyTransferForm } from './PropertyTransferForm'
 import {
   PROPERTY_STATUS_OPTIONS,
@@ -39,9 +40,9 @@ export function PropertyTransfersPage() {
   const { data, isLoading } = usePropertyTransfers()
   const [, navigate] = useLocation()
 
-  const [search, setSearch] = useState('')
-  const [status, setStatus] = useState<string>('all')
-  const [propType, setPropType] = useState<string>(ALL)
+  const [search, setSearch] = usePageState('prop:q', '')
+  const [status, setStatus] = usePageState<string>('prop:status', 'all')
+  const [propType, setPropType] = usePageState<string>('prop:type', ALL)
   const [dialogOpen, setDialogOpen] = useState(false)
 
   const propTypes = useMemo(

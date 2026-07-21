@@ -19,6 +19,7 @@ import {
 
 import { fmtDatePref } from '@/lib/format'
 import { useCase, useUpdateCaseStatus } from '@/hooks/useCases'
+import { usePageState } from '@/hooks/usePageState'
 import {
   CASE_STATUS_OPTIONS,
   caseStatusBadge,
@@ -53,6 +54,8 @@ export function CaseDetail({ id }: { id: string }) {
   const { data: c, isLoading, isError } = useCase(id)
   const statusM = useUpdateCaseStatus()
   const [editOpen, setEditOpen] = useState(false)
+  // التبويب المفتوح يدوم للرجوع/التحديث (لكل قضية على حدة)
+  const [tab, setTab] = usePageState('case-tab:' + id, 'overview')
 
   if (isLoading) {
     return (
@@ -144,7 +147,7 @@ export function CaseDetail({ id }: { id: string }) {
       </Card>
 
       {/* التبويبات (RTL — تبدأ من اليمين) */}
-      <Tabs defaultValue="overview" dir="rtl">
+      <Tabs value={tab} onValueChange={setTab} dir="rtl">
         <div className="overflow-x-auto">
           <TabsList className="inline-flex w-max justify-start">
             {TABS.map((t) => (

@@ -20,6 +20,7 @@ import {
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 import { useTeamMembers, useToggleActive } from '@/hooks/useTeam'
+import { usePageState } from '@/hooks/usePageState'
 import { TeamMemberForm } from './TeamMemberForm'
 import type { TeamMember } from '@/types/db'
 
@@ -45,7 +46,7 @@ function MemberAvatar({ member }: { member: TeamMember }) {
 export function TeamPage() {
   const { data, isLoading } = useTeamMembers()
   const toggle = useToggleActive()
-  const [filter, setFilter] = useState<Filter>('all')
+  const [filter, setFilter] = usePageState<Filter>('team:filter', 'all')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<TeamMember | null>(null)
 

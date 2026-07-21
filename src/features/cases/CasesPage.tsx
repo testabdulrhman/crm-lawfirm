@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/select'
 import { fmtNumber, fmtDatePref } from '@/lib/format'
 import { useCases } from '@/hooks/useCases'
+import { usePageState } from '@/hooks/usePageState'
 import { useTeamMembers } from '@/hooks/useTeam'
 import { CaseForm } from './CaseForm'
 import {
@@ -54,11 +55,11 @@ export function CasesPage() {
   const { data: members } = useTeamMembers()
   const [, navigate] = useLocation()
 
-  const [search, setSearch] = useState('')
-  const [status, setStatus] = useState<string>('all')
-  const [type, setType] = useState<string>(ALL)
-  const [assignee, setAssignee] = useState<string>(ALL)
-  const [visible, setVisible] = useState(PAGE)
+  const [search, setSearch] = usePageState('cases:q', '')
+  const [status, setStatus] = usePageState<string>('cases:status', 'all')
+  const [type, setType] = usePageState<string>('cases:type', ALL)
+  const [assignee, setAssignee] = usePageState<string>('cases:assignee', ALL)
+  const [visible, setVisible] = usePageState('cases:visible', PAGE)
   const [dialogOpen, setDialogOpen] = useState(false)
 
   const resetPage = () => setVisible(PAGE)

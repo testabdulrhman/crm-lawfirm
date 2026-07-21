@@ -19,6 +19,7 @@ import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 import { fmtNumber, fmtDatePref } from '@/lib/format'
 import { usePOAs } from '@/hooks/usePOAs'
+import { usePageState } from '@/hooks/usePageState'
 import { POAForm } from './POAForm'
 import {
   POA_STATUS_OPTIONS,
@@ -36,10 +37,10 @@ export function POAsPage() {
   const { data, isLoading } = usePOAs()
   const [, navigate] = useLocation()
 
-  const [search, setSearch] = useState('')
-  const [status, setStatus] = useState<string>('all')
-  const [soonOnly, setSoonOnly] = useState(false)
-  const [visible, setVisible] = useState(PAGE)
+  const [search, setSearch] = usePageState('poa:q', '')
+  const [status, setStatus] = usePageState<string>('poa:status', 'all')
+  const [soonOnly, setSoonOnly] = usePageState('poa:soon', false)
+  const [visible, setVisible] = usePageState('poa:visible', PAGE)
   const [dialogOpen, setDialogOpen] = useState(false)
 
   const resetPage = () => setVisible(PAGE)

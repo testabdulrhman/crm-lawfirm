@@ -589,7 +589,7 @@ function ApplicationRow({ a, onClick }: { a: DashApplication; onClick: () => voi
       <div className="flex items-center gap-2">
         <p className="truncate text-sm font-medium text-foreground">{a.full_name}</p>
         {a.has_cv && (
-          <span className="flex items-center gap-0.5 text-[11px] text-muted-foreground">
+          <span className="flex items-center gap-0.5 text-xs text-muted-foreground">
             <Paperclip className="h-3 w-3" />
             سيرة
           </span>
@@ -608,7 +608,7 @@ function RequestRow({ r, onClick }: { r: DashRequest; onClick: () => void }) {
     <RowShell onClick={onClick}>
       <div className="flex items-center gap-2">
         <p className="truncate text-sm font-medium text-foreground">{r.client_name}</p>
-        <Badge variant="outline" className="px-1.5 py-0 text-[10px]">
+        <Badge variant="outline" className="px-1.5 py-0 text-xs">
           {requestTypeLabel(r.request_type)}
         </Badge>
       </div>

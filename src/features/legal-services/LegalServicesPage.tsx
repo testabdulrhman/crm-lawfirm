@@ -25,6 +25,7 @@ import {
 import { cn } from '@/lib/utils'
 import { fmtNumber, fmtDatePref } from '@/lib/format'
 import { useLegalServices } from '@/hooks/useLegalServices'
+import { usePageState } from '@/hooks/usePageState'
 import { useTeamMembers } from '@/hooks/useTeam'
 import { LegalServiceForm } from './LegalServiceForm'
 import {
@@ -44,10 +45,10 @@ export function LegalServicesPage() {
   const { data: members } = useTeamMembers()
   const [, navigate] = useLocation()
 
-  const [search, setSearch] = useState('')
-  const [type, setType] = useState<string>('all')
-  const [status, setStatus] = useState<string>('all')
-  const [assignee, setAssignee] = useState<string>(ALL)
+  const [search, setSearch] = usePageState('ls:q', '')
+  const [type, setType] = usePageState<string>('ls:type', 'all')
+  const [status, setStatus] = usePageState<string>('ls:status', 'all')
+  const [assignee, setAssignee] = usePageState<string>('ls:assignee', ALL)
   const [dialogOpen, setDialogOpen] = useState(false)
 
   const activeMembers = (members ?? []).filter((m) => m.is_active)

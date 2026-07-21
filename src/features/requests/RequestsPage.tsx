@@ -9,6 +9,7 @@ import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { Card, CardContent } from '@/components/ui/card'
 import { fmtDatePref } from '@/lib/format'
 import { useRequests } from '@/hooks/useRequests'
+import { usePageState } from '@/hooks/usePageState'
 import { RequestForm } from './RequestForm'
 import {
   STATUS_OPTIONS,
@@ -23,7 +24,7 @@ type Filter = RequestStatus | 'all'
 export function RequestsPage() {
   const { data, isLoading } = useRequests('all')
   const [, navigate] = useLocation()
-  const [filter, setFilter] = useState<Filter>('all')
+  const [filter, setFilter] = usePageState<Filter>('req:filter', 'all')
   const [dialogOpen, setDialogOpen] = useState(false)
 
   const counts = useMemo(() => {

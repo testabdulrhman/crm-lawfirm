@@ -9,13 +9,14 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { fmtNumber, fmtDatePref } from '@/lib/format'
 import { useOutgoingLetters } from '@/hooks/useOutgoingLetters'
+import { usePageState } from '@/hooks/usePageState'
 import { OutgoingLetterForm } from './OutgoingLetterForm'
 import type { OutgoingLetter } from '@/types/db'
 
 export function OutgoingLettersPage() {
   const { data, isLoading } = useOutgoingLetters()
   const [, navigate] = useLocation()
-  const [search, setSearch] = useState('')
+  const [search, setSearch] = usePageState('out:q', '')
   const [dialogOpen, setDialogOpen] = useState(false)
 
   const filtered = useMemo(() => {

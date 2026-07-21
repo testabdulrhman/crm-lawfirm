@@ -38,32 +38,54 @@ interface NavItem {
     | 'upcoming_appointments'
 }
 
-const navItems: NavItem[] = [
-  { label: 'لوحة التحكم', href: '/', icon: LayoutDashboard },
-  { label: 'القضايا', href: '/cases', icon: Scale },
-  { label: 'الجلسات', href: '/sessions', icon: CalendarDays },
-  { label: 'الوكالات', href: '/poa', icon: FileSignature, badge: 'expiring_poas' },
-  { label: 'الاستشارات واللوائح', href: '/legal-services', icon: BookOpen },
-  { label: 'التوثيق العقاري', href: '/property', icon: Landmark },
+// أقسام التنقل: تجميع منطقي بدل قائمة طويلة مسطّحة
+const navSections: { title?: string; items: NavItem[] }[] = [
   {
-    label: 'المواعيد',
-    href: '/appointments',
-    icon: CalendarClock,
-    badge: 'upcoming_appointments',
+    items: [{ label: 'لوحة التحكم', href: '/', icon: LayoutDashboard }],
   },
-  { label: 'الصادر', href: '/outgoing', icon: Send },
-  { label: 'الطلبات الواردة', href: '/requests', icon: Inbox, badge: 'pending_requests' },
-  { label: 'جهات الاتصال', href: '/contacts', icon: BookUser },
-  { label: 'الموظفون', href: '/team', icon: Users },
   {
-    label: 'طلبات التوظيف',
-    href: '/staff-applications',
-    icon: UserPlus,
-    badge: 'pending_applications',
+    title: 'الأعمال',
+    items: [
+      { label: 'القضايا', href: '/cases', icon: Scale },
+      { label: 'الجلسات', href: '/sessions', icon: CalendarDays },
+      { label: 'الوكالات', href: '/poa', icon: FileSignature, badge: 'expiring_poas' },
+      { label: 'الاستشارات واللوائح', href: '/legal-services', icon: BookOpen },
+      { label: 'التوثيق العقاري', href: '/property', icon: Landmark },
+      {
+        label: 'المواعيد',
+        href: '/appointments',
+        icon: CalendarClock,
+        badge: 'upcoming_appointments',
+      },
+      { label: 'الصادر', href: '/outgoing', icon: Send },
+    ],
   },
-  { label: 'التقارير', href: '/reports', icon: BarChart3 },
-  { label: 'الإعدادات', href: '/settings', icon: Settings },
-  /* مواقع وحدات قادمة: القضايا، جهات الاتصال، الوكالات... */
+  {
+    title: 'التواصل',
+    items: [
+      { label: 'جهات الاتصال', href: '/contacts', icon: BookUser },
+      {
+        label: 'الطلبات الواردة',
+        href: '/requests',
+        icon: Inbox,
+        badge: 'pending_requests',
+      },
+      {
+        label: 'طلبات التوظيف',
+        href: '/staff-applications',
+        icon: UserPlus,
+        badge: 'pending_applications',
+      },
+    ],
+  },
+  {
+    title: 'الإدارة',
+    items: [
+      { label: 'الموظفون', href: '/team', icon: Users },
+      { label: 'التقارير', href: '/reports', icon: BarChart3 },
+      { label: 'الإعدادات', href: '/settings', icon: Settings },
+    ],
+  },
 ]
 
 export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
@@ -88,51 +110,62 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       </div>
 
       {/* التنقل */}
-      <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
-        {navItems.map((item) => {
-          const active =
-            item.href === '/'
-              ? location === '/'
-              : location.startsWith(item.href)
-          const Icon = item.icon
-          const badgeCount =
-            item.badge === 'pending_requests'
-              ? (pendingCount ?? 0)
-              : item.badge === 'pending_applications'
-                ? (pendingApps ?? 0)
-                : item.badge === 'expiring_poas'
-                  ? (expiringPOAs ?? 0)
-                  : item.badge === 'upcoming_appointments'
-                    ? (upcomingAppts ?? 0)
-                    : 0
-          const showBadge = !!item.badge && badgeCount > 0
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={onNavigate}
-              className={cn(
-                'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors',
-                active
-                  ? 'bg-gold text-navy shadow-sm'
-                  : 'text-navy-100 hover:bg-white/10 hover:text-white'
-              )}
-            >
-              <Icon className="h-5 w-5 shrink-0" />
-              <span className="flex-1">{item.label}</span>
-              {showBadge && (
-                <span
-                  className={cn(
-                    'min-w-5 rounded-full px-1.5 py-0.5 text-center text-xs font-bold',
-                    active ? 'bg-navy text-gold' : 'bg-gold text-navy'
-                  )}
-                >
-                  {fmtNumber(badgeCount)}
-                </span>
-              )}
-            </Link>
-          )
-        })}
+      <nav className="flex-1 overflow-y-auto px-3 py-4">
+        {navSections.map((section, si) => (
+          <div key={si} className={cn(si > 0 && 'mt-4')}>
+            {section.title && (
+              <p className="px-3 pb-1.5 text-xs font-semibold text-navy-300">
+                {section.title}
+              </p>
+            )}
+            <div className="space-y-1">
+              {section.items.map((item) => {
+                const active =
+                  item.href === '/'
+                    ? location === '/'
+                    : location.startsWith(item.href)
+                const Icon = item.icon
+                const badgeCount =
+                  item.badge === 'pending_requests'
+                    ? (pendingCount ?? 0)
+                    : item.badge === 'pending_applications'
+                      ? (pendingApps ?? 0)
+                      : item.badge === 'expiring_poas'
+                        ? (expiringPOAs ?? 0)
+                        : item.badge === 'upcoming_appointments'
+                          ? (upcomingAppts ?? 0)
+                          : 0
+                const showBadge = !!item.badge && badgeCount > 0
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={onNavigate}
+                    className={cn(
+                      'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors',
+                      active
+                        ? 'bg-gold text-navy shadow-sm'
+                        : 'text-navy-100 hover:bg-white/10 hover:text-white'
+                    )}
+                  >
+                    <Icon className="h-5 w-5 shrink-0" />
+                    <span className="flex-1">{item.label}</span>
+                    {showBadge && (
+                      <span
+                        className={cn(
+                          'min-w-5 rounded-full px-1.5 py-0.5 text-center text-xs font-bold',
+                          active ? 'bg-navy text-gold' : 'bg-gold text-navy'
+                        )}
+                      >
+                        {fmtNumber(badgeCount)}
+                      </span>
+                    )}
+                  </Link>
+                )
+              })}
+            </div>
+          </div>
+        ))}
       </nav>
 
       {/* المستخدم الحالي + خروج */}

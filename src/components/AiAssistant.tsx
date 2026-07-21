@@ -89,7 +89,7 @@ export function AiAssistant() {
               <Sparkles className="h-5 w-5" />
               <div>
                 <p className="text-sm font-bold">المساعد الذكي</p>
-                <p className="text-[11px] opacity-80">يبحث ويرسل الرسائل وينشئ المهام</p>
+                <p className="text-xs opacity-80">يبحث ويرسل الرسائل وينشئ المهام</p>
               </div>
             </div>
             <button
@@ -166,7 +166,7 @@ export function AiAssistant() {
                 <Send className="h-4 w-4" />
               </Button>
             </div>
-            <p className="mt-1 px-1 text-[10px] text-muted-foreground">
+            <p className="mt-1 px-1 text-xs text-muted-foreground">
               مساعد ذكي — راجِع الإجراءات الحسّاسة قبل طلب تنفيذها.
             </p>
           </div>

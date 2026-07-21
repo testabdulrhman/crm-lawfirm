@@ -21,6 +21,7 @@ import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 import { fmtNumber, fmtDatePref, fmtTime, todayISO } from '@/lib/format'
 import { useAppointments } from '@/hooks/useAppointments'
+import { usePageState } from '@/hooks/usePageState'
 import { AppointmentForm } from './AppointmentForm'
 import {
   APPT_STATUS_OPTIONS,
@@ -47,8 +48,8 @@ export function AppointmentsPage() {
   const { data, isLoading } = useAppointments()
   const [, navigate] = useLocation()
 
-  const [search, setSearch] = useState('')
-  const [status, setStatus] = useState<string>('all')
+  const [search, setSearch] = usePageState('appts:q', '')
+  const [status, setStatus] = usePageState<string>('appts:status', 'all')
   const [dialogOpen, setDialogOpen] = useState(false)
 
   const filtered = useMemo(() => {

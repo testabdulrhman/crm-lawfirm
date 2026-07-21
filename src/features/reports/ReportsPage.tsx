@@ -63,7 +63,7 @@ export function ReportsPage() {
   const { data: byAssignee, isLoading: loadingAssignee } = useReportsByAssignee()
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-6xl space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-2xl font-bold tracking-tight text-foreground">
           التقارير والإحصاءات

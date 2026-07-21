@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { useLocation } from 'wouter'
 import {
   UserPlus,
@@ -15,6 +15,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Card, CardContent } from '@/components/ui/card'
 import { fmtDatePref } from '@/lib/format'
 import { useStaffApplications } from '@/hooks/useStaffApplications'
+import { usePageState } from '@/hooks/usePageState'
 import {
   APP_STATUS_OPTIONS,
   appStatusBadge,
@@ -28,7 +29,7 @@ type Filter = StaffApplicationStatus | 'all'
 export function StaffApplicationsPage() {
   const { data, isLoading } = useStaffApplications('all')
   const [, navigate] = useLocation()
-  const [filter, setFilter] = useState<Filter>('all')
+  const [filter, setFilter] = usePageState<Filter>('apps:filter', 'all')
 
   const counts = useMemo(() => {
     const c: Record<string, number> = { all: data?.length ?? 0 }

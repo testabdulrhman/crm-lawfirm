@@ -117,6 +117,10 @@ export function GlobalSearch() {
             setOpen(false)
             inputRef.current?.blur()
           }
+          // Enter يفتح أول نتيجة مباشرة
+          if (e.key === 'Enter' && open && (data?.length ?? 0) > 0) {
+            go(data![0])
+          }
         }}
         placeholder="بحث عام…"
         className="h-9 w-full rounded-md border border-input bg-background pr-9 pl-8 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
@@ -155,7 +159,7 @@ export function GlobalSearch() {
                     <div className="flex items-center gap-1.5 px-3 pb-1 pt-2 text-xs font-semibold text-muted-foreground">
                       <Icon className="h-3.5 w-3.5" />
                       {g.label}
-                      <span className="text-[10px]">
+                      <span className="text-xs font-normal">
                         ({fmtNumber(rows.length)})
                       </span>
                     </div>

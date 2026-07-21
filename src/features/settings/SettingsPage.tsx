@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { usePageState } from '@/hooks/usePageState'
 import { Card, CardContent } from '@/components/ui/card'
 import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/ui/button'
@@ -21,6 +22,8 @@ import { LookupsTab } from './LookupsTab'
 import { TemplatesTab } from './TemplatesTab'
 
 export function SettingsPage() {
+  // التبويب المفتوح يدوم للرجوع/التحديث
+  const [tab, setTab] = usePageState('settings:tab', 'office')
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <div>
@@ -30,7 +33,7 @@ export function SettingsPage() {
         </p>
       </div>
 
-      <Tabs defaultValue="office" dir="rtl">
+      <Tabs value={tab} onValueChange={setTab} dir="rtl">
         <TabsList className="flex w-full flex-wrap justify-start gap-1 sm:w-auto">
           <TabsTrigger value="office" className="gap-2">
             <Building2 className="h-4 w-4" />

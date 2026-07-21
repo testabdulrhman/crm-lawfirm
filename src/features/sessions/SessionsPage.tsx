@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { useLocation } from 'wouter'
 import { Search, CalendarDays, Gavel, Clock } from 'lucide-react'
 
@@ -9,6 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { fmtNumber, fmtDatePref, fmtTime } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useAllSessions } from '@/hooks/useCaseSessions'
+import { usePageState } from '@/hooks/usePageState'
 import type { SessionWithCase } from '@/hooks/useCaseSessions'
 import {
   sessionDisplayStatus,
@@ -48,8 +49,11 @@ function countdownText(days: number | null): string {
 export function SessionsPage() {
   const { data, isLoading } = useAllSessions()
   const [, navigate] = useLocation()
-  const [search, setSearch] = useState('')
-  const [filter, setFilter] = useState<SessionDisplayStatus | 'all'>('all')
+  const [search, setSearch] = usePageState('sessions:q', '')
+  const [filter, setFilter] = usePageState<SessionDisplayStatus | 'all'>(
+    'sessions:filter',
+    'all'
+  )
 
   // احسب الحالة التلقائية لكل جلسة مرة واحدة
   const withStatus = useMemo(

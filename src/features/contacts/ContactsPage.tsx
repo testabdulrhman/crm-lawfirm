@@ -22,6 +22,7 @@ import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { fmtNumber } from '@/lib/format'
 import { openExternal } from '@/lib/external'
 import { useContacts, useContactWorkLinks } from '@/hooks/useContacts'
+import { usePageState } from '@/hooks/usePageState'
 import { ContactForm } from './ContactForm'
 import {
   CATEGORY_OPTIONS,
@@ -64,12 +65,12 @@ export function ContactsPage() {
   const { data: workLinks } = useContactWorkLinks()
   const [, navigate] = useLocation()
 
-  const [search, setSearch] = useState('')
-  const [category, setCategory] = useState<string>('all')
-  const [entity, setEntity] = useState<string>('all')
-  const [linkFilter, setLinkFilter] = useState<LinkFilter>('all')
-  const [source, setSource] = useState<string>('all')
-  const [visible, setVisible] = useState(PAGE)
+  const [search, setSearch] = usePageState('contacts:q', '')
+  const [category, setCategory] = usePageState<string>('contacts:category', 'all')
+  const [entity, setEntity] = usePageState<string>('contacts:entity', 'all')
+  const [linkFilter, setLinkFilter] = usePageState<LinkFilter>('contacts:link', 'all')
+  const [source, setSource] = usePageState<string>('contacts:source', 'all')
+  const [visible, setVisible] = usePageState('contacts:visible', PAGE)
   const [dialogOpen, setDialogOpen] = useState(false)
 
   const filtered = useMemo(() => {
