@@ -1,11 +1,10 @@
 import { useMemo, useState } from 'react'
 import { useLocation } from 'wouter'
-import { Plus, Search, Send, ChevronLeft, FileText, Scale } from 'lucide-react'
+import { Plus, Search, Send, FileText, Scale, CalendarDays } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { fmtNumber, fmtDatePref } from '@/lib/format'
 import { useOutgoingLetters } from '@/hooks/useOutgoingLetters'
@@ -63,17 +62,17 @@ export function OutgoingLettersPage() {
       )}
 
       {isLoading ? (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="divide-y overflow-hidden rounded-xl border bg-card">
           {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="h-40 w-full" />
+            <Skeleton key={i} className="h-16 w-full rounded-none" />
           ))}
         </div>
       ) : filtered.length === 0 ? (
         <EmptyState />
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="divide-y overflow-hidden rounded-xl border bg-card">
           {filtered.map((l) => (
-            <LetterCard
+            <LetterRow
               key={l.id}
               letter={l}
               onOpen={() => navigate(`/outgoing/${l.id}`)}
@@ -91,7 +90,7 @@ export function OutgoingLettersPage() {
   )
 }
 
-function LetterCard({
+function LetterRow({
   letter: l,
   onOpen,
 }: {
@@ -99,38 +98,50 @@ function LetterCard({
   onOpen: () => void
 }) {
   return (
-    <Card className="flex flex-col">
-      <CardContent className="flex flex-1 flex-col gap-2 p-4">
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-2">
-            <Send className="h-4 w-4 shrink-0 text-gold" />
-            <p className="truncate font-semibold text-foreground">
-              {l.subject || 'خطاب'}
-            </p>
-          </div>
-          {l.file_url && <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />}
-        </div>
+    <button
+      onClick={onOpen}
+      className="block w-full px-4 py-3 text-right transition-colors hover:bg-accent/10"
+    >
+      {/* السطر العلوي: الموضوع + رقم الخطاب */}
+      <div className="flex items-center gap-2">
+        <h3 className="min-w-0 flex-1 truncate font-semibold leading-snug text-foreground">
+          {l.subject || 'خطاب'}
+        </h3>
+        {l.file_url && (
+          <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+        )}
+        {l.letter_number && (
+          <span
+            dir="ltr"
+            className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground"
+          >
+            {l.letter_number}
+          </span>
+        )}
+      </div>
 
-        <div className="space-y-1 text-xs text-muted-foreground">
-          {l.letter_number && <p dir="ltr" className="text-right">رقم: {l.letter_number}</p>}
-          {l.recipient && <p>إلى: {l.recipient}</p>}
-          {l.letter_date && <p>التاريخ: {fmtDatePref(l.letter_date)}</p>}
-          {l.case_id && (
-            <p className="flex items-center gap-1">
-              <Scale className="h-3 w-3" />
-              {l.case?.title || 'قضية مرتبطة'}
-            </p>
-          )}
-        </div>
-
-        <div className="mt-auto flex justify-end pt-1">
-          <Button size="sm" variant="ghost" onClick={onOpen}>
-            عرض
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+      {/* السطر السفلي: التاريخ/المستلم/القضية */}
+      <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+        {l.letter_date && (
+          <span className="flex items-center gap-1">
+            <CalendarDays className="h-3 w-3 shrink-0" />
+            {fmtDatePref(l.letter_date)}
+          </span>
+        )}
+        {l.recipient && (
+          <span className="flex min-w-0 items-center gap-1">
+            <Send className="h-3 w-3 shrink-0" />
+            <span className="truncate">إلى: {l.recipient}</span>
+          </span>
+        )}
+        {l.case_id && (
+          <span className="flex items-center gap-1">
+            <Scale className="h-3 w-3 shrink-0" />
+            {l.case?.title || 'قضية مرتبطة'}
+          </span>
+        )}
+      </div>
+    </button>
   )
 }
 
