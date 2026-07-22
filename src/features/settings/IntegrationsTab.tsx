@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Link2,
   Plus,
@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Switch } from '@/components/ui/switch'
 import {
   Dialog,
   DialogContent,
@@ -42,6 +43,8 @@ import type { LookupValue } from '@/types/db'
 
 // روابط التكاملات تُخزَّن في lookup_values تحت هذا النوع (بلا جداول جديدة)
 export const INTEGRATION_LINK_TYPE = 'integration_link'
+// إعدادات التكاملات (مفتاح/قيمة) — يقرؤها الخادم أيضاً (calendar-sync)
+export const INTEGRATION_CONFIG_TYPE = 'integration_config'
 
 // إضافة https:// تلقائياً إن غاب البروتوكول
 const normalizeUrl = (raw: string) => {
@@ -60,6 +63,37 @@ export function IntegrationsTab() {
     () => (data ?? []).filter((l) => l.type === INTEGRATION_LINK_TYPE),
     [data]
   )
+
+  // إعدادات (مفتاح ← صف)
+  const config = useMemo(() => {
+    const map = new Map<string, LookupValue>()
+    for (const l of data ?? [])
+      if (l.type === INTEGRATION_CONFIG_TYPE) map.set(l.label, l)
+    return map
+  }, [data])
+
+  const setConfig = (key: string, value: string) => {
+    const existing = config.get(key)
+    if (existing) {
+      updateM.mutate({
+        id: existing.id,
+        input: { type: INTEGRATION_CONFIG_TYPE, label: key, value },
+      })
+    } else {
+      createM.mutate({
+        type: INTEGRATION_CONFIG_TYPE,
+        label: key,
+        value,
+        sort_order: 0,
+      })
+    }
+  }
+
+  // إعدادات Google Calendar
+  const gcalEnabled = (config.get('google_calendar_enabled')?.value ?? 'true') !== 'false'
+  const gcalIdSaved = config.get('google_calendar_id')?.value ?? ''
+  const [gcalId, setGcalId] = useState(gcalIdSaved)
+  useEffect(() => setGcalId(gcalIdSaved), [gcalIdSaved])
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<LookupValue | null>(null)
@@ -191,26 +225,57 @@ export function IntegrationsTab() {
         </CardContent>
       </Card>
 
-      {/* تكامل Google Calendar (تلقائي — للعلم فقط) */}
+      {/* تكامل Google Calendar — قابل للتحرير (جاهزية SaaS) */}
       <Card>
         <CardContent className="pt-6">
-          <div className="flex items-start gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10">
-              <CalendarCheck className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10">
+                <CalendarCheck className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <div>
+                <p className="font-medium text-foreground">Google Calendar</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  عند إضافة جلسة أو موعد يُنشأ حدث في التقويم (الجلسات أزرق،
+                  المواعيد أخضر، تذكير منبثق قبل ١٠ دقائق)، ويُحذف الحدث عند
+                  الحذف.
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="font-medium text-foreground">Google Calendar</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                مزامنة تلقائية مفعّلة: عند إضافة جلسة أو موعد يُنشأ حدث في تقويم
-                المكتب (الجلسات بلون أزرق، المواعيد بلون أخضر، تذكير منبثق قبل
-                ١٠ دقائق). يُحذف الحدث عند حذف الجلسة/الموعد. تظهر علامة «في
-                التقويم» على العناصر المزامَنة.
-              </p>
-              <p className="mt-2 text-xs text-muted-foreground">
-                تتم المزامنة عبر خدمة آمنة في الخادم؛ لا حاجة لإعداد أي مفاتيح
-                هنا.
-              </p>
+            <Switch
+              checked={gcalEnabled}
+              onCheckedChange={(v) =>
+                setConfig('google_calendar_enabled', v ? 'true' : 'false')
+              }
+            />
+          </div>
+
+          <div className="mt-4 border-t pt-4">
+            <Label htmlFor="gcal_id">معرّف التقويم (Calendar ID)</Label>
+            <div className="mt-1.5 flex gap-2">
+              <Input
+                id="gcal_id"
+                dir="ltr"
+                value={gcalId}
+                onChange={(e) => setGcalId(e.target.value)}
+                placeholder="مثال: office@group.calendar.google.com"
+                disabled={!gcalEnabled}
+              />
+              <Button
+                variant="outline"
+                className="shrink-0"
+                disabled={!gcalEnabled || pending || gcalId.trim() === gcalIdSaved}
+                onClick={() => setConfig('google_calendar_id', gcalId.trim())}
+              >
+                {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                حفظ
+              </Button>
             </div>
+            <p className="mt-2 text-xs text-muted-foreground">
+              اتركه فارغاً لاستخدام تقويم المنصة الافتراضي. لتقويم خاص بالمكتب:
+              أنشئ تقويماً في Google Calendar وشاركه مع حساب المنصة ثم الصق
+              معرّفه هنا.
+            </p>
           </div>
         </CardContent>
       </Card>

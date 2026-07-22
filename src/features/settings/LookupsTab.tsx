@@ -42,9 +42,12 @@ export function LookupsTab() {
   const [editing, setEditing] = useState<LookupValue | null>(null)
   const [presetType, setPresetType] = useState<string | undefined>(undefined)
 
-  // روابط التكاملات لها تبويبها الخاص — لا تُعرض هنا
+  // روابط وإعدادات التكاملات لها تبويبها الخاص — لا تُعرض هنا
   const lookups = useMemo(
-    () => (data ?? []).filter((l) => l.type !== 'integration_link'),
+    () =>
+      (data ?? []).filter(
+        (l) => l.type !== 'integration_link' && l.type !== 'integration_config'
+      ),
     [data]
   )
 
