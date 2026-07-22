@@ -11,6 +11,7 @@ import {
 
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { usePageState } from '@/hooks/usePageState'
+import { IntegrationsTab } from './IntegrationsTab'
 import { Card, CardContent } from '@/components/ui/card'
 import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/ui/button'
@@ -79,32 +80,6 @@ export function SettingsPage() {
         </TabsContent>
       </Tabs>
     </div>
-  )
-}
-
-function IntegrationsTab() {
-  return (
-    <Card>
-      <CardContent className="space-y-4 pt-6">
-        <div className="flex items-start gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10">
-            <CalendarCheck className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
-          </div>
-          <div>
-            <p className="font-medium text-foreground">Google Calendar</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              مزامنة تلقائية مفعّلة: عند إضافة جلسة أو موعد يُنشأ حدث في تقويم
-              المكتب (الجلسات بلون أزرق، المواعيد بلون أخضر، تذكير منبثق قبل ١٠
-              دقائق). يُحذف الحدث عند حذف الجلسة/الموعد. تظهر علامة «في التقويم»
-              على العناصر المزامَنة.
-            </p>
-            <p className="mt-2 text-xs text-muted-foreground">
-              تتم المزامنة عبر خدمة آمنة في الخادم؛ لا حاجة لإعداد أي مفاتيح هنا.
-            </p>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
   )
 }
 

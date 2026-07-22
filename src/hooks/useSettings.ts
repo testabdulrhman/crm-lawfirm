@@ -104,12 +104,12 @@ export function useCreateLookup() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: LOOKUP_KEY })
-      toast({ variant: 'success', title: 'تمت إضافة التصنيف' })
+      toast({ variant: 'success', title: 'تمت الإضافة' })
     },
     onError: (e: unknown) => {
       toast({
         variant: 'destructive',
-        title: 'تعذّرت إضافة التصنيف',
+        title: 'تعذّرت الإضافة',
         description: e instanceof Error ? e.message : undefined,
       })
     },
@@ -137,12 +137,12 @@ export function useUpdateLookup() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: LOOKUP_KEY })
-      toast({ variant: 'success', title: 'تم تحديث التصنيف' })
+      toast({ variant: 'success', title: 'تم التحديث' })
     },
     onError: (e: unknown) => {
       toast({
         variant: 'destructive',
-        title: 'تعذّر تحديث التصنيف',
+        title: 'تعذّر التحديث',
         description: e instanceof Error ? e.message : undefined,
       })
     },
@@ -161,12 +161,12 @@ export function useDeleteLookup() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: LOOKUP_KEY })
-      toast({ variant: 'success', title: 'تم حذف التصنيف' })
+      toast({ variant: 'success', title: 'تم الحذف' })
     },
     onError: (e: unknown) => {
       toast({
         variant: 'destructive',
-        title: 'تعذّر حذف التصنيف',
+        title: 'تعذّر الحذف',
         description: e instanceof Error ? e.message : undefined,
       })
     },

@@ -42,22 +42,28 @@ export function LookupsTab() {
   const [editing, setEditing] = useState<LookupValue | null>(null)
   const [presetType, setPresetType] = useState<string | undefined>(undefined)
 
+  // روابط التكاملات لها تبويبها الخاص — لا تُعرض هنا
+  const lookups = useMemo(
+    () => (data ?? []).filter((l) => l.type !== 'integration_link'),
+    [data]
+  )
+
   // أنواع موجودة (للاقتراح)
   const types = useMemo(
-    () => Array.from(new Set((data ?? []).map((l) => l.type))).sort(),
-    [data]
+    () => Array.from(new Set(lookups.map((l) => l.type))).sort(),
+    [lookups]
   )
 
   // التجميع حسب النوع
   const grouped = useMemo(() => {
     const map = new Map<string, LookupValue[]>()
-    for (const l of data ?? []) {
+    for (const l of lookups) {
       const arr = map.get(l.type) ?? []
       arr.push(l)
       map.set(l.type, arr)
     }
     return Array.from(map.entries())
-  }, [data])
+  }, [lookups])
 
   const openNew = (type?: string) => {
     setEditing(null)
