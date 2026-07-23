@@ -17,7 +17,8 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 
-import { fmtDatePref } from '@/lib/format'
+import { fmtDatePref, fmtNumber } from '@/lib/format'
+import { useCaseDocuments } from '@/hooks/useCaseDocuments'
 import { useCase, useUpdateCaseStatus } from '@/hooks/useCases'
 import { usePageState } from '@/hooks/usePageState'
 import {
@@ -56,6 +57,9 @@ export function CaseDetail({ id }: { id: string }) {
   const [editOpen, setEditOpen] = useState(false)
   // التبويب المفتوح يدوم للرجوع/التحديث (لكل قضية على حدة)
   const [tab, setTab] = usePageState('case-tab:' + id, 'overview')
+  // عدد المستندات — يظهر على التبويب لتعرف وجودها دون فتحه (نفس استعلام التبويب المخزّن)
+  const { data: caseDocs } = useCaseDocuments(id)
+  const docsCount = caseDocs?.length ?? 0
 
   if (isLoading) {
     return (
@@ -153,6 +157,11 @@ export function CaseDetail({ id }: { id: string }) {
             {TABS.map((t) => (
               <TabsTrigger key={t.value} value={t.value}>
                 {t.label}
+                {t.value === 'documents' && docsCount > 0 && (
+                  <span className="mr-1.5 rounded-full bg-gold/15 px-1.5 text-xs font-medium text-gold-700 dark:text-gold-300">
+                    {fmtNumber(docsCount)}
+                  </span>
+                )}
               </TabsTrigger>
             ))}
           </TabsList>
