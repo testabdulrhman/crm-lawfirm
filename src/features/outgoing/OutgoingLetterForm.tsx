@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -19,9 +19,11 @@ import { pickFile, uploadFile } from '@/lib/files'
 import { useAuth } from '@/stores/auth'
 import { useCases } from '@/hooks/useCases'
 import {
+  useOutgoingLetters,
   useCreateOutgoingLetter,
   useUpdateOutgoingLetter,
 } from '@/hooks/useOutgoingLetters'
+import { todayISO } from '@/lib/format'
 import type { OutgoingLetter, OutgoingLetterInput } from '@/types/db'
 
 const schema = z.object({
@@ -43,8 +45,20 @@ export function OutgoingLetterForm({
   const isEdit = Boolean(letter)
   const { teamMember } = useAuth()
   const { data: cases } = useCases()
+  const { data: letters } = useOutgoingLetters()
   const createM = useCreateOutgoingLetter()
   const updateM = useUpdateOutgoingLetter()
+
+  // الرقم التالي تلقائياً: OUT-YY-NNN حسب السنة الحالية (أكبر تسلسل + 1)
+  const nextNumber = useMemo(() => {
+    const yy = String(new Date().getFullYear() % 100).padStart(2, '0')
+    const re = new RegExp(`^OUT-${yy}-(\\d+)$`)
+    const max = (letters ?? []).reduce((m, l) => {
+      const match = l.letter_number?.trim().match(re)
+      return match ? Math.max(m, parseInt(match[1], 10)) : m
+    }, 0)
+    return `OUT-${yy}-${String(max + 1).padStart(3, '0')}`
+  }, [letters])
 
   const [caseId, setCaseId] = useState<string | null>(letter?.case_id ?? null)
   const [file, setFile] = useState<File | null>(null)
@@ -55,17 +69,26 @@ export function OutgoingLetterForm({
     register,
     handleSubmit,
     control,
+    getValues,
+    setValue,
     formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
-      letter_number: letter?.letter_number ?? '',
+      letter_number: letter?.letter_number ?? nextNumber,
       subject: letter?.subject ?? '',
       recipient: letter?.recipient ?? '',
-      letter_date: letter?.letter_date ?? '',
+      letter_date: letter?.letter_date ?? todayISO(),
       notes: letter?.notes ?? '',
     },
   })
+
+  // لو وصلت قائمة الخطابات بعد فتح النموذج، عبّئ الرقم المقترح (دون مسح إدخال يدوي)
+  useEffect(() => {
+    if (!isEdit && getValues('letter_number')?.trim() === '') {
+      setValue('letter_number', nextNumber)
+    }
+  }, [isEdit, nextNumber, getValues, setValue])
 
   const onSubmit = async (values: FormValues) => {
     const t = (v: string | undefined) => (v && v.trim() !== '' ? v.trim() : null)
@@ -108,7 +131,12 @@ export function OutgoingLetterForm({
       <div className="my-4 space-y-3">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
-            <Label htmlFor="letter_number">رقم الخطاب</Label>
+            <Label htmlFor="letter_number">
+              رقم الخطاب{' '}
+              <span className="font-normal text-muted-foreground">
+                (تلقائي — يمكن تعديله)
+              </span>
+            </Label>
             <Input id="letter_number" dir="ltr" {...register('letter_number')} />
           </div>
           <Controller
