@@ -60,6 +60,16 @@ export function OutgoingLetterForm({
     return `OUT-${yy}-${String(max + 1).padStart(3, '0')}`
   }, [letters])
 
+  // الأرقام المستخدمة (رقم ← معرّف خطابه) للتحقق اللحظي من التكرار
+  const usedNumbers = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const l of letters ?? []) {
+      const n = l.letter_number?.trim()
+      if (n) m.set(n, l.id)
+    }
+    return m
+  }, [letters])
+
   const [caseId, setCaseId] = useState<string | null>(letter?.case_id ?? null)
   const [file, setFile] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
@@ -71,6 +81,7 @@ export function OutgoingLetterForm({
     control,
     getValues,
     setValue,
+    watch,
     formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -90,8 +101,20 @@ export function OutgoingLetterForm({
     }
   }, [isEdit, nextNumber, getValues, setValue])
 
+  // تحقق لحظي: هل الرقم المكتوب مستخدم في خطاب آخر؟
+  const numberValue = watch('letter_number')
+  const duplicateOf = useMemo(() => {
+    const n = numberValue?.trim()
+    if (!n) return null
+    const id = usedNumbers.get(n)
+    return id && id !== letter?.id ? id : null
+  }, [numberValue, usedNumbers, letter?.id])
+
   const onSubmit = async (values: FormValues) => {
     const t = (v: string | undefined) => (v && v.trim() !== '' ? v.trim() : null)
+
+    // منع التكرار برسالة واضحة (لا «تعذّر» غامضة)
+    if (duplicateOf) return
 
     let fileUrl: string | null | undefined
     if (file) {
@@ -137,7 +160,18 @@ export function OutgoingLetterForm({
                 (تلقائي — يمكن تعديله)
               </span>
             </Label>
-            <Input id="letter_number" dir="ltr" {...register('letter_number')} />
+            <Input
+              id="letter_number"
+              dir="ltr"
+              className={duplicateOf ? 'border-destructive' : undefined}
+              {...register('letter_number')}
+            />
+            {duplicateOf && (
+              <p className="text-xs font-medium text-destructive">
+                يوجد خطاب آخر بنفس الرقم «{numberValue?.trim()}» — غيّر الرقم
+                للمتابعة.
+              </p>
+            )}
           </div>
           <Controller
             control={control}
@@ -212,7 +246,7 @@ export function OutgoingLetterForm({
       </div>
 
       <DialogFooter className="gap-2">
-        <Button type="submit" variant="gold" disabled={pending}>
+        <Button type="submit" variant="gold" disabled={pending || !!duplicateOf}>
           {pending && <Loader2 className="h-4 w-4 animate-spin" />}
           {isEdit ? 'حفظ التعديلات' : 'إضافة'}
         </Button>
