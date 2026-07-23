@@ -723,6 +723,10 @@ export interface OutgoingApproval {
   letter_id: string
   status: 'pending' | 'approved' | 'rejected'
   note: string | null
+  // موضع الختم الذي اختاره الطالب: رقم الصفحة + مركز الختم (كسور 0..1 من أعلى يسار)
+  stamp_page: number | null
+  stamp_x: number | null
+  stamp_y: number | null
   original_file_url: string | null
   signed_file_url: string | null
   requested_by: string | null

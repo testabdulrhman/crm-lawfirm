@@ -8,9 +8,27 @@ async function fetchBytes(url: string): Promise<ArrayBuffer> {
   return res.arrayBuffer()
 }
 
+// أبعاد الختم/التوقيع بنقاط PDF — تُستخدم أيضاً في واجهة اختيار الموضع
+export const STAMP_WIDTH_PT = 115
+export const SIGNATURE_WIDTH_PT = 150
+
+// موضع مركز الختم: رقم الصفحة (1-أساس) + كسور 0..1 من أعلى يسار الصفحة
+export interface StampPosition {
+  page: number
+  x: number
+  y: number
+}
+
+// الافتراضي التاريخي: أسفل يسار آخر صفحة (يُستخدم عند غياب موضع مختار)
+export const DEFAULT_STAMP_POS = { x: 0.22, y: 0.86 }
+
 export async function stampPdf(
   fileUrl: string,
-  opts: { stampUrl?: string | null; signatureUrl?: string | null }
+  opts: {
+    stampUrl?: string | null
+    signatureUrl?: string | null
+    position?: StampPosition | null
+  }
 ): Promise<Blob> {
   if (!opts.stampUrl && !opts.signatureUrl)
     throw new Error('لا يوجد ختم أو توقيع مرفوع — ارفعهما من الإعدادات ← بيانات المكتب')
@@ -19,8 +37,13 @@ export async function stampPdf(
   const doc = await PDFDocument.load(await fetchBytes(fileUrl), {
     ignoreEncryption: true,
   })
-  const page = doc.getPage(doc.getPageCount() - 1)
-  const { width } = page.getSize()
+
+  const pageCount = doc.getPageCount()
+  const pageIndex = opts.position
+    ? Math.min(Math.max(opts.position.page, 1), pageCount) - 1
+    : pageCount - 1
+  const page = doc.getPage(pageIndex)
+  const { width, height } = page.getSize()
 
   const embed = async (url: string) => {
     const bytes = await fetchBytes(url)
@@ -31,30 +54,35 @@ export async function stampPdf(
     }
   }
 
-  const x = width * 0.12
-  const baseY = 58
+  // مركز الختم بنقاط PDF (الأصل أسفل-يسار)
+  const cx = (opts.position?.x ?? DEFAULT_STAMP_POS.x) * width
+  const cyTop = (opts.position?.y ?? DEFAULT_STAMP_POS.y) * height
+  const cy = height - cyTop
 
+  let stampH = 0
+  if (opts.stampUrl) {
+    const img = await embed(opts.stampUrl)
+    const w = STAMP_WIDTH_PT
+    stampH = (img.height / img.width) * w
+    page.drawImage(img, {
+      x: cx - w / 2,
+      y: cy - stampH / 2,
+      width: w,
+      height: stampH,
+      opacity: 0.92,
+    })
+  }
   // التوقيع فوق الختم بتداخل خفيف (مظهر طبيعي)
   if (opts.signatureUrl) {
     const img = await embed(opts.signatureUrl)
-    const w = 150
+    const w = SIGNATURE_WIDTH_PT
+    const h = (img.height / img.width) * w
     page.drawImage(img, {
-      x,
-      y: baseY + 30,
+      x: cx - w / 2 - 20,
+      y: cy - stampH / 2 + Math.max(stampH * 0.55, 30),
       width: w,
-      height: (img.height / img.width) * w,
+      height: h,
       opacity: 0.95,
-    })
-  }
-  if (opts.stampUrl) {
-    const img = await embed(opts.stampUrl)
-    const w = 115
-    page.drawImage(img, {
-      x: x + 20,
-      y: baseY,
-      width: w,
-      height: (img.height / img.width) * w,
-      opacity: 0.92,
     })
   }
 

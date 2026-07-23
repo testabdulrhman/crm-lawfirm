@@ -1,6 +1,7 @@
-// دورة اعتماد الخطاب الصادر: الموظف يطلب ← المدير يعاين النسخة المختومة ويوافق.
+// دورة اعتماد الخطاب الصادر: الطالب يحدّد مكان الختم على الصفحة ← المدير
+// يعاين النسخة المختومة على الموضع المختار (ويقدر يعدّله) ← موافقة بضغطة.
 // الدمج يتم في المتصفح (pdf-lib) ثم تُرفع النسخة الموقّعة وتصبح ملف الخطاب الرئيسي.
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Stamp,
   Clock,
@@ -8,6 +9,7 @@ import {
   XCircle,
   ExternalLink,
   Loader2,
+  Move,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -29,10 +31,11 @@ import {
   useApproveLetter,
   useRejectLetter,
 } from '@/hooks/useOutgoingApprovals'
-import { stampPdf } from '@/lib/pdfStamp'
+import { stampPdf, type StampPosition } from '@/lib/pdfStamp'
 import { uploadFile } from '@/lib/files'
 import { fmtDatePref } from '@/lib/format'
 import { SIGNATURE_CONFIG_KEY } from '@/features/settings/OfficeInfoTab'
+import { StampPlacementDialog } from './StampPlacementDialog'
 import type { OutgoingLetter } from '@/types/db'
 
 const isPdf = (url: string | null | undefined) =>
@@ -41,18 +44,68 @@ const isPdf = (url: string | null | undefined) =>
 export function ApprovalSection({ letter: l }: { letter: OutgoingLetter }) {
   const { teamMember } = useAuth()
   const isDirector = useIsDirector()
+  const { data: office } = useOfficeInfo()
+  const { data: lookups } = useLookups()
   const requestM = useRequestApproval()
-  const [approveOpen, setApproveOpen] = useState(false)
+
+  const stampUrl = office?.stamp_url ?? null
+  const signatureUrl = useMemo(
+    () =>
+      (lookups ?? []).find(
+        (x) =>
+          x.type === 'integration_config' && x.label === SIGNATURE_CONFIG_KEY
+      )?.value ?? null,
+    [lookups]
+  )
 
   const a = l.approval
   const canRequest = isPdf(l.file_url)
 
-  const request = () =>
-    requestM.mutate({
-      letter: l,
-      requesterId: teamMember?.id ?? null,
-      requesterName: teamMember?.name ?? null,
-    })
+  // الموضع المحفوظ مع الطلب (إن وُجد)
+  const storedPos: StampPosition | null =
+    a?.stamp_x != null && a?.stamp_y != null
+      ? { page: a.stamp_page ?? 1, x: a.stamp_x, y: a.stamp_y }
+      : null
+
+  const [placementOpen, setPlacementOpen] = useState(false)
+  const [placementMode, setPlacementMode] = useState<'request' | 'direct' | 'edit'>(
+    'request'
+  )
+  const [approveOpen, setApproveOpen] = useState(false)
+  // موضع اختاره المدير في هذه الجلسة (يغلب المحفوظ)
+  const [overridePos, setOverridePos] = useState<StampPosition | null>(null)
+
+  const effectivePos = overridePos ?? storedPos
+
+  const openRequestPlacement = () => {
+    setPlacementMode('request')
+    setPlacementOpen(true)
+  }
+  const openDirectorFlow = () => {
+    if (effectivePos) setApproveOpen(true)
+    else {
+      setPlacementMode('direct')
+      setPlacementOpen(true)
+    }
+  }
+
+  const onPlacementConfirm = (pos: StampPosition) => {
+    if (placementMode === 'request') {
+      requestM.mutate(
+        {
+          letter: l,
+          position: pos,
+          requesterId: teamMember?.id ?? null,
+          requesterName: teamMember?.name ?? null,
+        },
+        { onSuccess: () => setPlacementOpen(false) }
+      )
+    } else {
+      setOverridePos(pos)
+      setPlacementOpen(false)
+      setApproveOpen(true)
+    }
+  }
 
   return (
     <Card>
@@ -99,19 +152,29 @@ export function ApprovalSection({ letter: l }: { letter: OutgoingLetter }) {
               <p className="mt-1 text-sm text-muted-foreground">
                 طلبه: {a.requester.name}
                 {a.requested_at ? ` — ${fmtDatePref(a.requested_at)}` : ''}
+                {storedPos ? ' — الموضع محدَّد ✓' : ''}
               </p>
             )}
-            {isDirector && (
-              <Button
-                variant="gold"
-                size="sm"
-                className="mt-3"
-                onClick={() => setApproveOpen(true)}
-              >
-                <Stamp className="h-4 w-4" />
-                معاينة واعتماد
-              </Button>
-            )}
+            <div className="mt-3 flex flex-wrap gap-2">
+              {isDirector && (
+                <Button variant="gold" size="sm" onClick={openDirectorFlow}>
+                  <Stamp className="h-4 w-4" />
+                  معاينة واعتماد
+                </Button>
+              )}
+              {/* الطالب يقدر يعدّل الموضع قبل الاعتماد */}
+              {!isDirector && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={openRequestPlacement}
+                  disabled={requestM.isPending}
+                >
+                  <Move className="h-4 w-4" />
+                  تعديل موضع الختم
+                </Button>
+              )}
+            </div>
           </div>
         ) : a?.status === 'rejected' ? (
           <div className="rounded-xl border border-destructive/40 bg-destructive/10 p-4">
@@ -128,7 +191,7 @@ export function ApprovalSection({ letter: l }: { letter: OutgoingLetter }) {
               variant="outline"
               size="sm"
               className="mt-3"
-              onClick={request}
+              onClick={openRequestPlacement}
               disabled={requestM.isPending || !canRequest}
             >
               {requestM.isPending && (
@@ -140,7 +203,7 @@ export function ApprovalSection({ letter: l }: { letter: OutgoingLetter }) {
         ) : canRequest ? (
           <div className="flex flex-wrap items-center gap-2">
             {isDirector ? (
-              <Button variant="gold" size="sm" onClick={() => setApproveOpen(true)}>
+              <Button variant="gold" size="sm" onClick={openDirectorFlow}>
                 <Stamp className="h-4 w-4" />
                 توقيع واعتماد
               </Button>
@@ -148,7 +211,7 @@ export function ApprovalSection({ letter: l }: { letter: OutgoingLetter }) {
               <Button
                 variant="gold"
                 size="sm"
-                onClick={request}
+                onClick={openRequestPlacement}
                 disabled={requestM.isPending}
               >
                 {requestM.isPending ? (
@@ -160,8 +223,7 @@ export function ApprovalSection({ letter: l }: { letter: OutgoingLetter }) {
               </Button>
             )}
             <p className="text-xs text-muted-foreground">
-              يُدمَج ختم الشركة{' '}
-              {`‏`}(والتوقيع إن وُجد) في الملف تلقائياً.
+              تحدّد مكان الختم على الصفحة، ثم يعتمده المدير بضغطة.
             </p>
           </div>
         ) : (
@@ -170,11 +232,35 @@ export function ApprovalSection({ letter: l }: { letter: OutgoingLetter }) {
           </p>
         )}
 
+        {/* اختيار موضع الختم (الطالب/المدير) */}
+        {l.file_url && (
+          <StampPlacementDialog
+            open={placementOpen}
+            onClose={() => setPlacementOpen(false)}
+            fileUrl={l.file_url}
+            stampUrl={stampUrl}
+            signatureUrl={signatureUrl}
+            initial={effectivePos}
+            onConfirm={onPlacementConfirm}
+            confirmLabel={
+              placementMode === 'request' ? 'تأكيد وإرسال الطلب' : 'تأكيد الموضع'
+            }
+            confirming={requestM.isPending}
+          />
+        )}
+
         {/* حوار المعاينة والاعتماد (المدير) */}
         <ApprovalDialog
           letter={l}
           open={approveOpen}
           onClose={() => setApproveOpen(false)}
+          stampUrl={stampUrl}
+          signatureUrl={signatureUrl}
+          position={effectivePos}
+          onEditPosition={() => {
+            setPlacementMode('edit')
+            setPlacementOpen(true)
+          }}
         />
       </CardContent>
     </Card>
@@ -185,21 +271,22 @@ function ApprovalDialog({
   letter: l,
   open,
   onClose,
+  stampUrl,
+  signatureUrl,
+  position,
+  onEditPosition,
 }: {
   letter: OutgoingLetter
   open: boolean
   onClose: () => void
+  stampUrl: string | null
+  signatureUrl: string | null
+  position: StampPosition | null
+  onEditPosition: () => void
 }) {
   const { teamMember } = useAuth()
-  const { data: office } = useOfficeInfo()
-  const { data: lookups } = useLookups()
   const approveM = useApproveLetter()
   const rejectM = useRejectLetter()
-
-  const signatureUrl =
-    (lookups ?? []).find(
-      (x) => x.type === 'integration_config' && x.label === SIGNATURE_CONFIG_KEY
-    )?.value ?? null
 
   const [blobUrl, setBlobUrl] = useState<string | null>(null)
   const [genError, setGenError] = useState<string | null>(null)
@@ -208,7 +295,7 @@ function ApprovalDialog({
   const [note, setNote] = useState('')
   const blobRef = useRef<Blob | null>(null)
 
-  // توليد المعاينة المختومة عند الفتح
+  // توليد المعاينة المختومة عند الفتح أو تغيّر الموضع
   useEffect(() => {
     if (!open || !l.file_url) return
     let objectUrl: string | null = null
@@ -219,23 +306,21 @@ function ApprovalDialog({
     ;(async () => {
       try {
         const blob = await stampPdf(l.file_url!, {
-          stampUrl: office?.stamp_url ?? null,
+          stampUrl,
           signatureUrl,
+          position,
         })
         blobRef.current = blob
         objectUrl = URL.createObjectURL(blob)
         setBlobUrl(objectUrl)
       } catch (e) {
-        setGenError(
-          e instanceof Error ? e.message : 'تعذّر تجهيز المعاينة'
-        )
+        setGenError(e instanceof Error ? e.message : 'تعذّر تجهيز المعاينة')
       }
     })()
     return () => {
       if (objectUrl) URL.revokeObjectURL(objectUrl)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, l.file_url, office?.stamp_url, signatureUrl])
+  }, [open, l.file_url, stampUrl, signatureUrl, position])
 
   const approve = async () => {
     if (!blobRef.current || saving) return
@@ -289,10 +374,10 @@ function ApprovalDialog({
           <iframe
             title="معاينة الخطاب"
             src={blobUrl}
-            className="h-[65vh] w-full rounded-xl border"
+            className="h-[62vh] w-full rounded-xl border"
           />
         ) : (
-          <div className="flex h-[65vh] items-center justify-center gap-2 text-sm text-muted-foreground">
+          <div className="flex h-[62vh] items-center justify-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-5 w-5 animate-spin" />
             جارٍ تجهيز المعاينة…
           </div>
@@ -337,6 +422,10 @@ function ApprovalDialog({
                   <CheckCircle2 className="h-4 w-4" />
                 )}
                 موافق — اعتماد وتوقيع
+              </Button>
+              <Button variant="outline" onClick={onEditPosition}>
+                <Move className="h-4 w-4" />
+                تعديل الموضع
               </Button>
               <Button
                 variant="ghost"

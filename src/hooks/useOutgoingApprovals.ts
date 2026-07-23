@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { toast } from '@/hooks/use-toast'
 import { normalizeSaudiPhone } from '@/lib/format'
+import type { StampPosition } from '@/lib/pdfStamp'
 import type { OutgoingLetter } from '@/types/db'
 
 const letterLink = (id: string) => `https://app.redwan.sa/#/outgoing/${id}`
@@ -64,16 +65,21 @@ export function useRequestApproval() {
       letter,
       requesterId,
       requesterName,
+      position,
     }: {
       letter: OutgoingLetter
       requesterId: string | null
       requesterName: string | null
+      position: StampPosition
     }): Promise<void> => {
       const { error } = await supabase.from('outgoing_approvals').upsert(
         {
           letter_id: letter.id,
           status: 'pending',
           note: null,
+          stamp_page: position.page,
+          stamp_x: position.x,
+          stamp_y: position.y,
           requested_by: requesterId,
           requested_at: new Date().toISOString(),
           approved_by: null,
