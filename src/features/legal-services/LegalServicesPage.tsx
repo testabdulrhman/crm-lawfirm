@@ -4,16 +4,16 @@ import {
   Plus,
   Search,
   FileText,
-  ChevronLeft,
   ArrowLeft,
   User,
+  UserCog,
+  CalendarDays,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import {
   Select,
@@ -157,17 +157,17 @@ export function LegalServicesPage() {
       )}
 
       {isLoading ? (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="divide-y overflow-hidden rounded-xl border bg-card">
           {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="h-44 w-full" />
+            <Skeleton key={i} className="h-16 w-full rounded-none" />
           ))}
         </div>
       ) : filtered.length === 0 ? (
         <EmptyState />
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="divide-y overflow-hidden rounded-xl border bg-card">
           {filtered.map((s) => (
-            <ServiceCard
+            <ServiceRow
               key={s.id}
               service={s}
               onOpen={() => navigate(`/legal-services/${s.id}`)}
@@ -211,7 +211,7 @@ function TypeChip({
   )
 }
 
-function ServiceCard({
+function ServiceRow({
   service: s,
   onOpen,
 }: {
@@ -220,54 +220,64 @@ function ServiceCard({
 }) {
   const isContract = s.type === 'contract'
   const isRegulation = s.type === 'regulation'
+  const assigneeName =
+    s.assignee?.short_name || s.assignee?.name || s.assignee_name || ''
+
   return (
-    <Card className="flex flex-col">
-      <CardContent className="flex flex-1 flex-col gap-3 p-4">
-        <div className="flex items-start justify-between gap-2">
-          <p className="min-w-0 flex-1 font-semibold leading-snug text-foreground">
-            {s.title || 'خدمة'}
-          </p>
-          <Badge variant={lsStatusBadge(s.status)}>{lsStatusLabel(s.status)}</Badge>
-        </div>
+    <button
+      onClick={onOpen}
+      className="block w-full px-4 py-3 text-right transition-colors hover:bg-accent/10"
+    >
+      {/* السطر العلوي: العنوان + النوع/الحالة */}
+      <div className="flex items-center gap-2">
+        <h3 className="min-w-0 flex-1 truncate font-semibold leading-snug text-foreground">
+          {s.title || 'خدمة'}
+        </h3>
+        {s.file_url && (
+          <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+        )}
+        <Badge variant={lsTypeBadge(s.type)} className="hidden shrink-0 sm:inline-flex">
+          {lsTypeLabel(s.type)}
+        </Badge>
+        <Badge variant={lsStatusBadge(s.status)} className="shrink-0">
+          {lsStatusLabel(s.status)}
+        </Badge>
+      </div>
 
-        <div className="flex flex-wrap items-center gap-1.5 text-xs">
-          <Badge variant={lsTypeBadge(s.type)}>{lsTypeLabel(s.type)}</Badge>
-          {s.service_kind && (
-            <span className="text-muted-foreground">{s.service_kind}</span>
-          )}
-        </div>
-
-        <div className="space-y-1 text-xs text-muted-foreground">
-          {s.client_name && (
-            <p className="flex items-center gap-1">
-              <User className="h-3 w-3" />
-              {s.client_name}
-            </p>
-          )}
-          {isRegulation && s.regulation_type && <p>اللائحة: {s.regulation_type}</p>}
-          {isContract && (s.party_first || s.party_second) && (
-            <p className="flex items-center gap-1">
-              <span className="truncate">{s.party_first || '—'}</span>
-              <ArrowLeft className="h-3 w-3 shrink-0" />
-              <span className="truncate">{s.party_second || '—'}</span>
-            </p>
-          )}
-          {s.service_date && <p>تاريخ الخدمة: {fmtDatePref(s.service_date)}</p>}
-          {s.delivered_date && <p>التسليم: {fmtDatePref(s.delivered_date)}</p>}
-        </div>
-
-        <div className="mt-auto flex items-center justify-between gap-2 pt-1">
-          <span className="flex items-center gap-2 text-xs text-muted-foreground">
-            {s.assignee?.short_name || s.assignee?.name || s.assignee_name || ''}
-            {s.file_url && <FileText className="h-3.5 w-3.5" />}
+      {/* السطر السفلي: ميتا هادئة */}
+      <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+        {s.client_name && (
+          <span className="flex min-w-0 items-center gap-1">
+            <User className="h-3 w-3 shrink-0" />
+            <span className="truncate">{s.client_name}</span>
           </span>
-          <Button size="sm" variant="ghost" onClick={onOpen}>
-            عرض
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+        )}
+        {assigneeName && (
+          <span className="flex items-center gap-1">
+            <UserCog className="h-3 w-3 shrink-0" />
+            {assigneeName}
+          </span>
+        )}
+        {s.service_kind && <span>{s.service_kind}</span>}
+        {isRegulation && s.regulation_type && (
+          <span>اللائحة: {s.regulation_type}</span>
+        )}
+        {isContract && (s.party_first || s.party_second) && (
+          <span className="flex min-w-0 items-center gap-1">
+            <span className="truncate">{s.party_first || '—'}</span>
+            <ArrowLeft className="h-3 w-3 shrink-0" />
+            <span className="truncate">{s.party_second || '—'}</span>
+          </span>
+        )}
+        {s.service_date && (
+          <span className="flex items-center gap-1">
+            <CalendarDays className="h-3 w-3 shrink-0" />
+            {fmtDatePref(s.service_date)}
+          </span>
+        )}
+        {s.delivered_date && <span>التسليم: {fmtDatePref(s.delivered_date)}</span>}
+      </div>
+    </button>
   )
 }
 

@@ -38,6 +38,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { FilePreviewDialog } from '@/components/FilePreviewDialog'
+import { DropZone } from '@/components/DropZone'
 
 import { toast } from '@/hooks/use-toast'
 import { fmtDatePref, fmtNumber, fmtFileSize } from '@/lib/format'
@@ -249,10 +250,9 @@ function LegalServiceDocumentsSection({ serviceId }: { serviceId: string }) {
   const [preview, setPreview] = useState<LegalServiceDocument | null>(null)
   const [toDelete, setToDelete] = useState<LegalServiceDocument | null>(null)
 
-  const onUpload = async () => {
-    const files = await pickFiles()
-    if (files.length === 0) return
-    // حدّ الحجم — استبعاد الكبيرة مع رسالة عربية
+  // رفع دفعة (سحب وإفلات أو اختيار متعدد) مع استبعاد الكبيرة برسالة واضحة
+  const uploadBatch = (files: File[]) => {
+    if (files.length === 0 || uploadM.isPending) return
     const valid = files.filter((f) => f.size <= MAX_LS_DOC_SIZE)
     if (valid.length < files.length) {
       toast({
@@ -263,6 +263,10 @@ function LegalServiceDocumentsSection({ serviceId }: { serviceId: string }) {
     }
     if (valid.length === 0) return
     uploadM.mutate({ files: valid, uploadedBy: user?.id ?? null })
+  }
+
+  const onUpload = async () => {
+    uploadBatch(await pickFiles())
   }
 
   const docs = data ?? []
@@ -294,23 +298,19 @@ function LegalServiceDocumentsSection({ serviceId }: { serviceId: string }) {
         </Button>
       </CardHeader>
       <CardContent>
+        <DropZone
+          onFiles={uploadBatch}
+          uploadingCount={uploadM.isPending ? 1 : 0}
+          hint="مستندات العمل — حتى ١٠ ميجابايت للملف"
+          className="mb-4 py-5"
+        />
         {isLoading ? (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {Array.from({ length: 3 }).map((_, i) => (
               <Skeleton key={i} className="h-36 w-full" />
             ))}
           </div>
-        ) : docs.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-12 text-center">
-            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-              <Paperclip className="h-6 w-6 text-muted-foreground" />
-            </div>
-            <p className="font-medium text-foreground">لا مرفقات</p>
-            <p className="text-sm text-muted-foreground">
-              ارفع مستندات العمل عبر «رفع مرفقات».
-            </p>
-          </div>
-        ) : (
+        ) : docs.length === 0 ? null : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {docs.map((d) => (
               <LsDocCard

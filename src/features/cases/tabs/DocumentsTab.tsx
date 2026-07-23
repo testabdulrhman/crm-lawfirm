@@ -9,7 +9,6 @@ import {
   Paperclip,
   Eye,
   FolderOpen,
-  UploadCloud,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -38,9 +37,9 @@ import {
 import { FilePreviewDialog } from '@/components/FilePreviewDialog'
 import { DualDatePicker } from '@/components/DualDatePicker'
 
-import { fmtDatePref, fmtFileSize, fmtNumber, todayISO } from '@/lib/format'
-import { pickFile, pickFiles } from '@/lib/files'
-import { cn } from '@/lib/utils'
+import { fmtDatePref, fmtFileSize, todayISO } from '@/lib/format'
+import { pickFile } from '@/lib/files'
+import { DropZone } from '@/components/DropZone'
 import { useAuth } from '@/stores/auth'
 import { useIsDirector } from '@/hooks/useIsDirector'
 import {
@@ -68,8 +67,7 @@ export function DocumentsTab({ caseId }: { caseId: string }) {
   const [preview, setPreview] = useState<CaseDocument | null>(null)
   const [toDelete, setToDelete] = useState<CaseDocument | null>(null)
 
-  // السحب والإفلات: عدّاد دخول/خروج لتفادي وميض التظليل، وعدّاد رفع للدفعة
-  const [dragDepth, setDragDepth] = useState(0)
+  // عدّاد رفع الدفعة (سحب وإفلات)
   const [batchLeft, setBatchLeft] = useState(0)
 
   // رفع مجموعة ملفات مباشرة (الاسم = اسم الملف، التاريخ = اليوم)
@@ -105,23 +103,7 @@ export function DocumentsTab({ caseId }: { caseId: string }) {
   const docs = data ?? []
 
   return (
-    <div
-      className="space-y-4"
-      onDragEnter={(e) => {
-        e.preventDefault()
-        setDragDepth((d) => d + 1)
-      }}
-      onDragOver={(e) => e.preventDefault()}
-      onDragLeave={(e) => {
-        e.preventDefault()
-        setDragDepth((d) => Math.max(0, d - 1))
-      }}
-      onDrop={(e) => {
-        e.preventDefault()
-        setDragDepth(0)
-        uploadBatch(Array.from(e.dataTransfer.files))
-      }}
-    >
+    <div className="space-y-4">
       <div className="flex justify-end">
         <Button variant="gold" onClick={() => setUploadOpen(true)}>
           <Plus className="h-4 w-4" />
@@ -129,41 +111,11 @@ export function DocumentsTab({ caseId }: { caseId: string }) {
         </Button>
       </div>
 
-      {/* منطقة الإفلات — والضغط عليها يفتح منتقي ملفات متعدد */}
-      <button
-        type="button"
-        onClick={async () => uploadBatch(await pickFiles())}
-        disabled={batchLeft > 0}
-        className={cn(
-          'flex w-full flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed py-6 text-center transition-colors',
-          dragDepth > 0
-            ? 'border-gold bg-gold/10'
-            : 'border-border hover:border-gold/50 hover:bg-muted/40'
-        )}
-      >
-        {batchLeft > 0 ? (
-          <span className="flex items-center gap-2 text-sm font-medium text-foreground">
-            <Loader2 className="h-5 w-5 animate-spin text-gold" />
-            جارٍ رفع {fmtNumber(batchLeft)} من الملفات…
-          </span>
-        ) : (
-          <>
-            <UploadCloud
-              className={cn(
-                'h-6 w-6',
-                dragDepth > 0 ? 'text-gold' : 'text-muted-foreground'
-              )}
-            />
-            <span className="text-sm font-medium text-foreground">
-              اسحب الملفات وأفلتها هنا — أو اضغط للاختيار
-            </span>
-            <span className="text-xs text-muted-foreground">
-              تُرفع مباشرة باسم الملف وتاريخ اليوم. للتسمية والوصف استخدم «رفع
-              مستند».
-            </span>
-          </>
-        )}
-      </button>
+      <DropZone
+        onFiles={uploadBatch}
+        uploadingCount={batchLeft}
+        hint="تُرفع مباشرة باسم الملف وتاريخ اليوم. للتسمية والوصف استخدم «رفع مستند»."
+      />
 
       {docs.length === 0 ? (
         <EmptyState />

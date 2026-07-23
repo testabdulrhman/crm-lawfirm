@@ -44,6 +44,7 @@ import {
 } from '@/components/ui/alert-dialog'
 
 import { FilePreviewDialog } from '@/components/FilePreviewDialog'
+import { DropZone } from '@/components/DropZone'
 import { toast } from '@/hooks/use-toast'
 import { fmtDatePref, fmtNumber, fmtCurrency, fmtFileSize } from '@/lib/format'
 import { pickFile } from '@/lib/files'
@@ -353,20 +354,34 @@ function PropertyDocumentsSection({ transferId }: { transferId: string }) {
 
   const [preview, setPreview] = useState<PropertyDocument | null>(null)
   const [toDelete, setToDelete] = useState<PropertyDocument | null>(null)
+  const [batchLeft, setBatchLeft] = useState(0)
+
+  // رفع دفعة (سحب وإفلات أو اختيار متعدد) مع استبعاد الكبيرة برسالة واضحة
+  const uploadBatch = async (files: File[]) => {
+    if (batchLeft > 0) return
+    const valid = files.filter((f) => f.size <= MAX_DOC_SIZE)
+    if (valid.length < files.length) {
+      toast({
+        variant: 'destructive',
+        title: 'بعض الملفات كبيرة جداً',
+        description: 'تم تجاهل ملفات تتجاوز 10 ميجابايت.',
+      })
+    }
+    if (valid.length === 0) return
+    setBatchLeft(valid.length)
+    for (const f of valid) {
+      try {
+        await uploadM.mutateAsync({ file: f, uploadedBy: teamMember?.name ?? null })
+      } catch {
+        /* الهوك يعرض سبب الفشل */
+      }
+      setBatchLeft((n) => Math.max(0, n - 1))
+    }
+  }
 
   const onUpload = async () => {
     const file = await pickFile()
-    if (!file) return
-    // حدّ الحجم — رسالة عربية واضحة (تحقّق مبكر قبل الرفع)
-    if (file.size > MAX_DOC_SIZE) {
-      toast({
-        variant: 'destructive',
-        title: 'الملف كبير جداً',
-        description: 'حجم الملف يتجاوز 10 ميجابايت. اختر ملفاً أصغر.',
-      })
-      return
-    }
-    uploadM.mutate({ file, uploadedBy: teamMember?.name ?? null })
+    if (file) uploadBatch([file])
   }
 
   const docs = data ?? []
@@ -398,23 +413,19 @@ function PropertyDocumentsSection({ transferId }: { transferId: string }) {
         </Button>
       </CardHeader>
       <CardContent>
+        <DropZone
+          onFiles={uploadBatch}
+          uploadingCount={batchLeft}
+          hint="صك، هوية، عقد… حتى ١٠ ميجابايت للملف"
+          className="mb-4 py-5"
+        />
         {isLoading ? (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {Array.from({ length: 3 }).map((_, i) => (
               <Skeleton key={i} className="h-36 w-full" />
             ))}
           </div>
-        ) : docs.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-12 text-center">
-            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-              <Paperclip className="h-6 w-6 text-muted-foreground" />
-            </div>
-            <p className="font-medium text-foreground">لا مرفقات</p>
-            <p className="text-sm text-muted-foreground">
-              ارفع أول مرفق (صك، هوية، عقد…) عبر «رفع مرفق».
-            </p>
-          </div>
-        ) : (
+        ) : docs.length === 0 ? null : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {docs.map((d) => (
               <PropertyDocCard

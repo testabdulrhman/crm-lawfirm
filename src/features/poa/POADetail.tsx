@@ -38,9 +38,17 @@ import {
 import { FilePreviewDialog } from '@/components/FilePreviewDialog'
 
 import { fmtDatePref } from '@/lib/format'
+import { uploadFile } from '@/lib/files'
+import { toast } from '@/hooks/use-toast'
 import { useAuth } from '@/stores/auth'
 import { useIsDirector } from '@/hooks/useIsDirector'
-import { usePOA, useUpdatePOAStatus, useDeletePOA } from '@/hooks/usePOAs'
+import {
+  usePOA,
+  useUpdatePOA,
+  useUpdatePOAStatus,
+  useDeletePOA,
+} from '@/hooks/usePOAs'
+import { DropZone } from '@/components/DropZone'
 import { POAForm } from './POAForm'
 import {
   POA_STATUS_OPTIONS,
@@ -62,6 +70,27 @@ export function POADetail({ id }: { id: string }) {
   const [editOpen, setEditOpen] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+
+  // رفع/استبدال مستند الوكالة بالإفلات
+  const updateM = useUpdatePOA()
+  const [uploadingDoc, setUploadingDoc] = useState(false)
+  const onDocFile = async (files: File[]) => {
+    const f = files[0]
+    if (!f || uploadingDoc) return
+    setUploadingDoc(true)
+    try {
+      const { publicUrl } = await uploadFile(f, { folder: `poa/${id}` })
+      await updateM.mutateAsync({ id, input: { document_url: publicUrl } })
+    } catch (e) {
+      toast({
+        variant: 'destructive',
+        title: 'تعذّر رفع مستند الوكالة',
+        description: e instanceof Error ? e.message : undefined,
+      })
+    } finally {
+      setUploadingDoc(false)
+    }
+  }
 
   if (isLoading) {
     return (
@@ -187,20 +216,33 @@ export function POADetail({ id }: { id: string }) {
           </div>
 
           {/* المستند */}
-          {poa.document_url && (
-            <div className="flex flex-wrap gap-2 border-t pt-4">
-              <Button variant="outline" size="sm" onClick={() => setPreviewOpen(true)}>
-                <FileText className="h-4 w-4" />
-                معاينة المستند
-              </Button>
-              <Button variant="ghost" size="sm" asChild>
-                <a href={poa.document_url} target="_blank" rel="noopener noreferrer">
-                  <ExternalLink className="h-4 w-4" />
-                  فتح/تنزيل
-                </a>
-              </Button>
-            </div>
-          )}
+          <div className="space-y-3 border-t pt-4">
+            {poa.document_url && (
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" onClick={() => setPreviewOpen(true)}>
+                  <FileText className="h-4 w-4" />
+                  معاينة المستند
+                </Button>
+                <Button variant="ghost" size="sm" asChild>
+                  <a href={poa.document_url} target="_blank" rel="noopener noreferrer">
+                    <ExternalLink className="h-4 w-4" />
+                    فتح/تنزيل
+                  </a>
+                </Button>
+              </div>
+            )}
+            <DropZone
+              multiple={false}
+              onFiles={onDocFile}
+              uploadingCount={uploadingDoc ? 1 : 0}
+              hint={
+                poa.document_url
+                  ? 'إفلات ملف جديد يستبدل مستند الوكالة الحالي'
+                  : 'أضف صورة أو ملف الوكالة'
+              }
+              className="py-4"
+            />
+          </div>
 
           <div className="flex justify-end border-t pt-4">
             <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
