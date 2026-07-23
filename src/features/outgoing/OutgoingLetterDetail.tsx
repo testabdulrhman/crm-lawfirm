@@ -35,6 +35,7 @@ import {
   useDeleteOutgoingLetter,
 } from '@/hooks/useOutgoingLetters'
 import { OutgoingLetterForm } from './OutgoingLetterForm'
+import { ApprovalSection } from './ApprovalSection'
 
 export function OutgoingLetterDetail({ id }: { id: string }) {
   const [, navigate] = useLocation()
@@ -142,6 +143,9 @@ export function OutgoingLetterDetail({ id }: { id: string }) {
           </div>
         </CardContent>
       </Card>
+
+      {/* التوقيع والاعتماد */}
+      <ApprovalSection letter={l} />
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent className="max-w-xl">

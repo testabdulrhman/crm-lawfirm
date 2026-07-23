@@ -714,6 +714,24 @@ export interface OutgoingLetter {
   deleted_by: string | null
   created_at: string | null
   case?: { id: string; title: string | null; office_num: string | null } | null
+  approval?: OutgoingApproval | null
+}
+
+/* اعتماد الخطاب الصادر (توقيع/ختم المدير) */
+export interface OutgoingApproval {
+  id: string
+  letter_id: string
+  status: 'pending' | 'approved' | 'rejected'
+  note: string | null
+  original_file_url: string | null
+  signed_file_url: string | null
+  requested_by: string | null
+  requested_at: string | null
+  approved_by: string | null
+  approved_at: string | null
+  created_at: string | null
+  requester?: { id: string; name: string | null; phone: string | null } | null
+  approver?: { id: string; name: string | null } | null
 }
 
 export interface OutgoingLetterInput {

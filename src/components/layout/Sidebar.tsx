@@ -21,8 +21,10 @@ import {
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/stores/auth'
 import { useOfficeInfo } from '@/hooks/useSettings'
+import { useIsDirector } from '@/hooks/useIsDirector'
 import { UserAvatar } from '@/components/UserAvatar'
 import { usePendingRequestsCount } from '@/hooks/useRequests'
+import { usePendingOutgoingApprovalsCount } from '@/hooks/useOutgoingApprovals'
 import { usePendingApplicationsCount } from '@/hooks/useStaffApplications'
 import { useExpiringPOAsCount } from '@/hooks/usePOAs'
 import { useUpcomingAppointmentsCount } from '@/hooks/useAppointments'
@@ -37,6 +39,7 @@ interface NavItem {
     | 'pending_applications'
     | 'expiring_poas'
     | 'upcoming_appointments'
+    | 'pending_out_approvals'
 }
 
 // أقسام التنقل: تجميع منطقي بدل قائمة طويلة مسطّحة
@@ -58,7 +61,12 @@ const navSections: { title?: string; items: NavItem[] }[] = [
         icon: CalendarClock,
         badge: 'upcoming_appointments',
       },
-      { label: 'الصادر', href: '/outgoing', icon: Send },
+      {
+        label: 'الصادر',
+        href: '/outgoing',
+        icon: Send,
+        badge: 'pending_out_approvals',
+      },
     ],
   },
   {
@@ -93,6 +101,8 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const [location] = useLocation()
   const { teamMember, logout } = useAuth()
   const { data: office } = useOfficeInfo()
+  const isDirector = useIsDirector()
+  const { data: pendingApprovals } = usePendingOutgoingApprovalsCount()
   const { data: pendingCount } = usePendingRequestsCount()
   const { data: pendingApps } = usePendingApplicationsCount()
   const { data: expiringPOAs } = useExpiringPOAsCount()
@@ -142,7 +152,9 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                         ? (expiringPOAs ?? 0)
                         : item.badge === 'upcoming_appointments'
                           ? (upcomingAppts ?? 0)
-                          : 0
+                          : item.badge === 'pending_out_approvals'
+                            ? (isDirector ? (pendingApprovals ?? 0) : 0)
+                            : 0
                 const showBadge = !!item.badge && badgeCount > 0
                 return (
                   <Link

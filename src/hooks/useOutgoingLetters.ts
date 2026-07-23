@@ -4,7 +4,17 @@ import { supabase } from '@/lib/supabase'
 import { toast } from '@/hooks/use-toast'
 import type { OutgoingLetter, OutgoingLetterInput } from '@/types/db'
 
-const SELECT = '*, case:cases(id,title,office_num)'
+const SELECT =
+  '*, case:cases(id,title,office_num), approval:outgoing_approvals(*, requester:team_members!outgoing_approvals_requested_by_fkey(id,name,phone), approver:team_members!outgoing_approvals_approved_by_fkey(id,name))'
+
+// PostgREST يرجع الاعتماد كمصفوفة (علاقة 1-1 عملياً بقيد unique) — نسطّحه
+function normalize(row: Record<string, unknown>): OutgoingLetter {
+  const a = row.approval
+  return {
+    ...row,
+    approval: Array.isArray(a) ? (a[0] ?? null) : (a ?? null),
+  } as OutgoingLetter
+}
 
 function errToast(title: string) {
   return (e: unknown) =>
@@ -26,7 +36,7 @@ export function useOutgoingLetters() {
         .order('letter_date', { ascending: false, nullsFirst: false })
         .order('created_at', { ascending: false })
       if (error) throw error
-      return (data ?? []) as unknown as OutgoingLetter[]
+      return ((data ?? []) as Record<string, unknown>[]).map(normalize)
     },
   })
 }
@@ -42,7 +52,7 @@ export function useOutgoingLetter(id: string | null) {
         .eq('id', id)
         .single()
       if (error) throw error
-      return data as unknown as OutgoingLetter
+      return normalize(data as Record<string, unknown>)
     },
   })
 }

@@ -3,6 +3,7 @@ import { useLocation } from 'wouter'
 import { Plus, Search, Send, FileText, Scale, CalendarDays } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
@@ -107,6 +108,21 @@ function LetterRow({
         <h3 className="min-w-0 flex-1 truncate font-semibold leading-snug text-foreground">
           {l.subject || 'خطاب'}
         </h3>
+        {l.approval?.status === 'approved' && (
+          <Badge variant="success" className="shrink-0">
+            معتمد
+          </Badge>
+        )}
+        {l.approval?.status === 'pending' && (
+          <Badge variant="warning" className="shrink-0">
+            بانتظار الاعتماد
+          </Badge>
+        )}
+        {l.approval?.status === 'rejected' && (
+          <Badge variant="destructive" className="shrink-0">
+            مرفوض
+          </Badge>
+        )}
         {l.file_url && (
           <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
         )}
