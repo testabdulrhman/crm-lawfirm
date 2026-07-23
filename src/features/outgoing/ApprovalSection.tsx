@@ -33,13 +33,32 @@ import {
 } from '@/hooks/useOutgoingApprovals'
 import { stampPdf, type StampPosition } from '@/lib/pdfStamp'
 import { uploadFile } from '@/lib/files'
-import { fmtDatePref } from '@/lib/format'
+import { fmtDateTime } from '@/lib/format'
 import { SIGNATURE_CONFIG_KEY } from '@/features/settings/OfficeInfoTab'
 import { StampPlacementDialog } from './StampPlacementDialog'
 import type { OutgoingLetter } from '@/types/db'
 
 const isPdf = (url: string | null | undefined) =>
   !!url && url.toLowerCase().includes('.pdf')
+
+// سطر في سجلّ الدورة: «قدّم الطلب: يسرى — ٢٣/٠٧/٢٠٢٦ ٢:٣٥ م»
+function TrailLine({
+  label,
+  name,
+  at,
+}: {
+  label: string
+  name?: string | null
+  at?: string | null
+}) {
+  if (!name) return null
+  return (
+    <p className="text-sm text-muted-foreground">
+      {label}: <span className="font-medium text-foreground">{name}</span>
+      {at ? ` — ${fmtDateTime(at)}` : ''}
+    </p>
+  )
+}
 
 export function ApprovalSection({ letter: l }: { letter: OutgoingLetter }) {
   const { teamMember } = useAuth()
@@ -122,10 +141,18 @@ export function ApprovalSection({ letter: l }: { letter: OutgoingLetter }) {
               <CheckCircle2 className="h-5 w-5 shrink-0" />
               معتمد وموقّع
             </p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {a.approver?.name ? `بواسطة ${a.approver.name}` : ''}
-              {a.approved_at ? ` — ${fmtDatePref(a.approved_at)}` : ''}
-            </p>
+            <div className="mt-1.5 space-y-0.5">
+              <TrailLine
+                label="قدّم الطلب"
+                name={a.requester?.name}
+                at={a.requested_at}
+              />
+              <TrailLine
+                label="اعتمده"
+                name={a.approver?.name}
+                at={a.approved_at}
+              />
+            </div>
             <p className="mt-1 text-xs text-muted-foreground">
               ملف الخطاب أعلاه هو النسخة الموقّعة.
             </p>
@@ -148,13 +175,18 @@ export function ApprovalSection({ letter: l }: { letter: OutgoingLetter }) {
               <Clock className="h-5 w-5 shrink-0" />
               بانتظار اعتماد المدير
             </p>
-            {a.requester?.name && (
-              <p className="mt-1 text-sm text-muted-foreground">
-                طلبه: {a.requester.name}
-                {a.requested_at ? ` — ${fmtDatePref(a.requested_at)}` : ''}
-                {storedPos ? ' — الموضع محدَّد ✓' : ''}
-              </p>
-            )}
+            <div className="mt-1.5 space-y-0.5">
+              <TrailLine
+                label="قدّم الطلب"
+                name={a.requester?.name}
+                at={a.requested_at}
+              />
+              {storedPos && (
+                <p className="text-xs text-muted-foreground">
+                  موضع الختم محدَّد ✓
+                </p>
+              )}
+            </div>
             <div className="mt-3 flex flex-wrap gap-2">
               {isDirector && (
                 <Button variant="gold" size="sm" onClick={openDirectorFlow}>
@@ -182,6 +214,18 @@ export function ApprovalSection({ letter: l }: { letter: OutgoingLetter }) {
               <XCircle className="h-5 w-5 shrink-0" />
               مرفوض
             </p>
+            <div className="mt-1.5 space-y-0.5">
+              <TrailLine
+                label="قدّم الطلب"
+                name={a.requester?.name}
+                at={a.requested_at}
+              />
+              <TrailLine
+                label="رفضه"
+                name={a.approver?.name}
+                at={a.approved_at}
+              />
+            </div>
             {a.note && (
               <p className="mt-1 text-sm text-muted-foreground">
                 السبب: {a.note}

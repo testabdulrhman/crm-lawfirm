@@ -156,6 +156,11 @@ function LetterRow({
             {l.case?.title || 'قضية مرتبطة'}
           </span>
         )}
+        {l.approval?.status === 'pending' && l.approval.requester?.name && (
+          <span className="text-amber-600 dark:text-amber-400">
+            طلبه: {l.approval.requester.name}
+          </span>
+        )}
       </div>
     </button>
   )
