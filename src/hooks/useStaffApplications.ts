@@ -404,3 +404,61 @@ export function useDeleteApplication() {
     onError: errToast('تعذّر حذف الطلب'),
   })
 }
+
+/* ===================== تعديل يدوي + رابط الاستكمال ===================== */
+
+// تحديث حقول الطلب (بيانات أو روابط مرفقات) — للتعديل اليدوي من المكتب
+export function useUpdateApplication() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      id,
+      input,
+    }: {
+      id: string
+      input: Partial<StaffApplication>
+    }): Promise<void> => {
+      const { error } = await supabase
+        .from('staff_applications')
+        .update(input)
+        .eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      invalidate(qc)
+      toast({ variant: 'success', title: 'تم تحديث الطلب' })
+    },
+    onError: errToast('تعذّر تحديث الطلب'),
+  })
+}
+
+// إرسال SMS للمتقدم برابط استكمال المستندات على نفس طلبه (بلا تقديم جديد)
+export async function sendCompletionLinkSms(
+  app: { id: string; full_name: string | null; phone: string | null },
+  sentBy: string | null
+): Promise<boolean> {
+  if (!app.phone) return false
+  const numbers = normalizeSaudiPhone(app.phone)
+  if (!numbers) return false
+  const msg =
+    `مرحباً ${app.full_name ?? ''}\n` +
+    `نرجو استكمال مستندات طلب التوظيف عبر الرابط:\n` +
+    `https://redwan.sa/careers/complete?id=${app.id}\n` +
+    `شركة عبدالرحمن بن رضوان المشيقح للمحاماة وإدارة إجراءات الإفلاس`
+  try {
+    const { data, error } = await supabase.functions.invoke('swift-endpoint', {
+      body: { numbers, msg },
+    })
+    const ok = !error && (data?.code === '1' || data?.code === 1)
+    await supabase.from('sms_log').insert({
+      recipient_name: app.full_name ?? 'متقدم',
+      phone: numbers,
+      message: msg,
+      status: ok ? 'sent' : 'failed',
+      sent_by: sentBy,
+    })
+    return ok
+  } catch {
+    return false
+  }
+}

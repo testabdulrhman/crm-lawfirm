@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useLocation } from 'wouter'
 import {
   UserPlus,
@@ -7,14 +7,19 @@ import {
   FileText,
   Award,
   Scale,
+  Sparkles,
+  Loader2,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Card, CardContent } from '@/components/ui/card'
-import { fmtDatePref } from '@/lib/format'
+import { fmtDatePref, fmtNumber } from '@/lib/format'
+import { toast } from '@/hooks/use-toast'
+import { useAuth } from '@/stores/auth'
 import { useStaffApplications } from '@/hooks/useStaffApplications'
+import { useAnalyzeApplicant, useApplicantAnalyses } from '@/hooks/useAiAnalysis'
 import { usePageState } from '@/hooks/usePageState'
 import {
   APP_STATUS_OPTIONS,
@@ -30,6 +35,50 @@ export function StaffApplicationsPage() {
   const { data, isLoading } = useStaffApplications('all')
   const [, navigate] = useLocation()
   const [filter, setFilter] = usePageState<Filter>('apps:filter', 'all')
+  const { teamMember } = useAuth()
+  const analyzeM = useAnalyzeApplicant()
+  const { data: analyses } = useApplicantAnalyses()
+
+  // تحليل كل الطلبات المعلّقة ذات السير غير المحلَّلة — واحداً تلو الآخر
+  const [batch, setBatch] = useState<{ done: number; total: number } | null>(null)
+  const runBatchAnalysis = async () => {
+    if (batch) return
+    const analyzedIds = new Set((analyses ?? []).map((x) => x.application_id))
+    const targets = (data ?? []).filter(
+      (a) =>
+        (a.status ?? 'pending') === 'pending' &&
+        !!a.cv_url &&
+        !analyzedIds.has(a.id)
+    )
+    if (targets.length === 0) {
+      toast({ title: 'لا طلبات معلّقة (بسيرة ذاتية) تحتاج تحليلاً' })
+      return
+    }
+    setBatch({ done: 0, total: targets.length })
+    let ok = 0
+    for (const a of targets) {
+      try {
+        await analyzeM.mutateAsync({
+          application_id: a.id,
+          analyzed_by: teamMember?.name ?? null,
+          full_name: a.full_name,
+          qualifications: a.qualifications,
+          email: a.email,
+          cv_url: a.cv_url,
+        })
+        ok++
+      } catch {
+        /* الهوك يعرض الخطأ — نكمل البقية */
+      }
+      setBatch((b) => (b ? { done: b.done + 1, total: b.total } : b))
+    }
+    setBatch(null)
+    toast({
+      variant: 'success',
+      title: `اكتمل تحليل ${fmtNumber(ok)} من ${fmtNumber(targets.length)} متقدماً`,
+      description: 'اسأل المساعد الذكي الآن: «من أفضل المتقدمين؟»',
+    })
+  }
 
   const counts = useMemo(() => {
     const c: Record<string, number> = { all: data?.length ?? 0 }
@@ -47,7 +96,30 @@ export function StaffApplicationsPage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
-      <h2 className="text-2xl font-bold tracking-tight text-foreground">طلبات التوظيف</h2>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-2xl font-bold tracking-tight text-foreground">
+          طلبات التوظيف
+        </h2>
+        <Button
+          variant="outline"
+          size="sm"
+          className="border-violet-300 text-violet-700 hover:bg-violet-50 dark:border-violet-800 dark:text-violet-300 dark:hover:bg-violet-950/40"
+          onClick={runBatchAnalysis}
+          disabled={!!batch || isLoading}
+        >
+          {batch ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              جارٍ التحليل {fmtNumber(batch.done)}/{fmtNumber(batch.total)}…
+            </>
+          ) : (
+            <>
+              <Sparkles className="h-4 w-4" />
+              تحليل الكل بالذكاء الاصطناعي
+            </>
+          )}
+        </Button>
+      </div>
 
       <div className="flex flex-wrap gap-2">
         <FilterButton

@@ -1,4 +1,4 @@
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { supabase } from '@/lib/supabase'
 import { toast } from '@/hooks/use-toast'
@@ -9,6 +9,7 @@ export interface ApplicantAnalysis {
   suggested_role: string
   strengths: string[]
   concerns: string[]
+  gpa?: string | null
   experience_years?: string | null
   fit_score: number
   recommendation: string
@@ -21,10 +22,57 @@ export interface AnalyzeResult {
 }
 
 interface AnalyzeArgs {
+  // تمرير معرّف الطلب يجعل الخادم يحفظ النتيجة في staff_application_analysis
+  application_id?: string
+  analyzed_by?: string | null
   full_name?: string | null
   qualifications?: string | null
   email?: string | null
   cv_url?: string | null
+}
+
+// التحليل المحفوظ لطلب توظيف (من جدول staff_application_analysis)
+export interface SavedAnalysis {
+  application_id: string
+  fit_score: number | null
+  gpa: string | null
+  experience_years: string | null
+  suggested_role: string | null
+  summary: string | null
+  recommendation: string | null
+  used_cv: boolean | null
+  analyzed_at: string | null
+  analyzed_by: string | null
+}
+
+export function useSavedApplicantAnalysis(applicationId: string | null) {
+  return useQuery({
+    queryKey: ['staff_application_analysis', applicationId],
+    enabled: !!applicationId,
+    queryFn: async (): Promise<SavedAnalysis | null> => {
+      const { data, error } = await supabase
+        .from('staff_application_analysis')
+        .select('*')
+        .eq('application_id', applicationId)
+        .maybeSingle()
+      if (error) throw error
+      return (data as SavedAnalysis) ?? null
+    },
+  })
+}
+
+// كل التحليلات المحفوظة (لمعرفة من حُلّل — يستخدمها زر «تحليل الكل»)
+export function useApplicantAnalyses() {
+  return useQuery({
+    queryKey: ['staff_application_analysis'],
+    queryFn: async (): Promise<SavedAnalysis[]> => {
+      const { data, error } = await supabase
+        .from('staff_application_analysis')
+        .select('*')
+      if (error) throw error
+      return (data ?? []) as SavedAnalysis[]
+    },
+  })
 }
 
 /**
@@ -32,12 +80,15 @@ interface AnalyzeArgs {
  * تحليل عند الطلب — لا يُخزَّن في قاعدة البيانات.
  */
 export function useAnalyzeApplicant() {
+  const qc = useQueryClient()
   return useMutation({
     mutationFn: async (args: AnalyzeArgs): Promise<AnalyzeResult> => {
       const { data, error } = await supabase.functions.invoke('ai-assistant', {
         body: {
           task: 'analyze_applicant',
           payload: {
+            application_id: args.application_id || undefined,
+            analyzed_by: args.analyzed_by || undefined,
             full_name: args.full_name ?? '',
             qualifications: args.qualifications ?? '',
             email: args.email ?? '',
@@ -53,6 +104,8 @@ export function useAnalyzeApplicant() {
         used_cv: !!data?.used_cv,
       }
     },
+    onSuccess: () =>
+      qc.invalidateQueries({ queryKey: ['staff_application_analysis'] }),
     onError: () =>
       toast({ variant: 'destructive', title: 'تعذّر التحليل، حاول مرة أخرى' }),
   })

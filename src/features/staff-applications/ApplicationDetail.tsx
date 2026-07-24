@@ -18,6 +18,9 @@ import {
   Sparkles,
   Check,
   AlertTriangle,
+  Pencil,
+  UploadCloud,
+  Send,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -37,17 +40,34 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { FilePreviewDialog } from '@/components/FilePreviewDialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 
 import { fmtDatePref, fmtDateTime, fmtNumber } from '@/lib/format'
 import { openExternal } from '@/lib/external'
+import { pickFile, uploadFile } from '@/lib/files'
+import { toast } from '@/hooks/use-toast'
 import { useAuth } from '@/stores/auth'
 import { useIsDirector } from '@/hooks/useIsDirector'
-import { useAnalyzeApplicant } from '@/hooks/useAiAnalysis'
+import {
+  useAnalyzeApplicant,
+  useSavedApplicantAnalysis,
+} from '@/hooks/useAiAnalysis'
 import type { ApplicantAnalysis } from '@/hooks/useAiAnalysis'
 import {
   useStaffApplication,
   useDeleteApplication,
   useReopenApplication,
+  useUpdateApplication,
+  sendCompletionLinkSms,
 } from '@/hooks/useStaffApplications'
 import { ApproveDialog } from './ApproveDialog'
 import { RejectDialog } from './RejectDialog'
@@ -68,6 +88,54 @@ export function ApplicationDetail({ id }: { id: string }) {
   const [approveOpen, setApproveOpen] = useState(false)
   const [rejectOpen, setRejectOpen] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [editOpen, setEditOpen] = useState(false)
+
+  // رفع/استبدال مرفق يدوياً من المكتب
+  const updateM = useUpdateApplication()
+  const [uploadingKind, setUploadingKind] = useState<string | null>(null)
+  const uploadAttachment = async (
+    kind: string,
+    urlCol: string,
+    nameCol: string
+  ) => {
+    const f = await pickFile()
+    if (!f || uploadingKind) return
+    setUploadingKind(kind)
+    try {
+      const { publicUrl } = await uploadFile(f, {
+        folder: 'staff_applications/manual',
+      })
+      await updateM.mutateAsync({
+        id,
+        input: { [urlCol]: publicUrl, [nameCol]: f.name },
+      })
+    } catch (e) {
+      toast({
+        variant: 'destructive',
+        title: 'تعذّر رفع الملف',
+        description: e instanceof Error ? e.message : undefined,
+      })
+    } finally {
+      setUploadingKind(null)
+    }
+  }
+
+  // إرسال رابط الاستكمال SMS
+  const [sendingLink, setSendingLink] = useState(false)
+  const sendLink = async () => {
+    if (!a || sendingLink) return
+    setSendingLink(true)
+    const ok = await sendCompletionLinkSms(a, teamMember?.name ?? null)
+    setSendingLink(false)
+    if (ok)
+      toast({ variant: 'success', title: `أُرسل رابط الاستكمال إلى ${a.full_name}` })
+    else
+      toast({
+        variant: 'destructive',
+        title: 'تعذّر إرسال الرسالة',
+        description: 'تحقق من رقم الجوال ورصيد الرسائل.',
+      })
+  }
 
   if (isLoading) {
     return (
@@ -131,9 +199,15 @@ export function ApplicationDetail({ id }: { id: string }) {
               <span>قُدّم في {fmtDatePref(a.created_at)}</span>
             </div>
           </div>
-          <Badge variant={appStatusBadge(status)}>
-            {appStatusLabel(status)}
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
+              <Pencil className="h-4 w-4" />
+              تعديل
+            </Button>
+            <Badge variant={appStatusBadge(status)}>
+              {appStatusLabel(status)}
+            </Badge>
+          </div>
         </CardContent>
       </Card>
 
@@ -182,8 +256,22 @@ export function ApplicationDetail({ id }: { id: string }) {
 
       {/* المرفقات */}
       <Card>
-        <CardHeader>
+        <CardHeader className="flex-row items-center justify-between gap-2 space-y-0">
           <CardTitle className="text-base">المرفقات</CardTitle>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={sendLink}
+            disabled={sendingLink || !a.phone}
+            title="يرسل للمتقدم SMS برابط يرفع فيه مستنداته على نفس الطلب"
+          >
+            {sendingLink ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Send className="h-4 w-4" />
+            )}
+            إرسال رابط الاستكمال
+          </Button>
         </CardHeader>
         <CardContent className="space-y-2">
           <Attachment
@@ -192,6 +280,8 @@ export function ApplicationDetail({ id }: { id: string }) {
             name={a.cv_name}
             url={a.cv_url}
             onPreview={setPreview}
+            uploading={uploadingKind === 'cv'}
+            onUpload={() => uploadAttachment('cv', 'cv_url', 'cv_name')}
           />
           <Attachment
             icon={Award}
@@ -199,6 +289,14 @@ export function ApplicationDetail({ id }: { id: string }) {
             name={a.qualification_doc_name}
             url={a.qualification_doc_url}
             onPreview={setPreview}
+            uploading={uploadingKind === 'qual'}
+            onUpload={() =>
+              uploadAttachment(
+                'qual',
+                'qualification_doc_url',
+                'qualification_doc_name'
+              )
+            }
           />
           <Attachment
             icon={Scale}
@@ -206,14 +304,20 @@ export function ApplicationDetail({ id }: { id: string }) {
             name={a.lawyer_license_name}
             url={a.lawyer_license_url}
             onPreview={setPreview}
+            uploading={uploadingKind === 'license'}
+            onUpload={() =>
+              uploadAttachment('license', 'lawyer_license_url', 'lawyer_license_name')
+            }
           />
-          {!a.cv_url && !a.qualification_doc_url && !a.lawyer_license_url && (
-            <p className="py-3 text-center text-sm text-muted-foreground">
-              لا توجد مرفقات.
-            </p>
-          )}
         </CardContent>
       </Card>
+
+      {/* تعديل بيانات الطلب */}
+      <EditApplicationDialog
+        app={a}
+        open={editOpen}
+        onOpenChange={setEditOpen}
+      />
 
       {/* الحوارات */}
       <FilePreviewDialog
@@ -346,13 +450,17 @@ function ActionBar({
 /* ===================== تحليل بالذكاء الاصطناعي ===================== */
 
 function AiAnalysisCard({ app: a }: { app: StaffApplication }) {
+  const { teamMember } = useAuth()
   const analyzeM = useAnalyzeApplicant()
+  const { data: saved } = useSavedApplicantAnalysis(a.id)
   const result = analyzeM.data
   const hasResult = !!result
   const hasCv = !!a.cv_url
 
   const run = () =>
     analyzeM.mutate({
+      application_id: a.id,
+      analyzed_by: teamMember?.name ?? null,
       full_name: a.full_name,
       qualifications: a.qualifications,
       email: a.email,
@@ -384,7 +492,18 @@ function AiAnalysisCard({ app: a }: { app: StaffApplication }) {
       </CardHeader>
 
       <CardContent className="space-y-4">
-        {!hasResult && !analyzeM.isPending && (
+        {/* تحليل محفوظ سابقاً (يظهر حتى قبل أي تحليل جديد في هذه الجلسة) */}
+        {!hasResult && !analyzeM.isPending && saved && (
+          <div className="space-y-3">
+            <SavedAnalysisSummary saved={saved} />
+            <Button size="sm" variant="outline" onClick={run}>
+              <RotateCcw className="h-4 w-4" />
+              إعادة التحليل
+            </Button>
+          </div>
+        )}
+
+        {!hasResult && !analyzeM.isPending && !saved && (
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
               احصل على تحليل سريع لمساعدتك في فرز هذا المتقدّم.
@@ -440,6 +559,76 @@ function AiAnalysisCard({ app: a }: { app: StaffApplication }) {
         )}
       </CardContent>
     </Card>
+  )
+}
+
+// عرض مضغوط للتحليل المحفوظ (المؤشر + المعدل + الخبرة + التوصية)
+function SavedAnalysisSummary({
+  saved,
+}: {
+  saved: import('@/hooks/useAiAnalysis').SavedAnalysis
+}) {
+  const score = Math.max(0, Math.min(10, Number(saved.fit_score) || 0))
+  const tone = scoreTone(score)
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-muted-foreground">
+        آخر تحليل محفوظ{saved.analyzed_at ? ` — ${fmtDateTime(saved.analyzed_at)}` : ''}
+        {saved.used_cv ? ' (شمل السيرة الذاتية)' : ' (بدون سيرة)'}
+      </p>
+      <div className="flex flex-wrap items-center gap-4">
+        <div className="min-w-[10rem] flex-1">
+          <div className="mb-1 flex items-center justify-between text-xs text-muted-foreground">
+            <span>مؤشّر الملاءمة</span>
+            <span className={'font-bold ' + tone.text} dir="ltr">
+              {fmtNumber(score)}/10
+            </span>
+          </div>
+          <div className={'h-2.5 w-full overflow-hidden rounded-full ' + tone.track}>
+            <div
+              className={'h-full rounded-full ' + tone.bar}
+              style={{ width: `${score * 10}%` }}
+            />
+          </div>
+        </div>
+        {saved.suggested_role && (
+          <Badge className="bg-violet-600 text-white hover:bg-violet-600">
+            {saved.suggested_role}
+          </Badge>
+        )}
+      </div>
+      <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
+        {saved.gpa && (
+          <span>
+            <span className="text-muted-foreground">المعدل: </span>
+            <span className="font-medium text-foreground">{saved.gpa}</span>
+          </span>
+        )}
+        {saved.experience_years && !saved.experience_years.includes('غير مذكور') && (
+          <span>
+            <span className="text-muted-foreground">الخبرة: </span>
+            <span className="font-medium text-foreground">
+              {saved.experience_years}
+            </span>
+          </span>
+        )}
+      </div>
+      {saved.summary && (
+        <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
+          {saved.summary}
+        </p>
+      )}
+      {saved.recommendation && (
+        <div className="rounded-lg border border-violet-200 bg-violet-100/50 p-3 dark:border-violet-900/40 dark:bg-violet-950/30">
+          <p className="mb-0.5 text-xs font-semibold text-violet-600 dark:text-violet-300">
+            التوصية
+          </p>
+          <p className="text-sm font-medium text-foreground">
+            {saved.recommendation}
+          </p>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -503,13 +692,21 @@ function AnalysisResult({ data }: { data: ApplicantAnalysis }) {
         )}
       </div>
 
-      {/* الخبرة التقريبية */}
-      {showExp && (
-        <p className="text-sm">
-          <span className="text-muted-foreground">الخبرة التقريبية: </span>
-          <span className="font-medium text-foreground">{exp}</span>
-        </p>
-      )}
+      {/* المعدل والخبرة التقريبية */}
+      <div className="flex flex-wrap gap-x-6 gap-y-1">
+        {data.gpa && !String(data.gpa).includes('غير مذكور') && (
+          <p className="text-sm">
+            <span className="text-muted-foreground">المعدل الدراسي: </span>
+            <span className="font-medium text-foreground">{data.gpa}</span>
+          </p>
+        )}
+        {showExp && (
+          <p className="text-sm">
+            <span className="text-muted-foreground">الخبرة التقريبية: </span>
+            <span className="font-medium text-foreground">{exp}</span>
+          </p>
+        )}
+      </div>
 
       {/* الملخّص */}
       {data.summary && (
@@ -628,48 +825,185 @@ function Attachment({
   name,
   url,
   onPreview,
+  onUpload,
+  uploading,
 }: {
   icon: LucideIcon
   label: string
   name: string | null
   url: string | null
   onPreview: (p: { url: string; name: string }) => void
+  onUpload: () => void
+  uploading: boolean
 }) {
-  if (!url) return null
   const displayName = name || label
   return (
-    <div className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2">
+    <div
+      className={
+        'flex items-center justify-between gap-2 rounded-lg px-3 py-2 ' +
+        (url ? 'border' : 'border border-dashed')
+      }
+    >
       <div className="flex min-w-0 items-center gap-2">
-        <Icon className="h-4 w-4 shrink-0 text-gold" />
+        <Icon
+          className={
+            'h-4 w-4 shrink-0 ' + (url ? 'text-gold' : 'text-muted-foreground')
+          }
+        />
         <div className="min-w-0">
           <p className="truncate text-sm font-medium text-foreground">
             {label}
           </p>
           <p className="truncate text-xs text-muted-foreground">
-            {displayName}
+            {url ? displayName : 'غير مرفوع'}
           </p>
         </div>
       </div>
       <div className="flex items-center gap-1">
+        {url && (
+          <>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              title="معاينة"
+              onClick={() => onPreview({ url, name: displayName })}
+            >
+              <Eye className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              title="فتح في تبويب جديد"
+              onClick={() => openExternal(url)}
+            >
+              <ExternalLink className="h-4 w-4" />
+            </Button>
+          </>
+        )}
         <Button
           variant="ghost"
-          size="icon"
-          className="h-8 w-8"
-          title="معاينة"
-          onClick={() => onPreview({ url, name: displayName })}
+          size="sm"
+          className="h-8"
+          onClick={onUpload}
+          disabled={uploading}
+          title={url ? 'استبدال الملف' : 'رفع الملف'}
         >
-          <Eye className="h-4 w-4" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8"
-          title="فتح في تبويب جديد"
-          onClick={() => openExternal(url)}
-        >
-          <ExternalLink className="h-4 w-4" />
+          {uploading ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <UploadCloud className="h-4 w-4" />
+          )}
+          {url ? 'استبدال' : 'رفع'}
         </Button>
       </div>
     </div>
+  )
+}
+
+// تعديل بيانات الطلب الأساسية يدوياً
+function EditApplicationDialog({
+  app: a,
+  open,
+  onOpenChange,
+}: {
+  app: StaffApplication
+  open: boolean
+  onOpenChange: (o: boolean) => void
+}) {
+  const updateM = useUpdateApplication()
+  const [fullName, setFullName] = useState(a.full_name ?? '')
+  const [phone, setPhone] = useState(a.phone ?? '')
+  const [email, setEmail] = useState(a.email ?? '')
+  const [quals, setQuals] = useState(a.qualifications ?? '')
+
+  const save = () => {
+    if (fullName.trim() === '') return
+    updateM.mutate(
+      {
+        id: a.id,
+        input: {
+          full_name: fullName.trim(),
+          phone: phone.trim() || null,
+          email: email.trim() || null,
+          qualifications: quals.trim() || null,
+        },
+      },
+      { onSuccess: () => onOpenChange(false) }
+    )
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>تعديل بيانات الطلب</DialogTitle>
+        </DialogHeader>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            save()
+          }}
+          className="space-y-3"
+        >
+          <div className="space-y-1.5">
+            <Label htmlFor="ea_name">الاسم الكامل *</Label>
+            <Input
+              id="ea_name"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="ea_phone">الجوال</Label>
+            <Input
+              id="ea_phone"
+              dir="ltr"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="ea_email">البريد الإلكتروني</Label>
+            <Input
+              id="ea_email"
+              dir="ltr"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="ea_quals">المؤهلات</Label>
+            <Textarea
+              id="ea_quals"
+              rows={3}
+              value={quals}
+              onChange={(e) => setQuals(e.target.value)}
+            />
+          </div>
+          <DialogFooter className="gap-2 pt-2">
+            <Button
+              type="submit"
+              variant="gold"
+              disabled={updateM.isPending || fullName.trim() === ''}
+            >
+              {updateM.isPending && (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              )}
+              حفظ
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+            >
+              إلغاء
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   )
 }
