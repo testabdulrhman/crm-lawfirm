@@ -1,6 +1,6 @@
 // المساعد الذكي — زر عائم يفتح محادثة تنفيذية (بحث + إجراءات) عبر ai-assistant (task: agent)
 import { useEffect, useRef, useState } from 'react'
-import { Sparkles, X, Send, Loader2, CheckCircle2 } from 'lucide-react'
+import { Sparkles, X, Send, Loader2, CheckCircle2, ArrowLeft } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -13,10 +13,19 @@ interface ChatMsg {
   role: 'user' | 'assistant'
   content: string
   actions?: string[]
+  suggestions?: string[]
 }
 
 const WELCOME =
   'مرحباً! أنا المساعد الذكي للمكتب. اسألني عن الوكالات والقضايا وجهات الاتصال، أو اطلب مني إجراءً مثل:\n«الوكالة 466650258 منتهية، أرسل لصاحبها طلب إعادة إصدار وكالة»'
+
+// اقتراحات البداية (قبل أول رسالة)
+const STARTERS = [
+  'وش جلساتي هذا الأسبوع؟',
+  'المهام المتأخرة',
+  'وكالات تنتهي خلال شهر',
+  'من أفضل المتقدمين للوظائف؟',
+]
 
 export function AiAssistant() {
   const { teamMember } = useAuth()
@@ -31,8 +40,9 @@ export function AiAssistant() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight })
   }, [messages, busy, open])
 
-  const send = async () => {
-    const text = input.trim()
+  // الإرسال — يقبل نصّاً مباشراً (من زر اقتراح) أو يأخذ ما في حقل الكتابة
+  const send = async (preset?: string) => {
+    const text = (preset ?? input).trim()
     if (!text || busy) return
     const next: ChatMsg[] = [...messages, { role: 'user', content: text }]
     setMessages(next)
@@ -55,6 +65,7 @@ export function AiAssistant() {
           role: 'assistant',
           content: String(data?.text ?? 'تم.'),
           actions: Array.isArray(data?.actions) ? data.actions : [],
+          suggestions: Array.isArray(data?.suggestions) ? data.suggestions : [],
         },
       ])
     } catch {
@@ -64,6 +75,11 @@ export function AiAssistant() {
       setBusy(false)
     }
   }
+
+  // اقتراحات آخر رد فقط (تختفي بمجرد إرسال رسالة جديدة)
+  const last = messages[messages.length - 1]
+  const liveSuggestions =
+    !busy && last?.role === 'assistant' ? (last.suggestions ?? []) : []
 
   return (
     <>
@@ -103,9 +119,12 @@ export function AiAssistant() {
           {/* الرسائل */}
           <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto p-3">
             {messages.length === 0 && (
-              <div className="rounded-xl bg-violet-50 p-3 text-sm leading-relaxed text-foreground dark:bg-violet-950/30">
-                <p className="whitespace-pre-wrap">{WELCOME}</p>
-              </div>
+              <>
+                <div className="rounded-xl bg-violet-50 p-3 text-sm leading-relaxed text-foreground dark:bg-violet-950/30">
+                  <p className="whitespace-pre-wrap">{WELCOME}</p>
+                </div>
+                <SuggestionChips items={STARTERS} onPick={send} />
+              </>
             )}
             {messages.map((m, i) => (
               <div
@@ -139,6 +158,10 @@ export function AiAssistant() {
                 يعمل على طلبك…
               </div>
             )}
+            {/* اقتراحات المتابعة — ضغطة واحدة تُرسلها */}
+            {liveSuggestions.length > 0 && (
+              <SuggestionChips items={liveSuggestions} onPick={send} />
+            )}
           </div>
 
           {/* الإدخال */}
@@ -161,7 +184,7 @@ export function AiAssistant() {
                 size="icon"
                 className="h-10 w-10 shrink-0 bg-violet-600 text-white hover:bg-violet-700"
                 disabled={busy || input.trim() === ''}
-                onClick={send}
+                onClick={() => send()}
               >
                 <Send className="h-4 w-4" />
               </Button>
@@ -173,5 +196,30 @@ export function AiAssistant() {
         </div>
       )}
     </>
+  )
+}
+
+// أزرار اقتراحات: الضغط يرسل الاقتراح مباشرة
+function SuggestionChips({
+  items,
+  onPick,
+}: {
+  items: string[]
+  onPick: (text: string) => void
+}) {
+  return (
+    <div className="flex flex-wrap gap-1.5 pt-0.5">
+      {items.map((s, i) => (
+        <button
+          key={i}
+          type="button"
+          onClick={() => onPick(s)}
+          className="flex items-center gap-1 rounded-full border border-violet-300 bg-violet-50 px-3 py-1.5 text-xs font-medium text-violet-700 transition-colors hover:bg-violet-100 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-300 dark:hover:bg-violet-900/50"
+        >
+          {s}
+          <ArrowLeft className="h-3 w-3 shrink-0 opacity-60" />
+        </button>
+      ))}
+    </div>
   )
 }
