@@ -713,7 +713,12 @@ export interface OutgoingLetter {
   deleted_at: string | null
   deleted_by: string | null
   created_at: string | null
-  case?: { id: string; title: string | null; office_num: string | null } | null
+  case?: {
+    id: string
+    title: string | null
+    office_num: string | null
+    contact?: { name: string | null; phone: string | null } | null
+  } | null
   approval?: OutgoingApproval | null
 }
 

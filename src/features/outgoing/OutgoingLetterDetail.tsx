@@ -8,6 +8,7 @@ import {
   FileText,
   ExternalLink,
   Scale,
+  MessageCircle,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -36,6 +37,7 @@ import {
 } from '@/hooks/useOutgoingLetters'
 import { OutgoingLetterForm } from './OutgoingLetterForm'
 import { ApprovalSection } from './ApprovalSection'
+import { SendLetterDialog } from './SendLetterDialog'
 
 export function OutgoingLetterDetail({ id }: { id: string }) {
   const [, navigate] = useLocation()
@@ -47,6 +49,7 @@ export function OutgoingLetterDetail({ id }: { id: string }) {
   const [editOpen, setEditOpen] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [sendOpen, setSendOpen] = useState(false)
 
   if (isLoading) {
     return (
@@ -123,6 +126,16 @@ export function OutgoingLetterDetail({ id }: { id: string }) {
                   <FileText className="h-4 w-4" />
                   معاينة الملف
                 </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-400 dark:hover:bg-emerald-950/40"
+                  onClick={() => setSendOpen(true)}
+                  title="إرسال ملف الخطاب للعميل عبر الواتساب"
+                >
+                  <MessageCircle className="h-4 w-4" />
+                  إرسال واتساب
+                </Button>
                 <Button variant="ghost" size="sm" asChild>
                   <a href={l.file_url} target="_blank" rel="noopener noreferrer">
                     <ExternalLink className="h-4 w-4" />
@@ -146,6 +159,9 @@ export function OutgoingLetterDetail({ id }: { id: string }) {
 
       {/* التوقيع والاعتماد */}
       <ApprovalSection letter={l} />
+
+      {/* إرسال الخطاب واتساب */}
+      <SendLetterDialog letter={l} open={sendOpen} onOpenChange={setSendOpen} />
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent className="max-w-xl">

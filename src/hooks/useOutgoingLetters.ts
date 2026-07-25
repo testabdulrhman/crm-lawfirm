@@ -5,7 +5,7 @@ import { toast } from '@/hooks/use-toast'
 import type { OutgoingLetter, OutgoingLetterInput } from '@/types/db'
 
 const SELECT =
-  '*, case:cases(id,title,office_num), approval:outgoing_approvals(*, requester:team_members!outgoing_approvals_requested_by_fkey(id,name,phone), approver:team_members!outgoing_approvals_approved_by_fkey(id,name))'
+  '*, case:cases(id,title,office_num,contact:contacts(name,phone)), approval:outgoing_approvals(*, requester:team_members!outgoing_approvals_requested_by_fkey(id,name,phone), approver:team_members!outgoing_approvals_approved_by_fkey(id,name))'
 
 // PostgREST يرجع الاعتماد كمصفوفة (علاقة 1-1 عملياً بقيد unique) — نسطّحه
 function normalize(row: Record<string, unknown>): OutgoingLetter {
