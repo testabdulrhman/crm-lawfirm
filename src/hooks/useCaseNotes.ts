@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { toast } from '@/hooks/use-toast'
 import { normalizeSaudiPhone } from '@/lib/format'
 import type { Note } from '@/types/db'
+import { errMessage } from '@/lib/errors'
 
 const APP_URL = 'https://app.redwan.sa'
 
@@ -19,7 +20,7 @@ function errToast(title: string) {
     toast({
       variant: 'destructive',
       title,
-      description: e instanceof Error ? e.message : undefined,
+      description: errMessage(e),
     })
 }
 

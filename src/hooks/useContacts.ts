@@ -8,6 +8,7 @@ import type {
   ContactWorkLinks,
   HatifCall,
 } from '@/types/db'
+import { errMessage } from '@/lib/errors'
 
 const KEY = ['contacts'] as const
 const WORK_LINKS_KEY = ['contact_work_links'] as const
@@ -17,7 +18,7 @@ function errToast(title: string) {
     toast({
       variant: 'destructive',
       title,
-      description: e instanceof Error ? e.message : undefined,
+      description: errMessage(e),
     })
 }
 

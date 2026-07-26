@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { toast } from '@/hooks/use-toast'
 import type { PropertyTransfer, PropertyTransferInput } from '@/types/db'
+import { errMessage } from '@/lib/errors'
 
 // لا embed: يوجد FK لكلٍّ من seller_id/buyer_id → contacts (FK مزدوج لنفس الجدول).
 // نعتمد seller_name/buyer_name المخزّنين، ونربط عبر seller_id/buyer_id للروابط.
@@ -12,7 +13,7 @@ function errToast(title: string) {
     toast({
       variant: 'destructive',
       title,
-      description: e instanceof Error ? e.message : undefined,
+      description: errMessage(e),
     })
 }
 

@@ -8,6 +8,7 @@ import type {
   StaffApplication,
   StaffApplicationStatus,
 } from '@/types/db'
+import { errMessage } from '@/lib/errors'
 
 const LIST_KEY = 'staff_applications'
 const LOGIN_URL = 'https://app.redwan.sa'
@@ -21,7 +22,7 @@ function errToast(title: string) {
     toast({
       variant: 'destructive',
       title,
-      description: e instanceof Error ? e.message : undefined,
+      description: errMessage(e),
     })
 }
 

@@ -3,13 +3,14 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { toast } from '@/hooks/use-toast'
 import type { Ruling, RulingInput } from '@/types/db'
+import { errMessage } from '@/lib/errors'
 
 function errToast(title: string) {
   return (e: unknown) =>
     toast({
       variant: 'destructive',
       title,
-      description: e instanceof Error ? e.message : undefined,
+      description: errMessage(e),
     })
 }
 

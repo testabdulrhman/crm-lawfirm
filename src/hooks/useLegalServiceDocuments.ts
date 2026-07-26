@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { toast } from '@/hooks/use-toast'
 import { uploadFile } from '@/lib/files'
+import { errMessage } from '@/lib/errors'
 
 // مرفق استشارة/لائحة (جدول legal_service_documents — مرفقات متعددة)
 export interface LegalServiceDocument {
@@ -26,7 +27,7 @@ function errToast(title: string) {
     toast({
       variant: 'destructive',
       title,
-      description: e instanceof Error ? e.message : undefined,
+      description: errMessage(e),
     })
 }
 

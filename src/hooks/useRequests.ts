@@ -16,6 +16,7 @@ import type {
   RequestEvaluationInput,
   RequestStatus,
 } from '@/types/db'
+import { errMessage } from '@/lib/errors'
 
 const LIST_KEY = 'incoming_requests'
 const PENDING_KEY = ['incoming_requests', 'pending_count'] as const
@@ -29,7 +30,7 @@ function errToast(title: string) {
     toast({
       variant: 'destructive',
       title,
-      description: e instanceof Error ? e.message : undefined,
+      description: errMessage(e),
     })
 }
 

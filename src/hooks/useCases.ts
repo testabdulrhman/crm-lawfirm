@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { toast } from '@/hooks/use-toast'
 import { todayISO } from '@/lib/format'
 import type { Case, CaseInput, CaseStatus } from '@/types/db'
+import { errMessage } from '@/lib/errors'
 
 const LIST_KEY = ['cases'] as const
 
@@ -16,7 +17,7 @@ function errToast(title: string) {
     toast({
       variant: 'destructive',
       title,
-      description: e instanceof Error ? e.message : undefined,
+      description: errMessage(e),
     })
 }
 

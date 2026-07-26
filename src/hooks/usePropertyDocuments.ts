@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { toast } from '@/hooks/use-toast'
 import { uploadFile } from '@/lib/files'
+import { errMessage } from '@/lib/errors'
 
 // مرفق توثيق عقاري (جدول property_documents)
 export interface PropertyDocument {
@@ -27,7 +28,7 @@ function errToast(title: string) {
     toast({
       variant: 'destructive',
       title,
-      description: e instanceof Error ? e.message : undefined,
+      description: errMessage(e),
     })
 }
 

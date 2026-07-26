@@ -8,6 +8,7 @@ import type {
   OfficeInfo,
   OfficeInfoInput,
 } from '@/types/db'
+import { errMessage } from '@/lib/errors'
 
 /* ===================== بيانات المكتب ===================== */
 
@@ -65,7 +66,7 @@ export function useUpdateOfficeInfo() {
       toast({
         variant: 'destructive',
         title: 'تعذّر حفظ بيانات المكتب',
-        description: e instanceof Error ? e.message : undefined,
+        description: errMessage(e),
       })
     },
   })
@@ -110,7 +111,7 @@ export function useCreateLookup() {
       toast({
         variant: 'destructive',
         title: 'تعذّرت الإضافة',
-        description: e instanceof Error ? e.message : undefined,
+        description: errMessage(e),
       })
     },
   })
@@ -143,7 +144,7 @@ export function useUpdateLookup() {
       toast({
         variant: 'destructive',
         title: 'تعذّر التحديث',
-        description: e instanceof Error ? e.message : undefined,
+        description: errMessage(e),
       })
     },
   })
@@ -167,7 +168,7 @@ export function useDeleteLookup() {
       toast({
         variant: 'destructive',
         title: 'تعذّر الحذف',
-        description: e instanceof Error ? e.message : undefined,
+        description: errMessage(e),
       })
     },
   })

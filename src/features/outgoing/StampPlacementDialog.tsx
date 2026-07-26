@@ -18,6 +18,7 @@ import {
   DEFAULT_STAMP_POS,
   type StampPosition,
 } from '@/lib/pdfStamp'
+import { errMessage } from '@/lib/errors'
 
 export function StampPlacementDialog({
   open,
@@ -105,7 +106,7 @@ export function StampPlacementDialog({
         if (!cancelled) setLoading(false)
       } catch (e) {
         if (!cancelled) {
-          setError(e instanceof Error ? e.message : 'تعذّر عرض الملف')
+          setError(errMessage(e) ?? 'تعذّر عرض الملف')
           setLoading(false)
         }
       }

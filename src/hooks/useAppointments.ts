@@ -6,6 +6,7 @@ import { getTemplate, fillTemplate } from '@/lib/templates'
 import { normalizeSaudiPhone, todayISO, fmtDatePref, fmtTime } from '@/lib/format'
 import { addAppointmentEvent, deleteCalendarEvent } from '@/lib/calendar'
 import type { Appointment, AppointmentInput } from '@/types/db'
+import { errMessage } from '@/lib/errors'
 
 function calendarWarn() {
   toast({
@@ -27,7 +28,7 @@ function errToast(title: string) {
     toast({
       variant: 'destructive',
       title,
-      description: e instanceof Error ? e.message : undefined,
+      description: errMessage(e),
     })
 }
 

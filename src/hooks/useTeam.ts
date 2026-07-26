@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { toast } from '@/hooks/use-toast'
 import type { TeamMember, TeamMemberInput } from '@/types/db'
+import { errMessage } from '@/lib/errors'
 
 const KEY = ['team_members'] as const
 
@@ -42,7 +43,7 @@ export function useCreateTeamMember() {
       toast({
         variant: 'destructive',
         title: 'تعذّرت إضافة الموظف',
-        description: e instanceof Error ? e.message : undefined,
+        description: errMessage(e),
       })
     },
   })
@@ -75,7 +76,7 @@ export function useUpdateTeamMember() {
       toast({
         variant: 'destructive',
         title: 'تعذّر تحديث الموظف',
-        description: e instanceof Error ? e.message : undefined,
+        description: errMessage(e),
       })
     },
   })
@@ -108,7 +109,7 @@ export function useToggleActive() {
       toast({
         variant: 'destructive',
         title: 'تعذّر تغيير الحالة',
-        description: e instanceof Error ? e.message : undefined,
+        description: errMessage(e),
       })
     },
   })

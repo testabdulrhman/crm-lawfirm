@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { supabase } from '@/lib/supabase'
 import { toast } from '@/hooks/use-toast'
+import { errMessage } from '@/lib/errors'
 
 export interface MessageTemplate {
   id: string
@@ -50,7 +51,7 @@ export function useUpdateMessageTemplate() {
       toast({
         variant: 'destructive',
         title: 'تعذّر حفظ القالب',
-        description: e instanceof Error ? e.message : undefined,
+        description: errMessage(e),
       }),
   })
 }

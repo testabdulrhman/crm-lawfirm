@@ -6,6 +6,7 @@ import { toast } from '@/hooks/use-toast'
 import { normalizeSaudiPhone } from '@/lib/format'
 import type { StampPosition } from '@/lib/pdfStamp'
 import type { OutgoingLetter } from '@/types/db'
+import { errMessage } from '@/lib/errors'
 
 const letterLink = (id: string) => `https://app.redwan.sa/#/outgoing/${id}`
 
@@ -116,7 +117,7 @@ export function useRequestApproval() {
       toast({
         variant: 'destructive',
         title: 'تعذّر إرسال طلب الاعتماد',
-        description: e instanceof Error ? e.message : undefined,
+        description: errMessage(e),
       }),
   })
 }
@@ -175,7 +176,7 @@ export function useApproveLetter() {
       toast({
         variant: 'destructive',
         title: 'تعذّر الاعتماد',
-        description: e instanceof Error ? e.message : undefined,
+        description: errMessage(e),
       }),
   })
 }
@@ -226,7 +227,7 @@ export function useRejectLetter() {
       toast({
         variant: 'destructive',
         title: 'تعذّر الرفض',
-        description: e instanceof Error ? e.message : undefined,
+        description: errMessage(e),
       }),
   })
 }

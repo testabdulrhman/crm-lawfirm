@@ -19,6 +19,7 @@ import { toast } from '@/hooks/use-toast'
 import { normalizeSaudiPhone } from '@/lib/format'
 import { COMPANY_NAME } from '@/lib/constants'
 import type { OutgoingLetter } from '@/types/db'
+import { errMessage } from '@/lib/errors'
 
 export function SendLetterDialog({
   letter: l,
@@ -85,7 +86,7 @@ export function SendLetterDialog({
         variant: 'destructive',
         title: 'تعذّر الإرسال عبر الواتساب',
         description:
-          e instanceof Error ? e.message : 'تحقّق من الرقم واتصال البوابة.',
+          errMessage(e) ?? 'تحقّق من الرقم واتصال البوابة.',
       })
     } finally {
       setSending(false)

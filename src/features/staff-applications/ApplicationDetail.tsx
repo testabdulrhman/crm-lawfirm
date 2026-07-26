@@ -73,6 +73,7 @@ import { ApproveDialog } from './ApproveDialog'
 import { RejectDialog } from './RejectDialog'
 import { appStatusBadge, appStatusLabel, idTypeLabel } from './labels'
 import type { StaffApplication } from '@/types/db'
+import { errMessage } from '@/lib/errors'
 
 export function ApplicationDetail({ id }: { id: string }) {
   const [, navigate] = useLocation()
@@ -113,7 +114,7 @@ export function ApplicationDetail({ id }: { id: string }) {
       toast({
         variant: 'destructive',
         title: 'تعذّر رفع الملف',
-        description: e instanceof Error ? e.message : undefined,
+        description: errMessage(e),
       })
     } finally {
       setUploadingKind(null)

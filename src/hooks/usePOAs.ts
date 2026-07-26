@@ -5,6 +5,7 @@ import { toast } from '@/hooks/use-toast'
 import { todayISO } from '@/lib/format'
 import { SOON_DAYS } from '@/lib/poaLabels'
 import type { POAInput, PowerOfAttorney } from '@/types/db'
+import { errMessage } from '@/lib/errors'
 
 const LIST_KEY = ['poas'] as const
 
@@ -16,7 +17,7 @@ function errToast(title: string) {
     toast({
       variant: 'destructive',
       title,
-      description: e instanceof Error ? e.message : undefined,
+      description: errMessage(e),
     })
 }
 

@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { toast } from '@/hooks/use-toast'
 import { todayISO } from '@/lib/format'
 import type { LegalService, LegalServiceInput } from '@/types/db'
+import { errMessage } from '@/lib/errors'
 
 const SELECT = '*, assignee:team_members(id,name,short_name)'
 
@@ -12,7 +13,7 @@ function errToast(title: string) {
     toast({
       variant: 'destructive',
       title,
-      description: e instanceof Error ? e.message : undefined,
+      description: errMessage(e),
     })
 }
 

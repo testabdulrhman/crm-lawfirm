@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { toast } from '@/hooks/use-toast'
 import { useSendThankYou, type ThankYouResult } from '@/hooks/useThankYou'
+import { errMessage } from '@/lib/errors'
 
 export function ThankYouCard() {
   const [phone, setPhone] = useState('')
@@ -34,7 +35,7 @@ export function ThankYouCard() {
         toast({
           variant: 'destructive',
           title: 'تعذّر الإرسال',
-          description: e instanceof Error ? e.message : undefined,
+          description: errMessage(e),
         }),
     })
   }

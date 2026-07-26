@@ -4,13 +4,14 @@ import { supabase } from '@/lib/supabase'
 import { toast } from '@/hooks/use-toast'
 import { TASK_PRIORITY_ORDER } from '@/lib/caseLabels'
 import type { Task, TaskInput } from '@/types/db'
+import { errMessage } from '@/lib/errors'
 
 function errToast(title: string) {
   return (e: unknown) =>
     toast({
       variant: 'destructive',
       title,
-      description: e instanceof Error ? e.message : undefined,
+      description: errMessage(e),
     })
 }
 

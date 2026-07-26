@@ -10,15 +10,16 @@ import type {
   CloseSessionResult,
   SessionNeedingClosure,
 } from '@/types/db'
+import { errMessage } from '@/lib/errors'
 
 // ترجمة أخطاء القاعدة المعروفة إلى رسائل عربية واضحة
 function friendlyDbError(e: unknown): string | undefined {
-  const m = e instanceof Error ? e.message : String(e ?? '')
+  const m = errMessage(e) ?? String(e ?? '')
   if (m.includes('sessions_case_number_unique'))
     return 'رقم الجلسة مستخدم مسبقاً في هذه القضية — اختر رقماً آخر.'
   if (m.includes('schema cache'))
     return 'خطأ مؤقت في الخادم — أعد المحاولة بعد لحظات.'
-  return e instanceof Error ? e.message : undefined
+  return errMessage(e)
 }
 
 function errToast(title: string) {

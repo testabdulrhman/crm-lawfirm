@@ -37,6 +37,7 @@ import { fmtDateTime } from '@/lib/format'
 import { SIGNATURE_CONFIG_KEY } from '@/features/settings/OfficeInfoTab'
 import { StampPlacementDialog } from './StampPlacementDialog'
 import type { OutgoingLetter } from '@/types/db'
+import { errMessage } from '@/lib/errors'
 
 const isPdf = (url: string | null | undefined) =>
   !!url && url.toLowerCase().includes('.pdf')
@@ -358,7 +359,7 @@ function ApprovalDialog({
         objectUrl = URL.createObjectURL(blob)
         setBlobUrl(objectUrl)
       } catch (e) {
-        setGenError(e instanceof Error ? e.message : 'تعذّر تجهيز المعاينة')
+        setGenError(errMessage(e) ?? 'تعذّر تجهيز المعاينة')
       }
     })()
     return () => {
@@ -386,7 +387,7 @@ function ApprovalDialog({
       toast({
         variant: 'destructive',
         title: 'تعذّر حفظ النسخة الموقّعة',
-        description: e instanceof Error ? e.message : undefined,
+        description: errMessage(e),
       })
     } finally {
       setSaving(false)

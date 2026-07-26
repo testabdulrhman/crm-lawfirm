@@ -5,13 +5,14 @@ import { toast } from '@/hooks/use-toast'
 import { uploadFile } from '@/lib/files'
 import { todayISO } from '@/lib/format'
 import type { Memo, MemoDocument, MemoInput } from '@/types/db'
+import { errMessage } from '@/lib/errors'
 
 function errToast(title: string) {
   return (e: unknown) =>
     toast({
       variant: 'destructive',
       title,
-      description: e instanceof Error ? e.message : undefined,
+      description: errMessage(e),
     })
 }
 

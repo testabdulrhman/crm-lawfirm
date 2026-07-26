@@ -58,6 +58,7 @@ import {
   isActuallyExpired,
   expirySoonText,
 } from '@/lib/poaLabels'
+import { errMessage } from '@/lib/errors'
 
 export function POADetail({ id }: { id: string }) {
   const [, navigate] = useLocation()
@@ -85,7 +86,7 @@ export function POADetail({ id }: { id: string }) {
       toast({
         variant: 'destructive',
         title: 'تعذّر رفع مستند الوكالة',
-        description: e instanceof Error ? e.message : undefined,
+        description: errMessage(e),
       })
     } finally {
       setUploadingDoc(false)

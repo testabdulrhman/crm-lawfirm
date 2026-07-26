@@ -20,6 +20,7 @@ import { useCreateTeamMember, useUpdateTeamMember } from '@/hooks/useTeam'
 import { pickFile, uploadFile } from '@/lib/files'
 import { toast } from '@/hooks/use-toast'
 import type { TeamMember, TeamMemberInput } from '@/types/db'
+import { errMessage } from '@/lib/errors'
 
 // حقل نصي اختياري: يقبل الفراغ
 const optionalText = z.string().optional()
@@ -147,7 +148,7 @@ export function TeamMemberForm({ member, onDone }: Props) {
       toast({
         variant: 'destructive',
         title: 'تعذّر رفع الصورة',
-        description: e instanceof Error ? e.message : undefined,
+        description: errMessage(e),
       })
     } finally {
       setUploadingPhoto(false)

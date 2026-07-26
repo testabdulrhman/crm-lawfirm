@@ -20,6 +20,7 @@ import {
 import { pickFile, uploadFile } from '@/lib/files'
 import { toast } from '@/hooks/use-toast'
 import type { OfficeInfo, OfficeInfoInput } from '@/types/db'
+import { errMessage } from '@/lib/errors'
 
 // توقيع المدير يُخزَّن في lookup_values (إعدادات التكاملات) — بلا أعمدة جديدة
 export const SIGNATURE_CONFIG_KEY = 'director_signature_url'
@@ -91,7 +92,7 @@ export function OfficeInfoTab() {
       toast({
         variant: 'destructive',
         title: 'تعذّر رفع الصورة',
-        description: e instanceof Error ? e.message : undefined,
+        description: errMessage(e),
       })
     } finally {
       setUploading(null)
