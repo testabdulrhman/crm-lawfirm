@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -116,6 +117,7 @@ export function SessionsTab({
   const [closeFor, setCloseFor] = useState<CaseSession | null>(null)
   const [postponeFor, setPostponeFor] = useState<CaseSession | null>(null)
   const [preview, setPreview] = useState<CaseSession | null>(null)
+  const [resendFor, setResendFor] = useState<CaseSession | null>(null)
 
   const { upcoming, past } = useMemo(() => {
     const grp = (data ?? []).map((s) => ({ s, st: sessionDisplayStatus(s) }))
@@ -191,6 +193,7 @@ export function SessionsTab({
                 onClose={setCloseFor}
                 onPostpone={setPostponeFor}
                 onPreview={setPreview}
+                onResend={setResendFor}
               />
             ))}
           </Section>
@@ -204,6 +207,7 @@ export function SessionsTab({
                 onClose={setCloseFor}
                 onPostpone={setPostponeFor}
                 onPreview={setPreview}
+                onResend={setResendFor}
               />
             ))}
           </Section>
@@ -239,6 +243,16 @@ export function SessionsTab({
         clientPhone={clientPhone}
         session={closeFor}
         onClose={() => setCloseFor(null)}
+      />
+
+      {/* إرسال/إعادة إرسال التقرير */}
+      <ResendReportDialog
+        caseId={caseId}
+        caseTitle={caseTitle}
+        clientName={clientName}
+        clientPhone={clientPhone}
+        session={resendFor}
+        onClose={() => setResendFor(null)}
       />
 
       {/* معاينة المحضر */}
@@ -307,6 +321,7 @@ function SessionCard({
   onClose,
   onPostpone,
   onPreview,
+  onResend,
 }: {
   session: CaseSession
   onEdit: (s: CaseSession) => void
@@ -314,6 +329,7 @@ function SessionCard({
   onClose: (s: CaseSession) => void
   onPostpone: (s: CaseSession) => void
   onPreview: (s: CaseSession) => void
+  onResend: (s: CaseSession) => void
 }) {
   const st = sessionDisplayStatus(s)
   const isClosed = !!s.closed_at
@@ -458,6 +474,18 @@ function SessionCard({
               تعديل الإغلاق
             </Button>
           )}
+          {/* إرسال/إعادة إرسال تقرير الجلسة (بعد تسجيل النتيجة) */}
+          {isClosed && !!s.outcome && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-400 dark:hover:bg-emerald-950/40"
+              onClick={() => onResend(s)}
+            >
+              <MessageCircle className="h-4 w-4" />
+              {s.report_sent_at ? 'إعادة إرسال التقرير' : 'إرسال التقرير'}
+            </Button>
+          )}
           <Button variant="ghost" size="sm" onClick={() => onEdit(s)}>
             <Pencil className="h-4 w-4" />
             تعديل
@@ -600,6 +628,182 @@ const NEXT_OPTIONS: { value: NextAction; label: string; icon: typeof CalendarPlu
 
 const REPORT_FALLBACK =
   'عميلنا الكريم {client_name}\nنفيدكم بشأن قضيتكم ({case_title}):\n{outcome}\nشركة عبدالرحمن بن رضوان المشيقح للمحاماة وإدارة إجراءات الإفلاس'
+
+// إعادة إرسال تقرير الجلسة للعميل (واتساب/SMS) دون فتح حوار الإغلاق
+function ResendReportDialog({
+  caseId,
+  caseTitle,
+  clientName,
+  clientPhone,
+  session,
+  onClose,
+}: {
+  caseId: string
+  caseTitle?: string | null
+  clientName?: string | null
+  clientPhone?: string | null
+  session: CaseSession | null
+  onClose: () => void
+}) {
+  const qc = useQueryClient()
+  const open = !!session
+  const [tpl, setTpl] = useState<string>(REPORT_FALLBACK)
+  const [msg, setMsg] = useState('')
+  const [touched, setTouched] = useState(false)
+  const [phone, setPhone] = useState('')
+  const [wa, setWa] = useState(true)
+  const [sms, setSms] = useState(false)
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    if (!session) return
+    setTouched(false)
+    setMsg('')
+    setPhone(clientPhone ?? '')
+    setWa(true)
+    setSms(false)
+    getTemplate('session_report')
+      .then((b) => setTpl(b || REPORT_FALLBACK))
+      .catch(() => setTpl(REPORT_FALLBACK))
+  }, [session, clientPhone])
+
+  const defaultMsg = fillTemplate(tpl, {
+    client_name: clientName ?? 'عميلنا',
+    case_title: caseTitle ?? '',
+    outcome: (session?.outcome ?? '').trim(),
+  })
+  const value = touched ? msg : defaultMsg
+
+  const send = async () => {
+    if (!session || busy) return
+    if (!wa && !sms) {
+      toast({ variant: 'destructive', title: 'اختر قناة إرسال واحدة على الأقل' })
+      return
+    }
+    if (phone.trim() === '') {
+      toast({
+        variant: 'destructive',
+        title: 'أدخل جوال العميل',
+        description: 'لا يوجد جوال محفوظ لهذه القضية.',
+      })
+      return
+    }
+    setBusy(true)
+    const channels: string[] = []
+    try {
+      if (wa) {
+        const r = await sendSessionReportWhatsApp({
+          phone,
+          clientName: clientName ?? null,
+          message: value,
+        })
+        if (r.ok) channels.push('whatsapp')
+        else
+          toast({
+            variant: 'destructive',
+            title: 'تعذّر الإرسال عبر الواتساب',
+            description: r.error ?? 'تحقّق من الرقم واتصال البوابة.',
+          })
+      }
+      if (sms) {
+        const ok = await sendSessionReportSms({
+          sessionId: session.id,
+          phone,
+          clientName: clientName ?? null,
+          message: value,
+          sentBy: null,
+        })
+        if (ok) channels.push('sms')
+        else
+          toast({
+            variant: 'destructive',
+            title: 'تعذّر الإرسال عبر SMS',
+            description: 'تحقّق من الرقم ورصيد الرسائل.',
+          })
+      }
+      if (channels.length > 0) {
+        await markSessionReportSent(session.id, channels.join(','))
+        qc.invalidateQueries({ queryKey: ['case_sessions', caseId] })
+        toast({
+          variant: 'success',
+          title: `أُرسل التقرير (${channels.includes('whatsapp') ? 'واتساب' : ''}${channels.length > 1 ? ' + ' : ''}${channels.includes('sms') ? 'SMS' : ''})`,
+        })
+        onClose()
+      }
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-h-[88vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>
+            {session?.report_sent_at ? 'إعادة إرسال التقرير' : 'إرسال التقرير للعميل'}
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="my-3 space-y-4">
+          {session?.report_sent_at && (
+            <p className="rounded-lg bg-muted/60 p-2.5 text-xs text-muted-foreground">
+              أُرسل سابقاً في {fmtDatePref(session.report_sent_at)}
+              {session.report_sent_via ? ` عبر ${session.report_sent_via}` : ''}.
+            </p>
+          )}
+
+          <div className="space-y-1.5">
+            <Label htmlFor="rs_phone">جوال العميل *</Label>
+            <Input
+              id="rs_phone"
+              dir="ltr"
+              inputMode="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="05xxxxxxxx"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="rs_msg">نص التقرير</Label>
+            <Textarea
+              id="rs_msg"
+              rows={7}
+              value={value}
+              onChange={(e) => {
+                setTouched(true)
+                setMsg(e.target.value)
+              }}
+            />
+          </div>
+
+          <div className="flex flex-wrap items-center gap-5">
+            <label className="flex items-center gap-2 text-sm">
+              <Switch checked={wa} onCheckedChange={setWa} />
+              <MessageCircle className="h-4 w-4 text-emerald-600" />
+              واتساب
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <Switch checked={sms} onCheckedChange={setSms} />
+              <Send className="h-4 w-4 text-muted-foreground" />
+              رسالة نصية
+            </label>
+          </div>
+        </div>
+
+        <DialogFooter className="gap-2">
+          <Button variant="gold" onClick={send} disabled={busy}>
+            {busy && <Loader2 className="h-4 w-4 animate-spin" />}
+            إرسال
+          </Button>
+          <Button variant="outline" onClick={onClose}>
+            إلغاء
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
 
 function CloseSessionDialog({
   caseId,
