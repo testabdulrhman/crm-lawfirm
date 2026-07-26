@@ -407,6 +407,32 @@ export async function sendSessionReportSms(args: {
   }
 }
 
+// إرسال تقرير الجلسة عبر الواتساب مباشرة (بوابة Evolution عبر whatsapp-send).
+// الدالة الخادمية تسجّل الإرسال في sms_log بنفسها.
+// تُرجع { ok, error } — الرسالة العربية تُعرض للموظف عند الفشل.
+export async function sendSessionReportWhatsApp(args: {
+  phone: string
+  clientName: string | null
+  message: string
+}): Promise<{ ok: boolean; error?: string }> {
+  const numbers = normalizeSaudiPhone(args.phone)
+  if (!numbers) return { ok: false, error: 'رقم الجوال غير صالح' }
+  try {
+    const { data, error } = await supabase.functions.invoke('whatsapp-send', {
+      body: {
+        phone: numbers,
+        message: args.message,
+        recipient_name: args.clientName ?? 'عميل',
+      },
+    })
+    if (error || data?.error)
+      return { ok: false, error: errMessage(data?.error ?? error) }
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, error: errMessage(e) }
+  }
+}
+
 // تحديث رقم الجلسة (يُستخدم عند تعبئته من المحضر أثناء الإغلاق)
 // يُرجع رسالة خطأ عربية عند الفشل (مثل تكرار الرقم)، أو null عند النجاح.
 export async function updateSessionNumber(

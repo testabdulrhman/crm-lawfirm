@@ -57,12 +57,10 @@ import {
   fmtNumber,
   fmtDatePref,
   fmtTime,
-  normalizeSaudiPhone,
   todayISO,
 } from '@/lib/format'
 import { pickFile, uploadFile } from '@/lib/files'
 import { getTemplate, fillTemplate } from '@/lib/templates'
-import { openExternal } from '@/lib/external'
 import { useExtractSessionMinutes } from '@/hooks/useAiAnalysis'
 import { toast } from '@/hooks/use-toast'
 import {
@@ -73,6 +71,7 @@ import {
   useCloseSession,
   usePostponeSession,
   sendSessionReportSms,
+  sendSessionReportWhatsApp,
   markSessionReportSent,
   updateSessionNumber,
 } from '@/hooks/useCaseSessions'
@@ -770,11 +769,19 @@ function CloseSessionDialog({
       const channels: string[] = []
       if (hasPhone || phone) {
         if (sendWa && phone) {
-          const intl = normalizeSaudiPhone(phone)
-          openExternal(
-            `https://wa.me/${intl}?text=${encodeURIComponent(reportValue)}`
-          )
-          channels.push('whatsapp')
+          // إرسال مباشر عبر بوابة الواتساب (لا يفتح wa.me)
+          const wa = await sendSessionReportWhatsApp({
+            phone,
+            clientName: res.client_name || clientName || null,
+            message: reportValue,
+          })
+          if (wa.ok) channels.push('whatsapp')
+          else
+            toast({
+              variant: 'destructive',
+              title: 'تعذّر إرسال التقرير عبر الواتساب',
+              description: wa.error ?? 'تحقّق من الرقم واتصال البوابة.',
+            })
         }
         if (sendSms && phone) {
           const ok = await sendSessionReportSms({
