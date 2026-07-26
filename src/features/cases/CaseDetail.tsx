@@ -36,11 +36,13 @@ import { TasksTab } from './tabs/TasksTab'
 import { DocumentsTab } from './tabs/DocumentsTab'
 import { MemosTab } from './tabs/MemosTab'
 import { NotesTab } from './tabs/NotesTab'
+import { ProjectTab } from './tabs/ProjectTab'
 import type { Case, CaseStatus } from '@/types/db'
 
 // ترتيب التبويبات المعتمد
 const TABS = [
   { value: 'overview', label: 'نظرة عامة' },
+  { value: 'project', label: 'بطاقة المشروع' },
   { value: 'parties', label: 'الأطراف' },
   { value: 'sessions', label: 'الجلسات' },
   { value: 'judgments', label: 'الأحكام' },
@@ -169,6 +171,9 @@ export function CaseDetail({ id }: { id: string }) {
 
         <TabsContent value="overview">
           <OverviewTab caseData={c} />
+        </TabsContent>
+        <TabsContent value="project">
+          <ProjectTab caseId={c.id} />
         </TabsContent>
         <TabsContent value="parties">
           <PartiesTab caseId={c.id} />
