@@ -258,11 +258,17 @@ export interface Case {
   docs_count: number | null
   open_date: string | null
   close_date: string | null
+  engagement_id: string | null
   created_at: string | null
   updated_at: string | null
   // علاقات (join)
   contact?: CaseContactRef | null
   assignee?: CaseAssigneeRef | null
+  engagement?: {
+    id: string
+    title: string | null
+    engagement_number: string | null
+  } | null
 }
 
 export interface CaseInput {
@@ -695,6 +701,49 @@ export interface AppointmentInput {
   duration_minutes?: number | null
   notes?: string | null
   status?: string | null
+  created_by?: string | null
+}
+
+/* ===================== العقود (engagements) ===================== */
+// اتفاقية الأتعاب: نقطة البداية التجارية — العقد ← الموكّل ← المشاريع
+
+export interface Engagement {
+  id: string
+  engagement_number: string | null
+  title: string
+  type: string | null
+  client_id: string | null
+  signed_date: string | null
+  start_date: string | null
+  end_date: string | null
+  fees_total: number | null
+  payment_terms: string | null
+  scope: string | null
+  notes: string | null
+  status: string
+  file_url: string | null
+  created_by: string | null
+  deleted_at: string | null
+  deleted_by: string | null
+  created_at: string | null
+  updated_at: string | null
+  client?: { id: string; name: string | null; phone: string | null } | null
+}
+
+export interface EngagementInput {
+  engagement_number?: string | null
+  title: string
+  type?: string | null
+  client_id?: string | null
+  signed_date?: string | null
+  start_date?: string | null
+  end_date?: string | null
+  fees_total?: number | null
+  payment_terms?: string | null
+  scope?: string | null
+  notes?: string | null
+  status?: string
+  file_url?: string | null
   created_by?: string | null
 }
 

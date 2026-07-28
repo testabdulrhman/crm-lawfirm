@@ -10,7 +10,7 @@ const LIST_KEY = ['cases'] as const
 
 // الـ join المختصر للموكّل والمسؤول
 const SELECT =
-  '*, contact:contacts(id,name,phone), assignee:team_members(id,name,short_name)'
+  '*, contact:contacts(id,name,phone), assignee:team_members(id,name,short_name), engagement:engagements(id,title,engagement_number)'
 
 function errToast(title: string) {
   return (e: unknown) =>

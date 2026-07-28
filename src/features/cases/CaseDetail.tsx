@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { useLocation } from 'wouter'
-import { ArrowRight, Pencil, Scale } from 'lucide-react'
+import { Link, useLocation } from 'wouter'
+import { ArrowRight, Handshake, Pencil, Scale } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -157,6 +157,18 @@ export function CaseDetail({ id }: { id: string }) {
               label="تاريخ الفتح"
               value={c.open_date ? fmtDatePref(c.open_date) : null}
             />
+            {c.engagement && (
+              <span className="flex items-center gap-1">
+                <span className="text-muted-foreground">العقد:</span>
+                <Link
+                  href={`/engagements/${c.engagement.id}`}
+                  className="flex items-center gap-1 font-medium text-foreground hover:text-gold"
+                >
+                  <Handshake className="h-3.5 w-3.5 text-gold" />
+                  {c.engagement.title || c.engagement.engagement_number || 'عقد'}
+                </Link>
+              </span>
+            )}
           </div>
         </CardContent>
       </Card>

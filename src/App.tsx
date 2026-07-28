@@ -16,6 +16,8 @@ import { ApplicationDetail } from '@/features/staff-applications/ApplicationDeta
 import { ContactsPage } from '@/features/contacts/ContactsPage'
 import { ContactDetail } from '@/features/contacts/ContactDetail'
 import { CasesPage } from '@/features/cases/CasesPage'
+import { EngagementsPage } from '@/features/engagements/EngagementsPage'
+import { EngagementDetail } from '@/features/engagements/EngagementDetail'
 import { CaseDetail } from '@/features/cases/CaseDetail'
 import { SessionsPage } from '@/features/sessions/SessionsPage'
 import { POAsPage } from '@/features/poa/POAsPage'
@@ -48,6 +50,10 @@ function ProtectedRoutes() {
           {(params) => <CaseDetail id={params.id} />}
         </Route>
         <Route path="/cases" component={CasesPage} />
+        <Route path="/engagements/:id">
+          {(params) => <EngagementDetail id={params.id} />}
+        </Route>
+        <Route path="/engagements" component={EngagementsPage} />
         <Route path="/sessions" component={SessionsPage} />
         <Route path="/poa/:id">
           {(params) => <POADetail id={params.id} />}

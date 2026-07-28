@@ -8,6 +8,7 @@ export const BRAND_TITLE = `CRM — ${COMPANY_NAME}`
 export const ROUTE_TITLES: Record<string, string> = {
   '/': 'لوحة التحكم',
   '/cases': 'القضايا',
+  '/engagements': 'العقود',
   '/sessions': 'الجلسات',
   '/poa': 'الوكالات',
   '/legal-services': 'الاستشارات واللوائح',

@@ -30,6 +30,7 @@ export function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
       : undefined) ??
     (location.startsWith('/contacts') ? ROUTE_TITLES['/contacts'] : undefined) ??
     (location.startsWith('/cases') ? ROUTE_TITLES['/cases'] : undefined) ??
+    (location.startsWith('/engagements') ? ROUTE_TITLES['/engagements'] : undefined) ??
     (location.startsWith('/poa') ? ROUTE_TITLES['/poa'] : undefined) ??
     (location.startsWith('/legal-services')
       ? ROUTE_TITLES['/legal-services']

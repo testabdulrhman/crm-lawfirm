@@ -1,6 +1,7 @@
 import { Link, useLocation } from 'wouter'
 import {
   LayoutDashboard,
+  Handshake,
   Users,
   UserPlus,
   BookUser,
@@ -50,6 +51,7 @@ const navSections: { title?: string; items: NavItem[] }[] = [
   {
     title: 'الأعمال',
     items: [
+      { label: 'العقود', href: '/engagements', icon: Handshake },
       { label: 'القضايا', href: '/cases', icon: Scale },
       { label: 'الجلسات', href: '/sessions', icon: CalendarDays },
       { label: 'الوكالات', href: '/poa', icon: FileSignature, badge: 'expiring_poas' },
