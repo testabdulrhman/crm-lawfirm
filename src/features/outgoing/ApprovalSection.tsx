@@ -130,9 +130,13 @@ export function ApprovalSection({ letter: l }: { letter: OutgoingLetter }) {
   return (
     <Card>
       <CardContent className="p-5">
-        <div className="mb-3 flex items-center gap-2">
-          <Stamp className="h-5 w-5 text-gold" />
-          <h3 className="font-semibold text-foreground">التوقيع والاعتماد</h3>
+        <div className="mb-4 flex items-center gap-2.5">
+          <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gold/10">
+            <Stamp className="h-[18px] w-[18px] text-gold" />
+          </span>
+          <h3 className="text-[15px] font-semibold text-foreground">
+            التوقيع والاعتماد
+          </h3>
         </div>
 
         {/* الحالة الحالية */}

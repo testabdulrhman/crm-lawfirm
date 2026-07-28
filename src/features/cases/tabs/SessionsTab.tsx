@@ -171,7 +171,7 @@ export function SessionsTab({
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="space-y-5">
       <div className="flex justify-end">
         <Button variant="gold" onClick={openNew}>
           <Plus className="h-4 w-4" />

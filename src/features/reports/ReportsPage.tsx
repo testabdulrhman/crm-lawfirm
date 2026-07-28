@@ -81,7 +81,7 @@ export function ReportsPage() {
 
       {/* تنبيهات */}
       {!isLoading && data && (data.expiring_poas > 0 || data.urgent_tasks > 0) && (
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-2">
           {data.expiring_poas > 0 && (
             <AlertCard
               icon={AlertTriangle}
@@ -101,13 +101,13 @@ export function ReportsPage() {
 
       {/* بطاقات KPI */}
       {isLoading || !data ? (
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-4">
           {Array.from({ length: 9 }).map((_, i) => (
             <Skeleton key={i} className="h-24 w-full" />
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-4">
           <StatCard label="إجمالي القضايا" value={data.cases_total} icon={Briefcase} tone="navy" />
           <StatCard label="القضايا الجارية" value={data.cases_active} icon={FolderClock} tone="green" />
           <StatCard label="القضايا المنتهية" value={data.cases_closed} icon={FolderCheck} tone="gray" />

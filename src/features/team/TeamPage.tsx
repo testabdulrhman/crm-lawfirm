@@ -160,7 +160,7 @@ export function TeamPage() {
           </div>
 
           {/* بطاقات على الجوال */}
-          <div className="grid gap-3 md:hidden">
+          <div className="grid gap-4 md:hidden">
             {members.map((m) => (
               <div
                 key={m.id}

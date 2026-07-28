@@ -98,7 +98,7 @@ export function AppointmentDetail({ id }: { id: string }) {
   const sentBy = teamMember?.name ?? null
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5">
+    <div className="mx-auto max-w-4xl space-y-5">
       <div className="flex items-center justify-between gap-2">
         <Button variant="ghost" onClick={() => navigate('/appointments')}>
           <ArrowRight className="h-4 w-4" />

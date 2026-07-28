@@ -19,6 +19,8 @@ import {
 
 import { fmtDatePref, fmtNumber } from '@/lib/format'
 import { useCaseDocuments } from '@/hooks/useCaseDocuments'
+import { useCaseSessions } from '@/hooks/useCaseSessions'
+import { useCaseTasks } from '@/hooks/useCaseTasks'
 import { useCase, useUpdateCaseStatus } from '@/hooks/useCases'
 import { usePageState } from '@/hooks/usePageState'
 import {
@@ -61,7 +63,14 @@ export function CaseDetail({ id }: { id: string }) {
   const [tab, setTab] = usePageState('case-tab:' + id, 'overview')
   // عدد المستندات — يظهر على التبويب لتعرف وجودها دون فتحه (نفس استعلام التبويب المخزّن)
   const { data: caseDocs } = useCaseDocuments(id)
-  const docsCount = caseDocs?.length ?? 0
+  const { data: caseSessions } = useCaseSessions(id)
+  const { data: caseTasks } = useCaseTasks(id)
+  // عدّادات التبويبات — تُظهر المحتوى دون فتحه (وتُسرّع فتح التبويب لاحقاً)
+  const counts: Record<string, number> = {
+    documents: caseDocs?.length ?? 0,
+    sessions: caseSessions?.length ?? 0,
+    tasks: (caseTasks ?? []).filter((t) => t.status !== 'done').length,
+  }
 
   if (isLoading) {
     return (
@@ -159,9 +168,9 @@ export function CaseDetail({ id }: { id: string }) {
             {TABS.map((t) => (
               <TabsTrigger key={t.value} value={t.value}>
                 {t.label}
-                {t.value === 'documents' && docsCount > 0 && (
+                {(counts[t.value] ?? 0) > 0 && (
                   <span className="mr-1.5 rounded-full bg-gold/15 px-1.5 text-xs font-medium text-gold-700 dark:text-gold-300">
-                    {fmtNumber(docsCount)}
+                    {fmtNumber(counts[t.value])}
                   </span>
                 )}
               </TabsTrigger>

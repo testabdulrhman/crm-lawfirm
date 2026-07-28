@@ -4,6 +4,7 @@
 import { useEffect, useState } from 'react'
 import {
   Target,
+  Briefcase,
   ListChecks,
   PackageCheck,
   CircleSlash,
@@ -125,9 +126,17 @@ export function ProjectTab({ caseId }: { caseId: string }) {
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-4">
+    <div className="space-y-5">
       <Card>
         <CardContent className="space-y-4 p-5">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gold/10">
+              <Briefcase className="h-[18px] w-[18px] text-gold" />
+            </span>
+            <h3 className="text-[15px] font-semibold text-foreground">
+              بطاقة المشروع
+            </h3>
+          </div>
           <p className="text-sm text-muted-foreground">
             الطبقة الإدارية للقضية: تُوثّق ما اتُّفق عليه مع الموكّل — الغاية
             والنطاق والمخرجات — بمعزل عن المسار الإجرائي (الجلسات والأحكام).

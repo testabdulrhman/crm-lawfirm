@@ -31,3 +31,6 @@ dist-ssr
 
 # Netlify
 .netlify
+
+# ملفات مؤقتة من سكربتات التعديل
+*.tmp
