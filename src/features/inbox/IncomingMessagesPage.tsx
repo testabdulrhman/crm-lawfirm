@@ -1,0 +1,126 @@
+// الرسائل الواردة — المسجّلة تلقائياً من اختصار الآيفون (ناجز وغيرها)
+import { useMemo } from 'react'
+import { MessageSquare, Search } from 'lucide-react'
+
+import { Input } from '@/components/ui/input'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Badge } from '@/components/ui/badge'
+import { fmtNumber, fmtDateTime } from '@/lib/format'
+import { useIncomingSms, type IncomingSms } from '@/hooks/useIncomingSms'
+import { usePageState } from '@/hooks/usePageState'
+
+export function IncomingMessagesPage() {
+  const { data, isLoading } = useIncomingSms()
+  const [search, setSearch] = usePageState('inbox:q', '')
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return data ?? []
+    return (data ?? []).filter((m) =>
+      [m.recipient_name, m.phone, m.message]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+        .includes(q)
+    )
+  }, [data, search])
+
+  return (
+    <div className="mx-auto max-w-4xl space-y-6">
+      <h2 className="text-2xl font-bold tracking-tight text-foreground">
+        الرسائل الواردة{' '}
+        <span className="text-base font-normal text-muted-foreground">
+          ({fmtNumber(data?.length ?? 0)})
+        </span>
+      </h2>
+
+      <div className="relative">
+        <Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="بحث في المرسل أو نص الرسالة…"
+          className="pr-9"
+        />
+      </div>
+
+      {isLoading ? (
+        <div className="space-y-2">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-24 w-full rounded-xl" />
+          ))}
+        </div>
+      ) : filtered.length === 0 ? (
+        <EmptyState />
+      ) : (
+        <div className="divide-y overflow-hidden rounded-xl border bg-card">
+          {filtered.map((m) => (
+            <MessageRow key={m.id} m={m} />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// إبراز الروابط داخل نص الرسالة (روابط ناجز وغيرها)
+function MessageBody({ text }: { text: string }) {
+  const parts = text.split(/(https?:\/\/\S+)/g)
+  return (
+    <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground">
+      {parts.map((part, i) =>
+        /^https?:\/\//.test(part) ? (
+          <a
+            key={i}
+            href={part}
+            target="_blank"
+            rel="noopener noreferrer"
+            dir="ltr"
+            className="break-all text-gold underline underline-offset-2 hover:opacity-80"
+          >
+            {part}
+          </a>
+        ) : (
+          <span key={i}>{part}</span>
+        )
+      )}
+    </p>
+  )
+}
+
+function MessageRow({ m }: { m: IncomingSms }) {
+  const senderIsPhone = m.phone && /\d{6,}/.test(m.phone)
+  return (
+    <div className="space-y-1.5 px-4 py-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge variant="gold" className="shrink-0">
+          {m.recipient_name || m.phone || 'مجهول'}
+        </Badge>
+        {senderIsPhone && m.recipient_name && m.recipient_name !== m.phone && (
+          <span dir="ltr" className="text-xs text-muted-foreground">
+            {m.phone}
+          </span>
+        )}
+        <span className="mr-auto text-xs text-muted-foreground">
+          {fmtDateTime(m.created_at)}
+        </span>
+      </div>
+      {m.message && <MessageBody text={m.message} />}
+    </div>
+  )
+}
+
+function EmptyState() {
+  return (
+    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-16 text-center">
+      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+        <MessageSquare className="h-6 w-6 text-muted-foreground" />
+      </div>
+      <p className="font-medium text-foreground">لا رسائل واردة بعد</p>
+      <p className="mx-auto max-w-sm text-sm text-muted-foreground">
+        الرسائل التي يلتقطها اختصار الآيفون (مثل إشعارات ناجز) ستظهر هنا
+        تلقائياً.
+      </p>
+    </div>
+  )
+}

@@ -17,6 +17,7 @@ export const ROUTE_TITLES: Record<string, string> = {
   '/outgoing': 'الصادر',
   '/reports': 'التقارير والإحصاءات',
   '/team': 'الموظفون',
+  '/inbox': 'الرسائل الواردة',
   '/contacts': 'جهات الاتصال',
   '/requests': 'الطلبات الواردة',
   '/staff-applications': 'طلبات التوظيف',

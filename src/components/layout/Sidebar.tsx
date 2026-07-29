@@ -6,6 +6,7 @@ import {
   UserPlus,
   BookUser,
   Inbox,
+  MessageSquare,
   Settings,
   Scale,
   FileSignature,
@@ -75,6 +76,7 @@ const navSections: { title?: string; items: NavItem[] }[] = [
     title: 'التواصل',
     items: [
       { label: 'جهات الاتصال', href: '/contacts', icon: BookUser },
+      { label: 'الرسائل الواردة', href: '/inbox', icon: MessageSquare },
       {
         label: 'الطلبات الواردة',
         href: '/requests',
