@@ -1,5 +1,5 @@
 import { useLocation } from 'wouter'
-import { Menu, Moon, Sun, Settings, LogOut } from 'lucide-react'
+import { Menu, Moon, Sun, Settings, LogOut, Wallet } from 'lucide-react'
 
 import { useTheme } from '@/stores/theme'
 import { useAuth } from '@/stores/auth'
@@ -40,6 +40,7 @@ export function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
       ? ROUTE_TITLES['/appointments']
       : undefined) ??
     (location.startsWith('/outgoing') ? ROUTE_TITLES['/outgoing'] : undefined) ??
+    (location.startsWith('/team') ? ROUTE_TITLES['/team'] : undefined) ??
     'لوحة التحكم'
 
   return (
@@ -102,6 +103,15 @@ export function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
               )}
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
+            {teamMember?.id && (
+              <DropdownMenuItem
+                className="gap-2"
+                onClick={() => navigate(`/team/${teamMember.id}`)}
+              >
+                <Wallet className="h-4 w-4" />
+                ملفي الوظيفي
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem className="gap-2" onClick={() => navigate('/settings')}>
               <Settings className="h-4 w-4" />
               الإعدادات

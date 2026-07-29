@@ -37,6 +37,31 @@ export type TeamMemberInput = Partial<
   name: string
 }
 
+// قيود الرواتب/المكافآت/الخصومات لكل موظف
+export interface PayrollEntry {
+  id: string
+  team_member_id: string
+  entry_type: string // salary/bonus/allowance/deduction/other
+  amount: number
+  entry_date: string
+  note: string | null
+  file_url: string | null
+  created_by: string | null
+  deleted_at: string | null
+  deleted_by: string | null
+  created_at: string | null
+}
+
+export interface PayrollEntryInput {
+  team_member_id: string
+  entry_type: string
+  amount: number
+  entry_date: string
+  note?: string | null
+  file_url?: string | null
+  created_by?: string | null
+}
+
 export interface OfficeInfo {
   id: string
   office_name: string | null

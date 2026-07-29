@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useLocation } from 'wouter'
 import { Plus, Pencil, Power, Users } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -45,6 +46,7 @@ function MemberAvatar({ member }: { member: TeamMember }) {
 
 export function TeamPage() {
   const { data, isLoading } = useTeamMembers()
+  const [, navigate] = useLocation()
   const toggle = useToggleActive()
   const [filter, setFilter] = usePageState<Filter>('team:filter', 'all')
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -118,10 +120,13 @@ export function TeamPage() {
                 {members.map((m) => (
                   <TableRow key={m.id}>
                     <TableCell>
-                      <div className="flex items-center gap-3">
+                      <button
+                        className="flex items-center gap-3 text-right"
+                        onClick={() => navigate(`/team/${m.id}`)}
+                      >
                         <MemberAvatar member={m} />
                         <div className="min-w-0">
-                          <p className="font-medium text-foreground">
+                          <p className="font-medium text-foreground hover:text-gold">
                             {m.name}
                             {m.is_director && (
                               <Badge variant="gold" className="mr-2">
@@ -133,7 +138,7 @@ export function TeamPage() {
                             {m.role ?? '—'}
                           </p>
                         </div>
-                      </div>
+                      </button>
                     </TableCell>
                     <TableCell dir="ltr" className="text-right">
                       {m.email ?? '—'}
@@ -166,7 +171,10 @@ export function TeamPage() {
                 key={m.id}
                 className="rounded-xl border bg-card p-4 shadow-sm"
               >
-                <div className="flex items-center gap-3">
+                <button
+                  className="flex w-full items-center gap-3 text-right"
+                  onClick={() => navigate(`/team/${m.id}`)}
+                >
                   <MemberAvatar member={m} />
                   <div className="min-w-0 flex-1">
                     <p className="flex items-center gap-2 font-medium text-foreground">
@@ -178,7 +186,7 @@ export function TeamPage() {
                     </p>
                   </div>
                   <StatusBadge active={!!m.is_active} />
-                </div>
+                </button>
                 <div className="mt-3 space-y-1 text-sm text-muted-foreground">
                   <p dir="ltr" className="text-right">
                     {m.email ?? '—'}

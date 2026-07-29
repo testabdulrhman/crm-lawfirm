@@ -9,6 +9,7 @@ import Login from '@/pages/Login'
 import Dashboard from '@/pages/Dashboard'
 import { SettingsPage } from '@/features/settings/SettingsPage'
 import { TeamPage } from '@/features/team/TeamPage'
+import { TeamMemberDetail } from '@/features/team/TeamMemberDetail'
 import { RequestsPage } from '@/features/requests/RequestsPage'
 import { RequestDetail } from '@/features/requests/RequestDetail'
 import { StaffApplicationsPage } from '@/features/staff-applications/StaffApplicationsPage'
@@ -76,6 +77,9 @@ function ProtectedRoutes() {
         </Route>
         <Route path="/outgoing" component={OutgoingLettersPage} />
         <Route path="/reports" component={ReportsPage} />
+        <Route path="/team/:id">
+          {(params) => <TeamMemberDetail id={params.id} />}
+        </Route>
         <Route path="/team" component={TeamPage} />
         <Route path="/contacts/:id">
           {(params) => <ContactDetail id={params.id} />}
