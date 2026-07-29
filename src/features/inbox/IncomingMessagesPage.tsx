@@ -1,17 +1,32 @@
 // الرسائل الواردة — المسجّلة تلقائياً من اختصار الآيفون (ناجز وغيرها)
+// أي رقم (7+ خانات) في نص الرسالة يُطابَق مع أرقام المحكمة فتُربط الرسالة بقضيتها
 import { useMemo } from 'react'
-import { MessageSquare, Search } from 'lucide-react'
+import { useLocation } from 'wouter'
+import { MessageSquare, Scale, Search } from 'lucide-react'
 
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import { fmtNumber, fmtDateTime } from '@/lib/format'
 import { useIncomingSms, type IncomingSms } from '@/hooks/useIncomingSms'
+import { useCases } from '@/hooks/useCases'
 import { usePageState } from '@/hooks/usePageState'
+import type { Case } from '@/types/db'
 
 export function IncomingMessagesPage() {
   const { data, isLoading } = useIncomingSms()
+  const { data: cases } = useCases()
   const [search, setSearch] = usePageState('inbox:q', '')
+
+  // خريطة رقم المحكمة (أرقاماً فقط) ← القضية
+  const byCourtNum = useMemo(() => {
+    const m = new Map<string, Case>()
+    for (const c of cases ?? []) {
+      const n = (c.court_num ?? '').replace(/\D/g, '')
+      if (n.length >= 7) m.set(n, c)
+    }
+    return m
+  }, [cases])
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -55,7 +70,7 @@ export function IncomingMessagesPage() {
       ) : (
         <div className="divide-y overflow-hidden rounded-xl border bg-card">
           {filtered.map((m) => (
-            <MessageRow key={m.id} m={m} />
+            <MessageRow key={m.id} m={m} matchedCase={matchCase(m, byCourtNum)} />
           ))}
         </div>
       )}
@@ -88,7 +103,24 @@ function MessageBody({ text }: { text: string }) {
   )
 }
 
-function MessageRow({ m }: { m: IncomingSms }) {
+// استخراج الأرقام الطويلة من النص ومطابقتها مع أرقام المحكمة
+function matchCase(m: IncomingSms, byCourtNum: Map<string, Case>): Case | null {
+  if (!m.message || byCourtNum.size === 0) return null
+  for (const num of m.message.match(/\d{7,}/g) ?? []) {
+    const c = byCourtNum.get(num)
+    if (c) return c
+  }
+  return null
+}
+
+function MessageRow({
+  m,
+  matchedCase,
+}: {
+  m: IncomingSms
+  matchedCase: Case | null
+}) {
+  const [, navigate] = useLocation()
   const senderIsPhone = m.phone && /\d{6,}/.test(m.phone)
   return (
     <div className="space-y-1.5 px-4 py-3">
@@ -106,6 +138,15 @@ function MessageRow({ m }: { m: IncomingSms }) {
         </span>
       </div>
       {m.message && <MessageBody text={m.message} />}
+      {matchedCase && (
+        <button
+          onClick={() => navigate(`/cases/${matchedCase.id}`)}
+          className="flex items-center gap-1.5 rounded-lg border border-gold/40 bg-gold/10 px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-gold/20"
+        >
+          <Scale className="h-3.5 w-3.5 text-gold" />
+          القضية: {matchedCase.title || matchedCase.court_num}
+        </button>
+      )}
     </div>
   )
 }
