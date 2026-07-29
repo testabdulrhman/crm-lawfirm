@@ -11,6 +11,7 @@ import {
   PhoneCall,
   Download,
   PenLine,
+  ArrowUpDown,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -19,6 +20,13 @@ import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { fmtNumber } from '@/lib/format'
 import { openExternal } from '@/lib/external'
 import { useContacts, useContactWorkLinks } from '@/hooks/useContacts'
@@ -36,6 +44,14 @@ import type { Contact, ContactWorkLinks } from '@/types/db'
 
 type LinkFilter = 'all' | 'linked' | 'unlinked'
 const PAGE = 50
+
+// خيارات الفرز
+const SORT_OPTIONS: { value: string; label: string }[] = [
+  { value: 'newest', label: 'الأحدث إضافة' },
+  { value: 'oldest', label: 'الأقدم إضافة' },
+  { value: 'name', label: 'الاسم (أبجدي)' },
+  { value: 'links', label: 'الأكثر ارتباطاً بعمل' },
+]
 
 function linkSummary(l: ContactWorkLinks): string {
   const parts: string[] = []
@@ -70,6 +86,7 @@ export function ContactsPage() {
   const [entity, setEntity] = usePageState<string>('contacts:entity', 'all')
   const [linkFilter, setLinkFilter] = usePageState<LinkFilter>('contacts:link', 'all')
   const [source, setSource] = usePageState<string>('contacts:source', 'all')
+  const [sort, setSort] = usePageState<string>('contacts:sort', 'newest')
   const [visible, setVisible] = usePageState('contacts:visible', PAGE)
   const [dialogOpen, setDialogOpen] = useState(false)
 
@@ -95,7 +112,29 @@ export function ContactsPage() {
     })
   }, [data, search, category, entity, source, linkFilter, workLinks])
 
-  const shown = filtered.slice(0, visible)
+  // الفرز حسب اختيار المستخدم (القائمة أصلاً من الأحدث للأقدم)
+  const sorted = useMemo(() => {
+    if (sort === 'newest') return filtered
+    const list = filtered.map((c, i) => ({ c, i }))
+    switch (sort) {
+      case 'oldest':
+        list.sort((a, b) => b.i - a.i)
+        break
+      case 'name':
+        list.sort((a, b) => (a.c.name ?? '').localeCompare(b.c.name ?? '', 'ar'))
+        break
+      case 'links':
+        list.sort((a, b) => {
+          const la = workLinks?.get(a.c.id)?.total_links ?? 0
+          const lb = workLinks?.get(b.c.id)?.total_links ?? 0
+          return lb - la || a.i - b.i
+        })
+        break
+    }
+    return list.map((x) => x.c)
+  }, [filtered, sort, workLinks])
+
+  const shown = sorted.slice(0, visible)
 
   // أعد ضبط الصفحات عند تغيير أي فلتر
   const resetPage = () => setVisible(PAGE)
@@ -160,11 +199,26 @@ export function ContactsPage() {
         </FilterRow>
       </div>
 
-      {/* عدّاد النتائج */}
+      {/* عدّاد النتائج + الفرز */}
       {!isLoading && (
-        <p className="text-sm text-muted-foreground">
-          النتائج: {fmtNumber(filtered.length)}
-        </p>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm text-muted-foreground">
+            النتائج: {fmtNumber(filtered.length)}
+          </p>
+          <Select value={sort} onValueChange={(v) => { setSort(v); resetPage() }}>
+            <SelectTrigger className="h-9 w-48">
+              <ArrowUpDown className="ml-1 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              <SelectValue placeholder="الفرز" />
+            </SelectTrigger>
+            <SelectContent>
+              {SORT_OPTIONS.map((o) => (
+                <SelectItem key={o.value} value={o.value}>
+                  {o.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       )}
 
       {/* المحتوى */}

@@ -7,6 +7,7 @@ import {
   CalendarClock,
   User,
   UserCog,
+  ArrowUpDown,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -39,6 +40,16 @@ import type { Case } from '@/types/db'
 const PAGE = 50
 const ALL = '__all__'
 
+// خيارات الفرز
+const SORT_OPTIONS: { value: string; label: string }[] = [
+  { value: 'default', label: 'الحالة ثم الأحدث' },
+  { value: 'newest', label: 'الأحدث إضافة' },
+  { value: 'oldest', label: 'الأقدم إضافة' },
+  { value: 'hearing', label: 'الجلسة الأقرب' },
+  { value: 'updated', label: 'آخر تحديث' },
+  { value: 'title', label: 'العنوان (أبجدي)' },
+]
+
 // هل الجلسة قريبة (خلال 7 أيام من اليوم)؟
 function isHearingSoon(d: string | null): boolean {
   if (!d) return false
@@ -59,6 +70,7 @@ export function CasesPage() {
   const [status, setStatus] = usePageState<string>('cases:status', 'all')
   const [type, setType] = usePageState<string>('cases:type', ALL)
   const [assignee, setAssignee] = usePageState<string>('cases:assignee', ALL)
+  const [sort, setSort] = usePageState<string>('cases:sort', 'default')
   const [visible, setVisible] = usePageState('cases:visible', PAGE)
   const [dialogOpen, setDialogOpen] = useState(false)
 
@@ -100,16 +112,44 @@ export function CasesPage() {
       if (assignee !== ALL && c.assignee_id !== assignee) return false
       return true
     })
-    // فرز: الجارية ثم المعلّقة ثم المنتهية (مع الحفاظ على ترتيب الأحدث داخل كل مجموعة)
+    // الفرز حسب اختيار المستخدم (الافتراضي: الجارية ثم المعلّقة ثم المنتهية، والأحدث داخل كل مجموعة)
+    const ts = (d: string | null | undefined) => {
+      const t = d ? new Date(d).getTime() : NaN
+      return isNaN(t) ? null : t
+    }
     return list
       .map((c, i) => ({ c, i }))
       .sort((a, b) => {
-        const sa = CASE_STATUS_ORDER[a.c.status ?? 'jarri'] ?? 9
-        const sb = CASE_STATUS_ORDER[b.c.status ?? 'jarri'] ?? 9
-        return sa - sb || a.i - b.i
+        switch (sort) {
+          case 'newest':
+            return a.i - b.i // القائمة أصلاً من الأحدث للأقدم
+          case 'oldest':
+            return b.i - a.i
+          case 'hearing': {
+            // الأقرب أولاً، وبلا جلسة في الآخر
+            const ha = ts(a.c.hearing_date)
+            const hb = ts(b.c.hearing_date)
+            if (ha === null && hb === null) return a.i - b.i
+            if (ha === null) return 1
+            if (hb === null) return -1
+            return ha - hb
+          }
+          case 'updated': {
+            const ua = ts(a.c.updated_at) ?? 0
+            const ub = ts(b.c.updated_at) ?? 0
+            return ub - ua
+          }
+          case 'title':
+            return (a.c.title ?? '').localeCompare(b.c.title ?? '', 'ar')
+          default: {
+            const sa = CASE_STATUS_ORDER[a.c.status ?? 'jarri'] ?? 9
+            const sb = CASE_STATUS_ORDER[b.c.status ?? 'jarri'] ?? 9
+            return sa - sb || a.i - b.i
+          }
+        }
       })
       .map((x) => x.c)
-  }, [data, search, status, type, assignee])
+  }, [data, search, status, type, assignee, sort])
 
   const shown = filtered.slice(0, visible)
 
@@ -185,6 +225,19 @@ export function CasesPage() {
             {activeMembers.map((m) => (
               <SelectItem key={m.id} value={m.id}>
                 {m.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={sort} onValueChange={(v) => { setSort(v); resetPage() }}>
+          <SelectTrigger className="h-9 w-44">
+            <ArrowUpDown className="ml-1 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            <SelectValue placeholder="الفرز" />
+          </SelectTrigger>
+          <SelectContent>
+            {SORT_OPTIONS.map((o) => (
+              <SelectItem key={o.value} value={o.value}>
+                {o.label}
               </SelectItem>
             ))}
           </SelectContent>
