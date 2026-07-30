@@ -37,6 +37,27 @@ export type TeamMemberInput = Partial<
   name: string
 }
 
+// رسائل البريد (وارد/صادر عبر Gmail API)
+export interface EmailMessage {
+  id: string
+  direction: string // incoming/outgoing
+  gmail_id: string | null
+  thread_id: string | null
+  from_email: string | null
+  from_name: string | null
+  to_email: string | null
+  subject: string | null
+  body_text: string | null
+  snippet: string | null
+  contact_id: string | null
+  sent_by: string | null
+  status: string // received/sent/failed
+  error: string | null
+  internal_date: string | null
+  created_at: string | null
+  contact?: { id: string; name: string } | null
+}
+
 // قيود الرواتب/المكافآت/الخصومات لكل موظف
 export interface PayrollEntry {
   id: string
