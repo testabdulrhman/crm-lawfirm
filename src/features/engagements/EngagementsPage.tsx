@@ -8,6 +8,7 @@ import {
   User,
   CalendarDays,
   FileText,
+  FileSpreadsheet,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -20,6 +21,7 @@ import { fmtNumber, fmtDatePref } from '@/lib/format'
 import { useEngagements } from '@/hooks/useEngagements'
 import { usePageState } from '@/hooks/usePageState'
 import { EngagementForm } from './EngagementForm'
+import { NewDebtContractDialog } from './NewDebtContractDialog'
 import {
   ENG_STATUS_OPTIONS,
   engStatusBadge,
@@ -34,6 +36,7 @@ export function EngagementsPage() {
   const [search, setSearch] = usePageState('eng:q', '')
   const [status, setStatus] = usePageState<string>('eng:status', 'all')
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [templateOpen, setTemplateOpen] = useState(false)
 
   const counts = useMemo(() => {
     const c: Record<string, number> = { all: data?.length ?? 0 }
@@ -65,10 +68,16 @@ export function EngagementsPage() {
             ({fmtNumber(data?.length ?? 0)})
           </span>
         </h2>
-        <Button variant="gold" onClick={() => setDialogOpen(true)}>
-          <Plus className="h-4 w-4" />
-          عقد جديد
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setTemplateOpen(true)}>
+            <FileSpreadsheet className="h-4 w-4" />
+            من نموذج
+          </Button>
+          <Button variant="gold" onClick={() => setDialogOpen(true)}>
+            <Plus className="h-4 w-4" />
+            عقد جديد
+          </Button>
+        </div>
       </div>
 
       {/* البحث */}
@@ -124,6 +133,13 @@ export function EngagementsPage() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-2xl">
           <EngagementForm onDone={() => setDialogOpen(false)} />
+        </DialogContent>
+      </Dialog>
+
+      {/* عقد تحصيل ديون من النموذج المعتمد */}
+      <Dialog open={templateOpen} onOpenChange={setTemplateOpen}>
+        <DialogContent className="max-w-2xl">
+          <NewDebtContractDialog onDone={() => setTemplateOpen(false)} />
         </DialogContent>
       </Dialog>
     </div>

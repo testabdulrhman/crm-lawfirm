@@ -32,6 +32,7 @@ export function engStatusBadge(s: string | null): BadgeProps['variant'] {
 
 export const ENG_TYPE_OPTIONS = [
   { value: 'case', label: 'قضية / ترافع' },
+  { value: 'collection', label: 'تحصيل ديون' },
   { value: 'consultation', label: 'استشارات' },
   { value: 'bankruptcy', label: 'إجراءات إفلاس' },
   { value: 'subscription', label: 'اشتراك سنوي' },
