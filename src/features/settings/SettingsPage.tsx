@@ -7,6 +7,7 @@ import {
   CalendarDays,
   CalendarCheck,
   MessageSquareText,
+  UserCircle2,
 } from 'lucide-react'
 
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
@@ -21,6 +22,7 @@ import { fmtDatePref, todayISO } from '@/lib/format'
 import { OfficeInfoTab } from './OfficeInfoTab'
 import { LookupsTab } from './LookupsTab'
 import { TemplatesTab } from './TemplatesTab'
+import { AccountTab } from './AccountTab'
 
 export function SettingsPage() {
   // التبويب المفتوح يدوم للرجوع/التحديث
@@ -42,6 +44,10 @@ export function SettingsPage() {
               إعدادات خاصة بك
             </p>
             <TabsList className="flex w-auto flex-wrap justify-start gap-1">
+              <TabsTrigger value="account" className="gap-2">
+                <UserCircle2 className="h-4 w-4" />
+                حسابي
+              </TabsTrigger>
               <TabsTrigger value="appearance" className="gap-2">
                 <Palette className="h-4 w-4" />
                 المظهر
@@ -83,6 +89,10 @@ export function SettingsPage() {
 
         <TabsContent value="templates">
           <TemplatesTab />
+        </TabsContent>
+
+        <TabsContent value="account">
+          <AccountTab />
         </TabsContent>
 
         <TabsContent value="appearance">
