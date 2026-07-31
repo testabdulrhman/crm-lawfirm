@@ -70,10 +70,12 @@ export function useSaveCaseStudy(caseId: string) {
   })
 }
 
+// التوليد يعمل في خلفية الخادم (قد يستغرق دقائق) — نطلقه ثم نتابع الصف حتى يكتمل
 export function useGenerateCaseStudy(caseId: string) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (userName: string | null) => {
+      const startedAt = Date.now()
       const { data, error } = await supabase.functions.invoke('case-study', {
         body: { case_id: caseId, user_name: userName },
       })
@@ -88,16 +90,32 @@ export function useGenerateCaseStudy(caseId: string) {
         throw new Error(detail)
       }
       if (data?.error) throw new Error(data.error)
-      return data as { study: CaseStudy; read_docs: string[] }
+
+      // متابعة كل 6 ثوانٍ حتى 7 دقائق
+      for (let i = 0; i < 70; i++) {
+        await new Promise((r) => setTimeout(r, 6000))
+        const { data: row } = await supabase
+          .from('case_studies')
+          .select('*')
+          .eq('case_id', caseId)
+          .maybeSingle()
+        const study = row as CaseStudy | null
+        if (
+          study?.generated_at &&
+          new Date(study.generated_at).getTime() >= startedAt - 10000
+        ) {
+          return study
+        }
+      }
+      throw new Error(
+        'استغرق التوليد أطول من المتوقع — أعد فتح التبويب بعد قليل أو أعد المحاولة.'
+      )
     },
-    onSuccess: (d) => {
+    onSuccess: (study) => {
       qc.invalidateQueries({ queryKey: [KEY, caseId] })
       toast({
         title: 'اكتملت دراسة القضية',
-        description:
-          d.read_docs.length > 0
-            ? `قرأ الذكاء ${d.read_docs.length} مستند من ملف القضية.`
-            : 'وُلّدت من بيانات النظام (لا مستندات PDF مقروءة).',
+        description: study.generated_by ?? undefined,
       })
     },
     onError: (e) =>
