@@ -1,13 +1,23 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 
 import { cn } from '@/lib/utils'
 import { usePrefs } from '@/stores/prefs'
+import { useAuth } from '@/stores/auth'
+import { startUsageTracking } from '@/lib/usageTracker'
 import { Sidebar } from './Sidebar'
 import { TopBar } from './TopBar'
 import { AiAssistant } from '@/components/AiAssistant'
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false)
+  const { teamMember } = useAuth()
+
+  // تسجيل جلسة الاستخدام (مرة واحدة لكل فتح للتطبيق)
+  useEffect(() => {
+    if (teamMember?.name) {
+      void startUsageTracking(teamMember.name, teamMember.role)
+    }
+  }, [teamMember?.name, teamMember?.role])
   // مفتاح يعيد بناء المحتوى عند تغيير تفضيل عرض التاريخ (تحديث فوري للتواريخ)
   const dateDisplay = usePrefs((s) => s.dateDisplay)
 

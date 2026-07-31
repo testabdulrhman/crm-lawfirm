@@ -24,6 +24,10 @@ import {
   AlertTriangle,
   Flame,
   RefreshCw,
+  MonitorSmartphone,
+  Users,
+  Timer,
+  LogIn,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -38,11 +42,13 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { fmtNumber } from '@/lib/format'
+import { fmtNumber, fmtDateTime } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { categoryLabel } from '@/lib/contactLabels'
 import { caseTypeLabel } from '@/lib/caseLabels'
 import { useReportsOverview, useReportsByAssignee } from '@/hooks/useReports'
+import { useUsageStats } from '@/hooks/useUsageStats'
+import { useIsDirector } from '@/hooks/useIsDirector'
 import type { NameValue } from '@/types/db'
 
 const COLORS = [
@@ -208,6 +214,114 @@ export function ReportsPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* استخدام التطبيق (للمدير) */}
+      <UsageSection />
+    </div>
+  )
+}
+
+// دقائق ← نص «س ود» مقروء
+const fmtMins = (m: number): string => {
+  if (m < 60) return `${fmtNumber(m)} د`
+  const h = Math.floor(m / 60)
+  const r = m % 60
+  return r === 0 ? `${fmtNumber(h)} س` : `${fmtNumber(h)} س ${fmtNumber(r)} د`
+}
+
+function UsageSection() {
+  const isDirector = useIsDirector()
+  const { data: usage, isLoading } = useUsageStats()
+
+  if (!isDirector) return null
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2.5">
+        <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gold/10">
+          <MonitorSmartphone className="h-[18px] w-[18px] text-gold" />
+        </span>
+        <h3 className="text-[15px] font-semibold text-foreground">
+          استخدام التطبيق (آخر 30 يوماً)
+        </h3>
+      </div>
+
+      {isLoading || !usage ? (
+        <Skeleton className="h-64 w-full" />
+      ) : (
+        <>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <StatCard label="نشطون اليوم" value={usage.activeToday} icon={Users} tone="green" />
+            <StatCard label="جلسات هذا الأسبوع" value={usage.weekSessions} icon={LogIn} tone="gold" />
+            <Card>
+              <CardContent className="flex items-center justify-between gap-3 p-4">
+                <div>
+                  <p className="text-2xl font-bold text-foreground">
+                    {fmtMins(usage.weekMinutes)}
+                  </p>
+                  <p className="text-sm text-muted-foreground">استخدام هذا الأسبوع</p>
+                </div>
+                <div className={cn('flex h-11 w-11 items-center justify-center rounded-xl', TONES.blue)}>
+                  <Timer className="h-5 w-5" />
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <ChartCard title="دقائق الاستخدام يومياً (آخر 14 يوماً)">
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={usage.byDay}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="label" tick={{ fontSize: 11 }} reversed />
+                <YAxis orientation="right" tick={{ fontSize: 11 }} allowDecimals={false} />
+                <Tooltip formatter={(v) => [`${fmtNumber(Number(v))} دقيقة`, 'الاستخدام']} />
+                <Bar dataKey="minutes" fill="#C9A84C" radius={[6, 6, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </ChartCard>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">الاستخدام حسب الموظف</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {usage.byUser.length === 0 ? (
+                <p className="py-6 text-center text-sm text-muted-foreground">
+                  لا بيانات استخدام بعد — تُسجَّل الجلسات تلقائياً من الآن مع كل دخول.
+                </p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>الموظف</TableHead>
+                      <TableHead className="text-center">الجلسات</TableHead>
+                      <TableHead className="text-center">إجمالي الاستخدام</TableHead>
+                      <TableHead className="text-center">آخر دخول</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {usage.byUser.map((u) => (
+                      <TableRow key={u.name}>
+                        <TableCell>
+                          <p className="font-medium text-foreground">{u.name}</p>
+                          {u.role && (
+                            <p className="text-xs text-muted-foreground">{u.role}</p>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center">{fmtNumber(u.sessions)}</TableCell>
+                        <TableCell className="text-center font-medium">{fmtMins(u.minutes)}</TableCell>
+                        <TableCell className="text-center text-sm text-muted-foreground">
+                          {fmtDateTime(u.lastLogin)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </>
+      )}
     </div>
   )
 }
