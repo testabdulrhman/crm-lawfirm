@@ -30,34 +30,48 @@ export function SettingsPage() {
       <div>
         <h2 className="text-2xl font-bold tracking-tight text-foreground">الإعدادات</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          إدارة بيانات المكتب والتصنيفات ومظهر النظام
+          إعداداتك الشخصية، وإعدادات المكتب المشتركة
         </p>
       </div>
 
       <Tabs value={tab} onValueChange={setTab} dir="rtl">
-        <TabsList className="flex w-full flex-wrap justify-start gap-1 sm:w-auto">
-          <TabsTrigger value="office" className="gap-2">
-            <Building2 className="h-4 w-4" />
-            بيانات المكتب
-          </TabsTrigger>
-          <TabsTrigger value="lookups" className="gap-2">
-            <Tags className="h-4 w-4" />
-            التصنيفات
-          </TabsTrigger>
-          <TabsTrigger value="templates" className="gap-2">
-            <MessageSquareText className="h-4 w-4" />
-            قوالب الرسائل
-          </TabsTrigger>
-          <TabsTrigger value="appearance" className="gap-2">
-            <Palette className="h-4 w-4" />
-            المظهر
-          </TabsTrigger>
-          <TabsTrigger value="integrations" className="gap-2">
-            <CalendarCheck className="h-4 w-4" />
-            التكاملات
-          </TabsTrigger>
-          {/* تبويبات قادمة: قوالب الرسائل، SMS، مستندات المكتب... */}
-        </TabsList>
+        {/* مجموعتان: ما يخص المستخدم وحده، وما يخص المكتب كله */}
+        <div className="flex flex-wrap items-end gap-x-8 gap-y-3">
+          <div>
+            <p className="mb-1.5 px-1 text-xs font-semibold text-muted-foreground">
+              إعدادات خاصة بك
+            </p>
+            <TabsList className="flex w-auto flex-wrap justify-start gap-1">
+              <TabsTrigger value="appearance" className="gap-2">
+                <Palette className="h-4 w-4" />
+                المظهر
+              </TabsTrigger>
+            </TabsList>
+          </div>
+          <div>
+            <p className="mb-1.5 px-1 text-xs font-semibold text-muted-foreground">
+              إعدادات المكتب (مشتركة للجميع)
+            </p>
+            <TabsList className="flex w-auto flex-wrap justify-start gap-1">
+              <TabsTrigger value="office" className="gap-2">
+                <Building2 className="h-4 w-4" />
+                بيانات المكتب
+              </TabsTrigger>
+              <TabsTrigger value="lookups" className="gap-2">
+                <Tags className="h-4 w-4" />
+                التصنيفات
+              </TabsTrigger>
+              <TabsTrigger value="templates" className="gap-2">
+                <MessageSquareText className="h-4 w-4" />
+                قوالب الرسائل
+              </TabsTrigger>
+              <TabsTrigger value="integrations" className="gap-2">
+                <CalendarCheck className="h-4 w-4" />
+                التكاملات
+              </TabsTrigger>
+            </TabsList>
+          </div>
+        </div>
 
         <TabsContent value="office">
           <OfficeInfoTab />
