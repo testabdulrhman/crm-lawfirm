@@ -31,6 +31,7 @@ import {
 } from '@/lib/caseLabels'
 import { CaseForm } from './CaseForm'
 import { OverviewTab } from './tabs/OverviewTab'
+import { StudyTab } from './tabs/StudyTab'
 import { PartiesTab } from './tabs/PartiesTab'
 import { SessionsTab } from './tabs/SessionsTab'
 import { RulingsTab } from './tabs/RulingsTab'
@@ -44,6 +45,7 @@ import type { Case, CaseStatus } from '@/types/db'
 // ترتيب التبويبات المعتمد
 const TABS = [
   { value: 'overview', label: 'نظرة عامة' },
+  { value: 'study', label: 'دراسة القضية' },
   { value: 'project', label: 'بطاقة المشروع' },
   { value: 'parties', label: 'الأطراف' },
   { value: 'sessions', label: 'الجلسات' },
@@ -192,6 +194,9 @@ export function CaseDetail({ id }: { id: string }) {
 
         <TabsContent value="overview">
           <OverviewTab caseData={c} />
+        </TabsContent>
+        <TabsContent value="study">
+          <StudyTab caseId={c.id} />
         </TabsContent>
         <TabsContent value="project">
           <ProjectTab caseId={c.id} />
