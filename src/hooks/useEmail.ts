@@ -14,13 +14,58 @@ export function useEmailMessages(direction: 'incoming' | 'outgoing') {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('email_messages')
-        .select('*, contact:contacts(id,name)')
+        .select('*, contact:contacts(id,name), case:cases(id,title)')
         .eq('direction', direction)
         .order('internal_date', { ascending: false })
         .limit(300)
       if (error) throw error
       return (data ?? []) as EmailMessage[]
     },
+  })
+}
+
+// إضافة الرسالة ومرفقاتها لملف قضية (عبر دالة email-attach)
+export function useAttachEmailToCase() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: {
+      email_id: string
+      case_id: string
+      uploaded_by_name: string | null
+    }) => {
+      const { data, error } = await supabase.functions.invoke('email-attach', {
+        body: input,
+      })
+      if (error) {
+        let detail = errMessage(error)
+        try {
+          const ctx = await (error as { context?: Response }).context?.json()
+          if (ctx?.error) detail = ctx.error
+        } catch {
+          /* نكتفي بالرسالة العامة */
+        }
+        throw new Error(detail)
+      }
+      if (data?.error) throw new Error(data.error)
+      return data as { ok: boolean; attachments: number }
+    },
+    onSuccess: (d, vars) => {
+      qc.invalidateQueries({ queryKey: [KEY] })
+      qc.invalidateQueries({ queryKey: ['case_documents', vars.case_id] })
+      toast({
+        title: 'أُضيفت الرسالة لملف القضية',
+        description:
+          d.attachments > 0
+            ? `نُقل ${d.attachments} مرفق + نص الرسالة إلى مستندات القضية.`
+            : 'نُقل نص الرسالة إلى مستندات القضية (لا مرفقات).',
+      })
+    },
+    onError: (e) =>
+      toast({
+        variant: 'destructive',
+        title: 'تعذّرت الإضافة للقضية',
+        description: errMessage(e),
+      }),
   })
 }
 

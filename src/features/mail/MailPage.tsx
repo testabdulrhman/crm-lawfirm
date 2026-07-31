@@ -1,7 +1,16 @@
 // البريد الرسمي — وارد (مزامنة كل 5 دقائق) وصادر (إرسال عبر Gmail API)
 import { useMemo, useState } from 'react'
 import { useLocation } from 'wouter'
-import { Mail, Search, Send, Loader2, AlertCircle, User } from 'lucide-react'
+import {
+  Mail,
+  Search,
+  Send,
+  Loader2,
+  AlertCircle,
+  User,
+  Scale,
+  FolderPlus,
+} from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -17,11 +26,17 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { ContactPicker } from '@/components/ContactPicker'
+import { CasePicker } from '@/components/CasePicker'
 import { fmtNumber, fmtDateTime } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/stores/auth'
 import { useContacts } from '@/hooks/useContacts'
-import { useEmailMessages, useSendEmail } from '@/hooks/useEmail'
+import { useCases } from '@/hooks/useCases'
+import {
+  useEmailMessages,
+  useSendEmail,
+  useAttachEmailToCase,
+} from '@/hooks/useEmail'
 import { usePageState } from '@/hooks/usePageState'
 import type { EmailMessage } from '@/types/db'
 
@@ -112,7 +127,12 @@ export function MailPage() {
 
 function MailRow({ m }: { m: EmailMessage }) {
   const [, navigate] = useLocation()
+  const { teamMember } = useAuth()
   const [open, setOpen] = useState(false)
+  const [attachOpen, setAttachOpen] = useState(false)
+  const [pickedCase, setPickedCase] = useState<string | null>(null)
+  const { data: cases } = useCases()
+  const attachM = useAttachEmailToCase()
   const isOut = m.direction === 'outgoing'
   const who = isOut
     ? m.to_email
@@ -157,17 +177,81 @@ function MailRow({ m }: { m: EmailMessage }) {
           >
             {m.body_text || m.snippet || '—'}
           </p>
-          {m.contact && (
-            <button
-              onClick={() => navigate(`/contacts/${m.contact!.id}`)}
-              className="flex items-center gap-1.5 rounded-lg border border-gold/40 bg-gold/10 px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-gold/20"
-            >
-              <User className="h-3.5 w-3.5 text-gold" />
-              {m.contact.name}
-            </button>
-          )}
+          <div className="flex flex-wrap items-center gap-2">
+            {m.contact && (
+              <button
+                onClick={() => navigate(`/contacts/${m.contact!.id}`)}
+                className="flex items-center gap-1.5 rounded-lg border border-gold/40 bg-gold/10 px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-gold/20"
+              >
+                <User className="h-3.5 w-3.5 text-gold" />
+                {m.contact.name}
+              </button>
+            )}
+            {m.case ? (
+              <button
+                onClick={() => navigate(`/cases/${m.case!.id}`)}
+                className="flex items-center gap-1.5 rounded-lg border border-gold/40 bg-gold/10 px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-gold/20"
+              >
+                <Scale className="h-3.5 w-3.5 text-gold" />
+                القضية: {m.case.title || '—'}
+              </button>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={() => {
+                  setPickedCase(null)
+                  setAttachOpen(true)
+                }}
+              >
+                <FolderPlus className="h-3.5 w-3.5" />
+                إضافة لملف قضية
+              </Button>
+            )}
+          </div>
         </div>
       )}
+
+      {/* اختيار القضية — تُنقل الرسالة ومرفقاتها لمستنداتها */}
+      <Dialog open={attachOpen} onOpenChange={setAttachOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>إضافة الرسالة لملف قضية</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            سيُحفظ نص الرسالة وجميع مرفقاتها في مستندات القضية المختارة.
+          </p>
+          <CasePicker
+            cases={cases ?? []}
+            value={pickedCase}
+            onChange={setPickedCase}
+          />
+          <DialogFooter className="gap-2">
+            <Button
+              variant="gold"
+              disabled={!pickedCase || attachM.isPending}
+              onClick={() =>
+                pickedCase &&
+                attachM.mutate(
+                  {
+                    email_id: m.id,
+                    case_id: pickedCase,
+                    uploaded_by_name: teamMember?.name ?? null,
+                  },
+                  { onSuccess: () => setAttachOpen(false) }
+                )
+              }
+            >
+              {attachM.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              إضافة
+            </Button>
+            <Button variant="outline" onClick={() => setAttachOpen(false)}>
+              إلغاء
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

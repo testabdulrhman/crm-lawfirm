@@ -55,7 +55,9 @@ export interface EmailMessage {
   error: string | null
   internal_date: string | null
   created_at: string | null
+  case_id: string | null
   contact?: { id: string; name: string } | null
+  case?: { id: string; title: string | null } | null
 }
 
 // قيود الرواتب/المكافآت/الخصومات لكل موظف
