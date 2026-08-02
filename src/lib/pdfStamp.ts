@@ -34,6 +34,49 @@ export const applyModeLabel = (m: string | null | undefined): string =>
 // الافتراضي التاريخي: أسفل يسار آخر صفحة (يُستخدم عند غياب موضع مختار)
 export const DEFAULT_STAMP_POS = { x: 0.22, y: 0.86 }
 
+// مستطيل عنصر على الصفحة بالنقاط — الأصل أعلى-يسار
+export interface LayoutRect {
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
+// ⚠️ مصدر الحقيقة الوحيد لمواضع الختم/التوقيع — تستخدمه معاينة السحب والدمج النهائي
+// معاً حتى يتطابقا بالمليمتر. aspect = ارتفاع الصورة ÷ عرضها.
+export function computeLayout(args: {
+  pageW: number
+  pageH: number
+  pos: { x: number; y: number } // مركز الكتلة بكسور 0..1 من أعلى يسار
+  stampAspect: number | null // null = بلا ختم
+  sigAspect: number | null // null = بلا توقيع
+}): { stamp?: LayoutRect; sig?: LayoutRect } {
+  const { pageW, pageH, pos } = args
+  const cx = pos.x * pageW
+  const cyTop = pos.y * pageH
+  const out: { stamp?: LayoutRect; sig?: LayoutRect } = {}
+
+  let stampH = 0
+  if (args.stampAspect != null) {
+    const w = STAMP_WIDTH_PT
+    stampH = args.stampAspect * w
+    out.stamp = { x: cx - w / 2, y: cyTop - stampH / 2, w, h: stampH }
+  }
+  if (args.sigAspect != null) {
+    const w = SIGNATURE_WIDTH_PT
+    const h = args.sigAspect * w
+    if (out.stamp) {
+      // فوق الختم بتداخل خفيف (نفس معادلة الدمج التاريخية)
+      const bottomFromBottom =
+        pageH - cyTop - stampH / 2 + Math.max(stampH * 0.55, 30)
+      out.sig = { x: cx - w / 2 - 20, y: pageH - bottomFromBottom - h, w, h }
+    } else {
+      out.sig = { x: cx - w / 2, y: cyTop - h / 2, w, h }
+    }
+  }
+  return out
+}
+
 export async function stampPdf(
   fileUrl: string,
   opts: {
@@ -68,48 +111,63 @@ export async function stampPdf(
     }
   }
 
-  // مركز الختم بنقاط PDF (الأصل أسفل-يسار)
-  const cx = (opts.position?.x ?? DEFAULT_STAMP_POS.x) * width
-  const cyTop = (opts.position?.y ?? DEFAULT_STAMP_POS.y) * height
-  const cy = height - cyTop
+  // الرسم من computeLayout نفسها التي تعرضها معاينة السحب — تطابق تام
+  const stampImg = opts.stampUrl ? await embed(opts.stampUrl) : null
+  const sigImg = opts.signatureUrl ? await embed(opts.signatureUrl) : null
 
-  let stampH = 0
-  if (opts.stampUrl) {
-    const img = await embed(opts.stampUrl)
-    const w = STAMP_WIDTH_PT
-    stampH = (img.height / img.width) * w
-    page.drawImage(img, {
-      x: cx - w / 2,
-      y: cy - stampH / 2,
-      width: w,
-      height: stampH,
+  const pos = {
+    x: opts.position?.x ?? DEFAULT_STAMP_POS.x,
+    y: opts.position?.y ?? DEFAULT_STAMP_POS.y,
+  }
+  const layout = computeLayout({
+    pageW: width,
+    pageH: height,
+    pos,
+    stampAspect: stampImg ? stampImg.height / stampImg.width : null,
+    sigAspect: sigImg ? sigImg.height / sigImg.width : null,
+  })
+
+  // تحويل أعلى-يسار → أصل pdf-lib أسفل-يسار: y = pageH - (top + h)
+  if (stampImg && layout.stamp) {
+    const r = layout.stamp
+    page.drawImage(stampImg, {
+      x: r.x,
+      y: height - (r.y + r.h),
+      width: r.w,
+      height: r.h,
       opacity: 0.92,
     })
   }
-  // التوقيع: مع الختم يعلوه بتداخل خفيف (مظهر طبيعي)، وبدونه يتمركز على الموضع المختار
-  if (opts.signatureUrl) {
-    const img = await embed(opts.signatureUrl)
-    const w = SIGNATURE_WIDTH_PT
-    const h = (img.height / img.width) * w
-    const x = opts.stampUrl ? cx - w / 2 - 20 : cx - w / 2
-    const y = opts.stampUrl
-      ? cy - stampH / 2 + Math.max(stampH * 0.55, 30)
-      : cy - h / 2
-    page.drawImage(img, { x, y, width: w, height: h, opacity: 0.95 })
+  if (sigImg && layout.sig) {
+    const r = layout.sig
+    page.drawImage(sigImg, {
+      x: r.x,
+      y: height - (r.y + r.h),
+      width: r.w,
+      height: r.h,
+      opacity: 0.95,
+    })
 
-    // التواقيع الإضافية: كلٌّ يتمركز على موضعه (في صفحته هو)
+    // التواقيع الإضافية: كلٌّ يتمركز على موضعه (في صفحته هو) بنفس الحاسبة
     for (const sig of opts.extraSignatures ?? []) {
       const p2 = doc.getPage(Math.min(Math.max(sig.page, 1), pageCount) - 1)
       const { width: w2, height: h2 } = p2.getSize()
-      const cx2 = sig.x * w2
-      const cy2 = h2 - sig.y * h2
-      p2.drawImage(img, {
-        x: cx2 - w / 2,
-        y: cy2 - h / 2,
-        width: w,
-        height: h,
-        opacity: 0.95,
+      const l2 = computeLayout({
+        pageW: w2,
+        pageH: h2,
+        pos: sig,
+        stampAspect: null,
+        sigAspect: sigImg.height / sigImg.width,
       })
+      if (l2.sig) {
+        p2.drawImage(sigImg, {
+          x: l2.sig.x,
+          y: h2 - (l2.sig.y + l2.sig.h),
+          width: l2.sig.w,
+          height: l2.sig.h,
+          opacity: 0.95,
+        })
+      }
     }
   }
 

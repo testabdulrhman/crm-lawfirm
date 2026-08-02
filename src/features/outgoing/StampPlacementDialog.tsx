@@ -23,14 +23,30 @@ import {
 } from '@/components/ui/dialog'
 import { fmtNumber } from '@/lib/format'
 import {
-  STAMP_WIDTH_PT,
-  SIGNATURE_WIDTH_PT,
   DEFAULT_STAMP_POS,
   APPLY_MODE_LABELS,
+  computeLayout,
   type StampPosition,
   type ApplyMode,
 } from '@/lib/pdfStamp'
 import { errMessage } from '@/lib/errors'
+
+// نسبة ارتفاع الصورة إلى عرضها (لحساب المواضع بدقة الدمج النهائي)
+function useImageAspect(url: string | null): number | null {
+  const [aspect, setAspect] = useState<number | null>(null)
+  useEffect(() => {
+    if (!url) {
+      setAspect(null)
+      return
+    }
+    const img = new Image()
+    img.onload = () => {
+      if (img.naturalWidth > 0) setAspect(img.naturalHeight / img.naturalWidth)
+    }
+    img.src = url
+  }, [url])
+  return aspect
+}
 
 export function StampPlacementDialog({
   open,
@@ -78,6 +94,10 @@ export function StampPlacementDialog({
   const [cssSize, setCssSize] = useState({ w: 0, h: 0 })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  // أبعاد الصور الحقيقية — 1 (مربع) و0.35 احتياطيان حتى تُحمَّل
+  const stampAspect = useImageAspect(stampUrl) ?? 1
+  const sigAspect = useImageAspect(signatureUrl) ?? 0.35
 
   // عند الفتح: ابدأ من الموضع المحفوظ أو الافتراضي، والصفحة الأخيرة افتراضاً
   useEffect(() => {
@@ -173,33 +193,57 @@ export function StampPlacementDialog({
     }
   }
 
+  // مقياس التحويل: نقاط PDF ← بكسلات الشاشة
+  const k = cssSize.w / pageSizePt.w
+
+  // ⚠️ نفس حاسبة الدمج النهائي (computeLayout) — المعاينة مطابقة للنتيجة بالمليمتر
+  const primaryLayout = computeLayout({
+    pageW: pageSizePt.w,
+    pageH: pageSizePt.h,
+    pos,
+    stampAspect: mode !== 'signature' && stampUrl ? stampAspect : null,
+    sigAspect: mode !== 'stamp' && signatureUrl ? sigAspect : null,
+  })
+  const extraSigRect = (s: StampPosition) =>
+    computeLayout({
+      pageW: pageSizePt.w,
+      pageH: pageSizePt.h,
+      pos: s,
+      stampAspect: null,
+      sigAspect,
+    }).sig!
+
   // تحديد العنصر الممسوك عند بدء الضغط (الأحدث أولاً) — لا شيء = لا سحب
+  const PAD = 10 // هامش لمس بالبكسل
+  const inRect = (
+    px: number,
+    py: number,
+    r: { x: number; y: number; w: number; h: number }
+  ) =>
+    px >= r.x * k - PAD &&
+    px <= (r.x + r.w) * k + PAD &&
+    py >= r.y * k - PAD &&
+    py <= (r.y + r.h) * k + PAD
+
   const findTarget = (clientX: number, clientY: number): 'primary' | number | null => {
-    const p = toFrac(clientX, clientY)
-    if (!p || cssSize.w === 0) return null
-    const halfW = sigCssW / cssSize.w / 2
-    const halfH = Math.max((sigCssW * 0.4) / cssSize.h / 2, 0.045)
-    if (mode !== 'stamp') {
+    const el = containerRef.current
+    if (!el || cssSize.w === 0) return null
+    const rect = el.getBoundingClientRect()
+    const px = clientX - rect.left
+    const py = clientY - rect.top
+    if (mode !== 'stamp' && signatureUrl) {
       for (let i = sigs.length - 1; i >= 0; i--) {
-        const s = sigs[i]
-        if (s.page !== page) continue
-        if (Math.abs(p.x - s.x) <= halfW && Math.abs(p.y - s.y) <= halfH) return i
+        if (sigs[i].page !== page) continue
+        if (inRect(px, py, extraSigRect(sigs[i]))) return i
       }
     }
-    // الكتلة الأساسية (في صفحتها فقط) — صندوق يغطي الختم/التوقيع
+    // الكتلة الأساسية (في صفحتها فقط) — أيٌّ من مستطيلي الختم/التوقيع
     if (page === primaryPage) {
-      const halfPW = Math.max(stampCssW, mode === 'signature' ? sigCssW : 0) / cssSize.w / 2
-      const halfPH = Math.max((stampCssW * 1.2) / cssSize.h / 2, 0.06)
-      if (Math.abs(p.x - pos.x) <= halfPW && Math.abs(p.y - pos.y) <= halfPH)
-        return 'primary'
+      if (primaryLayout.stamp && inRect(px, py, primaryLayout.stamp)) return 'primary'
+      if (primaryLayout.sig && inRect(px, py, primaryLayout.sig)) return 'primary'
     }
     return null
   }
-
-  // مقاس الختم على الشاشة بنفس نسبته الحقيقية في الـPDF
-  const k = cssSize.w / pageSizePt.w
-  const stampCssW = STAMP_WIDTH_PT * k
-  const sigCssW = SIGNATURE_WIDTH_PT * k
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -305,43 +349,33 @@ export function StampPlacementDialog({
                 </div>
               )}
 
-              {/* الختم و/أو التوقيع حسب الاختيار — الكتلة الأساسية تظهر في صفحتها فقط */}
-              {!loading && page === primaryPage && stampUrl && mode !== 'signature' && (
+              {/* الكتلة الأساسية — تُرسم من computeLayout نفسها (تطابق الدمج النهائي) */}
+              {!loading && page === primaryPage && primaryLayout.stamp && (
                 <img
-                  src={stampUrl}
+                  src={stampUrl!}
                   alt="الختم"
                   draggable={false}
                   className="pointer-events-none absolute opacity-90 drop-shadow-sm"
                   style={{
-                    width: stampCssW,
-                    left: pos.x * cssSize.w - stampCssW / 2,
-                    top: pos.y * cssSize.h - stampCssW / 2,
+                    width: primaryLayout.stamp.w * k,
+                    height: primaryLayout.stamp.h * k,
+                    left: primaryLayout.stamp.x * k,
+                    top: primaryLayout.stamp.y * k,
                   }}
                 />
               )}
-              {!loading && page === primaryPage && signatureUrl && mode !== 'stamp' && (
+              {!loading && page === primaryPage && primaryLayout.sig && (
                 <img
-                  src={signatureUrl}
+                  src={signatureUrl!}
                   alt="التوقيع"
                   draggable={false}
                   className="pointer-events-none absolute opacity-90"
-                  style={
-                    mode === 'signature'
-                      ? {
-                          // توقيع فقط: يتمركز على الموضع المختار (مطابق للدمج النهائي)
-                          width: sigCssW,
-                          left: pos.x * cssSize.w - sigCssW / 2,
-                          top: pos.y * cssSize.h - (sigCssW * 0.35) / 2,
-                        }
-                      : {
-                          width: sigCssW,
-                          left: pos.x * cssSize.w - sigCssW / 2 - 20 * k,
-                          top:
-                            pos.y * cssSize.h -
-                            stampCssW / 2 -
-                            Math.max(stampCssW * 0.55, 30 * k),
-                        }
-                  }
+                  style={{
+                    width: primaryLayout.sig.w * k,
+                    height: primaryLayout.sig.h * k,
+                    left: primaryLayout.sig.x * k,
+                    top: primaryLayout.sig.y * k,
+                  }}
                 />
               )}
 
@@ -349,15 +383,18 @@ export function StampPlacementDialog({
               {!loading &&
                 signatureUrl &&
                 mode !== 'stamp' &&
-                sigs.map((s, i) =>
-                  s.page === page ? (
+                sigs.map((s, i) => {
+                  if (s.page !== page) return null
+                  const r = extraSigRect(s)
+                  return (
                     <div
                       key={i}
                       className="pointer-events-none absolute"
                       style={{
-                        width: sigCssW,
-                        left: s.x * cssSize.w - sigCssW / 2,
-                        top: s.y * cssSize.h - (sigCssW * 0.35) / 2,
+                        width: r.w * k,
+                        height: r.h * k,
+                        left: r.x * k,
+                        top: r.y * k,
                       }}
                     >
                       <img
@@ -370,8 +407,8 @@ export function StampPlacementDialog({
                         {fmtNumber(i + 2)}
                       </span>
                     </div>
-                  ) : null
-                )}
+                  )
+                })}
             </div>
           </div>
         )}
