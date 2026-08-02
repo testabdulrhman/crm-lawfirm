@@ -48,7 +48,16 @@ import { categoryLabel } from '@/lib/contactLabels'
 import { caseTypeLabel } from '@/lib/caseLabels'
 import { useReportsOverview, useReportsByAssignee } from '@/hooks/useReports'
 import { useUsageStats } from '@/hooks/useUsageStats'
+import { useUsageDetails } from '@/hooks/useUsageDetails'
 import { useIsDirector } from '@/hooks/useIsDirector'
+import { usePageState } from '@/hooks/usePageState'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import type { NameValue } from '@/types/db'
 
 const COLORS = [
@@ -232,6 +241,8 @@ const fmtMins = (m: number): string => {
 function UsageSection() {
   const isDirector = useIsDirector()
   const { data: usage, isLoading } = useUsageStats()
+  const [userFilter, setUserFilter] = usePageState('reports:usage-user', 'all')
+  const { data: details } = useUsageDetails(userFilter)
 
   if (!isDirector) return null
 
@@ -320,6 +331,104 @@ function UsageSection() {
               )}
             </CardContent>
           </Card>
+
+          {/* التفاصيل الدقيقة: الصفحات والأزرار (مع فلتر موظف) */}
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+            <p className="text-sm font-semibold text-foreground">
+              تفاصيل دقيقة: الصفحات والأزرار
+            </p>
+            <Select value={userFilter} onValueChange={setUserFilter}>
+              <SelectTrigger className="h-9 w-44">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">كل الموظفين</SelectItem>
+                {usage.byUser.map((u) => (
+                  <SelectItem key={u.name} value={u.name}>
+                    {u.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">الوقت في كل صفحة</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {!details || details.pages.length === 0 ? (
+                  <p className="py-6 text-center text-sm text-muted-foreground">
+                    لا تفاصيل بعد — يبدأ التسجيل الدقيق من الآن مع كل استخدام.
+                  </p>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>الصفحة</TableHead>
+                        <TableHead className="text-center">الفتحات</TableHead>
+                        <TableHead className="text-center">المكوث</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {details.pages.slice(0, 12).map((p) => (
+                        <TableRow key={p.page}>
+                          <TableCell className="font-medium text-foreground">
+                            {p.title}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {fmtNumber(p.opens)}
+                          </TableCell>
+                          <TableCell className="text-center font-medium">
+                            {fmtMins(Math.round(p.seconds / 60))}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">أكثر الأزرار استخداماً</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {!details || details.buttons.length === 0 ? (
+                  <p className="py-6 text-center text-sm text-muted-foreground">
+                    لا تفاصيل بعد — تُسجَّل الضغطات تلقائياً من الآن.
+                  </p>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>الزر</TableHead>
+                        <TableHead>في صفحة</TableHead>
+                        <TableHead className="text-center">الضغطات</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {details.buttons.slice(0, 12).map((b) => (
+                        <TableRow key={`${b.label}|${b.page}`}>
+                          <TableCell className="font-medium text-foreground">
+                            {b.label}
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {b.pageTitle}
+                          </TableCell>
+                          <TableCell className="text-center font-medium">
+                            {fmtNumber(b.hits)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </>
       )}
     </div>
