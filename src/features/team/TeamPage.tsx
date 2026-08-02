@@ -23,6 +23,7 @@ import { cn } from '@/lib/utils'
 import { useTeamMembers, useToggleActive } from '@/hooks/useTeam'
 import { usePageState } from '@/hooks/usePageState'
 import { TeamMemberForm } from './TeamMemberForm'
+import { TeamNavTabs } from './TeamNavTabs'
 import type { TeamMember } from '@/types/db'
 
 type Filter = 'all' | 'active' | 'inactive'
@@ -78,6 +79,9 @@ export function TeamPage() {
           موظف جديد
         </Button>
       </div>
+
+      {/* التنقل: الموظفون / طلبات التوظيف */}
+      <TeamNavTabs active="team" />
 
       {/* الفلاتر */}
       <div className="flex flex-wrap gap-2">

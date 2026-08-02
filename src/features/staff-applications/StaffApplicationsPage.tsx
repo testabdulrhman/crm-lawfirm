@@ -28,6 +28,7 @@ import {
   idTypeLabel,
 } from './labels'
 import type { StaffApplication, StaffApplicationStatus } from '@/types/db'
+import { TeamNavTabs } from '@/features/team/TeamNavTabs'
 
 type Filter = StaffApplicationStatus | 'all'
 
@@ -120,6 +121,9 @@ export function StaffApplicationsPage() {
           )}
         </Button>
       </div>
+
+      {/* التنقل: الموظفون / طلبات التوظيف */}
+      <TeamNavTabs active="applications" />
 
       <div className="flex flex-wrap gap-2">
         <FilterButton

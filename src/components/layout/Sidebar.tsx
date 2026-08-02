@@ -3,7 +3,6 @@ import {
   LayoutDashboard,
   Handshake,
   Users,
-  UserPlus,
   BookUser,
   Inbox,
   MessageSquare,
@@ -85,18 +84,18 @@ const navSections: { title?: string; items: NavItem[] }[] = [
         icon: Inbox,
         badge: 'pending_requests',
       },
-      {
-        label: 'طلبات التوظيف',
-        href: '/staff-applications',
-        icon: UserPlus,
-        badge: 'pending_applications',
-      },
     ],
   },
   {
     title: 'الإدارة',
     items: [
-      { label: 'الموظفون', href: '/team', icon: Users },
+      // طلبات التوظيف صارت تبويباً داخل صفحة الموظفين — الشارة انتقلت هنا
+      {
+        label: 'الموظفون',
+        href: '/team',
+        icon: Users,
+        badge: 'pending_applications',
+      },
       { label: 'التقارير', href: '/reports', icon: BarChart3 },
       { label: 'الإعدادات', href: '/settings', icon: Settings },
     ],
@@ -147,7 +146,10 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                 const active =
                   item.href === '/'
                     ? location === '/'
-                    : location.startsWith(item.href)
+                    : location.startsWith(item.href) ||
+                      // طلبات التوظيف تبويب داخل الموظفين
+                      (item.href === '/team' &&
+                        location.startsWith('/staff-applications'))
                 const Icon = item.icon
                 const badgeCount =
                   item.badge === 'pending_requests'
