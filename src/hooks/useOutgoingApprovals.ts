@@ -68,12 +68,14 @@ export function useRequestApproval() {
       requesterName,
       position,
       mode,
+      signature2,
     }: {
       letter: OutgoingLetter
       requesterId: string | null
       requesterName: string | null
       position: StampPosition
       mode: ApplyMode
+      signature2: StampPosition | null
     }): Promise<void> => {
       const { error } = await supabase.from('outgoing_approvals').upsert(
         {
@@ -84,6 +86,9 @@ export function useRequestApproval() {
           stamp_x: position.x,
           stamp_y: position.y,
           apply_mode: mode,
+          sig2_page: signature2?.page ?? null,
+          sig2_x: signature2?.x ?? null,
+          sig2_y: signature2?.y ?? null,
           requested_by: requesterId,
           requested_at: new Date().toISOString(),
           approved_by: null,

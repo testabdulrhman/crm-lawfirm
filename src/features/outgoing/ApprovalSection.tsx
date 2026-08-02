@@ -91,6 +91,10 @@ export function ApprovalSection({ letter: l }: { letter: OutgoingLetter }) {
     a?.stamp_x != null && a?.stamp_y != null
       ? { page: a.stamp_page ?? 1, x: a.stamp_x, y: a.stamp_y }
       : null
+  const storedSig2: StampPosition | null =
+    a?.sig2_x != null && a?.sig2_y != null
+      ? { page: a.sig2_page ?? 1, x: a.sig2_x, y: a.sig2_y }
+      : null
 
   const [placementOpen, setPlacementOpen] = useState(false)
   const [placementMode, setPlacementMode] = useState<'request' | 'direct' | 'edit'>(
@@ -100,10 +104,15 @@ export function ApprovalSection({ letter: l }: { letter: OutgoingLetter }) {
   // موضع/نوع اختارهما المدير في هذه الجلسة (يغلبان المحفوظ)
   const [overridePos, setOverridePos] = useState<StampPosition | null>(null)
   const [overrideMode, setOverrideMode] = useState<ApplyMode | null>(null)
+  // undefined = لا تجاوز، null = أزال المدير التوقيع الثاني
+  const [overrideSig2, setOverrideSig2] = useState<
+    StampPosition | null | undefined
+  >(undefined)
 
   const effectivePos = overridePos ?? storedPos
   const storedMode = (a?.apply_mode as ApplyMode | null) ?? 'both'
   const effectiveMode = overrideMode ?? storedMode
+  const effectiveSig2 = overrideSig2 !== undefined ? overrideSig2 : storedSig2
 
   const openRequestPlacement = () => {
     setPlacementMode('request')
@@ -117,13 +126,18 @@ export function ApprovalSection({ letter: l }: { letter: OutgoingLetter }) {
     }
   }
 
-  const onPlacementConfirm = (pos: StampPosition, mode: ApplyMode) => {
+  const onPlacementConfirm = (
+    pos: StampPosition,
+    mode: ApplyMode,
+    sig2: StampPosition | null
+  ) => {
     if (placementMode === 'request') {
       requestM.mutate(
         {
           letter: l,
           position: pos,
           mode,
+          signature2: sig2,
           requesterId: teamMember?.id ?? null,
           requesterName: teamMember?.name ?? null,
         },
@@ -132,6 +146,7 @@ export function ApprovalSection({ letter: l }: { letter: OutgoingLetter }) {
     } else {
       setOverridePos(pos)
       setOverrideMode(mode)
+      setOverrideSig2(sig2)
       setPlacementOpen(false)
       setApproveOpen(true)
     }
@@ -198,6 +213,7 @@ export function ApprovalSection({ letter: l }: { letter: OutgoingLetter }) {
               />
               <p className="text-xs text-muted-foreground">
                 المطلوب: {applyModeLabel(storedMode)}
+                {storedSig2 ? ' (توقيعان)' : ''}
                 {storedPos ? ' — الموضع محدَّد ✓' : ''}
               </p>
             </div>
@@ -301,6 +317,7 @@ export function ApprovalSection({ letter: l }: { letter: OutgoingLetter }) {
             signatureUrl={signatureUrl}
             initial={effectivePos}
             initialMode={effectiveMode}
+            initialSig2={effectiveSig2}
             onConfirm={onPlacementConfirm}
             confirmLabel={
               placementMode === 'request' ? 'تأكيد وإرسال الطلب' : 'تأكيد الموضع'
@@ -318,6 +335,7 @@ export function ApprovalSection({ letter: l }: { letter: OutgoingLetter }) {
           signatureUrl={signatureUrl}
           position={effectivePos}
           mode={effectiveMode}
+          signature2={effectiveSig2}
           onEditPosition={() => {
             setPlacementMode('edit')
             setPlacementOpen(true)
@@ -336,6 +354,7 @@ function ApprovalDialog({
   signatureUrl,
   position,
   mode,
+  signature2,
   onEditPosition,
 }: {
   letter: OutgoingLetter
@@ -345,6 +364,7 @@ function ApprovalDialog({
   signatureUrl: string | null
   position: StampPosition | null
   mode: ApplyMode
+  signature2: StampPosition | null
   onEditPosition: () => void
 }) {
   const { teamMember } = useAuth()
@@ -373,6 +393,7 @@ function ApprovalDialog({
           stampUrl: mode !== 'signature' ? stampUrl : null,
           signatureUrl: mode !== 'stamp' ? signatureUrl : null,
           position,
+          signature2: mode !== 'stamp' ? signature2 : null,
         })
         blobRef.current = blob
         objectUrl = URL.createObjectURL(blob)
@@ -384,7 +405,7 @@ function ApprovalDialog({
     return () => {
       if (objectUrl) URL.revokeObjectURL(objectUrl)
     }
-  }, [open, l.file_url, stampUrl, signatureUrl, position, mode])
+  }, [open, l.file_url, stampUrl, signatureUrl, position, mode, signature2])
 
   const approve = async () => {
     if (!blobRef.current || saving) return

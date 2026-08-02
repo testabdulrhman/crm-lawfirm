@@ -830,6 +830,10 @@ export interface OutgoingApproval {
   stamp_x: number | null
   stamp_y: number | null
   apply_mode: string | null // both / stamp / signature
+  // موضع التوقيع الثاني (اختياري)
+  sig2_page: number | null
+  sig2_x: number | null
+  sig2_y: number | null
   original_file_url: string | null
   signed_file_url: string | null
   requested_by: string | null

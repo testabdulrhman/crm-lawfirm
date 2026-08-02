@@ -40,6 +40,8 @@ export async function stampPdf(
     stampUrl?: string | null
     signatureUrl?: string | null
     position?: StampPosition | null
+    // توقيع ثانٍ اختياري بموضع مستقل (وقد يكون في صفحة أخرى)
+    signature2?: StampPosition | null
   }
 ): Promise<Blob> {
   if (!opts.stampUrl && !opts.signatureUrl)
@@ -94,6 +96,23 @@ export async function stampPdf(
       ? cy - stampH / 2 + Math.max(stampH * 0.55, 30)
       : cy - h / 2
     page.drawImage(img, { x, y, width: w, height: h, opacity: 0.95 })
+
+    // التوقيع الثاني: يتمركز على موضعه (في صفحته هو)
+    if (opts.signature2) {
+      const p2 = doc.getPage(
+        Math.min(Math.max(opts.signature2.page, 1), pageCount) - 1
+      )
+      const { width: w2, height: h2 } = p2.getSize()
+      const cx2 = opts.signature2.x * w2
+      const cy2 = h2 - opts.signature2.y * h2
+      p2.drawImage(img, {
+        x: cx2 - w / 2,
+        y: cy2 - h / 2,
+        width: w,
+        height: h,
+        opacity: 0.95,
+      })
+    }
   }
 
   const bytes = await doc.save()
