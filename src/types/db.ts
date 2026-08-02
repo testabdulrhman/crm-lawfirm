@@ -829,6 +829,7 @@ export interface OutgoingApproval {
   stamp_page: number | null
   stamp_x: number | null
   stamp_y: number | null
+  apply_mode: string | null // both / stamp / signature
   original_file_url: string | null
   signed_file_url: string | null
   requested_by: string | null

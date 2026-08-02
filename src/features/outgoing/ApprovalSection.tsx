@@ -31,7 +31,12 @@ import {
   useApproveLetter,
   useRejectLetter,
 } from '@/hooks/useOutgoingApprovals'
-import { stampPdf, type StampPosition } from '@/lib/pdfStamp'
+import {
+  stampPdf,
+  applyModeLabel,
+  type ApplyMode,
+  type StampPosition,
+} from '@/lib/pdfStamp'
 import { uploadFile } from '@/lib/files'
 import { fmtDateTime } from '@/lib/format'
 import { SIGNATURE_CONFIG_KEY } from '@/features/settings/OfficeInfoTab'
@@ -92,10 +97,13 @@ export function ApprovalSection({ letter: l }: { letter: OutgoingLetter }) {
     'request'
   )
   const [approveOpen, setApproveOpen] = useState(false)
-  // موضع اختاره المدير في هذه الجلسة (يغلب المحفوظ)
+  // موضع/نوع اختارهما المدير في هذه الجلسة (يغلبان المحفوظ)
   const [overridePos, setOverridePos] = useState<StampPosition | null>(null)
+  const [overrideMode, setOverrideMode] = useState<ApplyMode | null>(null)
 
   const effectivePos = overridePos ?? storedPos
+  const storedMode = (a?.apply_mode as ApplyMode | null) ?? 'both'
+  const effectiveMode = overrideMode ?? storedMode
 
   const openRequestPlacement = () => {
     setPlacementMode('request')
@@ -109,12 +117,13 @@ export function ApprovalSection({ letter: l }: { letter: OutgoingLetter }) {
     }
   }
 
-  const onPlacementConfirm = (pos: StampPosition) => {
+  const onPlacementConfirm = (pos: StampPosition, mode: ApplyMode) => {
     if (placementMode === 'request') {
       requestM.mutate(
         {
           letter: l,
           position: pos,
+          mode,
           requesterId: teamMember?.id ?? null,
           requesterName: teamMember?.name ?? null,
         },
@@ -122,6 +131,7 @@ export function ApprovalSection({ letter: l }: { letter: OutgoingLetter }) {
       )
     } else {
       setOverridePos(pos)
+      setOverrideMode(mode)
       setPlacementOpen(false)
       setApproveOpen(true)
     }
@@ -186,11 +196,10 @@ export function ApprovalSection({ letter: l }: { letter: OutgoingLetter }) {
                 name={a.requester?.name}
                 at={a.requested_at}
               />
-              {storedPos && (
-                <p className="text-xs text-muted-foreground">
-                  موضع الختم محدَّد ✓
-                </p>
-              )}
+              <p className="text-xs text-muted-foreground">
+                المطلوب: {applyModeLabel(storedMode)}
+                {storedPos ? ' — الموضع محدَّد ✓' : ''}
+              </p>
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
               {isDirector && (
@@ -208,7 +217,7 @@ export function ApprovalSection({ letter: l }: { letter: OutgoingLetter }) {
                   disabled={requestM.isPending}
                 >
                   <Move className="h-4 w-4" />
-                  تعديل موضع الختم
+                  تعديل الطلب أو الموضع
                 </Button>
               )}
             </div>
@@ -272,7 +281,8 @@ export function ApprovalSection({ letter: l }: { letter: OutgoingLetter }) {
               </Button>
             )}
             <p className="text-xs text-muted-foreground">
-              تحدّد مكان الختم على الصفحة، ثم يعتمده المدير بضغطة.
+              تختار: ختم وتوقيع، أو ختم فقط، أو توقيع فقط — وتحدد موضعه، ثم
+              يعتمده المدير بضغطة.
             </p>
           </div>
         ) : (
@@ -290,6 +300,7 @@ export function ApprovalSection({ letter: l }: { letter: OutgoingLetter }) {
             stampUrl={stampUrl}
             signatureUrl={signatureUrl}
             initial={effectivePos}
+            initialMode={effectiveMode}
             onConfirm={onPlacementConfirm}
             confirmLabel={
               placementMode === 'request' ? 'تأكيد وإرسال الطلب' : 'تأكيد الموضع'
@@ -306,6 +317,7 @@ export function ApprovalSection({ letter: l }: { letter: OutgoingLetter }) {
           stampUrl={stampUrl}
           signatureUrl={signatureUrl}
           position={effectivePos}
+          mode={effectiveMode}
           onEditPosition={() => {
             setPlacementMode('edit')
             setPlacementOpen(true)
@@ -323,6 +335,7 @@ function ApprovalDialog({
   stampUrl,
   signatureUrl,
   position,
+  mode,
   onEditPosition,
 }: {
   letter: OutgoingLetter
@@ -331,6 +344,7 @@ function ApprovalDialog({
   stampUrl: string | null
   signatureUrl: string | null
   position: StampPosition | null
+  mode: ApplyMode
   onEditPosition: () => void
 }) {
   const { teamMember } = useAuth()
@@ -354,9 +368,10 @@ function ApprovalDialog({
     setNote('')
     ;(async () => {
       try {
+        // يُطبَّق ما اختاره الطالب/المدير فقط: ختم، توقيع، أو كلاهما
         const blob = await stampPdf(l.file_url!, {
-          stampUrl,
-          signatureUrl,
+          stampUrl: mode !== 'signature' ? stampUrl : null,
+          signatureUrl: mode !== 'stamp' ? signatureUrl : null,
           position,
         })
         blobRef.current = blob
@@ -369,7 +384,7 @@ function ApprovalDialog({
     return () => {
       if (objectUrl) URL.revokeObjectURL(objectUrl)
     }
-  }, [open, l.file_url, stampUrl, signatureUrl, position])
+  }, [open, l.file_url, stampUrl, signatureUrl, position, mode])
 
   const approve = async () => {
     if (!blobRef.current || saving) return
@@ -412,7 +427,7 @@ function ApprovalDialog({
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-3xl">
         <DialogHeader>
-          <DialogTitle>معاينة الخطاب بعد الختم والتوقيع</DialogTitle>
+          <DialogTitle>معاينة الخطاب — {applyModeLabel(mode)}</DialogTitle>
         </DialogHeader>
 
         {genError ? (

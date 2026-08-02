@@ -19,6 +19,18 @@ export interface StampPosition {
   y: number
 }
 
+// ما الذي يُطبَّق على الخطاب
+export type ApplyMode = 'both' | 'stamp' | 'signature'
+
+export const APPLY_MODE_LABELS: Record<ApplyMode, string> = {
+  both: 'ختم وتوقيع',
+  stamp: 'ختم فقط',
+  signature: 'توقيع فقط',
+}
+
+export const applyModeLabel = (m: string | null | undefined): string =>
+  APPLY_MODE_LABELS[(m as ApplyMode) ?? 'both'] ?? APPLY_MODE_LABELS.both
+
 // الافتراضي التاريخي: أسفل يسار آخر صفحة (يُستخدم عند غياب موضع مختار)
 export const DEFAULT_STAMP_POS = { x: 0.22, y: 0.86 }
 
@@ -72,18 +84,16 @@ export async function stampPdf(
       opacity: 0.92,
     })
   }
-  // التوقيع فوق الختم بتداخل خفيف (مظهر طبيعي)
+  // التوقيع: مع الختم يعلوه بتداخل خفيف (مظهر طبيعي)، وبدونه يتمركز على الموضع المختار
   if (opts.signatureUrl) {
     const img = await embed(opts.signatureUrl)
     const w = SIGNATURE_WIDTH_PT
     const h = (img.height / img.width) * w
-    page.drawImage(img, {
-      x: cx - w / 2 - 20,
-      y: cy - stampH / 2 + Math.max(stampH * 0.55, 30),
-      width: w,
-      height: h,
-      opacity: 0.95,
-    })
+    const x = opts.stampUrl ? cx - w / 2 - 20 : cx - w / 2
+    const y = opts.stampUrl
+      ? cy - stampH / 2 + Math.max(stampH * 0.55, 30)
+      : cy - h / 2
+    page.drawImage(img, { x, y, width: w, height: h, opacity: 0.95 })
   }
 
   const bytes = await doc.save()

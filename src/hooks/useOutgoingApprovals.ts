@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { toast } from '@/hooks/use-toast'
 import { normalizeSaudiPhone } from '@/lib/format'
-import type { StampPosition } from '@/lib/pdfStamp'
+import { applyModeLabel, type ApplyMode, type StampPosition } from '@/lib/pdfStamp'
 import type { OutgoingLetter } from '@/types/db'
 import { errMessage } from '@/lib/errors'
 
@@ -67,11 +67,13 @@ export function useRequestApproval() {
       requesterId,
       requesterName,
       position,
+      mode,
     }: {
       letter: OutgoingLetter
       requesterId: string | null
       requesterName: string | null
       position: StampPosition
+      mode: ApplyMode
     }): Promise<void> => {
       const { error } = await supabase.from('outgoing_approvals').upsert(
         {
@@ -81,6 +83,7 @@ export function useRequestApproval() {
           stamp_page: position.page,
           stamp_x: position.x,
           stamp_y: position.y,
+          apply_mode: mode,
           requested_by: requesterId,
           requested_at: new Date().toISOString(),
           approved_by: null,
@@ -97,7 +100,7 @@ export function useRequestApproval() {
         .eq('is_director', true)
         .eq('is_active', true)
         .not('phone', 'is', null)
-      const msg = `طلب اعتماد خطاب صادر 🖋\n${letter.subject || letter.letter_number || 'خطاب'}\nمن: ${requesterName ?? 'موظف'}\n${letterLink(letter.id)}`
+      const msg = `طلب اعتماد خطاب صادر 🖋 (${applyModeLabel(mode)})\n${letter.subject || letter.letter_number || 'خطاب'}\nمن: ${requesterName ?? 'موظف'}\n${letterLink(letter.id)}`
       await Promise.all(
         (directors ?? []).map((d) =>
           sendSms({

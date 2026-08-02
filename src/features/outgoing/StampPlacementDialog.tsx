@@ -16,7 +16,9 @@ import {
   STAMP_WIDTH_PT,
   SIGNATURE_WIDTH_PT,
   DEFAULT_STAMP_POS,
+  APPLY_MODE_LABELS,
   type StampPosition,
+  type ApplyMode,
 } from '@/lib/pdfStamp'
 import { errMessage } from '@/lib/errors'
 
@@ -27,6 +29,7 @@ export function StampPlacementDialog({
   stampUrl,
   signatureUrl,
   initial,
+  initialMode = 'both',
   onConfirm,
   confirmLabel = 'تأكيد الموضع',
   confirming = false,
@@ -37,7 +40,8 @@ export function StampPlacementDialog({
   stampUrl: string | null
   signatureUrl: string | null
   initial?: StampPosition | null
-  onConfirm: (pos: StampPosition) => void
+  initialMode?: ApplyMode
+  onConfirm: (pos: StampPosition, mode: ApplyMode) => void
   confirmLabel?: string
   confirming?: boolean
 }) {
@@ -47,6 +51,7 @@ export function StampPlacementDialog({
 
   const [pageCount, setPageCount] = useState(1)
   const [page, setPage] = useState(1)
+  const [mode, setMode] = useState<ApplyMode>(initialMode)
   const [pos, setPos] = useState({ x: DEFAULT_STAMP_POS.x, y: DEFAULT_STAMP_POS.y })
   const [pageSizePt, setPageSizePt] = useState({ w: 595, h: 842 })
   const [cssSize, setCssSize] = useState({ w: 0, h: 0 })
@@ -58,6 +63,7 @@ export function StampPlacementDialog({
     if (!open) return
     setError(null)
     setLoading(true)
+    setMode(initialMode)
     if (initial) {
       setPage(initial.page)
       setPos({ x: initial.x, y: initial.y })
@@ -138,12 +144,34 @@ export function StampPlacementDialog({
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-3xl">
         <DialogHeader>
-          <DialogTitle>اختر مكان الختم على الصفحة</DialogTitle>
+          <DialogTitle>ماذا يُطبَّق على الخطاب؟ وأين؟</DialogTitle>
         </DialogHeader>
+
+        {/* اختيار ما يُطبَّق: ختم وتوقيع / ختم فقط / توقيع فقط */}
+        <div className="flex flex-wrap gap-2">
+          {(Object.keys(APPLY_MODE_LABELS) as ApplyMode[])
+            .filter((m) =>
+              m === 'both'
+                ? !!stampUrl && !!signatureUrl
+                : m === 'stamp'
+                  ? !!stampUrl
+                  : !!signatureUrl
+            )
+            .map((m) => (
+              <Button
+                key={m}
+                size="sm"
+                variant={mode === m ? 'default' : 'outline'}
+                onClick={() => setMode(m)}
+              >
+                {APPLY_MODE_LABELS[m]}
+              </Button>
+            ))}
+        </div>
 
         <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
           <Move className="h-3.5 w-3.5" />
-          اسحب الختم إلى الموضع المطلوب — أو اضغط على المكان مباشرة.
+          اسحب إلى الموضع المطلوب — أو اضغط على المكان مباشرة.
         </p>
 
         {error ? (
@@ -172,8 +200,8 @@ export function StampPlacementDialog({
                 </div>
               )}
 
-              {/* الختم (والتوقيع) — يتحركان معاً */}
-              {!loading && stampUrl && (
+              {/* الختم و/أو التوقيع حسب الاختيار — يتحركان معاً */}
+              {!loading && stampUrl && mode !== 'signature' && (
                 <img
                   src={stampUrl}
                   alt="الختم"
@@ -186,20 +214,29 @@ export function StampPlacementDialog({
                   }}
                 />
               )}
-              {!loading && signatureUrl && (
+              {!loading && signatureUrl && mode !== 'stamp' && (
                 <img
                   src={signatureUrl}
                   alt="التوقيع"
                   draggable={false}
                   className="pointer-events-none absolute opacity-90"
-                  style={{
-                    width: sigCssW,
-                    left: pos.x * cssSize.w - sigCssW / 2 - 20 * k,
-                    top:
-                      pos.y * cssSize.h -
-                      stampCssW / 2 -
-                      Math.max(stampCssW * 0.55, 30 * k),
-                  }}
+                  style={
+                    mode === 'signature'
+                      ? {
+                          // توقيع فقط: يتمركز على الموضع المختار (مطابق للدمج النهائي)
+                          width: sigCssW,
+                          left: pos.x * cssSize.w - sigCssW / 2,
+                          top: pos.y * cssSize.h - (sigCssW * 0.35) / 2,
+                        }
+                      : {
+                          width: sigCssW,
+                          left: pos.x * cssSize.w - sigCssW / 2 - 20 * k,
+                          top:
+                            pos.y * cssSize.h -
+                            stampCssW / 2 -
+                            Math.max(stampCssW * 0.55, 30 * k),
+                        }
+                  }
                 />
               )}
             </div>
@@ -238,7 +275,9 @@ export function StampPlacementDialog({
             <Button
               variant="gold"
               disabled={loading || !!error || confirming}
-              onClick={() => onConfirm({ page: page || pageCount, x: pos.x, y: pos.y })}
+              onClick={() =>
+                onConfirm({ page: page || pageCount, x: pos.x, y: pos.y }, mode)
+              }
             >
               {confirming && <Loader2 className="h-4 w-4 animate-spin" />}
               {confirmLabel}
