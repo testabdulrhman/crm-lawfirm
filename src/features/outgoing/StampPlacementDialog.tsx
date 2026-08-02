@@ -1,5 +1,7 @@
 // اختيار موضع الختم/التوقيع: عرض صفحة الـPDF الحقيقية (pdf.js) والسحب عليها.
-// يدعم توقيعاً ثانياً بموضع مستقل (وقد يكون في صفحة أخرى) — كل عنصر يُسحب وحده.
+// يدعم أي عدد من التواقيع الإضافية بمواضع مستقلة (وفي صفحات مختلفة).
+// كل عنصر يتحرك بالسحب المباشر عليه فقط — الضغط على الفراغ لا ينقل شيئاً
+// (حتى لا «يهرب» الختم من صفحته عند التنقل بين الصفحات).
 // يُخرج المواضع كمراكز بكسور 0..1 من أعلى يسار الصفحة + رقم الصفحة.
 import { useEffect, useRef, useState } from 'react'
 import {
@@ -38,7 +40,7 @@ export function StampPlacementDialog({
   signatureUrl,
   initial,
   initialMode = 'both',
-  initialSig2 = null,
+  initialSigs = [],
   onConfirm,
   confirmLabel = 'تأكيد الموضع',
   confirming = false,
@@ -50,11 +52,11 @@ export function StampPlacementDialog({
   signatureUrl: string | null
   initial?: StampPosition | null
   initialMode?: ApplyMode
-  initialSig2?: StampPosition | null
+  initialSigs?: StampPosition[]
   onConfirm: (
     pos: StampPosition,
     mode: ApplyMode,
-    sig2: StampPosition | null
+    sigs: StampPosition[]
   ) => void
   confirmLabel?: string
   confirming?: boolean
@@ -62,15 +64,16 @@ export function StampPlacementDialog({
   const containerRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const dragging = useRef(false)
-  const dragTarget = useRef<'primary' | 'sig2'>('primary')
+  // ما الذي يُسحب: الكتلة الأساسية أو رقم توقيع إضافي — null = لا شيء
+  const dragTarget = useRef<'primary' | number | null>(null)
 
   const [pageCount, setPageCount] = useState(1)
   const [page, setPage] = useState(1)
   const [mode, setMode] = useState<ApplyMode>(initialMode)
   const [pos, setPos] = useState({ x: DEFAULT_STAMP_POS.x, y: DEFAULT_STAMP_POS.y })
-  // صفحة الكتلة الأساسية (قد يتنقل المستخدم لصفحات أخرى لوضع التوقيع الثاني)
+  // صفحة الكتلة الأساسية (قد يتنقل المستخدم لصفحات أخرى لوضع بقية التواقيع)
   const [primaryPage, setPrimaryPage] = useState(1)
-  const [sig2, setSig2] = useState<StampPosition | null>(null)
+  const [sigs, setSigs] = useState<StampPosition[]>([])
   const [pageSizePt, setPageSizePt] = useState({ w: 595, h: 842 })
   const [cssSize, setCssSize] = useState({ w: 0, h: 0 })
   const [loading, setLoading] = useState(true)
@@ -82,7 +85,7 @@ export function StampPlacementDialog({
     setError(null)
     setLoading(true)
     setMode(initialMode)
-    setSig2(initialSig2 ?? null)
+    setSigs(initialSigs ?? [])
     if (initial) {
       setPage(initial.page)
       setPrimaryPage(initial.page)
@@ -144,31 +147,53 @@ export function StampPlacementDialog({
     }
   }, [open, fileUrl, page])
 
-  // السحب: تحديث مركز العنصر المسحوب (الكتلة الأساسية أو التوقيع الثاني)
-  const moveTo = (clientX: number, clientY: number) => {
+  // إحداثيات النقطة بكسور الصفحة
+  const toFrac = (clientX: number, clientY: number) => {
     const el = containerRef.current
-    if (!el || cssSize.w === 0) return
+    if (!el) return null
     const rect = el.getBoundingClientRect()
-    const x = Math.min(0.97, Math.max(0.03, (clientX - rect.left) / rect.width))
-    const y = Math.min(0.97, Math.max(0.03, (clientY - rect.top) / rect.height))
-    if (dragTarget.current === 'sig2') {
-      setSig2({ page, x, y })
-    } else {
-      setPos({ x, y })
-      setPrimaryPage(page)
+    return {
+      x: (clientX - rect.left) / rect.width,
+      y: (clientY - rect.top) / rect.height,
     }
   }
 
-  // هل نقطة البدء فوق التوقيع الثاني؟ (فيُسحب هو بدل الكتلة الأساسية)
-  const hitSig2 = (clientX: number, clientY: number): boolean => {
-    const el = containerRef.current
-    if (!el || !sig2 || sig2.page !== page || mode === 'stamp') return false
-    const rect = el.getBoundingClientRect()
-    const x = (clientX - rect.left) / rect.width
-    const y = (clientY - rect.top) / rect.height
+  // السحب: تحديث مركز العنصر الممسوك فقط
+  const moveTo = (clientX: number, clientY: number) => {
+    if (cssSize.w === 0 || dragTarget.current === null) return
+    const p = toFrac(clientX, clientY)
+    if (!p) return
+    const x = Math.min(0.97, Math.max(0.03, p.x))
+    const y = Math.min(0.97, Math.max(0.03, p.y))
+    if (dragTarget.current === 'primary') {
+      setPos({ x, y })
+    } else {
+      const i = dragTarget.current
+      setSigs((arr) => arr.map((s, j) => (j === i ? { page, x, y } : s)))
+    }
+  }
+
+  // تحديد العنصر الممسوك عند بدء الضغط (الأحدث أولاً) — لا شيء = لا سحب
+  const findTarget = (clientX: number, clientY: number): 'primary' | number | null => {
+    const p = toFrac(clientX, clientY)
+    if (!p || cssSize.w === 0) return null
     const halfW = sigCssW / cssSize.w / 2
-    const halfH = Math.max((sigCssW * 0.4) / cssSize.h / 2, 0.04)
-    return Math.abs(x - sig2.x) <= halfW && Math.abs(y - sig2.y) <= halfH
+    const halfH = Math.max((sigCssW * 0.4) / cssSize.h / 2, 0.045)
+    if (mode !== 'stamp') {
+      for (let i = sigs.length - 1; i >= 0; i--) {
+        const s = sigs[i]
+        if (s.page !== page) continue
+        if (Math.abs(p.x - s.x) <= halfW && Math.abs(p.y - s.y) <= halfH) return i
+      }
+    }
+    // الكتلة الأساسية (في صفحتها فقط) — صندوق يغطي الختم/التوقيع
+    if (page === primaryPage) {
+      const halfPW = Math.max(stampCssW, mode === 'signature' ? sigCssW : 0) / cssSize.w / 2
+      const halfPH = Math.max((stampCssW * 1.2) / cssSize.h / 2, 0.06)
+      if (Math.abs(p.x - pos.x) <= halfPW && Math.abs(p.y - pos.y) <= halfPH)
+        return 'primary'
+    }
+    return null
   }
 
   // مقاس الختم على الشاشة بنفس نسبته الحقيقية في الـPDF
@@ -200,40 +225,54 @@ export function StampPlacementDialog({
                 variant={mode === m ? 'default' : 'outline'}
                 onClick={() => {
                   setMode(m)
-                  if (m === 'stamp') setSig2(null)
+                  if (m === 'stamp') setSigs([])
                 }}
               >
                 {APPLY_MODE_LABELS[m]}
               </Button>
             ))}
 
-          {/* توقيع ثانٍ بموضع مستقل (لخطابات تتطلب توقيعين) */}
+          {/* تواقيع إضافية بلا حد (لخطابات تتطلب عدة تواقيع) */}
           {signatureUrl && mode !== 'stamp' && (
-            <Button
-              size="sm"
-              variant="outline"
-              className="mr-auto"
-              onClick={() =>
-                sig2
-                  ? setSig2(null)
-                  : setSig2({ page: page || pageCount, x: 0.7, y: 0.5 })
-              }
-            >
-              {sig2 ? (
-                <X className="h-4 w-4" />
-              ) : (
-                <PenLine className="h-4 w-4" />
+            <div className="mr-auto flex items-center gap-1.5">
+              {sigs.length > 0 && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-destructive"
+                  onClick={() => setSigs((arr) => arr.slice(0, -1))}
+                >
+                  <X className="h-4 w-4" />
+                  إزالة آخر توقيع
+                </Button>
               )}
-              {sig2 ? 'إزالة التوقيع الثاني' : 'إضافة توقيع ثانٍ'}
-            </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() =>
+                  setSigs((arr) => [
+                    ...arr,
+                    {
+                      page: page || pageCount,
+                      // إزاحة بسيطة لكل توقيع جديد حتى لا تتكدس فوق بعضها
+                      x: Math.min(0.85, 0.6 + (arr.length % 3) * 0.12),
+                      y: Math.min(0.85, 0.45 + Math.floor(arr.length / 3) * 0.12),
+                    },
+                  ])
+                }
+              >
+                <PenLine className="h-4 w-4" />
+                إضافة توقيع ({fmtNumber(sigs.length + 1)})
+              </Button>
+            </div>
           )}
         </div>
 
         <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
           <Move className="h-3.5 w-3.5" />
-          {sig2
-            ? 'اسحب كل عنصر لمكانه — التوقيع الثاني مستقل، ويمكن وضعه في صفحة أخرى بالتنقل بين الصفحات.'
-            : 'اسحب إلى الموضع المطلوب — أو اضغط على المكان مباشرة.'}
+          {sigs.length > 0
+            ? `أمسك أي عنصر واسحبه لمكانه — كل توقيع مستقل وبإمكانه أن يكون في صفحة أخرى (تنقّل بالأسهم). كل عنصر يبقى في صفحته.`
+            : 'أمسك الختم/التوقيع واسحبه إلى الموضع المطلوب.'}
         </p>
 
         {error ? (
@@ -247,12 +286,13 @@ export function StampPlacementDialog({
               className="relative mx-auto w-full cursor-crosshair touch-none select-none"
               style={{ maxWidth: 680 }}
               onPointerDown={(e) => {
-                dragging.current = true
-                dragTarget.current = hitSig2(e.clientX, e.clientY)
-                  ? 'sig2'
-                  : 'primary'
-                ;(e.target as HTMLElement).setPointerCapture?.(e.pointerId)
-                moveTo(e.clientX, e.clientY)
+                const target = findTarget(e.clientX, e.clientY)
+                dragTarget.current = target
+                dragging.current = target !== null
+                if (target !== null) {
+                  ;(e.target as HTMLElement).setPointerCapture?.(e.pointerId)
+                  moveTo(e.clientX, e.clientY)
+                }
               }}
               onPointerMove={(e) => dragging.current && moveTo(e.clientX, e.clientY)}
               onPointerUp={() => (dragging.current = false)}
@@ -305,20 +345,33 @@ export function StampPlacementDialog({
                 />
               )}
 
-              {/* التوقيع الثاني — في صفحته فقط، ويُسحب مستقلاً */}
-              {!loading && sig2 && sig2.page === page && signatureUrl && mode !== 'stamp' && (
-                <img
-                  src={signatureUrl}
-                  alt="التوقيع الثاني"
-                  draggable={false}
-                  className="pointer-events-none absolute opacity-90 outline-dashed outline-1 outline-gold/60"
-                  style={{
-                    width: sigCssW,
-                    left: sig2.x * cssSize.w - sigCssW / 2,
-                    top: sig2.y * cssSize.h - (sigCssW * 0.35) / 2,
-                  }}
-                />
-              )}
+              {/* التواقيع الإضافية — كلٌّ في صفحته، ويُسحب مستقلاً، مع رقمه */}
+              {!loading &&
+                signatureUrl &&
+                mode !== 'stamp' &&
+                sigs.map((s, i) =>
+                  s.page === page ? (
+                    <div
+                      key={i}
+                      className="pointer-events-none absolute"
+                      style={{
+                        width: sigCssW,
+                        left: s.x * cssSize.w - sigCssW / 2,
+                        top: s.y * cssSize.h - (sigCssW * 0.35) / 2,
+                      }}
+                    >
+                      <img
+                        src={signatureUrl}
+                        alt={`توقيع ${i + 2}`}
+                        draggable={false}
+                        className="w-full opacity-90 outline-dashed outline-1 outline-gold/60"
+                      />
+                      <span className="absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center rounded-full bg-gold text-[11px] font-bold text-navy shadow">
+                        {fmtNumber(i + 2)}
+                      </span>
+                    </div>
+                  ) : null
+                )}
             </div>
           </div>
         )}
@@ -346,6 +399,18 @@ export function StampPlacementDialog({
               >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
+              {/* الكتلة الأساسية تنتقل بين الصفحات بهذا الزر فقط (لا بالضغط على الفراغ) */}
+              {page !== primaryPage && !loading && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 text-xs"
+                  onClick={() => setPrimaryPage(page)}
+                >
+                  <Move className="h-3.5 w-3.5" />
+                  {mode === 'signature' ? 'نقل التوقيع لهذه الصفحة' : 'نقل الختم لهذه الصفحة'}
+                </Button>
+              )}
             </div>
           ) : (
             <span />
@@ -359,7 +424,7 @@ export function StampPlacementDialog({
                 onConfirm(
                   { page: primaryPage || pageCount, x: pos.x, y: pos.y },
                   mode,
-                  mode === 'stamp' ? null : sig2
+                  mode === 'stamp' ? [] : sigs
                 )
               }
             >

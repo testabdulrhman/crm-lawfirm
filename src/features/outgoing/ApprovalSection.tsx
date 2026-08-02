@@ -38,7 +38,7 @@ import {
   type StampPosition,
 } from '@/lib/pdfStamp'
 import { uploadFile } from '@/lib/files'
-import { fmtDateTime } from '@/lib/format'
+import { fmtDateTime, fmtNumber } from '@/lib/format'
 import { SIGNATURE_CONFIG_KEY } from '@/features/settings/OfficeInfoTab'
 import { StampPlacementDialog } from './StampPlacementDialog'
 import type { OutgoingLetter } from '@/types/db'
@@ -91,10 +91,13 @@ export function ApprovalSection({ letter: l }: { letter: OutgoingLetter }) {
     a?.stamp_x != null && a?.stamp_y != null
       ? { page: a.stamp_page ?? 1, x: a.stamp_x, y: a.stamp_y }
       : null
-  const storedSig2: StampPosition | null =
-    a?.sig2_x != null && a?.sig2_y != null
-      ? { page: a.sig2_page ?? 1, x: a.sig2_x, y: a.sig2_y }
-      : null
+  // التواقيع الإضافية: extra_sigs الجديدة، مع قراءة sig2_* القديمة للطلبات القائمة
+  const storedSigs: StampPosition[] =
+    a?.extra_sigs && Array.isArray(a.extra_sigs)
+      ? a.extra_sigs
+      : a?.sig2_x != null && a?.sig2_y != null
+        ? [{ page: a.sig2_page ?? 1, x: a.sig2_x, y: a.sig2_y }]
+        : []
 
   const [placementOpen, setPlacementOpen] = useState(false)
   const [placementMode, setPlacementMode] = useState<'request' | 'direct' | 'edit'>(
@@ -104,15 +107,15 @@ export function ApprovalSection({ letter: l }: { letter: OutgoingLetter }) {
   // موضع/نوع اختارهما المدير في هذه الجلسة (يغلبان المحفوظ)
   const [overridePos, setOverridePos] = useState<StampPosition | null>(null)
   const [overrideMode, setOverrideMode] = useState<ApplyMode | null>(null)
-  // undefined = لا تجاوز، null = أزال المدير التوقيع الثاني
-  const [overrideSig2, setOverrideSig2] = useState<
-    StampPosition | null | undefined
-  >(undefined)
+  // undefined = لا تجاوز من المدير في هذه الجلسة
+  const [overrideSigs, setOverrideSigs] = useState<StampPosition[] | undefined>(
+    undefined
+  )
 
   const effectivePos = overridePos ?? storedPos
   const storedMode = (a?.apply_mode as ApplyMode | null) ?? 'both'
   const effectiveMode = overrideMode ?? storedMode
-  const effectiveSig2 = overrideSig2 !== undefined ? overrideSig2 : storedSig2
+  const effectiveSigs = overrideSigs ?? storedSigs
 
   const openRequestPlacement = () => {
     setPlacementMode('request')
@@ -129,7 +132,7 @@ export function ApprovalSection({ letter: l }: { letter: OutgoingLetter }) {
   const onPlacementConfirm = (
     pos: StampPosition,
     mode: ApplyMode,
-    sig2: StampPosition | null
+    sigs: StampPosition[]
   ) => {
     if (placementMode === 'request') {
       requestM.mutate(
@@ -137,7 +140,7 @@ export function ApprovalSection({ letter: l }: { letter: OutgoingLetter }) {
           letter: l,
           position: pos,
           mode,
-          signature2: sig2,
+          extraSignatures: sigs,
           requesterId: teamMember?.id ?? null,
           requesterName: teamMember?.name ?? null,
         },
@@ -146,7 +149,7 @@ export function ApprovalSection({ letter: l }: { letter: OutgoingLetter }) {
     } else {
       setOverridePos(pos)
       setOverrideMode(mode)
-      setOverrideSig2(sig2)
+      setOverrideSigs(sigs)
       setPlacementOpen(false)
       setApproveOpen(true)
     }
@@ -213,7 +216,9 @@ export function ApprovalSection({ letter: l }: { letter: OutgoingLetter }) {
               />
               <p className="text-xs text-muted-foreground">
                 المطلوب: {applyModeLabel(storedMode)}
-                {storedSig2 ? ' (توقيعان)' : ''}
+                {storedSigs.length > 0 && storedMode !== 'stamp'
+                  ? ` (${fmtNumber(storedSigs.length + 1)} تواقيع)`
+                  : ''}
                 {storedPos ? ' — الموضع محدَّد ✓' : ''}
               </p>
             </div>
@@ -317,7 +322,7 @@ export function ApprovalSection({ letter: l }: { letter: OutgoingLetter }) {
             signatureUrl={signatureUrl}
             initial={effectivePos}
             initialMode={effectiveMode}
-            initialSig2={effectiveSig2}
+            initialSigs={effectiveSigs}
             onConfirm={onPlacementConfirm}
             confirmLabel={
               placementMode === 'request' ? 'تأكيد وإرسال الطلب' : 'تأكيد الموضع'
@@ -335,7 +340,7 @@ export function ApprovalSection({ letter: l }: { letter: OutgoingLetter }) {
           signatureUrl={signatureUrl}
           position={effectivePos}
           mode={effectiveMode}
-          signature2={effectiveSig2}
+          extraSignatures={effectiveSigs}
           onEditPosition={() => {
             setPlacementMode('edit')
             setPlacementOpen(true)
@@ -354,7 +359,7 @@ function ApprovalDialog({
   signatureUrl,
   position,
   mode,
-  signature2,
+  extraSignatures,
   onEditPosition,
 }: {
   letter: OutgoingLetter
@@ -364,7 +369,7 @@ function ApprovalDialog({
   signatureUrl: string | null
   position: StampPosition | null
   mode: ApplyMode
-  signature2: StampPosition | null
+  extraSignatures: StampPosition[]
   onEditPosition: () => void
 }) {
   const { teamMember } = useAuth()
@@ -393,7 +398,7 @@ function ApprovalDialog({
           stampUrl: mode !== 'signature' ? stampUrl : null,
           signatureUrl: mode !== 'stamp' ? signatureUrl : null,
           position,
-          signature2: mode !== 'stamp' ? signature2 : null,
+          extraSignatures: mode !== 'stamp' ? extraSignatures : [],
         })
         blobRef.current = blob
         objectUrl = URL.createObjectURL(blob)
@@ -405,7 +410,7 @@ function ApprovalDialog({
     return () => {
       if (objectUrl) URL.revokeObjectURL(objectUrl)
     }
-  }, [open, l.file_url, stampUrl, signatureUrl, position, mode, signature2])
+  }, [open, l.file_url, stampUrl, signatureUrl, position, mode, extraSignatures])
 
   const approve = async () => {
     if (!blobRef.current || saving) return

@@ -830,7 +830,8 @@ export interface OutgoingApproval {
   stamp_x: number | null
   stamp_y: number | null
   apply_mode: string | null // both / stamp / signature
-  // موضع التوقيع الثاني (اختياري)
+  // تواقيع إضافية متعددة [{page,x,y}] — وsig2_* القديمة تُقرأ للتوافق
+  extra_sigs: { page: number; x: number; y: number }[] | null
   sig2_page: number | null
   sig2_x: number | null
   sig2_y: number | null
