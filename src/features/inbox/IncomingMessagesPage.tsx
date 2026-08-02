@@ -1,14 +1,27 @@
 // الرسائل الواردة — المسجّلة تلقائياً من اختصار الآيفون (ناجز وغيرها)
-// أي رقم (7+ خانات) في نص الرسالة يُطابَق مع أرقام المحكمة فتُربط الرسالة بقضيتها
-import { useMemo } from 'react'
+// الربط بالقضية: يدوي دائم (case_id) أو تلقائي بمطابقة أرقام المحكمة في النص
+import { useMemo, useState } from 'react'
 import { useLocation } from 'wouter'
-import { MessageSquare, Scale, Search } from 'lucide-react'
+import { Link2, Loader2, MessageSquare, Scale, Search, X } from 'lucide-react'
 
+import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { CasePicker } from '@/components/CasePicker'
 import { fmtNumber, fmtDateTime } from '@/lib/format'
-import { useIncomingSms, type IncomingSms } from '@/hooks/useIncomingSms'
+import {
+  useIncomingSms,
+  useLinkSmsToCase,
+  type IncomingSms,
+} from '@/hooks/useIncomingSms'
 import { useCases } from '@/hooks/useCases'
 import { usePageState } from '@/hooks/usePageState'
 import type { Case } from '@/types/db'
@@ -121,7 +134,15 @@ function MessageRow({
   matchedCase: Case | null
 }) {
   const [, navigate] = useLocation()
+  const { data: cases } = useCases()
+  const linkM = useLinkSmsToCase()
+  const [linkOpen, setLinkOpen] = useState(false)
+  const [pickedCase, setPickedCase] = useState<string | null>(null)
   const senderIsPhone = m.phone && /\d{6,}/.test(m.phone)
+
+  // الربط اليدوي المحفوظ يغلب المطابقة التلقائية
+  const linked = m.case ?? null
+
   return (
     <div className="space-y-1.5 px-4 py-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -138,15 +159,87 @@ function MessageRow({
         </span>
       </div>
       {m.message && <MessageBody text={m.message} />}
-      {matchedCase && (
-        <button
-          onClick={() => navigate(`/cases/${matchedCase.id}`)}
-          className="flex items-center gap-1.5 rounded-lg border border-gold/40 bg-gold/10 px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-gold/20"
-        >
-          <Scale className="h-3.5 w-3.5 text-gold" />
-          القضية: {matchedCase.title || matchedCase.court_num}
-        </button>
-      )}
+
+      <div className="flex flex-wrap items-center gap-2">
+        {linked ? (
+          <>
+            <button
+              onClick={() => navigate(`/cases/${linked.id}`)}
+              className="flex items-center gap-1.5 rounded-lg border border-gold/40 bg-gold/10 px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-gold/20"
+            >
+              <Scale className="h-3.5 w-3.5 text-gold" />
+              القضية: {linked.title || '—'}
+            </button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 text-muted-foreground hover:text-destructive"
+              title="فك الربط"
+              onClick={() => linkM.mutate({ smsId: m.id, caseId: null })}
+            >
+              <X className="h-3.5 w-3.5" />
+            </Button>
+          </>
+        ) : (
+          <>
+            {matchedCase && (
+              <button
+                onClick={() => navigate(`/cases/${matchedCase.id}`)}
+                className="flex items-center gap-1.5 rounded-lg border border-gold/40 bg-gold/10 px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-gold/20"
+              >
+                <Scale className="h-3.5 w-3.5 text-gold" />
+                القضية: {matchedCase.title || matchedCase.court_num}
+              </button>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs"
+              onClick={() => {
+                // إن وُجدت مطابقة تلقائية نقترحها جاهزة في المنتقي
+                setPickedCase(matchedCase?.id ?? null)
+                setLinkOpen(true)
+              }}
+            >
+              <Link2 className="h-3.5 w-3.5" />
+              ربط بقضية
+            </Button>
+          </>
+        )}
+      </div>
+
+      {/* اختيار القضية للربط الدائم */}
+      <Dialog open={linkOpen} onOpenChange={setLinkOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>ربط الرسالة بقضية</DialogTitle>
+          </DialogHeader>
+          <CasePicker
+            cases={cases ?? []}
+            value={pickedCase}
+            onChange={setPickedCase}
+          />
+          <DialogFooter className="gap-2">
+            <Button
+              variant="gold"
+              disabled={!pickedCase || linkM.isPending}
+              onClick={() =>
+                pickedCase &&
+                linkM.mutate(
+                  { smsId: m.id, caseId: pickedCase },
+                  { onSuccess: () => setLinkOpen(false) }
+                )
+              }
+            >
+              {linkM.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              ربط
+            </Button>
+            <Button variant="outline" onClick={() => setLinkOpen(false)}>
+              إلغاء
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
