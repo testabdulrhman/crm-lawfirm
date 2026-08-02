@@ -1,5 +1,14 @@
+import { useState } from 'react'
 import { useLocation } from 'wouter'
-import { Menu, Moon, Sun, Settings, LogOut, Wallet } from 'lucide-react'
+import {
+  Menu,
+  Moon,
+  Sun,
+  Settings,
+  LogOut,
+  Wallet,
+  RefreshCw,
+} from 'lucide-react'
 
 import { useTheme } from '@/stores/theme'
 import { useAuth } from '@/stores/auth'
@@ -16,10 +25,30 @@ import {
 import { UserAvatar } from '@/components/UserAvatar'
 import { GlobalSearch } from './GlobalSearch'
 
+// تحديث قوي: مسح كاش المتصفح وجلب أحدث نسخة منشورة (بديل Ctrl+Shift+R للموظفين)
+async function hardRefresh() {
+  try {
+    if ('caches' in window) {
+      const keys = await caches.keys()
+      await Promise.all(keys.map((k) => caches.delete(k)))
+    }
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations()
+      await Promise.all(regs.map((r) => r.unregister()))
+    }
+  } catch {
+    /* حتى لو فشل المسح، إعادة التحميل بكسر الكاش تكفي غالباً */
+  }
+  const u = new URL(window.location.href)
+  u.searchParams.set('cb', String(Date.now()))
+  window.location.replace(u.toString())
+}
+
 export function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
   const [location, navigate] = useLocation()
   const { theme, toggle } = useTheme()
   const { teamMember, logout } = useAuth()
+  const [refreshing, setRefreshing] = useState(false)
 
   // طابق المسار الدقيق، وإلا أطول بادئة مطابقة (لمسارات التفاصيل مثل /requests/:id)
   const title =
@@ -67,8 +96,21 @@ export function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
         <GlobalSearch />
       </div>
 
-      {/* يسار: الثيم + قائمة المستخدم */}
+      {/* يسار: التحديث + الثيم + قائمة المستخدم */}
       <div className="flex items-center gap-2">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => {
+            setRefreshing(true)
+            void hardRefresh()
+          }}
+          disabled={refreshing}
+          aria-label="تحديث التطبيق"
+          title="تحديث التطبيق (يجلب أحدث نسخة)"
+        >
+          <RefreshCw className={refreshing ? 'h-5 w-5 animate-spin' : 'h-5 w-5'} />
+        </Button>
         <Button
           variant="ghost"
           size="icon"
