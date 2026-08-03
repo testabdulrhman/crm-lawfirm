@@ -2,7 +2,15 @@ import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Loader2, ImagePlus, Scale } from 'lucide-react'
+import {
+  Loader2,
+  ImagePlus,
+  Scale,
+  Building2,
+  ReceiptText,
+  Landmark,
+  type LucideIcon,
+} from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -157,95 +165,154 @@ export function OfficeInfoTab() {
   }
 
   return (
-    <Card>
-      <CardContent className="pt-6">
-        {/* الهوية: الشعار + الختم + التوقيع */}
-        <div className="mb-6 divide-y divide-border/60 rounded-xl border border-border/70 bg-muted/30">
-          <BrandingRow
-            title="شعار المكتب"
-            hint="يظهر في القائمة الجانبية. يُفضَّل PNG بخلفية شفافة."
-            imageUrl={data?.logo_url}
-            uploading={uploading === 'logo'}
-            onPick={onPickLogo}
-          />
-          <BrandingRow
-            title="ختم الشركة"
-            hint="يُدمَج في خطابات الصادر عند اعتماد المدير."
-            imageUrl={data?.stamp_url}
-            uploading={uploading === 'stamp'}
-            onPick={onPickStamp}
-          />
-          <BrandingRow
-            title="توقيع المدير"
-            hint="اختياري — يُدمَج مع الختم عند الاعتماد متى ما رُفع."
-            imageUrl={signatureRow?.value}
-            uploading={uploading === 'signature'}
-            onPick={onPickSignature}
-          />
-        </div>
-
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <FormField label="اسم المكتب" id="office_name">
-              <Input id="office_name" {...register('office_name')} />
-            </FormField>
-            <FormField label="العنوان" id="address">
-              <Input id="address" {...register('address')} />
-            </FormField>
-            <FormField label="الهاتف" id="phone">
-              <Input id="phone" dir="ltr" {...register('phone')} />
-            </FormField>
-            <FormField
-              label="البريد الإلكتروني"
-              id="email"
-              error={errors.email?.message}
-            >
-              <Input id="email" type="email" dir="ltr" {...register('email')} />
-            </FormField>
-            <FormField label="الرقم الضريبي" id="tax_number">
-              <Input id="tax_number" dir="ltr" {...register('tax_number')} />
-            </FormField>
-            <FormField label="السجل التجاري" id="commercial_register">
-              <Input
-                id="commercial_register"
-                dir="ltr"
-                {...register('commercial_register')}
-              />
-            </FormField>
-            <FormField label="اسم البنك" id="bank_name">
-              <Input id="bank_name" {...register('bank_name')} />
-            </FormField>
-            <FormField label="الآيبان (IBAN)" id="iban">
-              <Input id="iban" dir="ltr" {...register('iban')} />
-            </FormField>
-            <FormField label="رقم الحساب" id="account_number">
-              <Input id="account_number" dir="ltr" {...register('account_number')} />
-            </FormField>
-            <FormField label="الاسم المختصر للحساب" id="account_short_name">
-              <Input
-                id="account_short_name"
-                {...register('account_short_name')}
-              />
-            </FormField>
+    <div className="space-y-4">
+      {/* الهوية البصرية: الشعار + الختم + التوقيع */}
+      <Card>
+        <CardContent className="space-y-4 pt-6">
+          <SectionTitle icon={ImagePlus} title="الهوية البصرية" />
+          <div className="grid gap-3 sm:grid-cols-3">
+            <BrandingCard
+              title="شعار المكتب"
+              hint="يظهر في القائمة الجانبية — يُفضَّل PNG بخلفية شفافة."
+              imageUrl={data?.logo_url}
+              uploading={uploading === 'logo'}
+              onPick={onPickLogo}
+            />
+            <BrandingCard
+              title="ختم الشركة"
+              hint="يُدمَج في خطابات الصادر عند اعتماد المدير."
+              imageUrl={data?.stamp_url}
+              uploading={uploading === 'stamp'}
+              onPick={onPickStamp}
+            />
+            <BrandingCard
+              title="توقيع المدير"
+              hint="اختياري — يُدمَج عند الاعتماد متى ما رُفع."
+              imageUrl={signatureRow?.value}
+              uploading={uploading === 'signature'}
+              onPick={onPickSignature}
+            />
           </div>
+        </CardContent>
+      </Card>
 
-          <FormField label="تفاصيل" id="details">
-            <Textarea id="details" {...register('details')} />
-          </FormField>
+      {/* البيانات — مجمَّعة في أقسام واضحة */}
+      <form onSubmit={handleSubmit(onSubmit)}>
+        <Card>
+          <CardContent className="space-y-6 pt-6">
+            <section className="space-y-4">
+              <SectionTitle icon={Building2} title="بيانات المكتب" />
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <FormField label="اسم المكتب" id="office_name">
+                  <Input id="office_name" {...register('office_name')} />
+                </FormField>
+                <FormField label="العنوان" id="address">
+                  <Input id="address" {...register('address')} />
+                </FormField>
+                <FormField label="الهاتف" id="phone">
+                  <Input id="phone" dir="ltr" {...register('phone')} />
+                </FormField>
+                <FormField
+                  label="البريد الإلكتروني"
+                  id="email"
+                  error={errors.email?.message}
+                >
+                  <Input id="email" type="email" dir="ltr" {...register('email')} />
+                </FormField>
+              </div>
+            </section>
 
-          <div className="flex justify-end">
-            <Button type="submit" variant="gold" disabled={updateM.isPending}>
-              {updateM.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-              حفظ
-            </Button>
-          </div>
-        </form>
-      </CardContent>
-    </Card>
+            <section className="space-y-4 border-t pt-5">
+              <SectionTitle icon={ReceiptText} title="البيانات النظامية" />
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <FormField label="الرقم الضريبي" id="tax_number">
+                  <Input id="tax_number" dir="ltr" {...register('tax_number')} />
+                </FormField>
+                <FormField label="السجل التجاري" id="commercial_register">
+                  <Input
+                    id="commercial_register"
+                    dir="ltr"
+                    {...register('commercial_register')}
+                  />
+                </FormField>
+              </div>
+            </section>
+
+            <section className="space-y-4 border-t pt-5">
+              <SectionTitle
+                icon={Landmark}
+                title="الحساب البنكي"
+                hint="يُستخدم في العقود والفواتير."
+              />
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <FormField label="اسم البنك" id="bank_name">
+                  <Input id="bank_name" {...register('bank_name')} />
+                </FormField>
+                <FormField label="الآيبان (IBAN)" id="iban">
+                  <Input id="iban" dir="ltr" {...register('iban')} />
+                </FormField>
+                <FormField label="رقم الحساب" id="account_number">
+                  <Input
+                    id="account_number"
+                    dir="ltr"
+                    {...register('account_number')}
+                  />
+                </FormField>
+                <FormField label="الاسم المختصر للحساب" id="account_short_name">
+                  <Input
+                    id="account_short_name"
+                    {...register('account_short_name')}
+                  />
+                </FormField>
+              </div>
+            </section>
+
+            <section className="space-y-4 border-t pt-5">
+              <FormField label="تفاصيل إضافية" id="details">
+                <Textarea id="details" rows={3} {...register('details')} />
+              </FormField>
+            </section>
+
+            <div className="flex justify-end border-t pt-4">
+              <Button type="submit" variant="gold" disabled={updateM.isPending}>
+                {updateM.isPending && (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                )}
+                حفظ البيانات
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </form>
+    </div>
   )
 }
 
-function BrandingRow({
+// عنوان قسم بنمط النظام: أيقونة في مربع ذهبي + نص
+function SectionTitle({
+  icon: Icon,
+  title,
+  hint,
+}: {
+  icon: LucideIcon
+  title: string
+  hint?: string
+}) {
+  return (
+    <div className="flex items-center gap-2.5">
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gold/10">
+        <Icon className="h-[18px] w-[18px] text-gold" />
+      </span>
+      <div className="min-w-0">
+        <h3 className="text-[15px] font-semibold text-foreground">{title}</h3>
+        {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
+      </div>
+    </div>
+  )
+}
+
+// بطاقة علامة (شعار/ختم/توقيع): معاينة ثابتة الارتفاع + زر بعرض البطاقة
+function BrandingCard({
   title,
   hint,
   imageUrl,
@@ -259,26 +326,27 @@ function BrandingRow({
   onPick: () => void
 }) {
   return (
-    <div className="flex items-center gap-4 p-4">
-      {imageUrl ? (
-        <img
-          src={imageUrl}
-          alt={title}
-          className="h-14 w-14 shrink-0 rounded-xl bg-white object-contain p-1 ring-1 ring-border"
-        />
-      ) : (
-        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-gold/10">
-          <Scale className="h-6 w-6 text-gold" />
-        </div>
-      )}
-      <div className="min-w-0 flex-1">
+    <div className="flex flex-col gap-3 rounded-xl border bg-muted/30 p-3">
+      <div className="flex h-24 items-center justify-center rounded-lg bg-white ring-1 ring-border">
+        {imageUrl ? (
+          <img
+            src={imageUrl}
+            alt={title}
+            className="max-h-20 max-w-[85%] object-contain"
+          />
+        ) : (
+          <Scale className="h-7 w-7 text-gold/60" />
+        )}
+      </div>
+      <div className="min-h-[3.25rem]">
         <p className="text-sm font-semibold text-foreground">{title}</p>
-        <p className="text-xs text-muted-foreground">{hint}</p>
+        <p className="text-xs leading-relaxed text-muted-foreground">{hint}</p>
       </div>
       <Button
         type="button"
         variant="outline"
         size="sm"
+        className="w-full"
         onClick={onPick}
         disabled={uploading}
       >

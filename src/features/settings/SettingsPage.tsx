@@ -37,12 +37,12 @@ export function SettingsPage() {
       </div>
 
       <Tabs value={tab} onValueChange={setTab} dir="rtl">
-        {/* مجموعتان: ما يخص المستخدم وحده، وما يخص المكتب كله */}
-        <div className="flex flex-wrap items-end gap-x-8 gap-y-3">
-          <div>
-            <p className="mb-1.5 px-1 text-xs font-semibold text-muted-foreground">
-              إعدادات خاصة بك
-            </p>
+        {/* شريط واحد بمجموعتين: ما يخصك وحدك، وما يخص المكتب كله */}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-3 rounded-2xl border bg-card p-2.5">
+          <div className="flex items-center gap-2">
+            <span className="shrink-0 px-1 text-xs font-semibold text-muted-foreground">
+              خاص بك
+            </span>
             <TabsList className="flex w-auto flex-wrap justify-start gap-1">
               <TabsTrigger value="account" className="gap-2">
                 <UserCircle2 className="h-4 w-4" />
@@ -54,10 +54,13 @@ export function SettingsPage() {
               </TabsTrigger>
             </TabsList>
           </div>
-          <div>
-            <p className="mb-1.5 px-1 text-xs font-semibold text-muted-foreground">
-              إعدادات المكتب (مشتركة للجميع)
-            </p>
+
+          <div className="hidden h-8 w-px shrink-0 bg-border lg:block" />
+
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="shrink-0 px-1 text-xs font-semibold text-muted-foreground">
+              المكتب — مشترك للجميع
+            </span>
             <TabsList className="flex w-auto flex-wrap justify-start gap-1">
               <TabsTrigger value="office" className="gap-2">
                 <Building2 className="h-4 w-4" />
