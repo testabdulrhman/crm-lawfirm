@@ -22,6 +22,7 @@ import { useCaseDocuments } from '@/hooks/useCaseDocuments'
 import { useCaseSessions } from '@/hooks/useCaseSessions'
 import { useCaseTasks } from '@/hooks/useCaseTasks'
 import { useCase, useUpdateCaseStatus } from '@/hooks/useCases'
+import { useCaseStudy } from '@/hooks/useCaseStudy'
 import { usePageState } from '@/hooks/usePageState'
 import {
   CASE_STATUS_OPTIONS,
@@ -67,12 +68,16 @@ export function CaseDetail({ id }: { id: string }) {
   const { data: caseDocs } = useCaseDocuments(id)
   const { data: caseSessions } = useCaseSessions(id)
   const { data: caseTasks } = useCaseTasks(id)
+  const { data: study } = useCaseStudy(id)
   // عدّادات التبويبات — تُظهر المحتوى دون فتحه (وتُسرّع فتح التبويب لاحقاً)
   const counts: Record<string, number> = {
     documents: caseDocs?.length ?? 0,
     sessions: caseSessions?.length ?? 0,
     tasks: (caseTasks ?? []).filter((t) => t.status !== 'done').length,
   }
+  // علامة تبويب الدراسة: هل توجد دراسة؟ وهل اعتُمدت؟
+  const hasStudy = !!study && !!(study.facts || study.legal_opinion || study.basics)
+  const studyApproved = hasStudy && study?.status === 'approved'
 
   if (isLoading) {
     return (
@@ -185,6 +190,19 @@ export function CaseDetail({ id }: { id: string }) {
                 {(counts[t.value] ?? 0) > 0 && (
                   <span className="mr-1.5 rounded-full bg-gold/15 px-1.5 text-xs font-medium text-gold-700 dark:text-gold-300">
                     {fmtNumber(counts[t.value])}
+                  </span>
+                )}
+                {/* علامة وجود الدراسة: ✓ خضراء = معتمدة، نقطة ذهبية = مسودة */}
+                {t.value === 'study' && hasStudy && (
+                  <span
+                    className={
+                      studyApproved
+                        ? 'mr-1.5 text-xs font-bold text-emerald-600 dark:text-emerald-400'
+                        : 'mr-1.5 inline-block h-2 w-2 rounded-full bg-gold'
+                    }
+                    title={studyApproved ? 'دراسة معتمدة' : 'مسودة دراسة'}
+                  >
+                    {studyApproved ? '✓' : ''}
                   </span>
                 )}
               </TabsTrigger>
