@@ -23,6 +23,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { UserAvatar } from '@/components/UserAvatar'
+import { NotificationBell } from '@/components/NotificationBell'
 import { GlobalSearch } from './GlobalSearch'
 
 // تحديث قوي: مسح كاش المتصفح وجلب أحدث نسخة منشورة (بديل Ctrl+Shift+R للموظفين)
@@ -97,8 +98,9 @@ export function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
         <GlobalSearch />
       </div>
 
-      {/* يسار: التحديث + الثيم + قائمة المستخدم */}
+      {/* يسار: الإشعارات + التحديث + الثيم + قائمة المستخدم */}
       <div className="flex items-center gap-2">
+        <NotificationBell />
         <Button
           variant="ghost"
           size="icon"

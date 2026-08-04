@@ -5,6 +5,7 @@ import { toast } from '@/hooks/use-toast'
 import { normalizeSaudiPhone } from '@/lib/format'
 import type { Note } from '@/types/db'
 import { errMessage } from '@/lib/errors'
+import { notifyMany } from '@/hooks/useNotifications'
 
 const APP_URL = 'https://app.redwan.sa'
 
@@ -65,7 +66,18 @@ export function useAddNote(caseId: string) {
         .insert({ case_id: caseId, content, author_id: authorId })
       if (error) throw error
 
-      // إشعار المذكورين عبر SMS (غير قاتل — فشله لا يُفشل الملاحظة)
+      // إشعار داخل النظام لكل مذكور (يظهر في جرس الشريط العلوي فوراً)
+      await notifyMany(
+        (mentions ?? []).map((m) => m.id),
+        {
+          type: 'mention',
+          title: `ذكرك ${authorName || 'زميلك'} في ملاحظة`,
+          message: content.length > 90 ? `${content.slice(0, 90)}…` : content,
+          caseId,
+        }
+      )
+
+      // وإشعار SMS أيضاً (غير قاتل — فشله لا يُفشل الملاحظة)
       let notified = 0
       for (const m of mentions ?? []) {
         if (!m.phone) continue

@@ -7,6 +7,7 @@ import { toast } from '@/hooks/use-toast'
 import { errMessage } from '@/lib/errors'
 import { todayISO } from '@/lib/format'
 import { useAuth } from '@/stores/auth'
+import { notify } from '@/hooks/useNotifications'
 import type { Task, TaskInput } from '@/types/db'
 
 export interface TaskRow extends Task {
@@ -114,6 +115,16 @@ export function useSaveTask() {
           .from('tasks')
           .insert({ status: 'todo', ...input })
         if (error) throw error
+        // إشعار المسؤول عند إسناد مهمة له (لا تُشعر نفسك)
+        if (input.assignee_id && input.assignee_id !== input.created_by) {
+          await notify({
+            recipientId: input.assignee_id,
+            type: 'task_assigned',
+            title: 'أُسندت لك مهمة جديدة',
+            message: input.title,
+            caseId: input.case_id ?? null,
+          })
+        }
       }
       return !!id
     },

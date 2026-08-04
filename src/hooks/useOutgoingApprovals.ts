@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase'
 import { toast } from '@/hooks/use-toast'
 import { normalizeSaudiPhone } from '@/lib/format'
 import { applyModeLabel, type ApplyMode, type StampPosition } from '@/lib/pdfStamp'
+import { notify, notifyMany } from '@/hooks/useNotifications'
 import type { OutgoingLetter } from '@/types/db'
 import { errMessage } from '@/lib/errors'
 
@@ -103,20 +104,29 @@ export function useRequestApproval() {
       // إشعار كل المدراء النشطين
       const { data: directors } = await supabase
         .from('team_members')
-        .select('name, phone')
+        .select('id, name, phone')
         .eq('is_director', true)
         .eq('is_active', true)
-        .not('phone', 'is', null)
       const msg = `طلب اعتماد خطاب صادر 🖋 (${applyModeLabel(mode)})\n${letter.subject || letter.letter_number || 'خطاب'}\nمن: ${requesterName ?? 'موظف'}\n${letterLink(letter.id)}`
+      await notifyMany(
+        (directors ?? []).map((d) => d.id),
+        {
+          type: 'approval_request',
+          title: 'طلب اعتماد خطاب صادر',
+          message: `${letter.subject || letter.letter_number || 'خطاب'} — من ${requesterName ?? 'موظف'}`,
+        }
+      )
       await Promise.all(
-        (directors ?? []).map((d) =>
-          sendSms({
-            phone: d.phone as string,
-            name: d.name ?? 'المدير',
-            message: msg,
-            sentBy: requesterName,
-          })
-        )
+        (directors ?? [])
+          .filter((d) => d.phone)
+          .map((d) =>
+            sendSms({
+              phone: d.phone as string,
+              name: d.name ?? 'المدير',
+              message: msg,
+              sentBy: requesterName,
+            })
+          )
       )
     },
     onSuccess: (_d, vars) => {
@@ -169,6 +179,12 @@ export function useApproveLetter() {
 
       // إشعار الطالب
       const requester = letter.approval?.requester
+      await notify({
+        recipientId: requester?.id,
+        type: 'approval_result',
+        title: 'اعتُمد خطابك ووُقّع ✓',
+        message: letter.subject || letter.letter_number || 'خطاب',
+      })
       if (requester?.phone) {
         await sendSms({
           phone: requester.phone,
