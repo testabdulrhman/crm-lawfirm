@@ -487,7 +487,7 @@ export interface Task {
 }
 
 export interface TaskInput {
-  case_id: string
+  case_id?: string | null // اختيارية — تُسمح المهام الإدارية بلا قضية
   title: string
   description?: string | null
   assignee_id?: string | null

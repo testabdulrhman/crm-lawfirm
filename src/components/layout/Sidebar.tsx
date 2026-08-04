@@ -2,6 +2,7 @@ import { Link, useLocation } from 'wouter'
 import {
   LayoutDashboard,
   Handshake,
+  ListTodo,
   Users,
   BookUser,
   Inbox,
@@ -30,6 +31,7 @@ import { usePendingOutgoingApprovalsCount } from '@/hooks/useOutgoingApprovals'
 import { usePendingApplicationsCount } from '@/hooks/useStaffApplications'
 import { useExpiringPOAsCount } from '@/hooks/usePOAs'
 import { useUpcomingAppointmentsCount } from '@/hooks/useAppointments'
+import { useMyOpenTasksCount } from '@/hooks/useTasks'
 import { fmtNumber } from '@/lib/format'
 
 interface NavItem {
@@ -42,6 +44,7 @@ interface NavItem {
     | 'expiring_poas'
     | 'upcoming_appointments'
     | 'pending_out_approvals'
+    | 'my_open_tasks'
 }
 
 // أقسام التنقل: تجميع منطقي بدل قائمة طويلة مسطّحة
@@ -54,6 +57,7 @@ const navSections: { title?: string; items: NavItem[] }[] = [
     items: [
       { label: 'العقود', href: '/engagements', icon: Handshake },
       { label: 'القضايا', href: '/cases', icon: Scale },
+      { label: 'المهام', href: '/tasks', icon: ListTodo, badge: 'my_open_tasks' },
       { label: 'الجلسات', href: '/sessions', icon: CalendarDays },
       { label: 'الوكالات', href: '/poa', icon: FileSignature, badge: 'expiring_poas' },
       { label: 'الاستشارات واللوائح', href: '/legal-services', icon: BookOpen },
@@ -112,6 +116,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const { data: pendingApps } = usePendingApplicationsCount()
   const { data: expiringPOAs } = useExpiringPOAsCount()
   const { data: upcomingAppts } = useUpcomingAppointmentsCount()
+  const { data: myTasks } = useMyOpenTasksCount()
 
   return (
     <aside className="pt-safe pb-safe flex h-full w-64 flex-col bg-navy text-navy-50">
@@ -162,7 +167,9 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                           ? (upcomingAppts ?? 0)
                           : item.badge === 'pending_out_approvals'
                             ? (isDirector ? (pendingApprovals ?? 0) : 0)
-                            : 0
+                            : item.badge === 'my_open_tasks'
+                              ? (myTasks ?? 0)
+                              : 0
                 const showBadge = !!item.badge && badgeCount > 0
                 return (
                   <Link
