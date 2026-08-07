@@ -87,11 +87,15 @@ export const fmtHijri = (d: string | Date | null | undefined): string => {
   if (isNaN(date.getTime())) return '—'
   return safeFormat(
     () =>
+      // ⚠️ Intl يضيف «هـ» بنفسه في أغلب المتصفحات — ننزعها ثم نضيفها مرة واحدة
+      // (تفادياً لـ«1448 هـ هـ»، ولضمان وجودها لو لم يضفها المتصفح)
       new Intl.DateTimeFormat(HIJRI_LOCALE, {
         year: 'numeric',
         month: 'long',
         day: 'numeric',
-      }).format(date) + ' هـ',
+      })
+        .format(date)
+        .replace(/\s*هـ\s*$/, '') + ' هـ',
     date.toISOString()
   )
 }

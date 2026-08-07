@@ -6,6 +6,7 @@ import { Loader2 } from 'lucide-react'
 import { useAuth } from '@/stores/auth'
 import { AppLayout } from '@/components/layout/AppLayout'
 import Login from '@/pages/Login'
+import Booking from '@/pages/Booking'
 import Dashboard from '@/pages/Dashboard'
 import { SettingsPage } from '@/features/settings/SettingsPage'
 import { TeamPage } from '@/features/team/TeamPage'
@@ -115,6 +116,9 @@ function AppRoutes() {
   const [location] = useLocation()
 
   if (loading) return <FullScreenLoader />
+
+  // صفحة حجز المواعيد عامة تماماً (للعملاء بلا حساب)
+  if (location === '/book') return <Booking />
 
   // مسار الدخول عام: المسجّل يُحوّل إلى الرئيسية
   if (location === '/login') {
