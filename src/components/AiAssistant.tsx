@@ -1,6 +1,15 @@
 // المساعد الذكي — زر عائم يفتح محادثة تنفيذية (بحث + إجراءات) عبر ai-assistant (task: agent)
 import { useEffect, useRef, useState } from 'react'
-import { Sparkles, X, Send, Loader2, CheckCircle2, ArrowLeft } from 'lucide-react'
+import {
+  Sparkles,
+  X,
+  Send,
+  Loader2,
+  CheckCircle2,
+  ArrowLeft,
+  Paperclip,
+  FileText,
+} from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -8,12 +17,21 @@ import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/stores/auth'
 import { toast } from '@/hooks/use-toast'
+import { pickFile, uploadFile } from '@/lib/files'
+import { errMessage } from '@/lib/errors'
 
 interface ChatMsg {
   role: 'user' | 'assistant'
   content: string
   actions?: string[]
   suggestions?: string[]
+}
+
+// ملف أرفقه الموظف في المحادثة (يُرفع للتخزين فور اختياره)
+interface Attachment {
+  url: string
+  name: string
+  type: string | null
 }
 
 const WELCOME =
@@ -33,6 +51,8 @@ export function AiAssistant() {
   const [messages, setMessages] = useState<ChatMsg[]>([])
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
+  const [attachment, setAttachment] = useState<Attachment | null>(null)
+  const [uploading, setUploading] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   // تمرير لأسفل عند كل رسالة
@@ -40,13 +60,41 @@ export function AiAssistant() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight })
   }, [messages, busy, open])
 
+  // اختيار ملف ورفعه للتخزين — يبقى معلّقاً حتى ترسل الرسالة
+  const attachFile = async () => {
+    const f = await pickFile()
+    if (!f) return
+    setUploading(true)
+    try {
+      const { publicUrl } = await uploadFile(f, { folder: 'assistant' })
+      setAttachment({ url: publicUrl, name: f.name, type: f.type || null })
+    } catch (e) {
+      toast({
+        variant: 'destructive',
+        title: 'تعذّر رفع الملف',
+        description: errMessage(e),
+      })
+    } finally {
+      setUploading(false)
+    }
+  }
+
   // الإرسال — يقبل نصّاً مباشراً (من زر اقتراح) أو يأخذ ما في حقل الكتابة
   const send = async (preset?: string) => {
     const text = (preset ?? input).trim()
-    if (!text || busy) return
-    const next: ChatMsg[] = [...messages, { role: 'user', content: text }]
+    // المرفق وحده يكفي للإرسال (بنص افتراضي)
+    if ((!text && !attachment) || busy) return
+    const shown = text || `أرفقت ملفاً: ${attachment?.name}`
+    const next: ChatMsg[] = [
+      ...messages,
+      {
+        role: 'user',
+        content: attachment ? `${shown}\n📎 ${attachment.name}` : shown,
+      },
+    ]
     setMessages(next)
     setInput('')
+    setAttachment(null)
     setBusy(true)
     try {
       const { data, error } = await supabase.functions.invoke('ai-assistant', {
@@ -54,6 +102,7 @@ export function AiAssistant() {
           task: 'agent',
           payload: {
             user_name: teamMember?.name ?? 'موظف',
+            attachment,
             messages: next.map((m) => ({ role: m.role, content: m.content })),
           },
         },
@@ -166,7 +215,37 @@ export function AiAssistant() {
 
           {/* الإدخال */}
           <div className="border-t p-2">
+            {/* المرفق المعلّق قبل الإرسال */}
+            {attachment && (
+              <div className="mb-2 flex items-center gap-2 rounded-lg border bg-muted/40 px-2 py-1.5">
+                <FileText className="h-4 w-4 shrink-0 text-violet-600" />
+                <span className="min-w-0 flex-1 truncate text-xs text-foreground">
+                  {attachment.name}
+                </span>
+                <button
+                  onClick={() => setAttachment(null)}
+                  className="text-muted-foreground hover:text-destructive"
+                  aria-label="إزالة المرفق"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            )}
             <div className="flex items-end gap-2">
+              <Button
+                size="icon"
+                variant="outline"
+                className="h-10 w-10 shrink-0"
+                disabled={busy || uploading}
+                onClick={attachFile}
+                title="إرفاق ملف (ضبط جلسة، حكم، مستند…)"
+              >
+                {uploading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Paperclip className="h-4 w-4" />
+                )}
+              </Button>
               <Textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
@@ -183,7 +262,7 @@ export function AiAssistant() {
               <Button
                 size="icon"
                 className="h-10 w-10 shrink-0 bg-violet-600 text-white hover:bg-violet-700"
-                disabled={busy || input.trim() === ''}
+                disabled={busy || uploading || (input.trim() === '' && !attachment)}
                 onClick={() => send()}
               >
                 <Send className="h-4 w-4" />
