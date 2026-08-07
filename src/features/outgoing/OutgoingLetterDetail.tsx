@@ -37,6 +37,7 @@ import {
 } from '@/hooks/useOutgoingLetters'
 import { OutgoingLetterForm } from './OutgoingLetterForm'
 import { ApprovalSection } from './ApprovalSection'
+import { OutgoingDocumentsSection } from './OutgoingDocumentsSection'
 import { SendLetterDialog } from './SendLetterDialog'
 
 export function OutgoingLetterDetail({ id }: { id: string }) {
@@ -159,6 +160,9 @@ export function OutgoingLetterDetail({ id }: { id: string }) {
 
       {/* التوقيع والاعتماد */}
       <ApprovalSection letter={l} />
+
+      {/* المرفقات الإضافية */}
+      <OutgoingDocumentsSection letterId={l.id} />
 
       {/* إرسال الخطاب واتساب */}
       <SendLetterDialog letter={l} open={sendOpen} onOpenChange={setSendOpen} />
