@@ -128,6 +128,32 @@ export function useAddSession(caseId: string) {
   })
 }
 
+// إعادة إضافة جلسة للتقويم يدوياً (لجلسة فشلت مزامنتها وقت الإنشاء)
+export function useSyncSessionCalendar(caseId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (session: CaseSession): Promise<void> => {
+      const caseTitle = await getCaseTitle(caseId)
+      const eventId = await addSessionEvent(session, caseTitle)
+      if (!eventId)
+        throw new Error(
+          'رفض تقويم Google إنشاء الحدث — تحقّق من الإعدادات ← التكاملات (تفعيل المزامنة ومعرّف التقويم).'
+        )
+      const { error } = await supabase
+        .from('sessions')
+        .update({ gcal_event_id: eventId })
+        .eq('id', session.id)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      invalidate(qc, caseId)
+      qc.invalidateQueries({ queryKey: ['all_sessions'] })
+      toast({ variant: 'success', title: 'أُضيفت الجلسة للتقويم ✓' })
+    },
+    onError: errToast('تعذّرت إضافة الجلسة للتقويم'),
+  })
+}
+
 export function useUpdateSession(caseId: string) {
   const qc = useQueryClient()
   return useMutation({

@@ -69,6 +69,7 @@ import {
   useAddSession,
   useUpdateSession,
   useDeleteSession,
+  useSyncSessionCalendar,
   useCloseSession,
   usePostponeSession,
   sendSessionReportSms,
@@ -110,6 +111,7 @@ export function SessionsTab({
 }) {
   const { data, isLoading } = useCaseSessions(caseId)
   const deleteM = useDeleteSession(caseId)
+  const syncCalM = useSyncSessionCalendar(caseId)
 
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<CaseSession | null>(null)
@@ -194,6 +196,8 @@ export function SessionsTab({
                 onPostpone={setPostponeFor}
                 onPreview={setPreview}
                 onResend={setResendFor}
+                onSyncCalendar={(x) => syncCalM.mutate(x)}
+                syncingCalendar={syncCalM.isPending}
               />
             ))}
           </Section>
@@ -208,6 +212,8 @@ export function SessionsTab({
                 onPostpone={setPostponeFor}
                 onPreview={setPreview}
                 onResend={setResendFor}
+                onSyncCalendar={(x) => syncCalM.mutate(x)}
+                syncingCalendar={syncCalM.isPending}
               />
             ))}
           </Section>
@@ -322,6 +328,8 @@ function SessionCard({
   onPostpone,
   onPreview,
   onResend,
+  onSyncCalendar,
+  syncingCalendar,
 }: {
   session: CaseSession
   onEdit: (s: CaseSession) => void
@@ -330,6 +338,8 @@ function SessionCard({
   onPostpone: (s: CaseSession) => void
   onPreview: (s: CaseSession) => void
   onResend: (s: CaseSession) => void
+  onSyncCalendar: (s: CaseSession) => void
+  syncingCalendar: boolean
 }) {
   const st = sessionDisplayStatus(s)
   const isClosed = !!s.closed_at
@@ -394,11 +404,29 @@ function SessionCard({
                 بحاجة إغلاق
               </span>
             )}
-            {s.gcal_event_id && (
+            {s.gcal_event_id ? (
               <span className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
                 <CalendarCheck className="h-3 w-3" />
                 في التقويم
               </span>
+            ) : (
+              // فشل المزامنة كان صامتاً — نُظهره ونتيح إعادة المحاولة بضغطة
+              !isClosed && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-auto gap-1 px-2 py-0.5 text-xs text-amber-600 hover:text-amber-700 dark:text-amber-400"
+                  disabled={syncingCalendar}
+                  onClick={() => onSyncCalendar(s)}
+                >
+                  {syncingCalendar ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <CalendarOff className="h-3 w-3" />
+                  )}
+                  ليست في التقويم — أضِفها
+                </Button>
+              )
             )}
             {cd && (
               <span
