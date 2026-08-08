@@ -18,7 +18,6 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { supabase } from '@/lib/supabase'
-import { useOfficeInfo } from '@/hooks/useSettings'
 import { cn } from '@/lib/utils'
 import { fmtHijri, fmtGregorian, fmtNumber } from '@/lib/format'
 import { errMessage } from '@/lib/errors'
@@ -52,8 +51,16 @@ interface DayInfo {
   count: number
 }
 
+// ترويسة المكتب تصل من دالة booking — الزائر غير مسجَّل ولا يقرأ office_info (RLS)
+interface OfficeBranding {
+  office_name?: string | null
+  logo_url?: string | null
+  phone?: string | null
+  address?: string | null
+}
+
 export default function Booking() {
-  const { data: office } = useOfficeInfo()
+  const [office, setOffice] = useState<OfficeBranding | null>(null)
 
   const [days, setDays] = useState<DayInfo[]>([])
   const [loadingDays, setLoadingDays] = useState(true)
@@ -80,6 +87,7 @@ export default function Booking() {
         })
         if (e || data?.error) throw new Error(data?.error || 'تعذّر جلب المواعيد')
         setDays(data.days ?? [])
+        setOffice(data.office ?? null)
       } catch (e) {
         setError(errMessage(e) ?? 'تعذّر جلب المواعيد المتاحة')
       } finally {
@@ -418,21 +426,24 @@ function Shell({
       <div className="mx-auto w-full max-w-lg space-y-4">
         {/* الترويسة */}
         <div className="text-center">
+          {/* اسم المكتب مكتوب داخل الشعار — لا نكرره نصاً إلا عند غيابه */}
           {office?.logo_url ? (
             <img
               src={office.logo_url}
-              alt="شعار المكتب"
-              className="mx-auto max-h-24 object-contain"
+              alt={office.office_name ?? 'شعار المكتب'}
+              className="mx-auto max-h-28 object-contain"
             />
           ) : (
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gold/15 ring-1 ring-gold/30">
-              <Scale className="h-7 w-7 text-gold" />
-            </div>
+            <>
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gold/15 ring-1 ring-gold/30">
+                <Scale className="h-7 w-7 text-gold" />
+              </div>
+              <h1 className="mt-3 text-lg font-bold text-gold">
+                {office?.office_name ?? 'حجز موعد'}
+              </h1>
+            </>
           )}
-          <h1 className="mt-3 text-lg font-bold text-gold">
-            {office?.office_name ?? 'حجز موعد'}
-          </h1>
-          <p className="mt-1 flex items-center justify-center gap-1.5 text-sm text-navy-100">
+          <p className="mt-3 flex items-center justify-center gap-1.5 text-sm text-navy-100">
             <CalendarDays className="h-4 w-4" />
             احجز موعد استشارتك
           </p>
