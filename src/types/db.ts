@@ -737,6 +737,14 @@ export interface Appointment {
   created_by: string | null
   created_at: string | null
   updated_at: string | null
+  // حقول الحجز من الموقع (migration 20260808_booking_website_phase1)
+  service_type: string | null
+  meeting_method: string | null
+  client_email: string | null
+  company_name: string | null
+  source: string | null
+  reference_no: string | null
+  idempotency_key: string | null
   client?: { id: string; name: string | null; phone: string | null } | null
 }
 

@@ -34,7 +34,70 @@ function errToast(title: string) {
 
 function invalidate(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: ['appointments'] })
+  qc.invalidateQueries({ queryKey: ['appointment_conflict'] })
 }
+
+/* ===================== منع تعارض المواعيد ===================== */
+// ⚠️ القاعدة تمنع التداخل بقيد appointments_no_overlap (يسري على 2026-08-09 فأحدث).
+//    هذا الفحص يسبقه ليعرف الموظف بمن يتعارض قبل الحفظ، لا ليحلّ محلّه.
+//    كل الحسابات بتوقيت الرياض — نفس ما يخزَّن في العمودين.
+
+export interface AppointmentConflict {
+  id: string
+  client_name: string | null
+  appointment_time: string | null
+  duration_minutes: number | null
+}
+
+const toMinutes = (t: string): number => {
+  const [h, m] = t.split(':').map(Number)
+  return h * 60 + (m || 0)
+}
+
+/** الموعد المتعارض مع (تاريخ، وقت، مدة) — أو null إن كانت الفترة شاغرة. */
+export function useAppointmentConflict(args: {
+  date: string | null
+  time: string | null
+  durationMinutes: number
+  excludeId?: string | null
+}) {
+  const { date, time, durationMinutes, excludeId } = args
+  const enabled = !!date && !!time
+  return useQuery({
+    queryKey: ['appointment_conflict', date, time, durationMinutes, excludeId ?? null],
+    enabled,
+    queryFn: async (): Promise<AppointmentConflict | null> => {
+      const { data, error } = await supabase
+        .from('appointments')
+        .select('id, client_name, appointment_time, duration_minutes')
+        .eq('appointment_date', date)
+        .neq('status', 'cancelled')
+      if (error) throw error
+
+      const start = toMinutes(time as string)
+      const end = start + (durationMinutes || 60)
+      const hit = (data ?? []).find((a) => {
+        if (excludeId && a.id === excludeId) return false
+        if (!a.appointment_time) return false
+        const s = toMinutes(String(a.appointment_time).slice(0, 5))
+        const e = s + (a.duration_minutes ?? 60)
+        return start < e && s < end
+      })
+      return (hit as AppointmentConflict | undefined) ?? null
+    },
+  })
+}
+
+/** ترجمة خطأ قيد التداخل إلى رسالة عربية واضحة. */
+function friendlyApptError(e: unknown): string | undefined {
+  const m = errMessage(e) ?? String(e ?? '')
+  if (m.includes('appointments_no_overlap') || m.includes('23P01'))
+    return 'يتعارض هذا الموعد مع موعد آخر في نفس الوقت. اختر وقتاً شاغراً أو عدّل مدة الموعد.'
+  if (m.includes('appointments_reference_no_key'))
+    return 'الرقم المرجعي مستخدم مسبقاً — أعد المحاولة.'
+  return errMessage(e)
+}
+
 
 /* ===================== الجلب ===================== */
 
@@ -116,7 +179,12 @@ export function useCreateAppointment() {
       toast({ variant: 'success', title: 'تمت إضافة الموعد' })
       if (!res.calOk) calendarWarn()
     },
-    onError: errToast('تعذّرت إضافة الموعد'),
+    onError: (e: unknown) =>
+      toast({
+        variant: 'destructive',
+        title: 'تعذّرت إضافة الموعد',
+        description: friendlyApptError(e),
+      }),
   })
 }
 
@@ -169,7 +237,12 @@ export function useUpdateAppointment() {
       toast({ variant: 'success', title: 'تم تحديث الموعد' })
       if (res.calWarn) calendarWarn()
     },
-    onError: errToast('تعذّر تحديث الموعد'),
+    onError: (e: unknown) =>
+      toast({
+        variant: 'destructive',
+        title: 'تعذّر تحديث الموعد',
+        description: friendlyApptError(e),
+      }),
   })
 }
 

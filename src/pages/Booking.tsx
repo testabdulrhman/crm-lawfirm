@@ -448,6 +448,21 @@ function Shell({
             احجز موعد استشارتك
           </p>
         </div>
+
+        {/* ⚠️ الصفحة الرسمية صارت redwan.sa/appointments — نبقي هذه عاملة
+            لئلا ينكسر أي رابط متداول، ونوجّه الزوار الجدد للصفحة الجديدة. */}
+        <a
+          href="https://redwan.sa/appointments"
+          className="block rounded-lg border border-gold/40 bg-gold/10 p-3 text-center transition-colors hover:bg-gold/20"
+        >
+          <p className="text-sm font-medium text-gold">
+            صفحة الحجز الجديدة على الموقع الرسمي
+          </p>
+          <p className="mt-1 text-xs text-navy-100">
+            اختر نوع الخدمة وطريقة الاجتماع — redwan.sa/appointments
+          </p>
+        </a>
+
         {children}
         <p className="pb-4 text-center text-xs text-navy-200">
           {office?.phone ? `للاستفسار: ${office.phone}` : ''}

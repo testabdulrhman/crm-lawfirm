@@ -10,6 +10,11 @@ import {
   CheckCircle2,
   MessageSquare,
   CalendarCheck,
+  Globe,
+  Scale,
+  Video,
+  MapPin,
+  Hash,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -27,6 +32,8 @@ import {
   APPT_STATUS_OPTIONS,
   apptStatusBadge,
   apptStatusLabel,
+  serviceTypeLabel,
+  meetingMethodLabel,
 } from '@/lib/appointmentLabels'
 import type { Appointment } from '@/types/db'
 
@@ -208,9 +215,17 @@ function AppointmentCard({
           <p className="min-w-0 flex-1 truncate font-semibold text-foreground">
             {a.client_name || a.client?.name || 'عميل'}
           </p>
-          <Badge variant={apptStatusBadge(a.status)}>
-            {apptStatusLabel(a.status)}
-          </Badge>
+          <div className="flex shrink-0 flex-col items-end gap-1">
+            <Badge variant={apptStatusBadge(a.status)}>
+              {apptStatusLabel(a.status)}
+            </Badge>
+            {a.source === 'website' && (
+              <Badge variant="outline" className="gap-1 text-[10px]">
+                <Globe className="h-2.5 w-2.5" />
+                من الموقع
+              </Badge>
+            )}
+          </div>
         </div>
 
         <div className="space-y-1 text-xs text-muted-foreground">
@@ -232,6 +247,32 @@ function AppointmentCard({
               </span>
             )}
           </div>
+          {(serviceTypeLabel(a.service_type) || meetingMethodLabel(a.meeting_method)) && (
+            <div className="flex flex-wrap items-center gap-x-3">
+              {serviceTypeLabel(a.service_type) && (
+                <span className="flex items-center gap-1">
+                  <Scale className="h-3 w-3" />
+                  {serviceTypeLabel(a.service_type)}
+                </span>
+              )}
+              {meetingMethodLabel(a.meeting_method) && (
+                <span className="flex items-center gap-1">
+                  {a.meeting_method === 'remote' ? (
+                    <Video className="h-3 w-3" />
+                  ) : (
+                    <MapPin className="h-3 w-3" />
+                  )}
+                  {meetingMethodLabel(a.meeting_method)}
+                </span>
+              )}
+            </div>
+          )}
+          {a.reference_no && (
+            <p className="flex items-center gap-1 font-mono text-[11px]">
+              <Hash className="h-3 w-3" />
+              {a.reference_no}
+            </p>
+          )}
           {cd && (
             <p
               className={cn(

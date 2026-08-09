@@ -33,3 +33,29 @@ export const apptStatusBadge = (
   s && s in APPT_STATUS_BADGE
     ? APPT_STATUS_BADGE[s as AppointmentStatus]
     : 'secondary'
+
+// ── حقول الحجز الإلكتروني من الموقع (redwan.sa/appointments) ──
+
+// أسماء الخدمات: النسخة الحيّة في lookup_values.booking_config.services
+// وهذه للعرض فقط داخل الـCRM حين لا تُجلب الإعدادات.
+const SERVICE_LABELS: Record<string, string> = {
+  general: 'استشارة قانونية عامة',
+  civil: 'القضايا المدنية والتجارية',
+  labor: 'قضايا العمل والعمال',
+  criminal: 'القضايا الجنائية',
+  realestate: 'النزاعات العقارية',
+  bankruptcy: 'الإفلاس والتصفية',
+  arbitration: 'التحكيم',
+  notarization: 'التوثيق',
+  realestate_registration: 'التسجيل العيني للعقار',
+  other: 'أخرى',
+}
+
+export const serviceTypeLabel = (k: string | null | undefined): string | null =>
+  k ? (SERVICE_LABELS[k] ?? k) : null
+
+export const meetingMethodLabel = (m: string | null | undefined): string | null =>
+  m === 'remote' ? 'عن بُعد' : m === 'onsite' ? 'حضوري' : null
+
+export const sourceLabel = (s: string | null | undefined): string | null =>
+  s === 'website' ? 'من الموقع' : s === 'manual' ? 'يدوي' : s || null

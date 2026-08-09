@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Loader2 } from 'lucide-react'
+import { Loader2, AlertTriangle, CheckCircle2 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -22,9 +22,11 @@ import {
 } from '@/components/ui/dialog'
 import { ContactPicker } from '@/components/ContactPicker'
 import { DualDatePicker } from '@/components/DualDatePicker'
+import { fmtNumber, fmtTime } from '@/lib/format'
 import { useAuth } from '@/stores/auth'
 import { useContacts } from '@/hooks/useContacts'
 import {
+  useAppointmentConflict,
   useCreateAppointment,
   useUpdateAppointment,
 } from '@/hooks/useAppointments'
@@ -65,6 +67,7 @@ export function AppointmentForm({
     handleSubmit,
     control,
     setValue,
+    watch,
     formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -84,7 +87,21 @@ export function AppointmentForm({
     },
   })
 
+  // ⚠️ فحص حيّ للتعارض — يمنع الموظف من تسجيل وقت محجوز قبل الحفظ.
+  //    القاعدة تمنعه أيضاً بقيد appointments_no_overlap، وهذا ليعرف بمن يتعارض.
+  const wDate = watch('appointment_date')
+  const wTime = watch('appointment_time')
+  const wDur = Number(watch('duration_minutes')) || 60
+  const { data: conflict, isFetching: checkingConflict } = useAppointmentConflict({
+    date: wDate || null,
+    time: wTime && wTime.trim() !== '' ? wTime : null,
+    durationMinutes: wDur,
+    excludeId: appointment?.id ?? null,
+  })
+
   const onSubmit = async (values: FormValues) => {
+    // حارس أخير في الواجهة — القاعدة هي الحكم النهائي
+    if (conflict) return
     const t = (v: string | undefined) => (v && v.trim() !== '' ? v.trim() : null)
     const dur =
       values.duration_minutes && values.duration_minutes.trim() !== ''
@@ -189,6 +206,30 @@ export function AppointmentForm({
           </p>
         )}
 
+        {/* حالة الفترة: محجوزة أم شاغرة */}
+        {wDate && wTime && !checkingConflict && (
+          conflict ? (
+            <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-2.5">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+              <div className="text-xs">
+                <p className="font-medium text-destructive">هذا الوقت محجوز</p>
+                <p className="mt-0.5 text-muted-foreground">
+                  يتعارض مع موعد {conflict.client_name || 'عميل'} الساعة{' '}
+                  {fmtTime(conflict.appointment_time)}
+                  {conflict.duration_minutes != null &&
+                    ` (${fmtNumber(conflict.duration_minutes)} دقيقة)`}
+                  . اختر وقتاً آخر أو عدّل المدة.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <p className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              الفترة شاغرة
+            </p>
+          )
+        )}
+
         <div className="space-y-1.5">
           <Label htmlFor="appt_notes">ملاحظات</Label>
           <Textarea id="appt_notes" rows={2} {...register('notes')} />
@@ -196,7 +237,7 @@ export function AppointmentForm({
       </div>
 
       <DialogFooter className="gap-2">
-        <Button type="submit" variant="gold" disabled={pending}>
+        <Button type="submit" variant="gold" disabled={pending || !!conflict}>
           {pending && <Loader2 className="h-4 w-4 animate-spin" />}
           {isEdit ? 'حفظ التعديلات' : 'إضافة'}
         </Button>
