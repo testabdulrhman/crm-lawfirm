@@ -39,15 +39,9 @@ export const apptStatusBadge = (
 // أسماء الخدمات: النسخة الحيّة في lookup_values.booking_config.services
 // وهذه للعرض فقط داخل الـCRM حين لا تُجلب الإعدادات.
 const SERVICE_LABELS: Record<string, string> = {
-  general: 'استشارة قانونية عامة',
-  civil: 'القضايا المدنية والتجارية',
-  labor: 'قضايا العمل والعمال',
-  criminal: 'القضايا الجنائية',
-  realestate: 'النزاعات العقارية',
-  bankruptcy: 'الإفلاس والتصفية',
-  arbitration: 'التحكيم',
-  notarization: 'التوثيق',
-  realestate_registration: 'التسجيل العيني للعقار',
+  law: 'أعمال المحاماة',
+  bankruptcy: 'أعمال إفلاس',
+  notarization: 'التوثيق والتسجيل العيني',
   other: 'أخرى',
 }
 
