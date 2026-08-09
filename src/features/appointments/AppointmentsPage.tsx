@@ -6,7 +6,6 @@ import {
   CalendarClock,
   ChevronLeft,
   Clock,
-  Timer,
   CheckCircle2,
   MessageSquare,
   CalendarCheck,
@@ -21,7 +20,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Card, CardContent } from '@/components/ui/card'
+import { Card } from '@/components/ui/card'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 import { fmtNumber, fmtDatePref, fmtTime, todayISO } from '@/lib/format'
@@ -121,9 +120,9 @@ export function AppointmentsPage() {
       </div>
 
       {isLoading ? (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="space-y-2">
           {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="h-40 w-full" />
+            <Skeleton key={i} className="h-16 w-full" />
           ))}
         </div>
       ) : filtered.length === 0 ? (
@@ -132,7 +131,7 @@ export function AppointmentsPage() {
         <>
           <Section title="المواعيد القادمة" count={upcoming.length}>
             {upcoming.map((a) => (
-              <AppointmentCard
+              <AppointmentRow
                 key={a.id}
                 appt={a}
                 upcoming
@@ -142,7 +141,7 @@ export function AppointmentsPage() {
           </Section>
           <Section title="المواعيد السابقة" count={past.length}>
             {past.map((a) => (
-              <AppointmentCard
+              <AppointmentRow
                 key={a.id}
                 appt={a}
                 onOpen={() => navigate(`/appointments/${a.id}`)}
@@ -193,12 +192,14 @@ function Section({
         {title}
         <span className="text-xs text-muted-foreground">({fmtNumber(count)})</span>
       </h3>
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{children}</div>
+      <Card className="overflow-hidden">
+        <ul className="divide-y">{children}</ul>
+      </Card>
     </div>
   )
 }
 
-function AppointmentCard({
+function AppointmentRow({
   appt: a,
   upcoming,
   onOpen,
@@ -209,114 +210,102 @@ function AppointmentCard({
 }) {
   const cd = upcoming ? countdown(a.appointment_date) : null
   return (
-    <Card className="flex flex-col">
-      <CardContent className="flex flex-1 flex-col gap-3 p-4">
-        <div className="flex items-start justify-between gap-2">
-          <p className="min-w-0 flex-1 truncate font-semibold text-foreground">
-            {a.client_name || a.client?.name || 'عميل'}
-          </p>
-          <div className="flex shrink-0 flex-col items-end gap-1">
-            <Badge variant={apptStatusBadge(a.status)}>
-              {apptStatusLabel(a.status)}
-            </Badge>
-            {a.source === 'website' && (
-              <Badge variant="outline" className="gap-1 text-[10px]">
-                <Globe className="h-2.5 w-2.5" />
-                من الموقع
-              </Badge>
-            )}
-          </div>
-        </div>
-
-        <div className="space-y-1 text-xs text-muted-foreground">
-          <p className="flex items-center gap-1">
-            <CalendarClock className="h-3 w-3" />
+    <li>
+      <button
+        type="button"
+        onClick={onOpen}
+        className="flex w-full items-center gap-3 px-4 py-3 text-right transition-colors hover:bg-muted/50"
+      >
+        {/* التاريخ والوقت — عمود ثابت يجعل المسح البصري سهلاً */}
+        <div className="w-28 shrink-0 sm:w-36">
+          <p className="truncate text-sm font-medium text-foreground">
             {fmtDatePref(a.appointment_date)}
           </p>
-          <div className="flex flex-wrap items-center gap-x-3">
-            {a.appointment_time && (
-              <span className="flex items-center gap-1">
-                <Clock className="h-3 w-3" />
-                {fmtTime(a.appointment_time)}
-              </span>
-            )}
+          <p className="flex items-center gap-1 text-xs text-muted-foreground">
+            <Clock className="h-3 w-3 shrink-0" />
+            {a.appointment_time ? fmtTime(a.appointment_time) : '—'}
             {a.duration_minutes != null && (
+              <span className="text-muted-foreground/70">
+                · {fmtNumber(a.duration_minutes)} د
+              </span>
+            )}
+          </p>
+        </div>
+
+        {/* العميل والتفاصيل */}
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-medium text-foreground">
+            {a.client_name || a.client?.name || 'عميل'}
+          </p>
+          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-xs text-muted-foreground">
+            {serviceTypeLabel(a.service_type) && (
               <span className="flex items-center gap-1">
-                <Timer className="h-3 w-3" />
-                {fmtNumber(a.duration_minutes)} د
+                <Scale className="h-3 w-3 shrink-0" />
+                {serviceTypeLabel(a.service_type)}
+              </span>
+            )}
+            {meetingMethodLabel(a.meeting_method) && (
+              <span className="flex items-center gap-1">
+                {a.meeting_method === 'remote' ? (
+                  <Video className="h-3 w-3 shrink-0" />
+                ) : (
+                  <MapPin className="h-3 w-3 shrink-0" />
+                )}
+                {meetingMethodLabel(a.meeting_method)}
+              </span>
+            )}
+            {a.reference_no && (
+              <span className="flex items-center gap-1 font-mono">
+                <Hash className="h-3 w-3 shrink-0" />
+                {a.reference_no}
+              </span>
+            )}
+            {cd && (
+              <span
+                className={cn(
+                  'font-medium',
+                  cd.soon ? 'text-amber-600 dark:text-amber-400' : ''
+                )}
+              >
+                {cd.text}
               </span>
             )}
           </div>
-          {(serviceTypeLabel(a.service_type) || meetingMethodLabel(a.meeting_method)) && (
-            <div className="flex flex-wrap items-center gap-x-3">
-              {serviceTypeLabel(a.service_type) && (
-                <span className="flex items-center gap-1">
-                  <Scale className="h-3 w-3" />
-                  {serviceTypeLabel(a.service_type)}
-                </span>
-              )}
-              {meetingMethodLabel(a.meeting_method) && (
-                <span className="flex items-center gap-1">
-                  {a.meeting_method === 'remote' ? (
-                    <Video className="h-3 w-3" />
-                  ) : (
-                    <MapPin className="h-3 w-3" />
-                  )}
-                  {meetingMethodLabel(a.meeting_method)}
-                </span>
-              )}
-            </div>
+        </div>
+
+        {/* المؤشّرات — تختفي على الشاشات الضيقة */}
+        <div className="hidden shrink-0 items-center gap-1.5 text-muted-foreground sm:flex">
+          {a.gcal_event_id && (
+            <CalendarCheck
+              className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400"
+              aria-label="في التقويم"
+            />
           )}
-          {a.reference_no && (
-            <p className="flex items-center gap-1 font-mono text-[11px]">
-              <Hash className="h-3 w-3" />
-              {a.reference_no}
-            </p>
+          {a.confirmation_sent_at && (
+            <CheckCircle2
+              className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400"
+              aria-label="أُرسل التأكيد"
+            />
           )}
-          {cd && (
-            <p
-              className={cn(
-                'font-medium',
-                cd.soon ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'
-              )}
-            >
-              {cd.text}
-            </p>
+          {a.thank_you_sent_at && (
+            <MessageSquare className="h-3.5 w-3.5" aria-label="أُرسل الشكر" />
           )}
         </div>
 
-        {/* مؤشّرات SMS + التقويم */}
-        {(a.confirmation_sent_at || a.thank_you_sent_at || a.gcal_event_id) && (
-          <div className="flex flex-wrap gap-1.5">
-            {a.gcal_event_id && (
-              <span className="flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs text-emerald-700 dark:text-emerald-300">
-                <CalendarCheck className="h-3 w-3" />
-                في التقويم
-              </span>
-            )}
-            {a.confirmation_sent_at && (
-              <span className="flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs text-emerald-700 dark:text-emerald-300">
-                <CheckCircle2 className="h-3 w-3" />
-                تم التأكيد
-              </span>
-            )}
-            {a.thank_you_sent_at && (
-              <span className="flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-                <MessageSquare className="h-3 w-3" />
-                تم الشكر
-              </span>
-            )}
-          </div>
-        )}
-
-        <div className="mt-auto flex justify-end pt-1">
-          <Button size="sm" variant="ghost" onClick={onOpen}>
-            عرض
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
+        {/* الحالة والمصدر */}
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          <Badge variant={apptStatusBadge(a.status)}>{apptStatusLabel(a.status)}</Badge>
+          {a.source === 'website' && (
+            <Badge variant="outline" className="gap-1 text-[10px]">
+              <Globe className="h-2.5 w-2.5" />
+              من الموقع
+            </Badge>
+          )}
         </div>
-      </CardContent>
-    </Card>
+
+        <ChevronLeft className="h-4 w-4 shrink-0 text-muted-foreground" />
+      </button>
+    </li>
   )
 }
 

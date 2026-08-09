@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { toast } from '@/hooks/use-toast'
 import { getTemplate, fillTemplate } from '@/lib/templates'
-import { normalizeSaudiPhone, todayISO, fmtDatePref, fmtTime } from '@/lib/format'
+import { normalizeSaudiPhone, todayISO, fmtDual, fmtTime } from '@/lib/format'
 import { addAppointmentEvent, deleteCalendarEvent } from '@/lib/calendar'
 import type { Appointment, AppointmentInput } from '@/types/db'
 import { errMessage } from '@/lib/errors'
@@ -18,10 +18,11 @@ function calendarWarn() {
 
 const SELECT = '*, client:contacts(id,name,phone)'
 
+// احتياط فقط — النص الحيّ في message_templates ويُحرَّر من الإعدادات ← قوالب الرسائل
 const DEFAULT_CONFIRMATION =
-  'مرحباً {name}، نذكّركم بموعدكم في مكتب عبدالرحمن بن رضوان المشيقح للمحاماة يوم {date} الساعة {time}.'
+  'مرحباً {name}، نذكّركم بموعدكم في شركة عبدالرحمن بن رضوان المشيقح للمحاماة وإدارة إجراءات الإفلاس بتاريخ {date} الساعة {time}.'
 const DEFAULT_THANK_YOU =
-  'شكراً {name} لزيارتكم مكتب عبدالرحمن بن رضوان المشيقح للمحاماة. نتشرّف بخدمتكم.'
+  'شكراً {name} على تشريفكم.\nنسعد دائماً بخدمتكم.\n\nشركة عبدالرحمن بن رضوان المشيقح للمحاماة وإدارة إجراءات الإفلاس\nنرجو تقييم تجربتكم: https://g.page/r/Ceww_xrLKY_LEBE/review'
 
 function errToast(title: string) {
   return (e: unknown) =>
@@ -316,7 +317,9 @@ async function sendAppointmentSms(
     const body = (await getTemplate(templateKey)) || fallback
     message = fillTemplate(body, {
       name,
-      date: fmtDatePref(appt.appointment_date),
+      // ⚠️ مزدوج دائماً (هجري + ميلادي) — لا fmtDatePref: تلك تتبع تفضيل
+      //    الموظف المرسِل، فقد يصل العميل تاريخ واحد فقط حسب إعدادات غيره.
+      date: fmtDual(appt.appointment_date),
       time: fmtTime(appt.appointment_time),
     })
 
