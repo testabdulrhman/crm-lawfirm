@@ -23,7 +23,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Card } from '@/components/ui/card'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
-import { fmtNumber, fmtDatePref, fmtTime, todayISO } from '@/lib/format'
+import { fmtNumber, fmtHijri, fmtGregorian, fmtTime, todayISO } from '@/lib/format'
 import { useAppointments } from '@/hooks/useAppointments'
 import { usePageState } from '@/hooks/usePageState'
 import { AppointmentForm } from './AppointmentForm'
@@ -216,10 +216,14 @@ function AppointmentRow({
         onClick={onOpen}
         className="flex w-full items-center gap-3 px-4 py-3 text-right transition-colors hover:bg-muted/50"
       >
-        {/* التاريخ والوقت — عمود ثابت يجعل المسح البصري سهلاً */}
-        <div className="w-28 shrink-0 sm:w-36">
+        {/* التاريخ والوقت — عمود ثابت يجعل المسح البصري سهلاً.
+            التاريخان معاً دائماً: الهجري أعلى والميلادي تحته. */}
+        <div className="w-32 shrink-0 sm:w-44">
           <p className="truncate text-sm font-medium text-foreground">
-            {fmtDatePref(a.appointment_date)}
+            {fmtHijri(a.appointment_date)}
+          </p>
+          <p className="truncate text-xs text-muted-foreground">
+            {fmtGregorian(a.appointment_date)}
           </p>
           <p className="flex items-center gap-1 text-xs text-muted-foreground">
             <Clock className="h-3 w-3 shrink-0" />
