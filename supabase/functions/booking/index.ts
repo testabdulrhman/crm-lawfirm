@@ -145,17 +145,15 @@ function riyadhDatePlus(days: number): string {
     .slice(0, 10);
 }
 
-// رقم مرجعي عشوائي غير تسلسلي: APT-YYMMDD-XXXX
-// حروف بلا التباس (لا O/0/I/1) — يُملى على الهاتف بلا خطأ.
-const REF_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-function makeReference(dateStr: string): string {
-  const compact = dateStr.slice(2).replace(/-/g, "");
-  const bytes = new Uint8Array(4);
-  crypto.getRandomValues(bytes);
-  const suffix = Array.from(bytes)
-    .map((b) => REF_ALPHABET[b % REF_ALPHABET.length])
-    .join("");
-  return `APT-${compact}-${suffix}`;
+// الرقم المرجعي: APT-{YY}{NNN} — مثال APT-26001
+// ⚠️ التوليد في القاعدة (next_booking_reference) لا هنا: الزيادة ذرّية فلا
+//    يتكرر الرقم عند حجزين متزامنين. السنة تُحسب بتوقيت الرياض.
+async function nextReference(): Promise<string> {
+  const { data, error } = await admin.rpc("next_booking_reference");
+  if (error || !data) {
+    throw new Error(`تعذّر توليد الرقم المرجعي: ${error?.message ?? "لا قيمة"}`);
+  }
+  return String(data);
 }
 
 /** الفترات الشاغرة ليوم محدد، بمدّة الخدمة المطلوبة */
@@ -343,7 +341,7 @@ Deno.serve(async (req) => {
       } catch (_) { /* الربط ثانوي */ }
 
       // ---- الإدراج: قيد appointments_no_overlap هو الحَكَم النهائي ----
-      const reference = makeReference(date);
+      const reference = await nextReference();
       const { data: appt, error } = await admin
         .from("appointments")
         .insert({
