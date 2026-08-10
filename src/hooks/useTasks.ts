@@ -15,8 +15,11 @@ export interface TaskRow extends Task {
   assignee?: { id: string; name: string | null; short_name: string | null } | null
 }
 
+// ⚠️ tasks فيه عمودان يشيران إلى team_members (assignee_id و created_by)، فلا بد
+//    من تسمية القيد صراحةً. بدونه ترفض PostgREST الاستعلام كاملاً (PGRST201)
+//    فتظهر الصفحة فارغة بينما الشارة — التي تَعُدّ بلا embed — تعرض رقماً صحيحاً.
 const SELECT =
-  '*, case:cases(id,title,office_num), assignee:team_members(id,name,short_name)'
+  '*, case:cases(id,title,office_num), assignee:team_members!tasks_assignee_id_fkey(id,name,short_name)'
 
 const LIST_KEY = 'tasks-board'
 
