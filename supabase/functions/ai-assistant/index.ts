@@ -2,9 +2,10 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // =============================================================
 // ai-assistant — البوابة الموحّدة للذكاء الاصطناعي (Claude API)
+// v23: إصلاح create_task (created_by عمود uuid لا اسم نصي — كان يفشل دائماً)
+//      + أداة create_session لتسجيل جلسة من إشعار ناجز.
 // v22: إصلاح قطع الـJSON — التفكير الداخلي يستهلك من ميزانية max_tokens،
 //      فكان السقف 1500/2000 يقطع الجواب في منتصفه فيفشل تحليله بصمت.
-//      رُفعت السقوف وأُضيف parseLoose متسامح مع السياج والكلام الزائد.
 // =============================================================
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
@@ -225,6 +226,22 @@ const AGENT_TOOLS = [
     },
   },
   {
+    name: "create_session",
+    description: "إنشاء جلسة جديدة في قضية. استخدمها عندما يطلب الموظف تسجيل جلسة أو موعد جلسة وصله من ناجز أو المحكمة. التاريخ ميلادي YYYY-MM-DD — إن أعطاك الموظف تاريخاً هجرياً فحوّله أولاً واذكر التحويل في ردّك. تُنشأ الجلسة بحالة «قادمة» وتُزامَن مع تقويم Google تلقائياً من النظام.",
+    input_schema: {
+      type: "object",
+      properties: {
+        case_office_num: { type: "string", description: "رقم مكتب القضية مثل CASE26039" },
+        session_date: { type: "string", description: "تاريخ الجلسة ميلادي YYYY-MM-DD" },
+        session_time: { type: "string", description: "وقت الجلسة HH:MM بنظام 24 ساعة (اختياري)" },
+        title: { type: "string", description: "عنوان الجلسة (اختياري — يُولَّد من رقمها)" },
+        court: { type: "string", description: "اسم المحكمة (اختياري — يُؤخذ من القضية)" },
+        preparation: { type: "string", description: "ما يجب تحضيره قبلها (اختياري)" },
+      },
+      required: ["case_office_num", "session_date"],
+    },
+  },
+  {
     name: "send_sms",
     description: "إرسال رسالة SMS لرقم جوال سعودي. استخدمها فقط بعد تأكّدك من الرقم والنص.",
     input_schema: {
@@ -253,6 +270,26 @@ const AGENT_TOOLS = [
     },
   },
 ];
+
+/** اسم الموظف → معرّفه في team_members (أو null). يُحفظ لتفادي استعلام متكرر. */
+const memberIdCache = new Map<string, string | null>();
+async function resolveMemberId(name: string): Promise<string | null> {
+  const key = (name ?? "").trim();
+  if (!key) return null;
+  if (memberIdCache.has(key)) return memberIdCache.get(key)!;
+  let id: string | null = null;
+  try {
+    const { data } = await admin
+      .from("team_members")
+      .select("id")
+      .ilike("name", `%${key}%`)
+      .eq("is_active", true)
+      .limit(1);
+    id = data?.[0]?.id ?? null;
+  } catch (_) { /* يبقى null */ }
+  memberIdCache.set(key, id);
+  return id;
+}
 
 function isoToday(): string {
   return new Date().toISOString().slice(0, 10);
@@ -490,6 +527,47 @@ async function runAgentTool(name: string, input: any, userName: string, actions:
       actions.push(`أُضيف «${docName}» لمستندات قضية ${caseRow.title}`);
       return JSON.stringify({ ok: true, case_title: caseRow.title });
     }
+    if (name === "create_session") {
+      const officeNum = String(input.case_office_num ?? "").trim();
+      const { data: cs } = await admin.from("cases").select("id, title, court").ilike("office_num", `%${officeNum}%`).limit(1);
+      const caseRow = cs?.[0];
+      if (!caseRow) return JSON.stringify({ ok: false, error: `لم أجد قضية برقم ${officeNum}` });
+
+      const date = String(input.session_date ?? "").trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date))
+        return JSON.stringify({ ok: false, error: "تاريخ الجلسة يجب أن يكون ميلادياً بصيغة YYYY-MM-DD" });
+      const rawTime = String(input.session_time ?? "").trim();
+      const time = /^\d{1,2}:\d{2}/.test(rawTime) ? rawTime.slice(0, 5).padStart(5, "0") : null;
+
+      // رقم الجلسة التالي في القضية
+      const { data: prev } = await admin
+        .from("sessions").select("session_number")
+        .eq("case_id", caseRow.id)
+        .order("session_number", { ascending: false, nullsFirst: false })
+        .limit(1);
+      const nextNum = (prev?.[0]?.session_number ?? 0) + 1;
+
+      const { data: created, error } = await admin.from("sessions").insert({
+        case_id: caseRow.id,
+        title: String(input.title ?? "").trim() || `جلسة رقم ${String(nextNum).padStart(2, "0")}`,
+        session_number: nextNum,
+        session_date: date,
+        session_time: time,
+        court: String(input.court ?? "").trim() || caseRow.court || null,
+        preparation: String(input.preparation ?? "").trim() || null,
+        status: "قادمة",
+      }).select("id, title, session_number").single();
+      if (error) return JSON.stringify({ ok: false, error: error.message });
+
+      actions.push(`أُنشئت جلسة في قضية ${caseRow.title} بتاريخ ${date}`);
+      // ⚠️ لا مزامنة تقويم من هنا: أسرار Google في دالة calendar-sync وحدها،
+      //    والجلسة ستظهر في التطبيق بمؤشّر «ليست في التقويم — أضِفها».
+      return JSON.stringify({
+        ok: true, session_id: created?.id, session_number: created?.session_number,
+        case_title: caseRow.title, date, time,
+        note: "أُنشئت الجلسة. لإضافتها لتقويم Google اضغط «ليست في التقويم — أضِفها» في تبويب الجلسات.",
+      });
+    }
     if (name === "send_sms") {
       const numbers = normalizeSaudi(String(input.phone ?? ""));
       if (!numbers || numbers.length < 12) return JSON.stringify({ ok: false, error: "رقم غير صالح" });
@@ -509,15 +587,21 @@ async function runAgentTool(name: string, input: any, userName: string, actions:
       return JSON.stringify({ ok });
     }
     if (name === "create_task") {
-      let assigneeId: string | null = null;
-      if (input.assignee_name) {
-        const { data: tm } = await admin.from("team_members").select("id, name").ilike("name", `%${input.assignee_name}%`).eq("is_active", true).limit(1);
-        assigneeId = tm?.[0]?.id ?? null;
-      }
+      // ⚠️ created_by و assignee_id عمودا uuid يشيران إلى team_members —
+      //    وضع الاسم نصاً فيهما يُرجع 22P02 (invalid input syntax for type uuid).
+      const creatorId = await resolveMemberId(userName);
+      // بلا اسم موظف: تُسند لطالبها بدل أن تبقى بلا مسؤول
+      const assigneeId = input.assignee_name
+        ? await resolveMemberId(String(input.assignee_name))
+        : creatorId;
+      if (input.assignee_name && !assigneeId)
+        return JSON.stringify({ ok: false, error: `لم أجد موظفاً باسم «${input.assignee_name}»` });
+
       let caseId: string | null = null;
       if (input.case_office_num) {
         const { data: cs } = await admin.from("cases").select("id").ilike("office_num", `%${input.case_office_num}%`).limit(1);
         caseId = cs?.[0]?.id ?? null;
+        if (!caseId) return JSON.stringify({ ok: false, error: `لم أجد قضية برقم ${input.case_office_num}` });
       }
       const { error } = await admin.from("tasks").insert({
         title: String(input.title ?? "").trim(),
@@ -526,11 +610,11 @@ async function runAgentTool(name: string, input: any, userName: string, actions:
         due_date: input.due_date || null,
         assignee_id: assigneeId,
         case_id: caseId,
-        created_by: userName,
+        created_by: creatorId,
       });
       if (error) return JSON.stringify({ ok: false, error: error.message });
       actions.push(`أُنشئت مهمة: ${input.title}`);
-      return JSON.stringify({ ok: true });
+      return JSON.stringify({ ok: true, assigned_to: input.assignee_name || userName });
     }
     return JSON.stringify({ error: "أداة غير معروفة" });
   } catch (e) {
@@ -544,7 +628,7 @@ const AGENT_SYSTEM = `أنت المساعد الذكي لنظام ${FIRM_NAME}. 
 - إذا طلب الموظف صراحةً إرسال رسالة (مثل «أرسل له…») فأرسلها مباشرة بعد إيجاد الرقم الصحيح. إن كان الطلب غامضاً اعرض مسودة الرسالة واطلب تأكيداً.
 - المرفقات: إن أرفق الموظف ملفاً وطلب حفظه في قضية، استخدم save_attachment. إن ذكر أنه «ضبط جلسة» أو «محضر» فاجعل target=session_minutes، وإلا case_document. إن لم يذكر القضية فاسأله عن رقمها أو ابحث بـ search_cases إن ذكر اسماً. بعد الحفظ اذكر ملخّص ما استُخرج من المحضر (outcome) في سطرين، وإن رجع extract_note فاذكر سببه بصراحة في سطر واحد.
 - رسائل العملاء: عربية فصحى رسمية موجزة، تُختم بالاسم الرسمي الكامل: «${FIRM_NAME}» (لا تختصره أبداً).
-- إن تعدّدت النتائج المطابقة فاسأل أيّها المقصود قبل أي إجراء.
+- الجلسات: إن وصل الموظف إشعار جلسة من ناجز أو المحكمة وطلب تسجيله، استخدم create_session. التواريخ في إشعارات ناجز هجرية غالباً — حوّلها إلى ميلادي واذكر التحويل صراحةً في ردّك ليتحقق منه الموظف.\n- إن تعدّدت النتائج المطابقة فاسأل أيّها المقصود قبل أي إجراء.
 - بعد التنفيذ اذكر بوضوح ما فعلته (لمن أُرسل، وما نص الرسالة).
 
 تنسيق الرد (مهم جداً — الواجهة تعرض نصّاً خاماً ولا تفهم Markdown):
