@@ -45,7 +45,7 @@ export function useTasks(scope: 'mine' | 'all', assigneeId: string | null) {
     queryKey: [LIST_KEY, scope, scope === 'mine' ? myId : assigneeId],
     enabled: scope === 'all' || !!myId,
     queryFn: async (): Promise<TaskRow[]> => {
-      let q = supabase.from('tasks').select(SELECT).limit(500)
+      let q = supabase.from('tasks').select(SELECT).is('deleted_at', null).limit(500)
       if (scope === 'mine' && myId) q = q.eq('assignee_id', myId)
       if (scope === 'all' && assigneeId) q = q.eq('assignee_id', assigneeId)
       const { data, error } = await q
@@ -68,6 +68,7 @@ export function useMyOpenTasksCount() {
         .from('tasks')
         .select('id', { count: 'exact', head: true })
         .eq('assignee_id', myId)
+        .is('deleted_at', null)
         .neq('status', 'done')
         .lte('due_date', todayISO())
       if (error) throw error
@@ -144,10 +145,35 @@ export function useSaveTask() {
 
 export function useRemoveTask() {
   const qc = useQueryClient()
+  const { teamMember } = useAuth()
+  const byName = teamMember?.name ?? null
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('tasks').delete().eq('id', id)
+      // ⚠️ حذف ناعم لا نهائي: الصف يبقى ويُسجَّل في سجل النشاط، فلا تختفي
+      //    مهمة بلا أثر يعرف منه المدير من حذفها ومتى.
+      const { data: row } = await supabase
+        .from('tasks')
+        .select('title, case_id')
+        .eq('id', id)
+        .maybeSingle()
+
+      const { error } = await supabase
+        .from('tasks')
+        .update({ deleted_at: new Date().toISOString(), deleted_by: byName ?? null })
+        .eq('id', id)
       if (error) throw error
+
+      try {
+        await supabase.from('activity_log').insert({
+          type: 'delete',
+          entity: 'task',
+          title: `حذف مهمة: ${row?.title ?? ''}`,
+          case_id: row?.case_id ?? null,
+          user_name: byName ?? null,
+        })
+      } catch {
+        /* التسجيل ثانوي — لا يمنع الحذف */
+      }
     },
     onSuccess: () => {
       invalidateAll(qc)

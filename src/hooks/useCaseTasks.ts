@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { supabase } from '@/lib/supabase'
+import { useAuth } from '@/stores/auth'
 import { toast } from '@/hooks/use-toast'
 import { TASK_PRIORITY_ORDER } from '@/lib/caseLabels'
 import type { Task, TaskInput } from '@/types/db'
@@ -27,6 +28,7 @@ export function useCaseTasks(caseId: string) {
       const { data, error } = await supabase
         .from('tasks')
         .select('*, subtasks:task_subtasks(*)')
+        .is('deleted_at', null)
         .eq('case_id', caseId)
       if (error) throw error
       const tasks = (data ?? []) as unknown as Task[]
@@ -110,10 +112,29 @@ export function useToggleTask(caseId: string) {
 
 export function useDeleteTask(caseId: string) {
   const qc = useQueryClient()
+  const { teamMember } = useAuth()
+  const byName = teamMember?.name ?? null
   return useMutation({
     mutationFn: async (id: string): Promise<void> => {
-      const { error } = await supabase.from('tasks').delete().eq('id', id)
+      // ⚠️ حذف ناعم — نفس سلوك صفحة المهام العامة (انظر useTasks.ts)
+      const { data: row } = await supabase
+        .from('tasks').select('title').eq('id', id).maybeSingle()
+
+      const { error } = await supabase
+        .from('tasks')
+        .update({ deleted_at: new Date().toISOString(), deleted_by: byName })
+        .eq('id', id)
       if (error) throw error
+
+      try {
+        await supabase.from('activity_log').insert({
+          type: 'delete', entity: 'task',
+          title: `حذف مهمة: ${row?.title ?? ''}`,
+          case_id: caseId, user_name: byName,
+        })
+      } catch {
+        /* التسجيل ثانوي */
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: key(caseId) })

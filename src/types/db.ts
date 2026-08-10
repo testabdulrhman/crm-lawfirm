@@ -469,6 +469,8 @@ export interface Subtask {
 }
 
 export interface Task {
+  deleted_at?: string | null
+  deleted_by?: string | null
   id: string
   case_id: string | null
   title: string | null
