@@ -937,8 +937,13 @@ function CloseSessionDialog({
     }
     const url = await ensureMinutesUrl(f)
     if (!url) return
-    const parsed = await extractM.mutateAsync(url)
-    if (!parsed) return
+    // الهوك يُظهر سبب الفشل في toast — نلتقط الرمي حتى لا يبقى وعد مرفوض معلّقاً
+    let parsed
+    try {
+      parsed = await extractM.mutateAsync(url)
+    } catch {
+      return
+    }
     const isISO = (v: string | null | undefined) =>
       !!v && /^\d{4}-\d{2}-\d{2}$/.test(v.trim())
     if (parsed.outcome && parsed.outcome.trim() !== '') {

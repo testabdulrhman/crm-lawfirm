@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { supabase } from '@/lib/supabase'
 import { toast } from '@/hooks/use-toast'
+import { errMessage } from '@/lib/errors'
 
 // نتيجة تحليل المتقدّم المحلَّلة (قد تكون null لو تعذّر تحليل JSON)
 export interface ApplicantAnalysis {
@@ -151,20 +152,38 @@ export interface SessionMinutesExtraction {
   hijri_note: string | null
 }
 
-// يقرأ محضر جلسة (PDF أو صورة) عبر رابطه ويُرجع ما تمّ + الخطوة القادمة (أو null).
+// يقرأ محضر جلسة (PDF أو صورة) عبر رابطه ويُرجع ما تمّ + الخطوة القادمة.
+//
+// ⚠️ دالة مستقلة (extract-minutes) لا ai-assistant: الأخيرة سقفها 2000 رمزاً
+//    يبتلع التفكيرُ الداخلي أكثرَها، فيُقطع الـJSON ويفشل تحليله فتُرجع null
+//    وتصمت الشاشة. المستقلة سقفها أوسع وتُرجع سبب الفشل صراحةً.
 export function useExtractSessionMinutes() {
   return useMutation({
-    mutationFn: async (
-      docUrl: string
-    ): Promise<SessionMinutesExtraction | null> => {
-      const { data, error } = await supabase.functions.invoke('ai-assistant', {
-        body: { task: 'extract_session_minutes', payload: { doc_url: docUrl } },
+    mutationFn: async (docUrl: string): Promise<SessionMinutesExtraction> => {
+      const { data, error } = await supabase.functions.invoke('extract-minutes', {
+        body: { doc_url: docUrl },
       })
-      if (error) throw error
+      // أخطاء الدالة (422/400) تصل هنا كـ FunctionsHttpError بلا نصّها،
+      // فنقرأ الرد الأصلي لنُظهر السبب الحقيقي للموظف.
+      if (error) {
+        let msg = ''
+        try {
+          const res = (error as { context?: Response }).context
+          if (res) msg = (await res.clone().json())?.error ?? ''
+        } catch {
+          /* يبقى العام */
+        }
+        throw new Error(msg || 'تعذّر الاتصال بخدمة قراءة المحضر.')
+      }
       if (data?.error) throw new Error(data.error)
-      return (data?.parsed ?? null) as SessionMinutesExtraction | null
+      if (!data?.parsed) throw new Error('لم يُستخرج شيء من المحضر — املأ الحقول يدوياً.')
+      return data.parsed as SessionMinutesExtraction
     },
-    onError: () =>
-      toast({ variant: 'destructive', title: 'تعذّر قراءة المحضر، حاول مرة أخرى' }),
+    onError: (e: unknown) =>
+      toast({
+        variant: 'destructive',
+        title: 'تعذّرت قراءة المحضر',
+        description: errMessage(e),
+      }),
   })
 }
