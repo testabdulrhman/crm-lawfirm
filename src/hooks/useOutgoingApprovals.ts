@@ -38,6 +38,35 @@ async function sendSms(args: {
   }
 }
 
+// حصيلة الإرسال: كم رسالة وصلت من كم محاولة
+type SmsOutcome = { sent: number; total: number }
+
+// لا تقل «تم» ما لم يصل شيء — الصمت هنا كلّف طلبات اعتماد ضائعة (2026-08-02)
+function smsOutcomeToast(
+  sent: number,
+  total: number,
+  okTitle: string,
+  who: string
+) {
+  if (total === 0) {
+    toast({ title: okTitle, description: `لا يوجد رقم جوال لـ${who} — لم تُرسل رسالة.` })
+  } else if (sent === total) {
+    toast({ variant: 'success', title: okTitle })
+  } else if (sent === 0) {
+    toast({
+      variant: 'destructive',
+      title: `${okTitle} — لكن لم تصل الرسالة`,
+      description: `تعذّر إبلاغ ${who} برسالة نصية. أبلغه بطريقة أخرى.`,
+    })
+  } else {
+    toast({
+      variant: 'destructive',
+      title: okTitle,
+      description: `وصلت ${sent} من ${total} رسائل فقط.`,
+    })
+  }
+}
+
 function invalidate(qc: ReturnType<typeof useQueryClient>, letterId: string) {
   qc.invalidateQueries({ queryKey: ['outgoing_letters'] })
   qc.invalidateQueries({ queryKey: ['outgoing_letter', letterId] })
@@ -77,7 +106,7 @@ export function useRequestApproval() {
       position: StampPosition
       mode: ApplyMode
       extraSignatures: StampPosition[]
-    }): Promise<void> => {
+    }): Promise<SmsOutcome> => {
       const { error } = await supabase.from('outgoing_approvals').upsert(
         {
           letter_id: letter.id,
@@ -116,22 +145,23 @@ export function useRequestApproval() {
           message: `${letter.subject || letter.letter_number || 'خطاب'} — من ${requesterName ?? 'موظف'}`,
         }
       )
-      await Promise.all(
-        (directors ?? [])
-          .filter((d) => d.phone)
-          .map((d) =>
-            sendSms({
-              phone: d.phone as string,
-              name: d.name ?? 'المدير',
-              message: msg,
-              sentBy: requesterName,
-            })
-          )
+      const withPhone = (directors ?? []).filter((d) => d.phone)
+      const results = await Promise.all(
+        withPhone.map((d) =>
+          sendSms({
+            phone: d.phone as string,
+            name: d.name ?? 'المدير',
+            message: msg,
+            sentBy: requesterName,
+          })
+        )
       )
+      // نُرجع حصيلة الإرسال حتى لا يُقال «أُرسل» ولم يصل شيء
+      return { sent: results.filter(Boolean).length, total: withPhone.length }
     },
-    onSuccess: (_d, vars) => {
+    onSuccess: (res, vars) => {
       invalidate(qc, vars.letter.id)
-      toast({ variant: 'success', title: 'أُرسل طلب الاعتماد للمدير' })
+      smsOutcomeToast(res.sent, res.total, 'أُرسل طلب الاعتماد للمدير', 'المدير')
     },
     onError: (e: unknown) =>
       toast({
@@ -156,7 +186,7 @@ export function useApproveLetter() {
       signedFileUrl: string
       approverId: string | null
       approverName: string | null
-    }): Promise<void> => {
+    }): Promise<SmsOutcome> => {
       const { error } = await supabase.from('outgoing_approvals').upsert(
         {
           letter_id: letter.id,
@@ -185,18 +215,18 @@ export function useApproveLetter() {
         title: 'اعتُمد خطابك ووُقّع ✓',
         message: letter.subject || letter.letter_number || 'خطاب',
       })
-      if (requester?.phone) {
-        await sendSms({
-          phone: requester.phone,
-          name: requester.name ?? 'موظف',
-          message: `تم اعتماد وتوقيع الخطاب ✓\n${letter.subject || letter.letter_number || 'خطاب'}\n${letterLink(letter.id)}`,
-          sentBy: approverName,
-        })
-      }
+      if (!requester?.phone) return { sent: 0, total: 0 }
+      const ok = await sendSms({
+        phone: requester.phone,
+        name: requester.name ?? 'موظف',
+        message: `تم اعتماد وتوقيع الخطاب ✓\n${letter.subject || letter.letter_number || 'خطاب'}\n${letterLink(letter.id)}`,
+        sentBy: approverName,
+      })
+      return { sent: ok ? 1 : 0, total: 1 }
     },
-    onSuccess: (_d, vars) => {
+    onSuccess: (res, vars) => {
       invalidate(qc, vars.letter.id)
-      toast({ variant: 'success', title: 'تم الاعتماد والتوقيع ✓' })
+      smsOutcomeToast(res.sent, res.total, 'تم الاعتماد والتوقيع ✓', 'الموظف')
     },
     onError: (e: unknown) =>
       toast({
@@ -221,7 +251,7 @@ export function useRejectLetter() {
       note: string
       approverId: string | null
       approverName: string | null
-    }): Promise<void> => {
+    }): Promise<SmsOutcome> => {
       const { error } = await supabase.from('outgoing_approvals').upsert(
         {
           letter_id: letter.id,
@@ -235,19 +265,19 @@ export function useRejectLetter() {
       if (error) throw error
 
       const requester = letter.approval?.requester
-      if (requester?.phone) {
-        const reason = note.trim() !== '' ? `\nالسبب: ${note.trim()}` : ''
-        await sendSms({
-          phone: requester.phone,
-          name: requester.name ?? 'موظف',
-          message: `تم رفض طلب اعتماد الخطاب\n${letter.subject || letter.letter_number || 'خطاب'}${reason}\n${letterLink(letter.id)}`,
-          sentBy: approverName,
-        })
-      }
+      if (!requester?.phone) return { sent: 0, total: 0 }
+      const reason = note.trim() !== '' ? `\nالسبب: ${note.trim()}` : ''
+      const ok = await sendSms({
+        phone: requester.phone,
+        name: requester.name ?? 'موظف',
+        message: `تم رفض طلب اعتماد الخطاب\n${letter.subject || letter.letter_number || 'خطاب'}${reason}\n${letterLink(letter.id)}`,
+        sentBy: approverName,
+      })
+      return { sent: ok ? 1 : 0, total: 1 }
     },
-    onSuccess: (_d, vars) => {
+    onSuccess: (res, vars) => {
       invalidate(qc, vars.letter.id)
-      toast({ title: 'تم رفض الطلب وإشعار الموظف' })
+      smsOutcomeToast(res.sent, res.total, 'تم رفض الطلب وإشعار الموظف', 'الموظف')
     },
     onError: (e: unknown) =>
       toast({

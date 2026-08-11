@@ -187,3 +187,61 @@ export function useExtractSessionMinutes() {
       }),
   })
 }
+
+/* ============ استخراج بيانات العقد والتزاماته من ملفه ============ */
+
+export interface ContractObligation {
+  title: string
+  due_date: string
+  type: string | null
+  notes: string | null
+}
+
+export interface ContractExtraction {
+  title: string | null
+  type: string | null
+  client_name: string | null
+  signed_date: string | null
+  start_date: string | null
+  end_date: string | null
+  fees_total: number | null
+  payment_terms: string | null
+  scope: string | null
+  auto_renew: boolean | null
+  notice_period_days: number | null
+  summary: string | null
+  obligations: ContractObligation[]
+  hijri_note: string | null
+}
+
+// الدالة تقرأ ولا تكتب — الواجهة تعرض النتيجة للمراجعة قبل الحفظ،
+// لأن الاستخراج الآلي يخطئ ولا يصح أن يكتب في العقد دون إقرار موظف.
+export function useExtractContract() {
+  return useMutation({
+    mutationFn: async (docUrl: string): Promise<ContractExtraction> => {
+      const { data, error } = await supabase.functions.invoke('extract-contract', {
+        body: { doc_url: docUrl },
+      })
+      // كما في المحاضر: نقرأ الرد الأصلي لنُظهر السبب الحقيقي لا رسالة عامة
+      if (error) {
+        let msg = ''
+        try {
+          const res = (error as { context?: Response }).context
+          if (res) msg = (await res.clone().json())?.error ?? ''
+        } catch {
+          /* يبقى العام */
+        }
+        throw new Error(msg || 'تعذّر الاتصال بخدمة قراءة العقود.')
+      }
+      if (data?.error) throw new Error(data.error)
+      if (!data?.parsed) throw new Error('لم يُستخرج شيء من العقد — أدخل البيانات يدوياً.')
+      return data.parsed as ContractExtraction
+    },
+    onError: (e: unknown) =>
+      toast({
+        variant: 'destructive',
+        title: 'تعذّرت قراءة العقد',
+        description: errMessage(e),
+      }),
+  })
+}

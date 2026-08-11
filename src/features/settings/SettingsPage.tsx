@@ -7,6 +7,7 @@ import {
   CalendarDays,
   CalendarCheck,
   MessageSquareText,
+  FileType2,
   UserCircle2,
   type LucideIcon,
 } from 'lucide-react'
@@ -26,6 +27,7 @@ import { LookupsTab } from './LookupsTab'
 import { TemplatesTab } from './TemplatesTab'
 import { AccountTab } from './AccountTab'
 import { BookingTab } from './BookingTab'
+import { ContractTemplatesTab } from './ContractTemplatesTab'
 
 // المستوى الأول: مجموعتان — والثاني: تبويبات كل مجموعة
 interface TabDef {
@@ -41,6 +43,7 @@ const OFFICE_TABS: TabDef[] = [
   { value: 'office', label: 'بيانات المكتب', icon: Building2 },
   { value: 'lookups', label: 'التصنيفات', icon: Tags },
   { value: 'templates', label: 'قوالب الرسائل', icon: MessageSquareText },
+  { value: 'contract-templates', label: 'قوالب العقود', icon: FileType2 },
   { value: 'booking', label: 'حجز المواعيد', icon: CalendarDays },
   { value: 'integrations', label: 'التكاملات', icon: CalendarCheck },
 ]
@@ -123,6 +126,10 @@ export function SettingsPage() {
 
         <TabsContent value="templates">
           <TemplatesTab />
+        </TabsContent>
+
+        <TabsContent value="contract-templates">
+          <ContractTemplatesTab />
         </TabsContent>
 
         <TabsContent value="account">

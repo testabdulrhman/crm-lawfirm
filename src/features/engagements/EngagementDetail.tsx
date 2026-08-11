@@ -15,6 +15,10 @@ import {
   Loader2,
   User,
   Phone,
+  Sparkles,
+  FileType2,
+  CalendarClock,
+  RotateCw,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -43,7 +47,7 @@ import {
 import { FilePreviewDialog } from '@/components/FilePreviewDialog'
 import { CasePicker } from '@/components/CasePicker'
 
-import { fmtDatePref, fmtNumber } from '@/lib/format'
+import { fmtDatePref, fmtNumber, todayISO } from '@/lib/format'
 import { useAuth } from '@/stores/auth'
 import { useIsDirector } from '@/hooks/useIsDirector'
 import { useCases } from '@/hooks/useCases'
@@ -56,7 +60,15 @@ import {
 } from '@/hooks/useEngagements'
 import { caseStatusBadge, caseStatusLabel } from '@/lib/caseLabels'
 import { lsStatusBadge, lsStatusLabel, lsTypeLabel } from '@/lib/legalServiceLabels'
+import {
+  useEngagementDeadlines,
+  useToggleDeadline,
+  useDeleteDeadline,
+  obligationTypeLabel,
+} from '@/hooks/useDeadlines'
 import { EngagementForm } from './EngagementForm'
+import { ExtractContractDialog } from './ExtractContractDialog'
+import { GenerateFromTemplateDialog } from './GenerateFromTemplateDialog'
 import { ENG_STATUS_OPTIONS, engStatusBadge, engStatusLabel, engTypeLabel } from './labels'
 
 export function EngagementDetail({ id }: { id: string }) {
@@ -69,6 +81,9 @@ export function EngagementDetail({ id }: { id: string }) {
   const deleteM = useDeleteEngagement()
   const linkM = useLinkCaseToEngagement(id)
   const { data: allCases } = useCases()
+  const { data: obligations } = useEngagementDeadlines(id)
+  const toggleDeadlineM = useToggleDeadline()
+  const deleteDeadlineM = useDeleteDeadline()
 
   const [editOpen, setEditOpen] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
@@ -76,6 +91,8 @@ export function EngagementDetail({ id }: { id: string }) {
   const [linkOpen, setLinkOpen] = useState(false)
   const [pickedCase, setPickedCase] = useState<string | null>(null)
   const [unlinkFor, setUnlinkFor] = useState<{ id: string; title: string | null } | null>(null)
+  const [extractOpen, setExtractOpen] = useState(false)
+  const [generateOpen, setGenerateOpen] = useState(false)
 
   if (isLoading) {
     return (
@@ -167,6 +184,10 @@ export function EngagementDetail({ id }: { id: string }) {
                   ))}
                 </SelectContent>
               </Select>
+              <Button variant="outline" size="sm" onClick={() => setGenerateOpen(true)}>
+                <FileType2 className="h-4 w-4" />
+                توليد من قالب
+              </Button>
               <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
                 <Pencil className="h-4 w-4" />
                 تعديل
@@ -203,12 +224,35 @@ export function EngagementDetail({ id }: { id: string }) {
               value={e.fees_total != null ? `${fmtNumber(e.fees_total)} ريال` : null}
             />
             <Row label="طريقة الدفع" value={e.payment_terms} />
+            <Row
+              label="التجديد التلقائي"
+              value={e.auto_renew == null ? null : e.auto_renew ? 'نعم' : 'لا'}
+            />
+            <Row
+              label="مهلة الإشعار بالإنهاء"
+              value={
+                e.notice_period_days != null
+                  ? `${fmtNumber(e.notice_period_days)} يوماً`
+                  : null
+              }
+            />
           </dl>
           {(e.scope || e.notes) && (
             <dl className="grid grid-cols-1 gap-y-3 border-t pt-4">
               <Row label="نطاق العمل" value={e.scope} full />
               <Row label="ملاحظات" value={e.notes} full />
             </dl>
+          )}
+          {e.extract_summary && (
+            <div className="rounded-xl bg-muted/50 p-3">
+              <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                <Sparkles className="h-3.5 w-3.5 text-gold" />
+                ملخّص العقد (استخراج آلي)
+              </p>
+              <p className="mt-1 text-sm leading-relaxed text-foreground">
+                {e.extract_summary}
+              </p>
+            </div>
           )}
 
           {/* الملف */}
@@ -223,6 +267,19 @@ export function EngagementDetail({ id }: { id: string }) {
                   <ExternalLink className="h-4 w-4" />
                   فتح/تنزيل
                 </a>
+              </Button>
+              <Button
+                variant="gold"
+                size="sm"
+                className="mr-auto"
+                onClick={() => setExtractOpen(true)}
+              >
+                {e.extracted_at ? (
+                  <RotateCw className="h-4 w-4" />
+                ) : (
+                  <Sparkles className="h-4 w-4" />
+                )}
+                {e.extracted_at ? 'إعادة استخراج البيانات' : 'استخراج البيانات من الملف'}
               </Button>
             </div>
           )}
@@ -312,6 +369,104 @@ export function EngagementDetail({ id }: { id: string }) {
         </CardContent>
       </Card>
 
+      {/* الالتزامات والمواعيد */}
+      <Card>
+        <CardHeader className="space-y-0">
+          <CardTitle className="flex items-center gap-2.5 text-[15px] font-semibold">
+            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gold/10">
+              <CalendarClock className="h-[18px] w-[18px] text-gold" />
+            </span>
+            الالتزامات والمواعيد
+            {(obligations ?? []).length > 0 && (
+              <span className="text-sm font-normal text-muted-foreground">
+                ({fmtNumber((obligations ?? []).length)})
+              </span>
+            )}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {(obligations ?? []).length === 0 ? (
+            <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-10 text-center">
+              <CalendarClock className="mb-2 h-6 w-6 text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">
+                لا التزامات مسجَّلة
+                {e.file_url
+                  ? ' — استخرجها من ملف العقد بزر «استخراج البيانات».'
+                  : ' — ارفع ملف العقد أولاً ليُستخرج منه.'}
+              </p>
+            </div>
+          ) : (
+            <ul className="divide-y divide-border/60 overflow-hidden rounded-xl border">
+              {(obligations ?? []).map((o) => {
+                const done = !!o.done
+                const overdue = !done && o.deadline_date < todayISO()
+                return (
+                  <li key={o.id} className="flex items-start gap-3 px-4 py-3">
+                    <input
+                      type="checkbox"
+                      checked={done}
+                      onChange={(ev) =>
+                        toggleDeadlineM.mutate({ id: o.id, done: ev.target.checked })
+                      }
+                      aria-label={done ? 'إرجاع الالتزام' : 'إنجاز الالتزام'}
+                      className="mt-1 h-4 w-4 shrink-0 cursor-pointer accent-gold"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p
+                        className={
+                          done
+                            ? 'text-sm text-muted-foreground line-through'
+                            : 'text-sm font-medium text-foreground'
+                        }
+                      >
+                        {o.title}
+                      </p>
+                      {o.notes && (
+                        <p className="mt-0.5 text-xs text-muted-foreground">{o.notes}</p>
+                      )}
+                    </div>
+                    <div className="flex shrink-0 flex-col items-end gap-1">
+                      <span
+                        className={
+                          overdue
+                            ? 'text-xs font-medium text-destructive'
+                            : 'text-xs text-muted-foreground'
+                        }
+                      >
+                        {fmtDatePref(o.deadline_date)}
+                        {overdue && ' — فات'}
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <Badge variant="outline" className="font-normal">
+                          {obligationTypeLabel(o.type)}
+                        </Badge>
+                        {o.source === 'ai_contract' && (
+                          <Sparkles className="h-3 w-3 text-gold" aria-label="استُخرج آلياً" />
+                        )}
+                      </div>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                      title="حذف الالتزام"
+                      onClick={() =>
+                        deleteDeadlineM.mutate({
+                          id: o.id,
+                          deletedBy: teamMember?.name ?? null,
+                        })
+                      }
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+
       {/* ربط قضية */}
       <Dialog open={linkOpen} onOpenChange={setLinkOpen}>
         <DialogContent className="max-w-md">
@@ -375,6 +530,22 @@ export function EngagementDetail({ id }: { id: string }) {
           <EngagementForm engagement={e} onDone={() => setEditOpen(false)} />
         </DialogContent>
       </Dialog>
+
+      <ExtractContractDialog
+        open={extractOpen}
+        onOpenChange={setExtractOpen}
+        engagement={e}
+      />
+
+      <GenerateFromTemplateDialog
+        open={generateOpen}
+        onOpenChange={setGenerateOpen}
+        presets={{
+          NAME: e.client?.name ?? '',
+          PHONE: e.client?.phone ?? '',
+          SCOPE: e.scope ?? '',
+        }}
+      />
 
       <FilePreviewDialog
         open={previewOpen}

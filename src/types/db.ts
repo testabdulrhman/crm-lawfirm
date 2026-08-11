@@ -780,6 +780,11 @@ export interface Engagement {
   notes: string | null
   status: string
   file_url: string | null
+  // يستخرجها الذكاء الاصطناعي من ملف العقد (extract-contract)
+  auto_renew: boolean | null
+  notice_period_days: number | null
+  extracted_at: string | null
+  extract_summary: string | null
   created_by: string | null
   deleted_at: string | null
   deleted_by: string | null
@@ -802,6 +807,10 @@ export interface EngagementInput {
   notes?: string | null
   status?: string
   file_url?: string | null
+  auto_renew?: boolean | null
+  notice_period_days?: number | null
+  extracted_at?: string | null
+  extract_summary?: string | null
   created_by?: string | null
 }
 
