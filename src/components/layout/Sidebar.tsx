@@ -32,6 +32,7 @@ import { usePendingApplicationsCount } from '@/hooks/useStaffApplications'
 import { useExpiringPOAsCount } from '@/hooks/usePOAs'
 import { useUpcomingAppointmentsCount } from '@/hooks/useAppointments'
 import { useMyOpenTasksCount } from '@/hooks/useTasks'
+import { useMyReviewCount } from '@/hooks/useTaskRoom'
 import { fmtNumber } from '@/lib/format'
 
 interface NavItem {
@@ -117,6 +118,8 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const { data: expiringPOAs } = useExpiringPOAsCount()
   const { data: upcomingAppts } = useUpcomingAppointmentsCount()
   const { data: myTasks } = useMyOpenTasksCount()
+  // شارة المهام = المستحق عليّ + ما ينتظر اعتمادي
+  const { data: myReviews } = useMyReviewCount()
 
   return (
     <aside className="pt-safe pb-safe flex h-full w-64 flex-col bg-navy text-navy-50">
@@ -168,7 +171,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                           : item.badge === 'pending_out_approvals'
                             ? (isDirector ? (pendingApprovals ?? 0) : 0)
                             : item.badge === 'my_open_tasks'
-                              ? (myTasks ?? 0)
+                              ? (myTasks ?? 0) + (myReviews ?? 0)
                               : 0
                 const showBadge = !!item.badge && badgeCount > 0
                 return (

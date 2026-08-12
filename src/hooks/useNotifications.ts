@@ -14,6 +14,7 @@ export interface AppNotification {
   message: string | null
   recipient_id: string | null
   case_id: string | null
+  task_id: string | null
   is_read: boolean | null
   created_at: string
 }
@@ -25,6 +26,10 @@ export const NOTIFICATION_TYPES = {
   mention: 'منشن',
   task_assigned: 'مهمة جديدة',
   task_due: 'مهمة مستحقة',
+  task_comment: 'تعليق على مهمة',
+  task_review: 'مهمة بانتظار اعتمادك',
+  task_approved: 'اعتُمدت المهمة',
+  task_returned: 'أُرجعت المهمة',
   approval_request: 'طلب اعتماد',
   approval_result: 'نتيجة اعتماد',
   session_soon: 'جلسة قريبة',
@@ -103,6 +108,7 @@ export async function notify(args: {
   title: string
   message?: string | null
   caseId?: string | null
+  taskId?: string | null
 }): Promise<void> {
   if (!args.recipientId) return
   try {
@@ -112,6 +118,7 @@ export async function notify(args: {
       title: args.title,
       message: args.message ?? null,
       case_id: args.caseId ?? null,
+      task_id: args.taskId ?? null,
       is_read: false,
       channels: ['app'],
     })

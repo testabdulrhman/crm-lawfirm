@@ -204,7 +204,7 @@ export const TASK_PRIORITY_ORDER: Record<string, number> = {
 }
 
 export const taskStatusLabel = (s: string | null | undefined): string =>
-  s === 'done' ? 'مكتملة' : 'قيد التنفيذ'
+  s === 'done' ? 'مكتملة' : s === 'review' ? 'بانتظار الاعتماد' : 'قيد التنفيذ'
 
 /* ===== المذكرات ===== */
 

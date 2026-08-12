@@ -21,6 +21,7 @@ import { ContactsPage } from '@/features/contacts/ContactsPage'
 import { ContactDetail } from '@/features/contacts/ContactDetail'
 import { CasesPage } from '@/features/cases/CasesPage'
 import { TasksPage } from '@/features/tasks/TasksPage'
+import { TaskRoomPage } from '@/features/tasks/TaskRoomPage'
 import { EngagementsPage } from '@/features/engagements/EngagementsPage'
 import { EngagementDetail } from '@/features/engagements/EngagementDetail'
 import { CaseDetail } from '@/features/cases/CaseDetail'
@@ -55,6 +56,9 @@ function ProtectedRoutes() {
           {(params) => <CaseDetail id={params.id} />}
         </Route>
         <Route path="/cases" component={CasesPage} />
+        <Route path="/tasks/:id">
+          {(params) => <TaskRoomPage id={params.id} />}
+        </Route>
         <Route path="/tasks" component={TasksPage} />
         <Route path="/engagements/:id">
           {(params) => <EngagementDetail id={params.id} />}

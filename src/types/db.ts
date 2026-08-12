@@ -485,7 +485,77 @@ export interface Task {
   is_urgent: boolean | null
   task_type: string | null
   created_at: string | null
+  // دورة الاعتماد (غرفة عمل المهمة)
+  submitted_at: string | null
+  submitted_by: string | null
+  review_by: string | null
+  approved_at: string | null
+  approved_by: string | null
   subtasks?: Subtask[]
+}
+
+/* ===== غرفة عمل المهمة: فريق + ملفات بنسخ + تعليقات + اعتماد ===== */
+
+export interface TaskParticipant {
+  id: string
+  task_id: string
+  member_id: string
+  role: string // worker | watcher
+  added_by: string | null
+  created_at: string
+  member?: {
+    id: string
+    name: string | null
+    short_name: string | null
+    avatar_color: string | null
+    avatar_initial: string | null
+  } | null
+}
+
+export interface TaskFile {
+  id: string
+  task_id: string
+  version: number
+  file_url: string
+  file_name: string | null
+  file_size: number | null
+  note: string | null
+  uploaded_by: string | null
+  created_at: string
+  uploader?: { id: string; name: string | null; short_name: string | null } | null
+}
+
+export interface TaskComment {
+  id: string
+  task_id: string
+  author_id: string | null
+  body: string
+  mentions: string[]
+  file_id: string | null
+  created_at: string
+  deleted_at: string | null
+  author?: {
+    id: string
+    name: string | null
+    short_name: string | null
+    avatar_color: string | null
+    avatar_initial: string | null
+  } | null
+}
+
+export type TaskApprovalAction = 'submitted' | 'approved' | 'forwarded' | 'returned'
+
+export interface TaskApproval {
+  id: string
+  task_id: string
+  file_id: string | null
+  action: TaskApprovalAction
+  actor_id: string | null
+  note: string | null
+  forwarded_to: string | null
+  created_at: string
+  actor?: { id: string; name: string | null; short_name: string | null } | null
+  forwardee?: { id: string; name: string | null; short_name: string | null } | null
 }
 
 export interface TaskInput {

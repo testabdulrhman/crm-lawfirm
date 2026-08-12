@@ -31,6 +31,10 @@ const ICONS: Record<string, LucideIcon> = {
   mention: AtSign,
   task_assigned: ListTodo,
   task_due: ListTodo,
+  task_comment: MessageSquare,
+  task_review: Stamp,
+  task_approved: ListTodo,
+  task_returned: ListTodo,
   approval_request: Stamp,
   approval_result: Stamp,
   session_soon: CalendarDays,
@@ -38,10 +42,16 @@ const ICONS: Record<string, LucideIcon> = {
 }
 
 function destination(n: AppNotification): string {
+  // إشعار مرتبط بمهمة يفتح غرفتها مباشرة — أدق من صفحة القضية
+  if (n.task_id) return `/tasks/${n.task_id}`
   if (n.case_id) return `/cases/${n.case_id}`
   switch (n.type) {
     case 'task_assigned':
     case 'task_due':
+    case 'task_comment':
+    case 'task_review':
+    case 'task_approved':
+    case 'task_returned':
       return '/tasks'
     case 'approval_request':
     case 'approval_result':

@@ -57,7 +57,7 @@ import type { Task } from '@/types/db'
 
 const ALL_MEMBERS = '__all__'
 // ترتيب عرض المجموعات
-const ORDER: BucketKey[] = ['overdue', 'today', 'week', 'later', 'someday']
+const ORDER: BucketKey[] = ['review', 'overdue', 'today', 'week', 'later', 'someday']
 
 export function TasksPage() {
   const isDirector = useIsDirector()
@@ -308,7 +308,7 @@ function TaskGroup({
   onDelete: (t: TaskRow) => void
 }) {
   const isOverdue = bucket === 'overdue'
-  const isToday = bucket === 'today'
+  const isToday = bucket === 'today' || bucket === 'review'
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2">
@@ -357,6 +357,7 @@ function TaskRowItem({
   const { teamMember } = useAuth()
   const toggleM = useToggleTaskDone()
   const done = t.status === 'done'
+  const inReview = t.status === 'review'
   const overdue = !done && !!t.due_date && bucketOf(t) === 'overdue'
   const isMine = t.assignee_id === teamMember?.id
 
@@ -365,9 +366,11 @@ function TaskRowItem({
       <input
         type="checkbox"
         checked={done}
+        disabled={inReview}
         onChange={(e) => toggleM.mutate({ id: t.id, done: e.target.checked })}
-        className="mt-1 h-4 w-4 shrink-0 cursor-pointer accent-gold"
-        aria-label={done ? 'إرجاع للمهام' : 'إنجاز المهمة'}
+        className="mt-1 h-4 w-4 shrink-0 cursor-pointer accent-gold disabled:cursor-not-allowed disabled:opacity-40"
+        aria-label={inReview ? 'بانتظار الاعتماد' : done ? 'إرجاع للمهام' : 'إنجاز المهمة'}
+        title={inReview ? 'بانتظار الاعتماد — تُنجز من غرفة المهمة' : undefined}
       />
 
       <div className="min-w-0 flex-1">
@@ -375,14 +378,20 @@ function TaskRowItem({
           {t.is_urgent && !done && (
             <Flame className="h-3.5 w-3.5 shrink-0 text-destructive" />
           )}
-          <p
+          <button
+            onClick={() => navigate(`/tasks/${t.id}`)}
             className={cn(
-              'text-sm font-medium',
+              'text-right text-sm font-medium hover:text-gold',
               done && 'text-muted-foreground line-through'
             )}
           >
             {t.title}
-          </p>
+          </button>
+          {inReview && (
+            <Badge variant="warning" className="shrink-0">
+              بانتظار الاعتماد
+            </Badge>
+          )}
           {!done && t.priority && t.priority !== 'med' && (
             <Badge variant={taskPriorityBadge(t.priority)} className="shrink-0">
               {taskPriorityLabel(t.priority)}

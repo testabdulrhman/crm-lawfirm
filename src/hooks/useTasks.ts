@@ -186,6 +186,7 @@ export function useRemoveTask() {
 /* ===== تجميع المهام في مجموعات زمنية (متأخر/اليوم/الأسبوع/لاحقاً/بلا موعد) ===== */
 
 export type BucketKey =
+  | 'review'
   | 'overdue'
   | 'today'
   | 'week'
@@ -194,6 +195,7 @@ export type BucketKey =
   | 'done'
 
 export const BUCKET_LABELS: Record<BucketKey, string> = {
+  review: 'بانتظار الاعتماد',
   overdue: 'متأخرة',
   today: 'اليوم',
   week: 'هذا الأسبوع',
@@ -204,6 +206,7 @@ export const BUCKET_LABELS: Record<BucketKey, string> = {
 
 export function bucketOf(t: TaskRow): BucketKey {
   if (t.status === 'done') return 'done'
+  if (t.status === 'review') return 'review'
   if (!t.due_date) return 'someday'
   const today = todayISO()
   if (t.due_date < today) return 'overdue'
