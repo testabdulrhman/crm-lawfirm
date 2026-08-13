@@ -22,7 +22,10 @@ import {
   CalendarClock,
   Inbox,
   AlertTriangle,
+  BarChart3,
+  ChevronLeft,
   Flame,
+  MousePointerClick,
   RefreshCw,
   MonitorSmartphone,
   Users,
@@ -30,8 +33,10 @@ import {
   LogIn,
   type LucideIcon,
 } from 'lucide-react'
+import { useLocation } from 'wouter'
 
 import { Button } from '@/components/ui/button'
+import { QueryErrorState } from '@/components/QueryErrorState'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -42,7 +47,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { fmtNumber, fmtDateTime } from '@/lib/format'
+import { fmtNumber, fmtDateTime, arPlural } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { categoryLabel } from '@/lib/contactLabels'
 import { caseTypeLabel } from '@/lib/caseLabels'
@@ -62,7 +67,8 @@ import type { NameValue } from '@/types/db'
 
 const COLORS = [
   '#C9A84C',
-  '#111D3A',
+  // كحلي أفتح من كحلي الهوية — الأصلي #111D3A يختفي على خلفية الوضع الداكن
+  '#3E5C9A',
   '#2A9D8F',
   '#3B82F6',
   '#E76F51',
@@ -74,8 +80,41 @@ const COLORS = [
 ]
 
 export function ReportsPage() {
-  const { data, isLoading, refetch, isFetching } = useReportsOverview()
-  const { data: byAssignee, isLoading: loadingAssignee } = useReportsByAssignee()
+  const { data, isLoading, isError, error, refetch, isFetching } =
+    useReportsOverview()
+  const {
+    data: byAssignee,
+    isLoading: loadingAssignee,
+    isError: errorAssignee,
+    error: assigneeError,
+    refetch: refetchAssignee,
+  } = useReportsByAssignee()
+  const [, navigate] = useLocation()
+
+  // انتقال ببطاقة التنبيه إلى الصفحة المعنية مع تهيئة فلاترها مسبقاً
+  const openExpiringPoas = () => {
+    try {
+      sessionStorage.setItem('ps:poa:soon', JSON.stringify(true))
+      sessionStorage.setItem('ps:poa:q', JSON.stringify(''))
+      // صفّر فلتر الحالة أيضاً — تركيبة soon+status لا تسمح بها الصفحة نفسها
+      sessionStorage.setItem('ps:poa:status', JSON.stringify('all'))
+    } catch {
+      /* تخزين معطّل — سيفتح بلا فلتر مسبق */
+    }
+    navigate('/poa')
+  }
+  const openUrgentTasks = () => {
+    try {
+      sessionStorage.setItem('ps:tasks:scope', JSON.stringify('all'))
+      sessionStorage.setItem('ps:tasks:q', JSON.stringify(''))
+      sessionStorage.setItem('ps:tasks:done', JSON.stringify('no'))
+      // صفّر فلتر الموظف — بقاؤه يجعل العدّاد الشامل يعرض قائمة منقوصة
+      sessionStorage.setItem('ps:tasks:assignee', JSON.stringify('__all__'))
+    } catch {
+      /* تخزين معطّل — سيفتح بلا فلتر مسبق */
+    }
+    navigate('/tasks')
+  }
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -94,6 +133,15 @@ export function ReportsPage() {
         </Button>
       </div>
 
+      {/* فشل التحميل: سبب واضح + إعادة محاولة بدل هياكل لا تنتهي */}
+      {isError && (
+        <QueryErrorState
+          title="تعذّر تحميل التقارير"
+          error={error}
+          onRetry={() => refetch()}
+        />
+      )}
+
       {/* تنبيهات */}
       {!isLoading && data && (data.expiring_poas > 0 || data.urgent_tasks > 0) && (
         <div className="grid gap-4 sm:grid-cols-2">
@@ -101,21 +149,31 @@ export function ReportsPage() {
             <AlertCard
               icon={AlertTriangle}
               tone="amber"
-              text={`${fmtNumber(data.expiring_poas)} وكالة تنتهي خلال 30 يوماً`}
+              text={`${arPlural(data.expiring_poas, {
+                one: 'وكالة تنتهي',
+                two: 'وكالتان تنتهيان',
+                many: 'وكالات تنتهي',
+              })} خلال 30 يوماً`}
+              onClick={openExpiringPoas}
             />
           )}
           {data.urgent_tasks > 0 && (
             <AlertCard
               icon={Flame}
               tone="red"
-              text={`${fmtNumber(data.urgent_tasks)} مهمة عاجلة مفتوحة`}
+              text={arPlural(data.urgent_tasks, {
+                one: 'مهمة عاجلة مفتوحة',
+                two: 'مهمتان عاجلتان مفتوحتان',
+                many: 'مهام عاجلة مفتوحة',
+              })}
+              onClick={openUrgentTasks}
             />
           )}
         </div>
       )}
 
       {/* بطاقات KPI */}
-      {isLoading || !data ? (
+      {isError ? null : isLoading || !data ? (
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-4">
           {Array.from({ length: 9 }).map((_, i) => (
             <Skeleton key={i} className="h-24 w-full" />
@@ -136,6 +194,7 @@ export function ReportsPage() {
       )}
 
       {/* الرسوم */}
+      {!isError && (
       <div className="grid gap-4 lg:grid-cols-2">
         <ChartCard title="القضايا حسب النوع">
           {data ? (
@@ -186,6 +245,7 @@ export function ReportsPage() {
           )}
         </ChartCard>
       </div>
+      )}
 
       {/* جدول أداء المسؤولين */}
       <Card>
@@ -194,7 +254,19 @@ export function ReportsPage() {
         </CardHeader>
         <CardContent>
           {loadingAssignee ? (
-            <Skeleton className="h-40 w-full" />
+            <div className="space-y-2">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <Skeleton key={i} className="h-10 w-full" />
+              ))}
+            </div>
+          ) : errorAssignee ? (
+            <QueryErrorState
+              title="تعذّر تحميل أداء المحامين"
+              error={assigneeError}
+              onRetry={() => refetchAssignee()}
+            />
+          ) : (byAssignee ?? []).length === 0 ? (
+            <MiniEmpty icon={Users}>لا قضايا مسندة بعد.</MiniEmpty>
           ) : (
             <Table>
               <TableHeader>
@@ -252,18 +324,26 @@ function UsageSection() {
         <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gold/10">
           <MonitorSmartphone className="h-[18px] w-[18px] text-gold" />
         </span>
-        <h3 className="text-[15px] font-semibold text-foreground">
+        <h3 className="text-base font-semibold text-foreground">
           استخدام التطبيق (آخر 30 يوماً)
         </h3>
       </div>
 
       {isLoading || !usage ? (
-        <Skeleton className="h-64 w-full" />
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <Skeleton key={i} className="h-24 w-full" />
+            ))}
+          </div>
+          <Skeleton className="h-64 w-full" />
+        </div>
       ) : (
         <>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <StatCard label="نشطون اليوم" value={usage.activeToday} icon={Users} tone="green" />
-            <StatCard label="جلسات هذا الأسبوع" value={usage.weekSessions} icon={LogIn} tone="gold" />
+            {/* «مرات الدخول» لا «الجلسات» — كلمة «جلسة» محجوزة لجلسات المحكمة */}
+            <StatCard label="مرات الدخول هذا الأسبوع" value={usage.weekSessions} icon={LogIn} tone="gold" />
             <Card>
               <CardContent className="flex items-center justify-between gap-3 p-4">
                 <div>
@@ -280,15 +360,31 @@ function UsageSection() {
           </div>
 
           <ChartCard title="دقائق الاستخدام يومياً (آخر 14 يوماً)">
-            <ResponsiveContainer width="100%" height={240}>
-              <BarChart data={usage.byDay}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="label" tick={{ fontSize: 11 }} reversed />
-                <YAxis orientation="right" tick={{ fontSize: 11 }} allowDecimals={false} />
-                <Tooltip formatter={(v) => [`${fmtNumber(Number(v))} دقيقة`, 'الاستخدام']} />
-                <Bar dataKey="minutes" fill="#C9A84C" radius={[6, 6, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            {/* نفس نمط بقية رسوم الصفحة: dir="ltr" ومحور يسار */}
+            <div dir="ltr" className="w-full">
+              <ResponsiveContainer width="100%" height={240}>
+                <BarChart data={usage.byDay}>
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    vertical={false}
+                    stroke="hsl(var(--border))"
+                  />
+                  <XAxis
+                    dataKey="label"
+                    tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
+                    allowDecimals={false}
+                  />
+                  <Tooltip
+                    contentStyle={{ direction: 'rtl', fontSize: 12, borderRadius: 8 }}
+                    formatter={(v) => [`${fmtNumber(Number(v))} دقيقة`, 'الاستخدام']}
+                  />
+                  <Bar dataKey="minutes" fill="#C9A84C" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </ChartCard>
 
           <Card>
@@ -297,15 +393,15 @@ function UsageSection() {
             </CardHeader>
             <CardContent>
               {usage.byUser.length === 0 ? (
-                <p className="py-6 text-center text-sm text-muted-foreground">
-                  لا بيانات استخدام بعد — تُسجَّل الجلسات تلقائياً من الآن مع كل دخول.
-                </p>
+                <MiniEmpty icon={LogIn}>
+                  لا بيانات استخدام بعد — تُسجَّل مرات الدخول تلقائياً من الآن.
+                </MiniEmpty>
               ) : (
                 <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead>الموظف</TableHead>
-                      <TableHead className="text-center">الجلسات</TableHead>
+                      <TableHead className="text-center">مرات الدخول</TableHead>
                       <TableHead className="text-center">إجمالي الاستخدام</TableHead>
                       <TableHead className="text-center">آخر دخول</TableHead>
                     </TableRow>
@@ -338,7 +434,7 @@ function UsageSection() {
               تفاصيل دقيقة: الصفحات والأزرار
             </p>
             <Select value={userFilter} onValueChange={setUserFilter}>
-              <SelectTrigger className="h-9 w-44">
+              <SelectTrigger className="h-9 w-44" aria-label="تصفية حسب الموظف">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -359,15 +455,15 @@ function UsageSection() {
               </CardHeader>
               <CardContent>
                 {!details || details.pages.length === 0 ? (
-                  <p className="py-6 text-center text-sm text-muted-foreground">
+                  <MiniEmpty icon={MonitorSmartphone}>
                     لا تفاصيل بعد — يبدأ التسجيل الدقيق من الآن مع كل استخدام.
-                  </p>
+                  </MiniEmpty>
                 ) : (
                   <Table>
                     <TableHeader>
                       <TableRow>
                         <TableHead>الصفحة</TableHead>
-                        <TableHead className="text-center">الفتحات</TableHead>
+                        <TableHead className="text-center">مرات الفتح</TableHead>
                         <TableHead className="text-center">المكوث</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -397,9 +493,9 @@ function UsageSection() {
               </CardHeader>
               <CardContent>
                 {!details || details.buttons.length === 0 ? (
-                  <p className="py-6 text-center text-sm text-muted-foreground">
+                  <MiniEmpty icon={MousePointerClick}>
                     لا تفاصيل بعد — تُسجَّل الضغطات تلقائياً من الآن.
-                  </p>
+                  </MiniEmpty>
                 ) : (
                   <Table>
                     <TableHeader>
@@ -479,26 +575,47 @@ function StatCard({
   )
 }
 
+// بطاقة تنبيه قابلة للنقر — تنقل إلى الصفحة المعنية بدل ترك المدير يبحث بنفسه
 function AlertCard({
   icon: Icon,
   text,
   tone,
+  onClick,
 }: {
   icon: LucideIcon
   text: string
   tone: 'amber' | 'red'
+  onClick: () => void
 }) {
   return (
-    <div
+    <button
+      onClick={onClick}
       className={cn(
-        'flex items-center gap-2 rounded-xl border p-3 text-sm font-medium',
+        'flex w-full items-center gap-2 rounded-xl border p-3 text-right text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         tone === 'amber'
-          ? 'border-amber-400/40 bg-amber-500/10 text-amber-700 dark:text-amber-300'
-          : 'border-destructive/40 bg-destructive/10 text-destructive'
+          ? 'border-amber-400/40 bg-amber-500/10 text-amber-700 hover:bg-amber-500/15 dark:text-amber-300'
+          : 'border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/15'
       )}
     >
       <Icon className="h-5 w-5 shrink-0" />
-      {text}
+      <span className="min-w-0 flex-1">{text}</span>
+      <ChevronLeft className="h-4 w-4 shrink-0 opacity-60" />
+    </button>
+  )
+}
+
+/** فراغ مصغّر داخل بطاقة: أيقونة باهتة + نص */
+function MiniEmpty({
+  icon: Icon,
+  children,
+}: {
+  icon: LucideIcon
+  children: React.ReactNode
+}) {
+  return (
+    <div className="flex flex-col items-center gap-2 py-6 text-center">
+      <Icon className="h-8 w-8 text-muted-foreground/40" />
+      <p className="text-sm text-muted-foreground">{children}</p>
     </div>
   )
 }
@@ -570,11 +687,11 @@ function MonthBarChart({
           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
           <XAxis
             dataKey="month"
-            tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+            tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
           />
           <YAxis
             allowDecimals={false}
-            tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+            tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
           />
           <Tooltip            contentStyle={{ direction: 'rtl', fontSize: 12, borderRadius: 8 }}
             labelStyle={{ direction: 'ltr' }}
@@ -588,8 +705,12 @@ function MonthBarChart({
 
 function EmptyChart() {
   return (
-    <div className="flex h-64 items-center justify-center text-sm text-muted-foreground">
-      لا توجد بيانات كافية
+    <div className="flex h-64 flex-col items-center justify-center gap-2 text-center">
+      <BarChart3 className="h-8 w-8 text-muted-foreground/40" />
+      <p className="text-sm font-medium text-foreground">لا توجد بيانات كافية</p>
+      <p className="text-xs text-muted-foreground">
+        يظهر الرسم تلقائياً عند توفر بيانات.
+      </p>
     </div>
   )
 }

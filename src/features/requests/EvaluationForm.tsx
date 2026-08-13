@@ -4,7 +4,6 @@ import { z } from 'zod'
 import { Loader2 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import {
@@ -25,13 +24,19 @@ import type { RequestEvaluation, RequestEvaluationInput } from '@/types/db'
 
 const RECOMMENDATIONS = ['قبول', 'رفض', 'بحاجة لمعلومات'] as const
 
-const schema = z.object({
-  summary: z.string().optional(),
-  strengths: z.string().optional(),
-  weaknesses: z.string().optional(),
-  recommendation: z.string().optional(),
-  notes: z.string().optional(),
-})
+const schema = z
+  .object({
+    summary: z.string().optional(),
+    strengths: z.string().optional(),
+    weaknesses: z.string().optional(),
+    recommendation: z.string().optional(),
+    notes: z.string().optional(),
+  })
+  // منع التقييم الفارغ تماماً: لا بد من ملخص أو توصية على الأقل
+  .refine((v) => Boolean(v.summary?.trim() || v.recommendation?.trim()), {
+    message: 'أدخل ملخصاً أو توصية على الأقل.',
+    path: ['summary'],
+  })
 
 type FormValues = z.infer<typeof schema>
 
@@ -54,6 +59,7 @@ export function EvaluationForm({
     register,
     handleSubmit,
     control,
+    formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
@@ -97,6 +103,9 @@ export function EvaluationForm({
         <div className="space-y-1.5">
           <Label htmlFor="summary">الملخص</Label>
           <Textarea id="summary" rows={2} {...register('summary')} />
+          {errors.summary && (
+            <p className="text-xs text-destructive">{errors.summary.message}</p>
+          )}
         </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
@@ -134,7 +143,7 @@ export function EvaluationForm({
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="notes">ملاحظات</Label>
-          <Input id="notes" {...register('notes')} />
+          <Textarea id="notes" rows={2} {...register('notes')} />
         </div>
       </div>
 

@@ -14,6 +14,7 @@ import {
   ChevronDown,
   ChevronUp,
   PhoneOff,
+  Link2,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -21,8 +22,9 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
-import { Alert, AlertTitle } from '@/components/ui/alert'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { QueryErrorState } from '@/components/QueryErrorState'
+import { EmptyState } from '@/components/EmptyState'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -58,7 +60,7 @@ import type { Contact, HatifCall } from '@/types/db'
 
 export function ContactDetail({ id }: { id: string }) {
   const [, navigate] = useLocation()
-  const { data: c, isLoading, isError } = useContact(id)
+  const { data: c, isLoading, isError, error, refetch } = useContact(id)
   const { data: workLinks } = useContactWorkLinks()
   const isDirector = useIsDirector()
   const deleteM = useDeleteContact()
@@ -82,15 +84,13 @@ export function ContactDetail({ id }: { id: string }) {
 
   if (isError || !c) {
     return (
-      <div className="space-y-4">
-        <Button variant="ghost" onClick={() => navigate('/contacts')}>
-          <ArrowRight className="h-4 w-4" />
-          رجوع
-        </Button>
-        <Alert variant="destructive">
-          <AlertTitle>تعذّر تحميل جهة الاتصال</AlertTitle>
-        </Alert>
-      </div>
+      <QueryErrorState
+        title="تعذّر تحميل جهة الاتصال"
+        error={error}
+        onRetry={() => refetch()}
+        backTo="/contacts"
+        backLabel="رجوع لجهات الاتصال"
+      />
     )
   }
 
@@ -141,6 +141,12 @@ export function ContactDetail({ id }: { id: string }) {
             <Stat label="القضايا" value={links?.cases_count ?? 0} />
             <Stat label="المواعيد" value={links?.appointments_count ?? 0} />
             <Stat label="الخدمات" value={links?.services_count ?? 0} />
+            {(links?.requests_count ?? 0) > 0 && (
+              <Stat label="الطلبات" value={links?.requests_count ?? 0} />
+            )}
+            {(links?.property_count ?? 0) > 0 && (
+              <Stat label="الإفراغات" value={links?.property_count ?? 0} />
+            )}
           </div>
         </CardContent>
       </Card>
@@ -165,7 +171,10 @@ export function ContactDetail({ id }: { id: string }) {
 
       {/* تعديل */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent
+          className="max-w-2xl"
+          onInteractOutside={(e) => e.preventDefault()}
+        >
           <ContactForm contact={c} onDone={() => setEditOpen(false)} />
         </DialogContent>
       </Dialog>
@@ -183,7 +192,10 @@ export function ContactDetail({ id }: { id: string }) {
                 </>
               ) : (
                 <>
-                  سيتم حذف «{c.name}» نهائياً. لا يمكن التراجع. هل أنت متأكد؟
+                  <span className="font-medium text-destructive">
+                    سيتم حذف «{c.name}» نهائياً — لا يمكن التراجع أو الاسترجاع.
+                  </span>{' '}
+                  هل أنت متأكد؟
                 </>
               )}
             </AlertDialogDescription>
@@ -489,9 +501,10 @@ function RelationsTab({
 
   if (!data || data.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed py-12 text-center text-sm text-muted-foreground">
-        لا توجد ارتباطات عمل لهذه الجهة.
-      </div>
+      <EmptyState
+        icon={Link2}
+        title="لا توجد ارتباطات عمل لهذه الجهة"
+      />
     )
   }
 
@@ -553,7 +566,7 @@ function RelGroup({
           </span>
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-2">{children}</CardContent>
+      <CardContent className="divide-y divide-border/60">{children}</CardContent>
     </Card>
   )
 }
@@ -570,7 +583,7 @@ function RelRow({
       onClick={onClick}
       className="block w-full cursor-pointer text-right transition-colors"
     >
-      <div className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2 hover:border-gold/40 hover:bg-accent/10">
+      <div className="flex items-center justify-between gap-2 rounded-xl px-3 py-3 hover:bg-muted/60">
         <div className="min-w-0">
           <p className="truncate text-sm font-medium text-foreground">
             {item.title}

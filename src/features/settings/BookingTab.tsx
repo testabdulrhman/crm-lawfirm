@@ -4,14 +4,16 @@
 //
 // ⚠️ يتطلب جدول booking_blocked_dates — migration 20260808_booking_website_phase1.
 import { useState } from 'react'
-import { CalendarX2, Plus, Trash2, Loader2, ExternalLink } from 'lucide-react'
+import { CalendarX2, Plus, Undo2, Loader2, ExternalLink } from 'lucide-react'
 
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
+import { QueryErrorState } from '@/components/QueryErrorState'
 import { DualDatePicker } from '@/components/DualDatePicker'
+import { openExternal } from '@/lib/external'
 import { fmtDatePref, todayISO } from '@/lib/format'
 import { useAuth } from '@/stores/auth'
 import {
@@ -23,7 +25,7 @@ import {
 const BOOKING_URL = 'https://redwan.sa/appointments'
 
 export function BookingTab() {
-  const { data: blocked, isLoading, error } = useBlockedDates()
+  const { data: blocked, isLoading, error, refetch } = useBlockedDates()
   const addM = useAddBlockedDate()
   const removeM = useRemoveBlockedDate()
   const { teamMember } = useAuth()
@@ -54,15 +56,14 @@ export function BookingTab() {
               يحجز العملاء مواعيدهم منه، وتصل الحجوزات مباشرة لصفحة المواعيد.
             </p>
           </div>
-          <a
-            href={BOOKING_URL}
-            target="_blank"
-            rel="noreferrer"
-            className="flex shrink-0 items-center gap-1.5 text-sm text-primary hover:underline"
+          <button
+            type="button"
+            onClick={() => openExternal(BOOKING_URL)}
+            className="flex shrink-0 items-center gap-1.5 rounded-lg text-sm text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            {BOOKING_URL}
+            <span dir="ltr">{BOOKING_URL}</span>
             <ExternalLink className="h-3.5 w-3.5" />
-          </a>
+          </button>
         </CardContent>
       </Card>
 
@@ -92,7 +93,12 @@ export function BookingTab() {
                 placeholder="إجازة عيد الفطر"
               />
             </div>
-            <Button onClick={submit} disabled={!date || addM.isPending} className="gap-1.5">
+            <Button
+              variant="gold"
+              onClick={submit}
+              disabled={!date || addM.isPending}
+              className="gap-1.5"
+            >
               {addM.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
@@ -114,10 +120,13 @@ export function BookingTab() {
               ))}
             </div>
           ) : error ? (
-            <p className="p-4 text-sm text-muted-foreground">
-              تعذّر جلب الأيام المحجوبة — تأكّد من تطبيق ترحيل قاعدة البيانات
-              (booking_blocked_dates).
-            </p>
+            <div className="p-4">
+              <QueryErrorState
+                title="تعذّر جلب الأيام المحجوبة"
+                error={error}
+                onRetry={() => refetch()}
+              />
+            </div>
           ) : (blocked?.length ?? 0) === 0 ? (
             <div className="flex flex-col items-center gap-2 p-8 text-center">
               <CalendarX2 className="h-8 w-8 text-muted-foreground/40" />
@@ -147,11 +156,11 @@ export function BookingTab() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="shrink-0 gap-1 text-destructive hover:text-destructive"
+                      className="shrink-0 gap-1 text-muted-foreground hover:text-foreground"
                       disabled={removeM.isPending}
                       onClick={() => removeM.mutate(b.id)}
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
+                      <Undo2 className="h-3.5 w-3.5" />
                       إعادة فتحه
                     </Button>
                   </li>

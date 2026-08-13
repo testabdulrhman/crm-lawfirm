@@ -1,5 +1,5 @@
 // تبويب «دراسة القضية» — توليد أولي بالذكاء الاصطناعي وفق منهجية الشركة، ثم مراجعة وتحرير يدوي
-import { useEffect, useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
   BookOpenCheck,
   Sparkles,
@@ -34,8 +34,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import { QueryErrorState } from '@/components/QueryErrorState'
 import { fmtDateTime } from '@/lib/format'
 import { useAuth } from '@/stores/auth'
+import { usePageState } from '@/hooks/usePageState'
 import {
   useCaseStudy,
   useSaveCaseStudy,
@@ -63,22 +65,25 @@ const SECTIONS: {
 
 export function StudyTab({ caseId }: { caseId: string }) {
   const { teamMember } = useAuth()
-  const { data: study, isLoading } = useCaseStudy(caseId)
+  const { data: study, isLoading, isError, error, refetch } = useCaseStudy(caseId)
   const saveM = useSaveCaseStudy(caseId)
   const genM = useGenerateCaseStudy(caseId)
 
-  const [values, setValues] = useState<Record<string, string>>({})
-  const [dirty, setDirty] = useState(false)
   const [confirmRegen, setConfirmRegen] = useState(false)
 
-  // تعبئة الحقول من الدراسة المحفوظة (وعدم مسح تحرير جارٍ)
-  useEffect(() => {
-    if (study && !dirty) {
-      const v: Record<string, string> = {}
-      for (const s of SECTIONS) v[s.key] = (study[s.key] as string) ?? ''
-      setValues(v)
-    }
-  }, [study, dirty])
+  // مسودة التحرير في sessionStorage بمفتاح القضية: TabsContent يُفكَّك عند
+  // تبديل التبويب، وأي حالة محلية بحتة تضيع بصمت مع كل تحرير غير محفوظ.
+  const [draft, setDraft] = usePageState<Record<string, string> | null>(
+    `case-study-draft:${caseId}`,
+    null
+  )
+  const baseValues = useMemo(() => {
+    const v: Record<string, string> = {}
+    for (const s of SECTIONS) v[s.key] = (study?.[s.key] as string) ?? ''
+    return v
+  }, [study])
+  const values = draft ?? baseValues
+  const dirty = draft != null
 
   const generate = () => genM.mutate(teamMember?.name ?? null)
 
@@ -87,7 +92,7 @@ export function StudyTab({ caseId }: { caseId: string }) {
     for (const s of SECTIONS)
       (input as Record<string, string | null>)[s.key] =
         values[s.key]?.trim() || null
-    saveM.mutate(input, { onSuccess: () => setDirty(false) })
+    saveM.mutate(input, { onSuccess: () => setDraft(null) })
   }
 
   if (isLoading) {
@@ -96,6 +101,16 @@ export function StudyTab({ caseId }: { caseId: string }) {
         <Skeleton className="h-24 w-full" />
         <Skeleton className="h-48 w-full" />
       </div>
+    )
+  }
+
+  if (isError) {
+    return (
+      <QueryErrorState
+        title="تعذّر تحميل دراسة القضية"
+        error={error}
+        onRetry={() => refetch()}
+      />
     )
   }
 
@@ -135,9 +150,9 @@ export function StudyTab({ caseId }: { caseId: string }) {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gold/10">
-            <BookOpenCheck className="h-[18px] w-[18px] text-gold" />
+            <BookOpenCheck className="h-5 w-5 text-gold" />
           </span>
-          <span className="text-[15px] font-semibold text-foreground">
+          <span className="text-base font-semibold text-foreground">
             دراسة القضية
           </span>
           <Badge variant={study.status === 'approved' ? 'success' : 'outline'}>
@@ -152,7 +167,7 @@ export function StudyTab({ caseId }: { caseId: string }) {
               onClick={() =>
                 saveM.mutate(
                   { status: 'approved', updated_by: teamMember?.name ?? null },
-                  { onSuccess: () => setDirty(false) }
+                  { onSuccess: () => setDraft(null) }
                 )
               }
             >
@@ -201,17 +216,19 @@ export function StudyTab({ caseId }: { caseId: string }) {
             const Icon = s.icon
             return (
               <div key={s.key} className="space-y-1.5">
-                <Label className="flex items-center gap-2 text-[13px] font-semibold">
+                <Label className="flex items-center gap-2 text-sm font-semibold">
                   <Icon className="h-4 w-4 text-gold" />
                   {s.label}
                 </Label>
                 <Textarea
                   rows={s.rows}
                   value={values[s.key] ?? ''}
-                  onChange={(e) => {
-                    setValues((v) => ({ ...v, [s.key]: e.target.value }))
-                    setDirty(true)
-                  }}
+                  onChange={(e) =>
+                    setDraft((d) => ({
+                      ...(d ?? baseValues),
+                      [s.key]: e.target.value,
+                    }))
+                  }
                   className="leading-relaxed"
                 />
               </div>
@@ -244,7 +261,7 @@ export function StudyTab({ caseId }: { caseId: string }) {
             <AlertDialogAction
               onClick={() => {
                 setConfirmRegen(false)
-                setDirty(false)
+                setDraft(null)
                 generate()
               }}
             >

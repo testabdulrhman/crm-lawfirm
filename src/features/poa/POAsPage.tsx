@@ -20,6 +20,8 @@ import { cn } from '@/lib/utils'
 import { fmtNumber, fmtDatePref } from '@/lib/format'
 import { usePOAs } from '@/hooks/usePOAs'
 import { usePageState } from '@/hooks/usePageState'
+import { QueryErrorState } from '@/components/QueryErrorState'
+import { EmptyState, FilteredEmptyState } from '@/components/EmptyState'
 import { POAForm } from './POAForm'
 import {
   POA_STATUS_OPTIONS,
@@ -34,7 +36,7 @@ import type { PowerOfAttorney } from '@/types/db'
 const PAGE = 50
 
 export function POAsPage() {
-  const { data, isLoading } = usePOAs()
+  const { data, isLoading, isError, error, refetch } = usePOAs()
   const [, navigate] = useLocation()
 
   const [search, setSearch] = usePageState('poa:q', '')
@@ -150,8 +152,31 @@ export function POAsPage() {
             <Skeleton key={i} className="h-44 w-full" />
           ))}
         </div>
+      ) : isError ? (
+        <QueryErrorState
+          title="تعذّر تحميل الوكالات"
+          error={error}
+          onRetry={() => refetch()}
+        />
       ) : filtered.length === 0 ? (
-        <EmptyState />
+        (data ?? []).length === 0 ? (
+          <EmptyState
+            icon={FileSignature}
+            title="لا توجد وكالات بعد"
+            description="أضف أول وكالة لمتابعة صلاحياتها وتواريخ انتهائها."
+            actionLabel="وكالة جديدة"
+            onAction={() => setDialogOpen(true)}
+          />
+        ) : (
+          <FilteredEmptyState
+            onClear={() => {
+              setSearch('')
+              setStatus('all')
+              setSoonOnly(false)
+              resetPage()
+            }}
+          />
+        )
       ) : (
         <>
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -170,7 +195,10 @@ export function POAsPage() {
       )}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-xl">
+        <DialogContent
+          className="max-w-xl"
+          onInteractOutside={(e) => e.preventDefault()}
+        >
           <POAForm onDone={() => setDialogOpen(false)} />
         </DialogContent>
       </Dialog>
@@ -205,7 +233,7 @@ function Chip({
           active ? 'bg-white/20' : 'bg-muted text-muted-foreground'
         )}
       >
-        {count}
+        {fmtNumber(count)}
       </span>
     </Button>
   )
@@ -221,7 +249,15 @@ function POACard({
   const soon = isExpiringSoon(p)
   const overdue = isActuallyExpired(p)
   return (
-    <Card className="flex flex-col">
+    <Card
+      className="flex cursor-pointer flex-col"
+      role="link"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') onOpen()
+      }}
+    >
       <CardContent className="flex flex-1 flex-col gap-3 p-4">
         <div className="flex items-start justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2">
@@ -273,24 +309,19 @@ function POACard({
           ) : (
             <span />
           )}
-          <Button size="sm" variant="ghost" onClick={onOpen}>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={(e) => {
+              e.stopPropagation()
+              onOpen()
+            }}
+          >
             عرض
             <ChevronLeft className="h-4 w-4" />
           </Button>
         </div>
       </CardContent>
     </Card>
-  )
-}
-
-function EmptyState() {
-  return (
-    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-16 text-center">
-      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-        <FileSignature className="h-6 w-6 text-muted-foreground" />
-      </div>
-      <p className="font-medium text-foreground">لا توجد وكالات</p>
-      <p className="text-sm text-muted-foreground">جرّب تعديل الفلاتر أو أضِف وكالة جديدة.</p>
-    </div>
   )
 }

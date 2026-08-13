@@ -20,8 +20,12 @@ import {
 } from '@/components/ui/table'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
+import { fmtNumber } from '@/lib/format'
 import { useTeamMembers, useToggleActive } from '@/hooks/useTeam'
 import { usePageState } from '@/hooks/usePageState'
+import { useConfirm } from '@/components/ConfirmDialog'
+import { EmptyState, FilteredEmptyState } from '@/components/EmptyState'
+import { QueryErrorState } from '@/components/QueryErrorState'
 import { TeamMemberForm } from './TeamMemberForm'
 import { TeamNavTabs } from './TeamNavTabs'
 import type { TeamMember } from '@/types/db'
@@ -31,7 +35,7 @@ type Filter = 'all' | 'active' | 'inactive'
 const filters: { key: Filter; label: string }[] = [
   { key: 'all', label: 'الكل' },
   { key: 'active', label: 'النشطون' },
-  { key: 'inactive', label: 'غير النشطين' },
+  { key: 'inactive', label: 'الموقوفون' },
 ]
 
 function MemberAvatar({ member }: { member: TeamMember }) {
@@ -46,9 +50,10 @@ function MemberAvatar({ member }: { member: TeamMember }) {
 }
 
 export function TeamPage() {
-  const { data, isLoading } = useTeamMembers()
+  const { data, isLoading, isError, error, refetch } = useTeamMembers()
   const [, navigate] = useLocation()
   const toggle = useToggleActive()
+  const { confirm, dialog: confirmDialog } = useConfirm()
   const [filter, setFilter] = usePageState<Filter>('team:filter', 'all')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<TeamMember | null>(null)
@@ -69,11 +74,32 @@ export function TeamPage() {
     setDialogOpen(true)
   }
 
+  // إيقاف موظف إجراء مؤثر — يمرّ بتأكيد؛ التفعيل مباشر
+  const onToggle = (m: TeamMember) => {
+    if (m.is_active) {
+      confirm({
+        title: 'إيقاف الموظف',
+        description: `سيُوقف «${m.name}» ويُمنع من الدخول للنظام. متابعة؟`,
+        confirmLabel: 'إيقاف',
+        onConfirm: () => toggle.mutate({ id: m.id, is_active: false }),
+      })
+    } else {
+      toggle.mutate({ id: m.id, is_active: true })
+    }
+  }
+
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       {/* الترويسة */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-2xl font-bold tracking-tight text-foreground">الموظفون</h2>
+        <h2 className="text-2xl font-bold tracking-tight text-foreground">
+          الموظفون{' '}
+          {!isLoading && !isError && (
+            <span className="text-base font-normal text-muted-foreground">
+              ({fmtNumber((data ?? []).length)})
+            </span>
+          )}
+        </h2>
         <Button variant="gold" onClick={openNew}>
           <Plus className="h-4 w-4" />
           موظف جديد
@@ -99,13 +125,37 @@ export function TeamPage() {
 
       {/* المحتوى */}
       {isLoading ? (
-        <div className="space-y-2">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <Skeleton key={i} className="h-16 w-full" />
-          ))}
-        </div>
+        <>
+          {/* سكيلتون جدول على الحاسب */}
+          <div className="hidden space-y-2 md:block">
+            <Skeleton className="h-10 w-full" />
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Skeleton key={i} className="h-16 w-full" />
+            ))}
+          </div>
+          {/* سكيلتون بطاقات على الجوال */}
+          <div className="grid gap-4 sm:grid-cols-2 md:hidden">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Skeleton key={i} className="h-36 w-full" />
+            ))}
+          </div>
+        </>
+      ) : isError ? (
+        <QueryErrorState
+          title="تعذّر تحميل الموظفين"
+          error={error}
+          onRetry={() => refetch()}
+        />
+      ) : (data ?? []).length === 0 ? (
+        <EmptyState
+          icon={Users}
+          title="لا يوجد موظفون"
+          description="أضِف أول موظف ليظهر هنا."
+          actionLabel="موظف جديد"
+          onAction={openNew}
+        />
       ) : members.length === 0 ? (
-        <EmptyState />
+        <FilteredEmptyState onClear={() => setFilter('all')} />
       ) : (
         <>
           {/* جدول على الحاسب */}
@@ -133,7 +183,7 @@ export function TeamPage() {
                           <p className="font-medium text-foreground hover:text-gold">
                             {m.name}
                             {m.is_director && (
-                              <Badge variant="gold" className="mr-2">
+                              <Badge variant="gold" className="ms-2">
                                 مدير
                               </Badge>
                             )}
@@ -156,10 +206,9 @@ export function TeamPage() {
                     <TableCell className="text-left">
                       <RowActions
                         member={m}
+                        pending={toggle.isPending}
                         onEdit={() => openEdit(m)}
-                        onToggle={() =>
-                          toggle.mutate({ id: m.id, is_active: !m.is_active })
-                        }
+                        onToggle={() => onToggle(m)}
                       />
                     </TableCell>
                   </TableRow>
@@ -169,7 +218,7 @@ export function TeamPage() {
           </div>
 
           {/* بطاقات على الجوال */}
-          <div className="grid gap-4 md:hidden">
+          <div className="grid gap-4 sm:grid-cols-2 md:hidden">
             {members.map((m) => (
               <div
                 key={m.id}
@@ -192,20 +241,19 @@ export function TeamPage() {
                   <StatusBadge active={!!m.is_active} />
                 </button>
                 <div className="mt-3 space-y-1 text-sm text-muted-foreground">
-                  <p dir="ltr" className="text-right">
+                  <p dir="ltr" className="truncate text-right">
                     {m.email ?? '—'}
                   </p>
-                  <p dir="ltr" className="text-right">
+                  <p dir="ltr" className="truncate text-right">
                     {m.phone ?? '—'}
                   </p>
                 </div>
                 <div className="mt-3 flex justify-end">
                   <RowActions
                     member={m}
+                    pending={toggle.isPending}
                     onEdit={() => openEdit(m)}
-                    onToggle={() =>
-                      toggle.mutate({ id: m.id, is_active: !m.is_active })
-                    }
+                    onToggle={() => onToggle(m)}
                   />
                 </div>
               </div>
@@ -214,15 +262,20 @@ export function TeamPage() {
         </>
       )}
 
-      {/* نموذج الإضافة/التعديل */}
+      {/* نموذج الإضافة/التعديل — نموذج طويل: لا يُغلق بنقرة خارجه سهواً */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent
+          className="max-w-2xl"
+          onInteractOutside={(e) => e.preventDefault()}
+        >
           <TeamMemberForm
             member={editing}
             onDone={() => setDialogOpen(false)}
           />
         </DialogContent>
       </Dialog>
+
+      {confirmDialog}
     </div>
   )
 }
@@ -237,10 +290,12 @@ function StatusBadge({ active }: { active: boolean }) {
 
 function RowActions({
   member,
+  pending,
   onEdit,
   onToggle,
 }: {
   member: TeamMember
+  pending: boolean
   onEdit: () => void
   onToggle: () => void
 }) {
@@ -253,25 +308,12 @@ function RowActions({
         variant="ghost"
         size="icon"
         onClick={onToggle}
+        disabled={pending}
         title={member.is_active ? 'إيقاف' : 'تفعيل'}
         className={cn(member.is_active ? 'text-emerald-600' : 'text-muted-foreground')}
       >
         <Power className="h-4 w-4" />
       </Button>
-    </div>
-  )
-}
-
-function EmptyState() {
-  return (
-    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-16 text-center">
-      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-        <Users className="h-6 w-6 text-muted-foreground" />
-      </div>
-      <p className="font-medium text-foreground">لا يوجد موظفون</p>
-      <p className="text-sm text-muted-foreground">
-        أضِف أول موظف عبر زر «موظف جديد».
-      </p>
     </div>
   )
 }

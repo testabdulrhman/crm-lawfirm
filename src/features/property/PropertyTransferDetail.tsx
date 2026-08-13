@@ -23,8 +23,8 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Alert, AlertTitle } from '@/components/ui/alert'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { QueryErrorState } from '@/components/QueryErrorState'
 import {
   Select,
   SelectContent,
@@ -74,7 +74,7 @@ export function PropertyTransferDetail({ id }: { id: string }) {
   const [, navigate] = useLocation()
   const { teamMember } = useAuth()
   const isDirector = useIsDirector()
-  const { data: p, isLoading, isError } = usePropertyTransfer(id)
+  const { data: p, isLoading, isError, error, refetch } = usePropertyTransfer(id)
   const statusM = useUpdatePropertyTransferStatus()
   const deleteM = useDeletePropertyTransfer()
 
@@ -92,15 +92,13 @@ export function PropertyTransferDetail({ id }: { id: string }) {
 
   if (isError || !p) {
     return (
-      <div className="space-y-4">
-        <Button variant="ghost" onClick={() => navigate('/property')}>
-          <ArrowRight className="h-4 w-4" />
-          رجوع
-        </Button>
-        <Alert variant="destructive">
-          <AlertTitle>تعذّر تحميل المعاملة</AlertTitle>
-        </Alert>
-      </div>
+      <QueryErrorState
+        title="تعذّر تحميل المعاملة"
+        error={error}
+        onRetry={() => refetch()}
+        backTo="/property"
+        backLabel="رجوع للتوثيق العقاري"
+      />
     )
   }
 
@@ -111,17 +109,23 @@ export function PropertyTransferDetail({ id }: { id: string }) {
           <ArrowRight className="h-4 w-4" />
           رجوع للتوثيق العقاري
         </Button>
-        {isDirector && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-destructive"
-            onClick={() => setConfirmDelete(true)}
-          >
-            <Trash2 className="h-4 w-4" />
-            حذف
+        <div className="flex items-center gap-1">
+          <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
+            <Pencil className="h-4 w-4" />
+            تعديل
           </Button>
-        )}
+          {isDirector && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-destructive"
+              onClick={() => setConfirmDelete(true)}
+            >
+              <Trash2 className="h-4 w-4" />
+              حذف
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* الرأس */}
@@ -145,21 +149,27 @@ export function PropertyTransferDetail({ id }: { id: string }) {
               )}
             </div>
           </div>
-          <Select
-            value={p.status ?? 'قيد التنفيذ'}
-            onValueChange={(v) => statusM.mutate({ id: p.id, status: v })}
-          >
-            <SelectTrigger className="h-9 w-32">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {PROPERTY_STATUS_OPTIONS.map((o) => (
-                <SelectItem key={o} value={o}>
-                  {o}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="flex items-center gap-2">
+            {statusM.isPending && (
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            )}
+            <Select
+              value={p.status ?? 'قيد التنفيذ'}
+              disabled={statusM.isPending}
+              onValueChange={(v) => statusM.mutate({ id: p.id, status: v })}
+            >
+              <SelectTrigger className="h-9 w-32">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {PROPERTY_STATUS_OPTIONS.map((o) => (
+                  <SelectItem key={o} value={o}>
+                    {o}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </CardContent>
       </Card>
 
@@ -241,16 +251,12 @@ export function PropertyTransferDetail({ id }: { id: string }) {
       {/* المرفقات */}
       <PropertyDocumentsSection transferId={p.id} />
 
-      <div className="flex justify-end">
-        <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
-          <Pencil className="h-4 w-4" />
-          تعديل
-        </Button>
-      </div>
-
       {/* الحوارات */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent
+          className="max-w-2xl"
+          onInteractOutside={(e) => e.preventDefault()}
+        >
           <PropertyTransferForm transfer={p} onDone={() => setEditOpen(false)} />
         </DialogContent>
       </Dialog>
@@ -315,7 +321,8 @@ function PartyCard({
         {phone && (
           <button
             dir="ltr"
-            className="flex items-center justify-end gap-1 text-sm text-muted-foreground hover:text-gold"
+            className="-my-2.5 flex items-center justify-end gap-1 py-2.5 text-sm text-muted-foreground hover:text-gold"
+            aria-label={`اتصال بـ ${name ?? phone}`}
             onClick={() => openExternal(`tel:${phone}`)}
           >
             <span>{phone}</span>
@@ -346,7 +353,7 @@ function docIcon(d: PropertyDocument) {
 }
 
 function PropertyDocumentsSection({ transferId }: { transferId: string }) {
-  const { user, teamMember } = useAuth()
+  const { teamMember } = useAuth()
   const isDirector = useIsDirector()
   const { data, isLoading } = usePropertyDocuments(transferId)
   const uploadM = useUploadPropertyDocument(transferId)
@@ -416,7 +423,7 @@ function PropertyDocumentsSection({ transferId }: { transferId: string }) {
         <DropZone
           onFiles={uploadBatch}
           uploadingCount={batchLeft}
-          hint="صك، هوية، عقد… حتى ١٠ ميجابايت للملف"
+          hint="صك، هوية، عقد… حتى 10 ميجابايت للملف"
           className="mb-4 py-5"
         />
         {isLoading ? (
@@ -464,7 +471,9 @@ function PropertyDocumentsSection({ transferId }: { transferId: string }) {
                 if (toDelete)
                   deleteM.mutate({
                     id: toDelete.id,
-                    deletedBy: user?.id ?? null,
+                    // ⚠️ عمود property_documents.deleted_by نوعه uuid لا نص —
+                    //    تمرير الاسم يُفشل الحذف بخطأ 22P02
+                    deletedBy: teamMember?.id ?? null,
                   })
                 setToDelete(null)
               }}
@@ -530,8 +539,9 @@ function PropertyDocCard({
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8"
+            className="h-10 w-10"
             title="معاينة"
+            aria-label="معاينة المرفق"
             onClick={onPreview}
           >
             <Eye className="h-4 w-4" />
@@ -540,8 +550,9 @@ function PropertyDocCard({
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8 text-destructive"
+              className="h-10 w-10 text-destructive"
               title="حذف"
+              aria-label="حذف المرفق"
               onClick={onDelete}
             >
               <Trash2 className="h-4 w-4" />

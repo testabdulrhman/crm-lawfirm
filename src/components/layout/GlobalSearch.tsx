@@ -202,6 +202,16 @@ export function GlobalSearch() {
           }
         }}
         placeholder="بحث أو انتقال…"
+        role="combobox"
+        aria-label="بحث عام"
+        aria-expanded={showPanel}
+        aria-controls="global-search-listbox"
+        aria-autocomplete="list"
+        aria-activedescendant={
+          showPanel && items.length > 0
+            ? `global-search-item-${Math.min(highlight, items.length - 1)}`
+            : undefined
+        }
         className="h-9 w-full rounded-md border border-input bg-background pr-9 pl-16 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
       />
       {query ? (
@@ -209,14 +219,14 @@ export function GlobalSearch() {
           type="button"
           onClick={clear}
           aria-label="مسح البحث"
-          className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+          className="absolute left-0.5 top-1/2 -translate-y-1/2 rounded-md p-2 text-muted-foreground hover:text-foreground"
         >
           <X className="h-4 w-4" />
         </button>
       ) : (
         <kbd
           dir="ltr"
-          className="pointer-events-none absolute left-2 top-1/2 hidden -translate-y-1/2 rounded border bg-muted px-1.5 py-0.5 font-sans text-[10px] font-medium text-muted-foreground sm:block"
+          className="pointer-events-none absolute left-2 top-1/2 hidden -translate-y-1/2 rounded border bg-muted px-1.5 py-0.5 font-sans text-xs font-medium text-muted-foreground sm:block"
         >
           {isMac ? '⌘K' : 'Ctrl K'}
         </kbd>
@@ -226,7 +236,10 @@ export function GlobalSearch() {
       {showPanel && (
         <div
           ref={listRef}
-          className="absolute left-0 right-0 top-full z-50 mt-1 max-h-[70vh] overflow-y-auto rounded-md border bg-popover shadow-lg"
+          id="global-search-listbox"
+          role="listbox"
+          aria-label="نتائج البحث"
+          className="fixed inset-x-2 top-[calc(env(safe-area-inset-top)+4.25rem)] z-50 max-h-[70vh] overflow-y-auto rounded-md border bg-popover shadow-lg sm:absolute sm:inset-x-0 sm:top-full sm:mt-1"
         >
           <div className="py-1">
             {navMatches.length > 0 && (
@@ -240,6 +253,9 @@ export function GlobalSearch() {
                     <button
                       key={a.href}
                       type="button"
+                      id={`global-search-item-${i}`}
+                      role="option"
+                      aria-selected={highlight === i}
                       data-idx={i}
                       onClick={() => goItem({ type: 'nav', ...a })}
                       onMouseEnter={() => setHighlight(i)}
@@ -298,6 +314,9 @@ export function GlobalSearch() {
                           <button
                             key={`${r.kind}-${r.id}`}
                             type="button"
+                            id={`global-search-item-${idx}`}
+                            role="option"
+                            aria-selected={highlight === idx}
                             data-idx={idx}
                             onClick={() => goItem({ type: 'result', r })}
                             onMouseEnter={() => setHighlight(idx)}

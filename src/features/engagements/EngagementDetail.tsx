@@ -25,7 +25,6 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Alert, AlertTitle } from '@/components/ui/alert'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import {
   Select,
@@ -46,6 +45,8 @@ import {
 } from '@/components/ui/alert-dialog'
 import { FilePreviewDialog } from '@/components/FilePreviewDialog'
 import { CasePicker } from '@/components/CasePicker'
+import { QueryErrorState } from '@/components/QueryErrorState'
+import { useConfirm } from '@/components/ConfirmDialog'
 
 import { fmtDatePref, fmtNumber, todayISO } from '@/lib/format'
 import { useAuth } from '@/stores/auth'
@@ -75,7 +76,7 @@ export function EngagementDetail({ id }: { id: string }) {
   const [, navigate] = useLocation()
   const { teamMember } = useAuth()
   const isDirector = useIsDirector()
-  const { data: e, isLoading, isError } = useEngagement(id)
+  const { data: e, isLoading, isError, error, refetch } = useEngagement(id)
   const { data: projects } = useEngagementProjects(id)
   const updateM = useUpdateEngagement()
   const deleteM = useDeleteEngagement()
@@ -93,6 +94,7 @@ export function EngagementDetail({ id }: { id: string }) {
   const [unlinkFor, setUnlinkFor] = useState<{ id: string; title: string | null } | null>(null)
   const [extractOpen, setExtractOpen] = useState(false)
   const [generateOpen, setGenerateOpen] = useState(false)
+  const { confirm, dialog: confirmDialog } = useConfirm()
 
   if (isLoading) {
     return (
@@ -106,15 +108,13 @@ export function EngagementDetail({ id }: { id: string }) {
 
   if (isError || !e) {
     return (
-      <div className="space-y-4">
-        <Button variant="ghost" onClick={() => navigate('/engagements')}>
-          <ArrowRight className="h-4 w-4" />
-          رجوع
-        </Button>
-        <Alert variant="destructive">
-          <AlertTitle>تعذّر تحميل العقد</AlertTitle>
-        </Alert>
-      </div>
+      <QueryErrorState
+        title="تعذّر تحميل العقد"
+        error={error}
+        onRetry={() => refetch()}
+        backTo="/engagements"
+        backLabel="رجوع للعقود"
+      />
     )
   }
 
@@ -167,13 +167,16 @@ export function EngagementDetail({ id }: { id: string }) {
                 )}
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {/* مبدّل الحالة السريع */}
               <Select
                 value={e.status}
                 onValueChange={(v) => updateM.mutate({ id: e.id, input: { status: v } })}
               >
-                <SelectTrigger className="h-9 w-32">
+                <SelectTrigger className="h-9 w-32" disabled={updateM.isPending}>
+                  {updateM.isPending && (
+                    <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />
+                  )}
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -289,7 +292,7 @@ export function EngagementDetail({ id }: { id: string }) {
       {/* المشاريع المرتبطة */}
       <Card>
         <CardHeader className="flex-row items-center justify-between gap-2 space-y-0">
-          <CardTitle className="flex items-center gap-2.5 text-[15px] font-semibold">
+          <CardTitle className="flex items-center gap-2.5 text-base font-semibold">
             <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gold/10">
               <Scale className="h-[18px] w-[18px] text-gold" />
             </span>
@@ -350,6 +353,7 @@ export function EngagementDetail({ id }: { id: string }) {
                   <BookOpen className="h-4 w-4 shrink-0 text-gold" />
                   <button
                     className="min-w-0 flex-1 text-right"
+                    title="فتح الخدمة — فك ربطها بالعقد يتم من صفحتها"
                     onClick={() => navigate(`/legal-services/${s.id}`)}
                   >
                     <p className="truncate text-sm font-medium text-foreground">
@@ -372,7 +376,7 @@ export function EngagementDetail({ id }: { id: string }) {
       {/* الالتزامات والمواعيد */}
       <Card>
         <CardHeader className="space-y-0">
-          <CardTitle className="flex items-center gap-2.5 text-[15px] font-semibold">
+          <CardTitle className="flex items-center gap-2.5 text-base font-semibold">
             <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gold/10">
               <CalendarClock className="h-[18px] w-[18px] text-gold" />
             </span>
@@ -391,9 +395,20 @@ export function EngagementDetail({ id }: { id: string }) {
               <p className="text-sm text-muted-foreground">
                 لا التزامات مسجَّلة
                 {e.file_url
-                  ? ' — استخرجها من ملف العقد بزر «استخراج البيانات».'
+                  ? ' — استخرجها من ملف العقد مباشرة.'
                   : ' — ارفع ملف العقد أولاً ليُستخرج منه.'}
               </p>
+              {e.file_url && (
+                <Button
+                  variant="gold"
+                  size="sm"
+                  className="mt-3"
+                  onClick={() => setExtractOpen(true)}
+                >
+                  <Sparkles className="h-4 w-4" />
+                  استخراج من ملف العقد
+                </Button>
+              )}
             </div>
           ) : (
             <ul className="divide-y divide-border/60 overflow-hidden rounded-xl border">
@@ -402,15 +417,18 @@ export function EngagementDetail({ id }: { id: string }) {
                 const overdue = !done && o.deadline_date < todayISO()
                 return (
                   <li key={o.id} className="flex items-start gap-3 px-4 py-3">
-                    <input
-                      type="checkbox"
-                      checked={done}
-                      onChange={(ev) =>
-                        toggleDeadlineM.mutate({ id: o.id, done: ev.target.checked })
-                      }
-                      aria-label={done ? 'إرجاع الالتزام' : 'إنجاز الالتزام'}
-                      className="mt-1 h-4 w-4 shrink-0 cursor-pointer accent-gold"
-                    />
+                    {/* label بحشوة توسّع هدف اللمس دون تغيير التخطيط */}
+                    <label className="-m-2 mt-1 shrink-0 cursor-pointer p-2">
+                      <input
+                        type="checkbox"
+                        checked={done}
+                        onChange={(ev) =>
+                          toggleDeadlineM.mutate({ id: o.id, done: ev.target.checked })
+                        }
+                        aria-label={done ? 'إرجاع الالتزام' : 'إنجاز الالتزام'}
+                        className="block h-4 w-4 cursor-pointer accent-gold"
+                      />
+                    </label>
                     <div className="min-w-0 flex-1">
                       <p
                         className={
@@ -441,7 +459,14 @@ export function EngagementDetail({ id }: { id: string }) {
                           {obligationTypeLabel(o.type)}
                         </Badge>
                         {o.source === 'ai_contract' && (
-                          <Sparkles className="h-3 w-3 text-gold" aria-label="استُخرج آلياً" />
+                          <span
+                            title="استُخرج آلياً"
+                            role="img"
+                            aria-label="استُخرج آلياً"
+                            className="inline-flex"
+                          >
+                            <Sparkles className="h-3 w-3 text-gold" aria-hidden="true" />
+                          </span>
                         )}
                       </div>
                     </div>
@@ -451,9 +476,14 @@ export function EngagementDetail({ id }: { id: string }) {
                       className="h-8 w-8 text-muted-foreground hover:text-destructive"
                       title="حذف الالتزام"
                       onClick={() =>
-                        deleteDeadlineM.mutate({
-                          id: o.id,
-                          deletedBy: teamMember?.name ?? null,
+                        confirm({
+                          title: 'تأكيد حذف الالتزام',
+                          description: `سيُحذف «${o.title}». يمكن استرجاعه لاحقاً من قِبل المدير.`,
+                          onConfirm: () =>
+                            deleteDeadlineM.mutate({
+                              id: o.id,
+                              deletedBy: teamMember?.name ?? null,
+                            }),
                         })
                       }
                     >
@@ -526,7 +556,10 @@ export function EngagementDetail({ id }: { id: string }) {
 
       {/* تعديل */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent
+          className="max-w-2xl"
+          onInteractOutside={(ev) => ev.preventDefault()}
+        >
           <EngagementForm engagement={e} onDone={() => setEditOpen(false)} />
         </DialogContent>
       </Dialog>
@@ -580,6 +613,9 @@ export function EngagementDetail({ id }: { id: string }) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* حوار تأكيد حذف الالتزام */}
+      {confirmDialog}
     </div>
   )
 }

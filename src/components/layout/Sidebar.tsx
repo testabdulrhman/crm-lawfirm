@@ -221,9 +221,10 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           <button
             onClick={() => logout()}
             title="تسجيل الخروج"
+            aria-label="تسجيل الخروج"
             className="rounded-md p-2 text-navy-200 transition-colors hover:bg-white/10 hover:text-white"
           >
-            <LogOut className="h-4 w-4" />
+            <LogOut className="h-5 w-5" />
           </button>
         </div>
       </div>

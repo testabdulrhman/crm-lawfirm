@@ -1,11 +1,12 @@
 // صفحة الموظف: بياناته + سجله المالي (رواتب/مكافآت/بدلات/خصومات)
 // الوصول: المدير لأي موظف، والموظف لصفحته فقط (والقراءة محمية أيضاً بـ RLS)
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useLocation } from 'wouter'
 import {
   ArrowRight,
   Wallet,
   Plus,
+  Pencil,
   Trash2,
   Paperclip,
   Loader2,
@@ -55,6 +56,8 @@ import { FilePreviewDialog } from '@/components/FilePreviewDialog'
 import { cn } from '@/lib/utils'
 import { fmtNumber, fmtDatePref, todayISO } from '@/lib/format'
 import { pickFile, uploadFile } from '@/lib/files'
+import { errMessage } from '@/lib/errors'
+import { toast } from '@/hooks/use-toast'
 import { useAuth } from '@/stores/auth'
 import { useIsDirector } from '@/hooks/useIsDirector'
 import { useTeamMembers } from '@/hooks/useTeam'
@@ -69,6 +72,7 @@ import {
   payTypeBadge,
   signedAmount,
 } from './payrollLabels'
+import { TeamMemberForm } from './TeamMemberForm'
 import type { PayrollEntry } from '@/types/db'
 
 // اسم الشهر بالعربية + السنة بأرقام لاتينية (وفق نمط النظام)
@@ -95,8 +99,14 @@ export function TeamMemberDetail({ id }: { id: string }) {
   const deleteM = useDeletePayrollEntry()
 
   const [addOpen, setAddOpen] = useState(false)
+  const [editOpen, setEditOpen] = useState(false)
   const [deleteFor, setDeleteFor] = useState<PayrollEntry | null>(null)
   const [preview, setPreview] = useState<PayrollEntry | null>(null)
+
+  // آخر قيد مُختار للحذف — يبقى للعرض أثناء أنيميشن إغلاق حوار التأكيد
+  const lastDeleteRef = useRef<PayrollEntry | null>(null)
+  if (deleteFor) lastDeleteRef.current = deleteFor
+  const deleteShown = deleteFor ?? lastDeleteRef.current
 
   // تجميع القيود بالشهر (الأحدث أولاً) + صافي كل شهر
   const months = useMemo(() => {
@@ -190,6 +200,16 @@ export function TeamMemberDetail({ id }: { id: string }) {
                 <p className="text-sm text-muted-foreground">{member.role}</p>
               )}
             </div>
+            {isDirector && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setEditOpen(true)}
+              >
+                <Pencil className="h-4 w-4" />
+                تعديل
+              </Button>
+            )}
           </div>
 
           <div className="flex flex-wrap gap-x-6 gap-y-1.5 border-t pt-3 text-sm text-muted-foreground">
@@ -224,8 +244,8 @@ export function TeamMemberDetail({ id }: { id: string }) {
 
       {/* السجل المالي */}
       <Card>
-        <CardHeader className="flex-row items-center justify-between gap-2 space-y-0">
-          <CardTitle className="flex items-center gap-2.5 text-[15px] font-semibold">
+        <CardHeader className="flex-row flex-wrap items-center justify-between gap-2 space-y-0">
+          <CardTitle className="flex flex-wrap items-center gap-2.5 text-base font-semibold">
             <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gold/10">
               <Wallet className="h-[18px] w-[18px] text-gold" />
             </span>
@@ -332,6 +352,16 @@ export function TeamMemberDetail({ id }: { id: string }) {
         </CardContent>
       </Card>
 
+      {/* تعديل بيانات الموظف (المدير فقط) */}
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent
+          className="max-w-2xl"
+          onInteractOutside={(e) => e.preventDefault()}
+        >
+          <TeamMemberForm member={member} onDone={() => setEditOpen(false)} />
+        </DialogContent>
+      </Dialog>
+
       {/* إضافة قيد (المدير فقط) */}
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
         <DialogContent className="max-w-md">
@@ -360,8 +390,8 @@ export function TeamMemberDetail({ id }: { id: string }) {
           <AlertDialogHeader>
             <AlertDialogTitle>حذف القيد</AlertDialogTitle>
             <AlertDialogDescription>
-              سيُحذف قيد «{payTypeLabel(deleteFor?.entry_type)} —{' '}
-              {fmtNumber(Math.abs(deleteFor?.amount ?? 0))} ريال». متابعة؟
+              سيُحذف قيد «{payTypeLabel(deleteShown?.entry_type)} —{' '}
+              {fmtNumber(Math.abs(deleteShown?.amount ?? 0))} ريال». متابعة؟
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -434,6 +464,15 @@ function AddEntryForm({
       try {
         const { publicUrl } = await uploadFile(file, { folder: 'payroll' })
         fileUrl = publicUrl
+      } catch (e) {
+        // فشل الرفع يوقف الحفظ برسالة واضحة — لا حفظ قيد بلا مرفقه
+        setError(errMessage(e) ?? 'تعذّر رفع المرفق')
+        toast({
+          variant: 'destructive',
+          title: 'تعذّر رفع المرفق',
+          description: errMessage(e),
+        })
+        return
       } finally {
         setUploading(false)
       }
@@ -521,13 +560,15 @@ function AddEntryForm({
               <span className="truncate text-xs text-muted-foreground">
                 {file.name}
               </span>
-              <button
+              <Button
                 type="button"
-                className="text-xs text-destructive"
+                variant="ghost"
+                size="sm"
+                className="text-destructive hover:text-destructive"
                 onClick={() => setFile(null)}
               >
                 إزالة
-              </button>
+              </Button>
             </>
           )}
         </div>

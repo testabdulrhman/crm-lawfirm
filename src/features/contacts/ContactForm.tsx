@@ -200,10 +200,10 @@ export function ContactForm({
           </Field>
 
           <Field label="الجوال" htmlFor="phone">
-            <Input id="phone" dir="ltr" {...register('phone')} />
+            <Input id="phone" type="tel" inputMode="tel" dir="ltr" {...register('phone')} />
           </Field>
           <Field label="جوال آخر" htmlFor="phone2">
-            <Input id="phone2" dir="ltr" {...register('phone2')} />
+            <Input id="phone2" type="tel" inputMode="tel" dir="ltr" {...register('phone2')} />
           </Field>
           <Field label="البريد الإلكتروني" htmlFor="email" error={errors.email?.message}>
             <Input id="email" type="email" dir="ltr" {...register('email')} />
@@ -215,10 +215,28 @@ export function ContactForm({
             <Input id="nationality" {...register('nationality')} />
           </Field>
           <Field label="رقم الهوية" htmlFor="id_number">
-            <Input id="id_number" dir="ltr" {...register('id_number')} />
+            <Input id="id_number" inputMode="numeric" dir="ltr" {...register('id_number')} />
           </Field>
-          <Field label="الجنس" htmlFor="gender">
-            <Input id="gender" {...register('gender')} />
+          <Field label="الجنس">
+            <Controller
+              control={control}
+              name="gender"
+              render={({ field }) => (
+                <Select
+                  value={field.value || undefined}
+                  onValueChange={(v) => field.onChange(v === '__none__' ? '' : v)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="اختياري" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">—</SelectItem>
+                    <SelectItem value="ذكر">ذكر</SelectItem>
+                    <SelectItem value="أنثى">أنثى</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
+            />
           </Field>
           <Controller
             control={control}
@@ -246,7 +264,7 @@ export function ContactForm({
             )}
           />
           <Field label="الرقم التسلسلي" htmlFor="serial_number">
-            <Input id="serial_number" dir="ltr" {...register('serial_number')} />
+            <Input id="serial_number" inputMode="numeric" dir="ltr" {...register('serial_number')} />
           </Field>
           <Field label="ملاحظات" htmlFor="notes" full>
             <Textarea id="notes" {...register('notes')} />

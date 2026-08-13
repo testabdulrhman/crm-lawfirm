@@ -325,11 +325,22 @@ export function StampPlacementDialog({
           </div>
         ) : (
           <div className="max-h-[62vh] overflow-y-auto rounded-xl border bg-muted/30 p-2">
+            {/* touch-none على عناصر الختم/التوقيع فقط لا على الحاوية —
+                حتى يمرّر اللمس على الكانفس السكرول للوصول لأسفل الصفحة على الجوال */}
             <div
               ref={containerRef}
-              className="relative mx-auto w-full cursor-crosshair touch-none select-none"
+              className="relative mx-auto w-full cursor-crosshair select-none"
               style={{ maxWidth: 680 }}
               onPointerDown={(e) => {
+                // باللمس: الإمساك من العنصر نفسه فقط (عليه touch-none فلا
+                // ينازعه السكرول) — هامش PAD حول العنصر يبقى للفأرة الدقيقة،
+                // فلمسة تبدأ على الكانفس داخل الهامش كانت تقفز بالعنصر وتتنازع
+                // التمرير
+                if (
+                  e.pointerType === 'touch' &&
+                  !(e.target as HTMLElement).closest('[data-drag]')
+                )
+                  return
                 const target = findTarget(e.clientX, e.clientY)
                 dragTarget.current = target
                 dragging.current = target !== null
@@ -355,7 +366,8 @@ export function StampPlacementDialog({
                   src={stampUrl!}
                   alt="الختم"
                   draggable={false}
-                  className="pointer-events-none absolute opacity-90 drop-shadow-sm"
+                  data-drag
+                  className="absolute cursor-move touch-none opacity-90 drop-shadow-sm"
                   style={{
                     width: primaryLayout.stamp.w * k,
                     height: primaryLayout.stamp.h * k,
@@ -369,7 +381,8 @@ export function StampPlacementDialog({
                   src={signatureUrl!}
                   alt="التوقيع"
                   draggable={false}
-                  className="pointer-events-none absolute opacity-90"
+                  data-drag
+                  className="absolute cursor-move touch-none opacity-90"
                   style={{
                     width: primaryLayout.sig.w * k,
                     height: primaryLayout.sig.h * k,
@@ -389,7 +402,8 @@ export function StampPlacementDialog({
                   return (
                     <div
                       key={i}
-                      className="pointer-events-none absolute"
+                      data-drag
+                      className="absolute cursor-move touch-none"
                       style={{
                         width: r.w * k,
                         height: r.h * k,
@@ -403,7 +417,7 @@ export function StampPlacementDialog({
                         draggable={false}
                         className="w-full opacity-90 outline-dashed outline-1 outline-gold/60"
                       />
-                      <span className="absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center rounded-full bg-gold text-[11px] font-bold text-navy shadow">
+                      <span className="absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center rounded-full bg-gold text-xs font-bold text-navy shadow">
                         {fmtNumber(i + 2)}
                       </span>
                     </div>
@@ -420,7 +434,8 @@ export function StampPlacementDialog({
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8"
+                className="-m-1 h-10 w-10"
+                aria-label="الصفحة السابقة"
                 disabled={page <= 1}
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
               >
@@ -430,7 +445,8 @@ export function StampPlacementDialog({
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8"
+                className="-m-1 h-10 w-10"
+                aria-label="الصفحة التالية"
                 disabled={page >= pageCount}
                 onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
               >

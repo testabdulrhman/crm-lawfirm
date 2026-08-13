@@ -16,6 +16,8 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { QueryErrorState } from '@/components/QueryErrorState'
+import { EmptyState, FilteredEmptyState } from '@/components/EmptyState'
 import { cn } from '@/lib/utils'
 import { fmtNumber, fmtDatePref } from '@/lib/format'
 import { useEngagements } from '@/hooks/useEngagements'
@@ -31,7 +33,7 @@ import {
 import type { Engagement } from '@/types/db'
 
 export function EngagementsPage() {
-  const { data, isLoading } = useEngagements()
+  const { data, isLoading, isError, error, refetch } = useEngagements()
   const [, navigate] = useLocation()
   const [search, setSearch] = usePageState('eng:q', '')
   const [status, setStatus] = usePageState<string>('eng:status', 'all')
@@ -63,7 +65,7 @@ export function EngagementsPage() {
     <div className="mx-auto max-w-6xl space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-2xl font-bold tracking-tight text-foreground">
-          العقود{' '}
+          العقود (اتفاقيات الأتعاب){' '}
           <span className="text-base font-normal text-muted-foreground">
             ({fmtNumber(data?.length ?? 0)})
           </span>
@@ -71,7 +73,7 @@ export function EngagementsPage() {
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => setTemplateOpen(true)}>
             <FileSpreadsheet className="h-4 w-4" />
-            من نموذج
+            عقد تحصيل ديون
           </Button>
           <Button variant="gold" onClick={() => setDialogOpen(true)}>
             <Plus className="h-4 w-4" />
@@ -111,15 +113,34 @@ export function EngagementsPage() {
       </div>
 
       {isLoading ? (
-        <div className="divide-y overflow-hidden rounded-xl border bg-card">
+        <div className="divide-y divide-border/60 overflow-hidden rounded-xl border bg-card">
           {Array.from({ length: 5 }).map((_, i) => (
             <Skeleton key={i} className="h-16 w-full rounded-none" />
           ))}
         </div>
+      ) : isError ? (
+        <QueryErrorState
+          title="تعذّر تحميل العقود"
+          error={error}
+          onRetry={() => refetch()}
+        />
+      ) : (data ?? []).length === 0 ? (
+        <EmptyState
+          icon={Handshake}
+          title="لا عقود بعد"
+          description="أضِف أول اتفاقية أتعاب عبر «عقد جديد» — ثم اربط بها القضايا."
+          actionLabel="عقد جديد"
+          onAction={() => setDialogOpen(true)}
+        />
       ) : filtered.length === 0 ? (
-        <EmptyState />
+        <FilteredEmptyState
+          onClear={() => {
+            setSearch('')
+            setStatus('all')
+          }}
+        />
       ) : (
-        <div className="divide-y overflow-hidden rounded-xl border bg-card">
+        <div className="divide-y divide-border/60 overflow-hidden rounded-xl border bg-card">
           {filtered.map((e) => (
             <EngagementRow
               key={e.id}
@@ -130,15 +151,22 @@ export function EngagementsPage() {
         </div>
       )}
 
+      {/* نموذج طويل — النقر خارج الحوار لا يغلقه حتى لا يضيع الإدخال؛ الإغلاق بزر إلغاء أو Escape */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent
+          className="max-w-2xl"
+          onInteractOutside={(ev) => ev.preventDefault()}
+        >
           <EngagementForm onDone={() => setDialogOpen(false)} />
         </DialogContent>
       </Dialog>
 
       {/* عقد تحصيل ديون من النموذج المعتمد */}
       <Dialog open={templateOpen} onOpenChange={setTemplateOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent
+          className="max-w-2xl"
+          onInteractOutside={(ev) => ev.preventDefault()}
+        >
           <NewDebtContractDialog onDone={() => setTemplateOpen(false)} />
         </DialogContent>
       </Dialog>
@@ -166,7 +194,7 @@ function StatusChip({
           active ? 'bg-white/20' : 'bg-muted text-muted-foreground'
         )}
       >
-        {count}
+        {fmtNumber(count)}
       </span>
     </Button>
   )
@@ -182,7 +210,7 @@ function EngagementRow({
   return (
     <button
       onClick={onOpen}
-      className="block w-full px-4 py-3 text-right transition-colors hover:bg-accent/10"
+      className="block w-full rounded-xl px-3 py-3 text-right transition-colors hover:bg-muted/60"
     >
       {/* السطر العلوي: العنوان + الرقم + الحالة */}
       <div className="flex items-center gap-2">
@@ -226,16 +254,3 @@ function EngagementRow({
   )
 }
 
-function EmptyState() {
-  return (
-    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-16 text-center">
-      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-        <Handshake className="h-6 w-6 text-muted-foreground" />
-      </div>
-      <p className="font-medium text-foreground">لا عقود بعد</p>
-      <p className="text-sm text-muted-foreground">
-        أضِف أول اتفاقية أتعاب عبر «عقد جديد» — ثم اربط بها القضايا.
-      </p>
-    </div>
-  )
-}

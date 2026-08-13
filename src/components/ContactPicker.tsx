@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { X, Check } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { X } from 'lucide-react'
 
 import { Input } from '@/components/ui/input'
 import type { Contact } from '@/types/db'
@@ -18,6 +18,22 @@ export function ContactPicker({
 }) {
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
+  const rootRef = useRef<HTMLDivElement>(null)
+
+  // إغلاق القائمة عند النقر/اللمس خارجها — نفس علاج CasePicker الموثّق
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e: MouseEvent | TouchEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node))
+        setOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('touchstart', onDown)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('touchstart', onDown)
+    }
+  }, [open])
 
   const selected = useMemo(
     () => contacts.find((c) => c.id === value) ?? null,
@@ -29,7 +45,7 @@ export function ContactPicker({
     if (!q) return contacts.slice(0, 20)
     return contacts
       .filter((c) =>
-        [c.name, c.phone, c.phone2]
+        [c.name, c.phone, c.phone2, c.email]
           .filter(Boolean)
           .join(' ')
           .toLowerCase()
@@ -65,7 +81,7 @@ export function ContactPicker({
   }
 
   return (
-    <div className="relative">
+    <div ref={rootRef} className="relative">
       <Input
         value={query}
         placeholder={placeholder}
@@ -105,7 +121,7 @@ export function ContactPicker({
             className="flex w-full items-center gap-1 border-t px-3 py-2 text-xs text-muted-foreground hover:bg-accent/20"
             onClick={() => setOpen(false)}
           >
-            <Check className="h-3 w-3" />
+            <X className="h-3 w-3" />
             إغلاق
           </button>
         </div>

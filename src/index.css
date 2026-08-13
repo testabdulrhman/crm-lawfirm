@@ -91,6 +91,24 @@
   body {
     @apply bg-background text-foreground;
     -webkit-font-smoothing: antialiased;
+    /* iOS: لا وميض رمادي عند اللمس، ولا ارتداد مطاطي يسحب الصفحة كلها */
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior-y: none;
+  }
+
+  /* لون التحديد على هوية النظام بدل الأزرق الافتراضي */
+  ::selection {
+    background: hsl(var(--accent) / 0.3);
+  }
+
+  /* حركة أقل لمن طلبها من نظامه */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 
   /* مناطق آمنة لـ iOS (Capacitor — القسم 1.1 بند 4) */

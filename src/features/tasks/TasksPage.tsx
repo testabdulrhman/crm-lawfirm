@@ -18,6 +18,8 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
+import { QueryErrorState } from '@/components/QueryErrorState'
+import { EmptyState, FilteredEmptyState } from '@/components/EmptyState'
 import {
   Select,
   SelectContent,
@@ -67,7 +69,7 @@ export function TasksPage() {
   const [showDone, setShowDone] = usePageState('tasks:done', 'no')
 
   const effectiveScope = isDirector ? scope : 'mine'
-  const { data, isLoading } = useTasks(
+  const { data, isLoading, isError, error, refetch } = useTasks(
     effectiveScope,
     effectiveScope === 'all' && assignee !== ALL_MEMBERS ? assignee : null
   )
@@ -76,6 +78,11 @@ export function TasksPage() {
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<Task | null>(null)
   const [toDelete, setToDelete] = useState<TaskRow | null>(null)
+  const [doneLimit, setDoneLimit] = useState(50)
+
+  // فلاتر مفعّلة؟ الفراغ الحقيقي يُقيَّم على البيانات قبل الفلترة
+  const hasFilter =
+    search.trim() !== '' || (effectiveScope === 'all' && assignee !== ALL_MEMBERS)
 
   // تصفية بالبحث ثم تجميع زمني
   const { groups, doneList, openCount, overdueCount } = useMemo(() => {
@@ -118,7 +125,7 @@ export function TasksPage() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl space-y-5">
+    <div className="mx-auto max-w-6xl space-y-6">
       {/* الترويسة */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
@@ -197,8 +204,29 @@ export function TasksPage() {
             <Skeleton key={i} className="h-14 w-full rounded-xl" />
           ))}
         </div>
+      ) : isError ? (
+        <QueryErrorState
+          title="تعذّر تحميل المهام"
+          error={error}
+          onRetry={() => refetch()}
+        />
       ) : openCount === 0 && doneList.length === 0 ? (
-        <EmptyState onAdd={openNew} />
+        hasFilter ? (
+          <FilteredEmptyState
+            onClear={() => {
+              setSearch('')
+              setAssignee(ALL_MEMBERS)
+            }}
+          />
+        ) : (
+          <EmptyState
+            icon={ListTodo}
+            title="لا مهام مفتوحة 🎉"
+            description="أضِف مهمة مرتبطة بقضية أو مهمة إدارية بلا قضية — وستظهر هنا مرتّبة بموعدها."
+            actionLabel="مهمة جديدة"
+            onAction={openNew}
+          />
+        )
       ) : (
         <div className="space-y-5">
           {ORDER.map((b) => {
@@ -232,19 +260,36 @@ export function TasksPage() {
                 </span>
               </button>
               {showDone === 'yes' && (
-                <div className="divide-y overflow-hidden rounded-xl border bg-card">
-                  {doneList.slice(0, 50).map((t) => (
-                    <TaskRowItem
-                      key={t.id}
-                      task={t}
-                      onEdit={(x) => {
-                        setEditing(x)
-                        setFormOpen(true)
-                      }}
-                      onDelete={setToDelete}
-                    />
-                  ))}
-                </div>
+                <>
+                  <div className="divide-y divide-border/60 overflow-hidden rounded-xl border bg-card">
+                    {doneList.slice(0, doneLimit).map((t) => (
+                      <TaskRowItem
+                        key={t.id}
+                        task={t}
+                        onEdit={(x) => {
+                          setEditing(x)
+                          setFormOpen(true)
+                        }}
+                        onDelete={setToDelete}
+                      />
+                    ))}
+                  </div>
+                  {doneList.length > doneLimit && (
+                    <div className="flex items-center justify-center gap-2 pt-1">
+                      <span className="text-xs text-muted-foreground">
+                        عُرضت {fmtNumber(doneLimit)} من {fmtNumber(doneList.length)}
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs"
+                        onClick={() => setDoneLimit((l) => l + 50)}
+                      >
+                        عرض المزيد
+                      </Button>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}
@@ -262,7 +307,7 @@ export function TasksPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>حذف المهمة</AlertDialogTitle>
             <AlertDialogDescription>
-              سيُحذف «{toDelete?.title}» نهائياً. متابعة؟
+              سيُحذف «{toDelete?.title}» ويمكن للمدير استرجاعه. متابعة؟
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -332,7 +377,7 @@ function TaskGroup({
       </div>
       <div
         className={cn(
-          'divide-y overflow-hidden rounded-xl border bg-card',
+          'divide-y divide-border/60 overflow-hidden rounded-xl border bg-card',
           isOverdue && 'border-destructive/40'
         )}
       >
@@ -362,16 +407,21 @@ function TaskRowItem({
   const isMine = t.assignee_id === teamMember?.id
 
   return (
-    <div className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-accent/5">
-      <input
-        type="checkbox"
-        checked={done}
-        disabled={inReview}
-        onChange={(e) => toggleM.mutate({ id: t.id, done: e.target.checked })}
-        className="mt-1 h-4 w-4 shrink-0 cursor-pointer accent-gold disabled:cursor-not-allowed disabled:opacity-40"
-        aria-label={inReview ? 'بانتظار الاعتماد' : done ? 'إرجاع للمهام' : 'إنجاز المهمة'}
+    <div className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-muted/60">
+      {/* هدف لمس ~40px حول المربع مع إبقاء حجمه البصري */}
+      <label
+        className="-m-3 mt-[-8px] flex shrink-0 cursor-pointer p-3"
         title={inReview ? 'بانتظار الاعتماد — تُنجز من غرفة المهمة' : undefined}
-      />
+      >
+        <input
+          type="checkbox"
+          checked={done}
+          disabled={inReview}
+          onChange={(e) => toggleM.mutate({ id: t.id, done: e.target.checked })}
+          className="h-4 w-4 shrink-0 cursor-pointer accent-gold disabled:cursor-not-allowed disabled:opacity-40"
+          aria-label={inReview ? 'بانتظار الاعتماد' : done ? 'إرجاع للمهام' : 'إنجاز المهمة'}
+        />
+      </label>
 
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-1.5">
@@ -440,25 +490,6 @@ function TaskRowItem({
           <Trash2 className="h-4 w-4" />
         </Button>
       </div>
-    </div>
-  )
-}
-
-function EmptyState({ onAdd }: { onAdd: () => void }) {
-  return (
-    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-16 text-center">
-      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-        <ListTodo className="h-6 w-6 text-muted-foreground" />
-      </div>
-      <p className="font-medium text-foreground">لا مهام مفتوحة 🎉</p>
-      <p className="mx-auto mb-4 max-w-sm text-sm text-muted-foreground">
-        أضِف مهمة مرتبطة بقضية أو مهمة إدارية بلا قضية — وستظهر هنا مرتّبة
-        بموعدها.
-      </p>
-      <Button variant="gold" size="sm" onClick={onAdd}>
-        <Plus className="h-4 w-4" />
-        مهمة جديدة
-      </Button>
     </div>
   )
 }

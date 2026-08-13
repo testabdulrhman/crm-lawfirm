@@ -8,6 +8,7 @@ import {
   CalendarDays,
   MessageSquare,
   CheckCheck,
+  Loader2,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -83,8 +84,8 @@ export function NotificationBell() {
         >
           <Bell className="h-5 w-5" />
           {count > 0 && (
-            <span className="absolute -left-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-white">
-              {fmtNumber(count > 99 ? 99 : count)}
+            <span className="absolute -left-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-xs font-bold text-white">
+              {count > 99 ? `${fmtNumber(99)}+` : fmtNumber(count)}
             </span>
           )}
         </button>
@@ -98,9 +99,14 @@ export function NotificationBell() {
               variant="ghost"
               size="sm"
               className="h-7 gap-1 text-xs"
+              disabled={markM.isPending && markM.variables === 'all'}
               onClick={() => markM.mutate('all')}
             >
-              <CheckCheck className="h-3.5 w-3.5" />
+              {markM.isPending && markM.variables === 'all' ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <CheckCheck className="h-3.5 w-3.5" />
+              )}
               تعليم الكل كمقروء
             </Button>
           )}
@@ -157,7 +163,7 @@ export function NotificationBell() {
                         {n.message}
                       </span>
                     )}
-                    <span className="mt-0.5 block text-[11px] text-muted-foreground">
+                    <span className="mt-0.5 block text-xs text-muted-foreground">
                       {fmtDateTime(n.created_at)}
                     </span>
                   </span>

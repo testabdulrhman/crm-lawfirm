@@ -185,14 +185,29 @@ export function PropertyTransferForm({
             placeholder="اختر البائع من جهات الاتصال…"
           />
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <Input placeholder="اسم البائع" {...register('seller_name')} />
-            <Input placeholder="جوال البائع" dir="ltr" {...register('seller_phone')} />
-            <Input
-              placeholder="هوية البائع"
-              dir="ltr"
-              className="sm:col-span-2"
-              {...register('seller_id_num')}
-            />
+            <div className="space-y-1.5">
+              <Label htmlFor="seller_name">اسم البائع</Label>
+              <Input id="seller_name" {...register('seller_name')} />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="seller_phone">جوال البائع</Label>
+              <Input
+                id="seller_phone"
+                type="tel"
+                inputMode="tel"
+                dir="ltr"
+                {...register('seller_phone')}
+              />
+            </div>
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label htmlFor="seller_id_num">هوية البائع</Label>
+              <Input
+                id="seller_id_num"
+                inputMode="numeric"
+                dir="ltr"
+                {...register('seller_id_num')}
+              />
+            </div>
           </div>
         </Section>
 
@@ -205,14 +220,29 @@ export function PropertyTransferForm({
             placeholder="اختر المشتري من جهات الاتصال…"
           />
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <Input placeholder="اسم المشتري" {...register('buyer_name')} />
-            <Input placeholder="جوال المشتري" dir="ltr" {...register('buyer_phone')} />
-            <Input
-              placeholder="هوية المشتري"
-              dir="ltr"
-              className="sm:col-span-2"
-              {...register('buyer_id_num')}
-            />
+            <div className="space-y-1.5">
+              <Label htmlFor="buyer_name">اسم المشتري</Label>
+              <Input id="buyer_name" {...register('buyer_name')} />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="buyer_phone">جوال المشتري</Label>
+              <Input
+                id="buyer_phone"
+                type="tel"
+                inputMode="tel"
+                dir="ltr"
+                {...register('buyer_phone')}
+              />
+            </div>
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label htmlFor="buyer_id_num">هوية المشتري</Label>
+              <Input
+                id="buyer_id_num"
+                inputMode="numeric"
+                dir="ltr"
+                {...register('buyer_id_num')}
+              />
+            </div>
           </div>
         </Section>
 
@@ -236,7 +266,7 @@ export function PropertyTransferForm({
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="deed_number">رقم الصك</Label>
-              <Input id="deed_number" dir="ltr" {...register('deed_number')} />
+              <Input id="deed_number" inputMode="numeric" dir="ltr" {...register('deed_number')} />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="area">المساحة (م²)</Label>

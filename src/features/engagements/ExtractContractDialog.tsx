@@ -1,7 +1,7 @@
 // استخراج بيانات العقد والتزاماته من ملفه بالذكاء الاصطناعي.
 // ⚠️ لا يُكتب شيء تلقائياً: تُعرض النتيجة للمراجعة ويختار الموظف ما يُعتمد.
 import { useEffect, useState } from 'react'
-import { Sparkles, Loader2, AlertTriangle, CalendarClock } from 'lucide-react'
+import { Sparkles, Loader2, AlertTriangle, CalendarClock, RotateCw } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -40,6 +40,16 @@ export function ExtractContractDialog({
   const [applyFields, setApplyFields] = useState(true)
   const [picked, setPicked] = useState<Set<number>>(new Set())
 
+  const runExtract = () => {
+    if (!engagement.file_url) return
+    extractM.mutate(engagement.file_url, {
+      onSuccess: (r) => {
+        setResult(r)
+        setPicked(new Set(r.obligations.map((_, i) => i)))
+      },
+    })
+  }
+
   // تشغيل الاستخراج عند الفتح، وتصفير النتيجة عند الإغلاق
   useEffect(() => {
     if (!open) {
@@ -48,13 +58,7 @@ export function ExtractContractDialog({
       setApplyFields(true)
       return
     }
-    if (!engagement.file_url) return
-    extractM.mutate(engagement.file_url, {
-      onSuccess: (r) => {
-        setResult(r)
-        setPicked(new Set(r.obligations.map((_, i) => i)))
-      },
-    })
+    runExtract()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
@@ -118,8 +122,18 @@ export function ExtractContractDialog({
           <div className="py-8 text-center">
             <AlertTriangle className="mx-auto mb-2 h-6 w-6 text-muted-foreground" />
             <p className="text-sm text-muted-foreground">
-              لم يُستخرج شيء. أغلِق الحوار وأعد المحاولة.
+              لم يُستخرج شيء — قد يكون خللاً مؤقتاً في الاستخراج.
             </p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-3"
+              onClick={runExtract}
+              disabled={!engagement.file_url}
+            >
+              <RotateCw className="h-4 w-4" />
+              إعادة المحاولة
+            </Button>
           </div>
         ) : (
           <div className="max-h-[55vh] space-y-5 overflow-y-auto pl-1">
@@ -176,20 +190,23 @@ export function ExtractContractDialog({
                 <ul className="divide-y overflow-hidden rounded-xl border">
                   {result.obligations.map((o, i) => (
                     <li key={i} className="flex items-start gap-3 p-3">
-                      <input
-                        type="checkbox"
-                        checked={picked.has(i)}
-                        onChange={(ev) =>
-                          setPicked((s) => {
-                            const n = new Set(s)
-                            if (ev.target.checked) n.add(i)
-                            else n.delete(i)
-                            return n
-                          })
-                        }
-                        aria-label={o.title}
-                        className="mt-1 h-4 w-4 shrink-0 cursor-pointer accent-gold"
-                      />
+                      {/* label بحشوة توسّع هدف اللمس دون تغيير التخطيط */}
+                      <label className="-m-2 mt-1 shrink-0 cursor-pointer p-2">
+                        <input
+                          type="checkbox"
+                          checked={picked.has(i)}
+                          onChange={(ev) =>
+                            setPicked((s) => {
+                              const n = new Set(s)
+                              if (ev.target.checked) n.add(i)
+                              else n.delete(i)
+                              return n
+                            })
+                          }
+                          aria-label={o.title}
+                          className="block h-4 w-4 cursor-pointer accent-gold"
+                        />
+                      </label>
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium text-foreground">{o.title}</p>
                         {o.notes && (

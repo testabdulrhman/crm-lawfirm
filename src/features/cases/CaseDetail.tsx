@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Card, CardContent } from '@/components/ui/card'
-import { Alert, AlertTitle } from '@/components/ui/alert'
+import { QueryErrorState } from '@/components/QueryErrorState'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import {
@@ -59,7 +59,7 @@ const TABS = [
 
 export function CaseDetail({ id }: { id: string }) {
   const [, navigate] = useLocation()
-  const { data: c, isLoading, isError } = useCase(id)
+  const { data: c, isLoading, isError, error, refetch } = useCase(id)
   const statusM = useUpdateCaseStatus()
   const [editOpen, setEditOpen] = useState(false)
   // التبويب المفتوح يدوم للرجوع/التحديث (لكل قضية على حدة)
@@ -91,20 +91,18 @@ export function CaseDetail({ id }: { id: string }) {
 
   if (isError || !c) {
     return (
-      <div className="space-y-4">
-        <Button variant="ghost" onClick={() => navigate('/cases')}>
-          <ArrowRight className="h-4 w-4" />
-          رجوع
-        </Button>
-        <Alert variant="destructive">
-          <AlertTitle>تعذّر تحميل القضية</AlertTitle>
-        </Alert>
-      </div>
+      <QueryErrorState
+        title="تعذّر تحميل القضية"
+        error={error}
+        onRetry={() => refetch()}
+        backTo="/cases"
+        backLabel="رجوع للقضايا"
+      />
     )
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-5">
+    <div className="mx-auto max-w-4xl space-y-5">
       <Button variant="ghost" onClick={() => navigate('/cases')}>
         <ArrowRight className="h-4 w-4" />
         رجوع للقضايا
@@ -127,9 +125,14 @@ export function CaseDetail({ id }: { id: string }) {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              {/* مبدّل الحالة السريع */}
+              {/* مبدّل الحالة السريع — أثناء الحفظ يعرض القيمة المختارة ويُقفل */}
               <Select
-                value={c.status ?? 'jarri'}
+                value={
+                  statusM.isPending
+                    ? statusM.variables?.status ?? c.status ?? 'jarri'
+                    : c.status ?? 'jarri'
+                }
+                disabled={statusM.isPending}
                 onValueChange={(v) =>
                   statusM.mutate({ id: c.id, status: v as CaseStatus })
                 }

@@ -10,6 +10,8 @@ import {
   User,
   Scale,
   FolderPlus,
+  ChevronDown,
+  Reply,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -27,6 +29,7 @@ import {
 } from '@/components/ui/dialog'
 import { ContactPicker } from '@/components/ContactPicker'
 import { CasePicker } from '@/components/CasePicker'
+import { Ltr } from '@/components/Ltr'
 import { fmtNumber, fmtDateTime } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/stores/auth'
@@ -59,6 +62,7 @@ export function MailPage() {
   }, [data, search])
 
   return (
+    // استثناء مقصود عن max-w-6xl: قوائم الرسائل نصية طويلة تُقرأ أفضل بعرض أضيق
     <div className="mx-auto max-w-4xl space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-2xl font-bold tracking-tight text-foreground">
@@ -107,9 +111,9 @@ export function MailPage() {
           ))}
         </div>
       ) : filtered.length === 0 ? (
-        <EmptyState tab={tab} />
+        <EmptyState tab={tab} onCompose={() => setComposeOpen(true)} />
       ) : (
-        <div className="divide-y overflow-hidden rounded-xl border bg-card">
+        <div className="divide-y divide-border/60 overflow-hidden rounded-xl border bg-card">
           {filtered.map((m) => (
             <MailRow key={m.id} m={m} />
           ))}
@@ -117,7 +121,12 @@ export function MailPage() {
       )}
 
       <Dialog open={composeOpen} onOpenChange={setComposeOpen}>
-        <DialogContent className="max-w-lg">
+        {/* حماية المسودة: لا إغلاق بالنقر الخارجي أو Escape — الإغلاق بزر إلغاء أو X فقط */}
+        <DialogContent
+          className="max-w-lg"
+          onInteractOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => e.preventDefault()}
+        >
           <ComposeForm onDone={() => setComposeOpen(false)} />
         </DialogContent>
       </Dialog>
@@ -130,6 +139,7 @@ function MailRow({ m }: { m: EmailMessage }) {
   const { teamMember } = useAuth()
   const [open, setOpen] = useState(false)
   const [attachOpen, setAttachOpen] = useState(false)
+  const [replyOpen, setReplyOpen] = useState(false)
   const [pickedCase, setPickedCase] = useState<string | null>(null)
   const { data: cases } = useCases()
   const attachM = useAttachEmailToCase()
@@ -139,10 +149,14 @@ function MailRow({ m }: { m: EmailMessage }) {
     : m.from_name || m.from_email || 'مجهول'
   return (
     <div className="px-4 py-3">
-      <button className="block w-full text-right" onClick={() => setOpen(!open)}>
+      <button
+        className="block w-full text-right"
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+      >
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant={isOut ? 'secondary' : 'gold'} className="shrink-0">
-            {who}
+            {who && who.includes('@') ? <Ltr>{who}</Ltr> : who}
           </Badge>
           {m.status === 'failed' && (
             <Badge variant="destructive" className="shrink-0 gap-1">
@@ -153,6 +167,12 @@ function MailRow({ m }: { m: EmailMessage }) {
           <span className="mr-auto text-xs text-muted-foreground">
             {fmtDateTime(m.internal_date ?? m.created_at)}
           </span>
+          <ChevronDown
+            className={cn(
+              'h-4 w-4 shrink-0 text-muted-foreground transition-transform',
+              open && 'rotate-180'
+            )}
+          />
         </div>
         <p className="mt-1 text-sm font-semibold text-foreground">
           {m.subject || '(بدون موضوع)'}
@@ -178,6 +198,17 @@ function MailRow({ m }: { m: EmailMessage }) {
             {m.body_text || m.snippet || '—'}
           </p>
           <div className="flex flex-wrap items-center gap-2">
+            {!isOut && m.from_email && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs"
+                onClick={() => setReplyOpen(true)}
+              >
+                <Reply className="h-3.5 w-3.5" />
+                رد
+              </Button>
+            )}
             {m.contact && (
               <button
                 onClick={() => navigate(`/contacts/${m.contact!.id}`)}
@@ -212,6 +243,30 @@ function MailRow({ m }: { m: EmailMessage }) {
           </div>
         </div>
       )}
+
+      {/* الرد على الوارد — نموذج الإرسال معبّأ بالعنوان والموضوع مسبقاً */}
+      <Dialog open={replyOpen} onOpenChange={setReplyOpen}>
+        <DialogContent
+          className="max-w-lg"
+          onInteractOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => e.preventDefault()}
+        >
+          {replyOpen && (
+            <ComposeForm
+              onDone={() => setReplyOpen(false)}
+              initial={{
+                to: m.from_email ?? '',
+                subject: m.subject
+                  ? m.subject.startsWith('رد:')
+                    ? m.subject
+                    : `رد: ${m.subject}`
+                  : '',
+                contactId: m.contact_id,
+              }}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* اختيار القضية — تُنقل الرسالة ومرفقاتها لمستنداتها */}
       <Dialog open={attachOpen} onOpenChange={setAttachOpen}>
@@ -256,14 +311,23 @@ function MailRow({ m }: { m: EmailMessage }) {
   )
 }
 
-function ComposeForm({ onDone }: { onDone: () => void }) {
+function ComposeForm({
+  onDone,
+  initial,
+}: {
+  onDone: () => void
+  /** قيم ابتدائية (للرد على رسالة واردة مثلاً) */
+  initial?: { to?: string; subject?: string; contactId?: string | null }
+}) {
   const { teamMember } = useAuth()
   const { data: contacts } = useContacts()
   const sendM = useSendEmail()
 
-  const [contactId, setContactId] = useState<string | null>(null)
-  const [to, setTo] = useState('')
-  const [subject, setSubject] = useState('')
+  const [contactId, setContactId] = useState<string | null>(
+    initial?.contactId ?? null
+  )
+  const [to, setTo] = useState(initial?.to ?? '')
+  const [subject, setSubject] = useState(initial?.subject ?? '')
   const [text, setText] = useState('')
   const [error, setError] = useState<string | null>(null)
 
@@ -307,9 +371,10 @@ function ComposeForm({ onDone }: { onDone: () => void }) {
       </DialogHeader>
       <div className="space-y-3">
         <div className="space-y-1.5">
-          <Label>موكّل من جهات الاتصال (اختياري — يعبّئ البريد)</Label>
+          <Label>جهة اتصال (اختياري — يعبّئ البريد)</Label>
           <ContactPicker
             contacts={withEmail}
+            placeholder="ابحث بالاسم أو الجوال أو البريد…"
             value={contactId}
             onSelect={(c) => {
               setContactId(c?.id ?? null)
@@ -360,7 +425,13 @@ function ComposeForm({ onDone }: { onDone: () => void }) {
   )
 }
 
-function EmptyState({ tab }: { tab: 'incoming' | 'outgoing' }) {
+function EmptyState({
+  tab,
+  onCompose,
+}: {
+  tab: 'incoming' | 'outgoing'
+  onCompose: () => void
+}) {
   return (
     <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-16 text-center">
       <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
@@ -374,6 +445,12 @@ function EmptyState({ tab }: { tab: 'incoming' | 'outgoing' }) {
           ? 'الوارد يُزامَن تلقائياً كل 5 دقائق بعد إكمال إعدادات Gmail.'
           : 'أرسل أول رسالة رسمية عبر «رسالة جديدة».'}
       </p>
+      {tab === 'outgoing' && (
+        <Button variant="gold" className="mt-4" onClick={onCompose}>
+          <Send className="h-4 w-4" />
+          رسالة جديدة
+        </Button>
+      )}
     </div>
   )
 }

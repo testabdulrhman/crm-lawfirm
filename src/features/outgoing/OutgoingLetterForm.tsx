@@ -15,6 +15,8 @@ import {
 } from '@/components/ui/dialog'
 import { CasePicker } from '@/components/CasePicker'
 import { DualDatePicker } from '@/components/DualDatePicker'
+import { toast } from '@/hooks/use-toast'
+import { errMessage } from '@/lib/errors'
 import { pickFile, uploadFile } from '@/lib/files'
 import { useAuth } from '@/stores/auth'
 import { useCases } from '@/hooks/useCases'
@@ -122,6 +124,14 @@ export function OutgoingLetterForm({
       try {
         const { publicUrl } = await uploadFile(file, { folder: 'outgoing' })
         fileUrl = publicUrl
+      } catch (e) {
+        // لا حفظ بلا الملف — فشل الرفع يظهر بسببه ويوقف الإرسال
+        toast({
+          variant: 'destructive',
+          title: 'تعذّر رفع ملف الخطاب',
+          description: errMessage(e),
+        })
+        return
       } finally {
         setUploading(false)
       }
@@ -137,10 +147,15 @@ export function OutgoingLetterForm({
     }
     if (fileUrl) input.file_url = fileUrl
 
-    if (isEdit && letter) {
-      await updateM.mutateAsync({ id: letter.id, input })
-    } else {
-      await createM.mutateAsync({ ...input, created_by: teamMember?.id ?? null })
+    try {
+      if (isEdit && letter) {
+        await updateM.mutateAsync({ id: letter.id, input })
+      } else {
+        await createM.mutateAsync({ ...input, created_by: teamMember?.id ?? null })
+      }
+    } catch {
+      // الهوك أظهر توست الفشل بسببه — نمنع تسرّب الاستثناء ونُبقي النموذج مفتوحاً
+      return
     }
     onDone()
   }

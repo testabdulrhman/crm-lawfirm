@@ -2,6 +2,8 @@
 // يعاين النسخة المختومة على الموضع المختار (ويقدر يعدّله) ← موافقة بضغطة.
 // الدمج يتم في المتصفح (pdf-lib) ثم تُرفع النسخة الموقّعة وتصبح ملف الخطاب الرئيسي.
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Link } from 'wouter'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Stamp,
   Clock,
@@ -10,6 +12,7 @@ import {
   ExternalLink,
   Loader2,
   Move,
+  Settings,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -23,6 +26,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { toast } from '@/hooks/use-toast'
+import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/stores/auth'
 import { useIsDirector } from '@/hooks/useIsDirector'
 import { useOfficeInfo, useLookups } from '@/hooks/useSettings'
@@ -69,8 +73,8 @@ function TrailLine({
 export function ApprovalSection({ letter: l }: { letter: OutgoingLetter }) {
   const { teamMember } = useAuth()
   const isDirector = useIsDirector()
-  const { data: office } = useOfficeInfo()
-  const { data: lookups } = useLookups()
+  const { data: office, isLoading: officeLoading } = useOfficeInfo()
+  const { data: lookups, isLoading: lookupsLoading } = useLookups()
   const requestM = useRequestApproval()
 
   const stampUrl = office?.stamp_url ?? null
@@ -84,7 +88,11 @@ export function ApprovalSection({ letter: l }: { letter: OutgoingLetter }) {
   )
 
   const a = l.approval
-  const canRequest = isPdf(l.file_url)
+  // لا اعتماد بلا ختم أو توقيع مرفوعين — وإلا يُنشأ طلب «يعتمد» نسخة بلا أي توقيع.
+  // أثناء تحميل الاستعلامين لا نحكم بالغياب — كانت الرسالة المضللة تظهر لوهلة لكل خطاب
+  const assetsLoading = officeLoading || lookupsLoading
+  const hasSignAssets = !!stampUrl || !!signatureUrl
+  const canRequest = isPdf(l.file_url) && hasSignAssets
 
   // الموضع المحفوظ مع الطلب (إن وُجد)
   const storedPos: StampPosition | null =
@@ -117,6 +125,53 @@ export function ApprovalSection({ letter: l }: { letter: OutgoingLetter }) {
   const effectiveMode = overrideMode ?? storedMode
   const effectiveSigs = overrideSigs ?? storedSigs
 
+  // تعديل موضع/نمط طلب قائم (pending): تحديث فقط — بلا إشعار ولا SMS جديدة
+  // للمدراء (إعادة تنفيذ requestM كانت ترسل وابل رسائل عن نفس الطلب)
+  const qc = useQueryClient()
+  const updatePlacementM = useMutation({
+    mutationFn: async (vars: {
+      position: StampPosition
+      mode: ApplyMode
+      extraSignatures: StampPosition[]
+    }) => {
+      const { data, error } = await supabase
+        .from('outgoing_approvals')
+        .update({
+          stamp_page: vars.position.page,
+          stamp_x: vars.position.x,
+          stamp_y: vars.position.y,
+          apply_mode: vars.mode,
+          extra_sigs:
+            vars.extraSignatures.length > 0 ? vars.extraSignatures : null,
+          sig2_page: null,
+          sig2_x: null,
+          sig2_y: null,
+        })
+        .eq('letter_id', l.id)
+        .eq('status', 'pending')
+        .select('id')
+      if (error) throw error
+      // صفر صفوف = الحالة تغيّرت تحت أيدينا (اعتُمد/رُفض للتو) — لا نجاح كاذب
+      if (!data || data.length === 0) {
+        throw new Error(
+          'تغيّرت حالة الطلب (لم يعد بانتظار الاعتماد) — حدّث الصفحة لترى وضعه الحالي.'
+        )
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['outgoing_letters'] })
+      qc.invalidateQueries({ queryKey: ['outgoing_letter', l.id] })
+      setPlacementOpen(false)
+      toast({ variant: 'success', title: 'حُدّث الطلب — الموضع الجديد ظاهر للمدير' })
+    },
+    onError: (e: unknown) =>
+      toast({
+        variant: 'destructive',
+        title: 'تعذّر تحديث الطلب',
+        description: errMessage(e),
+      }),
+  })
+
   const openRequestPlacement = () => {
     setPlacementMode('request')
     setPlacementOpen(true)
@@ -135,17 +190,22 @@ export function ApprovalSection({ letter: l }: { letter: OutgoingLetter }) {
     sigs: StampPosition[]
   ) => {
     if (placementMode === 'request') {
-      requestM.mutate(
-        {
-          letter: l,
-          position: pos,
-          mode,
-          extraSignatures: sigs,
-          requesterId: teamMember?.id ?? null,
-          requesterName: teamMember?.name ?? null,
-        },
-        { onSuccess: () => setPlacementOpen(false) }
-      )
+      if (a?.status === 'pending') {
+        // طلب قائم — تحديث الموضع فقط دون إعادة إرسال الطلب والرسائل
+        updatePlacementM.mutate({ position: pos, mode, extraSignatures: sigs })
+      } else {
+        requestM.mutate(
+          {
+            letter: l,
+            position: pos,
+            mode,
+            extraSignatures: sigs,
+            requesterId: teamMember?.id ?? null,
+            requesterName: teamMember?.name ?? null,
+          },
+          { onSuccess: () => setPlacementOpen(false) }
+        )
+      }
     } else {
       setOverridePos(pos)
       setOverrideMode(mode)
@@ -235,9 +295,13 @@ export function ApprovalSection({ letter: l }: { letter: OutgoingLetter }) {
                   variant="outline"
                   size="sm"
                   onClick={openRequestPlacement}
-                  disabled={requestM.isPending}
+                  disabled={requestM.isPending || updatePlacementM.isPending}
                 >
-                  <Move className="h-4 w-4" />
+                  {updatePlacementM.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Move className="h-4 w-4" />
+                  )}
                   تعديل الطلب أو الموضع
                 </Button>
               )}
@@ -306,10 +370,28 @@ export function ApprovalSection({ letter: l }: { letter: OutgoingLetter }) {
               يعتمده المدير بضغطة.
             </p>
           </div>
-        ) : (
+        ) : !isPdf(l.file_url) ? (
           <p className="text-sm text-muted-foreground">
             ارفع ملف الخطاب بصيغة PDF أولاً لتفعيل طلب الاعتماد.
           </p>
+        ) : assetsLoading ? (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            يُحمَّل الختم والتوقيع…
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-sm text-muted-foreground">
+              لا يوجد ختم أو توقيع مرفوعان — ارفعهما من الإعدادات أولاً لتفعيل
+              الاعتماد.
+            </p>
+            <Button variant="outline" size="sm" asChild>
+              <Link href="/settings">
+                <Settings className="h-4 w-4" />
+                فتح الإعدادات
+              </Link>
+            </Button>
+          </div>
         )}
 
         {/* اختيار موضع الختم (الطالب/المدير) */}
@@ -325,9 +407,13 @@ export function ApprovalSection({ letter: l }: { letter: OutgoingLetter }) {
             initialSigs={effectiveSigs}
             onConfirm={onPlacementConfirm}
             confirmLabel={
-              placementMode === 'request' ? 'تأكيد وإرسال الطلب' : 'تأكيد الموضع'
+              placementMode === 'request'
+                ? a?.status === 'pending'
+                  ? 'حفظ التعديل'
+                  : 'تأكيد وإرسال الطلب'
+                : 'تأكيد الموضع'
             }
-            confirming={requestM.isPending}
+            confirming={requestM.isPending || updatePlacementM.isPending}
           />
         )}
 
@@ -348,6 +434,69 @@ export function ApprovalSection({ letter: l }: { letter: OutgoingLetter }) {
         />
       </CardContent>
     </Card>
+  )
+}
+
+// معاينة PDF برسم كل الصفحات على canvas (pdf.js) بدل iframe —
+// داخل WKWebView على الآيفون يعرض iframe الصفحة الأولى فقط بلا تمرير،
+// والمدير يفتح رابط SMS على جواله فلا يستطيع مراجعة خطاب متعدد الصفحات.
+function PdfPagesPreview({ url }: { url: string }) {
+  const holderRef = useRef<HTMLDivElement>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    const holder = holderRef.current
+    ;(async () => {
+      try {
+        setLoading(true)
+        setError(null)
+        const pdfjs = await import('pdfjs-dist')
+        const worker = await import('pdfjs-dist/build/pdf.worker.min.mjs?url')
+        pdfjs.GlobalWorkerOptions.workerSrc = worker.default
+        const doc = await pdfjs.getDocument({ url }).promise
+        if (cancelled || !holder) return
+        holder.innerHTML = ''
+        const width = holder.clientWidth || 640
+        const dpr = window.devicePixelRatio || 1
+        for (let i = 1; i <= doc.numPages; i++) {
+          if (cancelled) return
+          const p = await doc.getPage(i)
+          const base = p.getViewport({ scale: 1 })
+          const viewport = p.getViewport({ scale: (width / base.width) * dpr })
+          const canvas = document.createElement('canvas')
+          canvas.width = viewport.width
+          canvas.height = viewport.height
+          canvas.className = 'mb-2 block w-full rounded-lg bg-white shadow-sm'
+          holder.appendChild(canvas)
+          const ctx = canvas.getContext('2d')!
+          await p.render({ canvas, canvasContext: ctx, viewport }).promise
+        }
+        if (!cancelled) setLoading(false)
+      } catch (e) {
+        if (!cancelled) {
+          setError(errMessage(e) ?? 'تعذّر عرض المعاينة')
+          setLoading(false)
+        }
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [url])
+
+  return (
+    <div className="max-h-[62vh] overflow-y-auto rounded-xl border bg-muted/30 p-2">
+      <div ref={holderRef} />
+      {loading && !error && (
+        <div className="flex h-40 items-center justify-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="h-5 w-5 animate-spin" />
+          جارٍ تجهيز المعاينة…
+        </div>
+      )}
+      {error && <div className="p-4 text-sm text-destructive">{error}</div>}
+    </div>
   )
 }
 
@@ -461,11 +610,7 @@ function ApprovalDialog({
             {genError}
           </div>
         ) : blobUrl ? (
-          <iframe
-            title="معاينة الخطاب"
-            src={blobUrl}
-            className="h-[62vh] w-full rounded-xl border"
-          />
+          <PdfPagesPreview url={blobUrl} />
         ) : (
           <div className="flex h-[62vh] items-center justify-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-5 w-5 animate-spin" />

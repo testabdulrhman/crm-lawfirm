@@ -153,3 +153,24 @@ export const normalizeSaudiPhone = (raw: string): string => {
   else if (!n.startsWith('966')) n = '966' + n
   return n
 }
+
+/* ===== صيغ العدّ العربية — «بعد 5 يوم» ممنوعة ===== */
+
+// جمع عربي سليم حسب العدد: 1=مفرد، 2=مثنى، 3-10=جمع، 11+=مفرد (تمييز منصوب)
+export const arPlural = (
+  n: number,
+  forms: { one: string; two: string; many: string }
+): string => {
+  if (n === 1) return forms.one
+  if (n === 2) return forms.two
+  if (n >= 3 && n <= 10) return `${fmtNumber(n)} ${forms.many}`
+  return `${fmtNumber(n)} ${forms.one}`
+}
+
+/** «يوم واحد» / «يومين» / «5 أيام» / «11 يوماً» */
+export const daysLabel = (n: number): string => {
+  if (n === 1) return 'يوم واحد'
+  if (n === 2) return 'يومين'
+  if (n >= 3 && n <= 10) return `${fmtNumber(n)} أيام`
+  return `${fmtNumber(n)} يوماً`
+}

@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { useLocation } from 'wouter'
 import {
   Scale,
@@ -23,13 +22,15 @@ import {
 
 import { useAuth } from '@/stores/auth'
 import { useIsDirector } from '@/hooks/useIsDirector'
+import { usePageState } from '@/hooks/usePageState'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ThankYouCard } from '@/components/ThankYouCard'
 import { cn } from '@/lib/utils'
-import { fmtNumber, fmtDatePref, fmtTime } from '@/lib/format'
+import { fmtNumber, fmtDatePref, fmtTime, daysLabel } from '@/lib/format'
+import { Ltr } from '@/components/Ltr'
 import { taskPriorityBadge, taskPriorityLabel } from '@/lib/caseLabels'
 import { typeLabel as requestTypeLabel } from '@/features/requests/labels'
 import {
@@ -62,8 +63,8 @@ function countdownText(days: number | null): string {
   if (days == null) return ''
   if (days === 0) return 'اليوم'
   if (days === 1) return 'غداً'
-  if (days > 0) return `بعد ${fmtNumber(days)} يوم`
-  return `متأخّرة ${fmtNumber(-days)} يوم`
+  if (days > 0) return `بعد ${daysLabel(days)}`
+  return `متأخّرة ${daysLabel(-days)}`
 }
 
 export default function Dashboard() {
@@ -71,8 +72,8 @@ export default function Dashboard() {
   const isDirector = useIsDirector()
   const [, navigate] = useLocation()
 
-  // النطاق: «متطلباتي» افتراضياً؛ «المكتب» للمدير فقط
-  const [scope, setScope] = useState<DashboardScope>('mine')
+  // النطاق: «متطلباتي» افتراضياً؛ «المكتب» للمدير فقط — يدوم خلال الجلسة
+  const [scope, setScope] = usePageState<DashboardScope>('dashboard.scope', 'mine')
   const effectiveScope: DashboardScope = isDirector ? scope : 'mine'
   const isAll = effectiveScope === 'all'
 
@@ -82,12 +83,12 @@ export default function Dashboard() {
   const completeM = useCompleteTask()
 
   return (
-    <div className="mx-auto max-w-6xl space-y-8">
+    <div className="mx-auto max-w-6xl space-y-6">
       {/* الترحيب */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="text-2xl font-bold tracking-tight text-foreground">
-            مرحباً، {teamMember?.name ?? 'بك'} 👋
+            {teamMember?.name ? `مرحباً، ${teamMember.name}` : 'مرحباً بك'} 👋
           </h2>
           <p className="mt-1.5 text-sm text-muted-foreground">
             {isAll
@@ -126,7 +127,7 @@ export default function Dashboard() {
       {/* بطاقات KPI */}
       {isLoading || !s ? (
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-4">
-          {Array.from({ length: isAll ? 8 : 2 }).map((_, i) => (
+          {Array.from({ length: isAll ? 9 : 2 }).map((_, i) => (
             <Skeleton key={i} className="h-[92px] w-full rounded-2xl" />
           ))}
         </div>
@@ -150,7 +151,7 @@ export default function Dashboard() {
                 ? `منها ${fmtNumber(s.overdue_tasks)} متأخرة`
                 : undefined
             }
-            onClick={() => navigate('/cases')}
+            onClick={() => navigate('/tasks')}
           />
 
           {/* بطاقات إدارية — وضع «المكتب» (المدير) فقط */}
@@ -199,13 +200,15 @@ export default function Dashboard() {
           loading={isLoading}
         >
           {(data?.upcoming_sessions ?? []).length === 0 ? (
-            <Empty text="لا جلسات قادمة" />
+            <Empty icon={CalendarDays} text="لا جلسات قادمة" />
           ) : (
             (data?.upcoming_sessions ?? []).map((x) => (
               <SessionRow
                 key={x.id}
                 s={x}
-                onClick={() => x.case_id && navigate(`/cases/${x.case_id}`)}
+                onClick={() =>
+                  navigate(x.case_id ? `/cases/${x.case_id}` : '/sessions')
+                }
               />
             ))
           )}
@@ -219,7 +222,7 @@ export default function Dashboard() {
           loading={isLoading}
         >
           {(data?.tasks ?? []).length === 0 ? (
-            <Empty text="لا مهام عليك 🎉" />
+            <Empty icon={ListTodo} text="لا مهام عليك 🎉" />
           ) : (
             (data?.tasks ?? []).map((t) => (
               <CompletableTaskRow
@@ -227,7 +230,7 @@ export default function Dashboard() {
                 t={t}
                 completing={completeM.isPending && completeM.variables === t.id}
                 onComplete={() => completeM.mutate(t.id)}
-                onOpen={() => t.case_id && navigate(`/cases/${t.case_id}`)}
+                onOpen={() => navigate(`/tasks/${t.id}`)}
               />
             ))
           )}
@@ -257,7 +260,7 @@ export default function Dashboard() {
           <>
             <SectionCard icon={FileSignature} title="وكالات تنتهي قريباً" loading={isLoading}>
               {(data?.expiring_poas ?? []).length === 0 ? (
-                <Empty text="لا وكالات تنتهي قريباً" />
+                <Empty icon={FileSignature} text="لا وكالات تنتهي قريباً" />
               ) : (
                 (data?.expiring_poas ?? []).map((p) => (
                   <PoaRow key={p.id} p={p} onClick={() => navigate('/poa')} />
@@ -267,7 +270,7 @@ export default function Dashboard() {
 
             <SectionCard icon={UserPlus} title="آخر طلبات التوظيف" loading={isLoading}>
               {(data?.applications ?? []).length === 0 ? (
-                <Empty text="لا طلبات جديدة" />
+                <Empty icon={UserPlus} text="لا طلبات جديدة" />
               ) : (
                 (data?.applications ?? []).map((a) => (
                   <ApplicationRow
@@ -281,7 +284,7 @@ export default function Dashboard() {
 
             <SectionCard icon={Inbox} title="الطلبات الواردة" loading={isLoading}>
               {(data?.requests ?? []).length === 0 ? (
-                <Empty text="لا طلبات واردة" />
+                <Empty icon={Inbox} text="لا طلبات واردة" />
               ) : (
                 (data?.requests ?? []).map((r) => (
                   <RequestRow key={r.id} r={r} onClick={() => navigate('/requests')} />
@@ -351,16 +354,16 @@ function Kpi({
     <button
       onClick={onClick}
       className={cn(
-        'group rounded-2xl border border-border/70 bg-card p-5 text-right transition-all hover:border-gold/50 hover:shadow-sm',
+        'group rounded-2xl border border-border/70 bg-card p-4 text-right transition-all hover:border-gold/50 hover:shadow-sm sm:p-5',
         highlight && (tone === 'red' ? 'border-destructive/30' : 'border-amber-400/30')
       )}
     >
       <div className="flex items-center gap-3.5">
-        <span className={cn('flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl', TONES[tone])}>
-          <Icon className="h-[22px] w-[22px]" />
+        <span className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl sm:h-11 sm:w-11', TONES[tone])}>
+          <Icon className="h-[18px] w-[18px] sm:h-[22px] sm:w-[22px]" />
         </span>
         <div className="min-w-0">
-          <p className="truncate text-[13px] text-muted-foreground">{label}</p>
+          <p className="line-clamp-2 text-sm text-muted-foreground">{label}</p>
           <p className="mt-0.5 text-[28px] font-bold leading-none text-foreground">
             {fmtNumber(value)}
           </p>
@@ -432,9 +435,12 @@ function RowShell({
   )
 }
 
-function Empty({ text }: { text: string }) {
+function Empty({ text, icon: Icon }: { text: string; icon?: LucideIcon }) {
   return (
-    <p className="py-6 text-center text-sm text-muted-foreground">{text}</p>
+    <div className="flex flex-col items-center justify-center gap-2 py-6 text-center">
+      {Icon && <Icon className="h-6 w-6 text-muted-foreground/50" />}
+      <p className="text-sm text-muted-foreground">{text}</p>
+    </div>
   )
 }
 
@@ -468,7 +474,7 @@ function SessionsNeedClosureSection({ scope }: { scope: DashboardScope }) {
               </p>
               <p className="mt-0.5 text-xs text-muted-foreground">
                 {fmtDatePref(x.session_date)} · فات موعدها منذ{' '}
-                {fmtNumber(x.days_ago)} يوم
+                {daysLabel(x.days_ago)}
               </p>
             </RowShell>
           ))}
@@ -520,7 +526,7 @@ function CompletableTaskRow({
         title="إنجاز المهمة"
         disabled={completing}
         onClick={onComplete}
-        className="group shrink-0 text-muted-foreground transition-colors hover:text-emerald-600 disabled:opacity-60"
+        className="group -m-1 shrink-0 rounded-md p-2 text-muted-foreground transition-colors hover:text-emerald-600 disabled:opacity-60"
       >
         {completing ? (
           <Loader2 className="h-5 w-5 animate-spin" />
@@ -558,7 +564,7 @@ function CompletableTaskRow({
               )}
             >
               {fmtDatePref(t.due_date)}
-              {t.overdue ? ` · متأخّرة ${fmtNumber(Math.abs(days ?? 0))} يوم` : ''}
+              {t.overdue ? ` · متأخّرة ${daysLabel(Math.abs(days ?? 0))}` : ''}
             </span>
           )}
         </div>
@@ -574,9 +580,13 @@ function PoaRow({ p, onClick }: { p: DashPOA; onClick: () => void }) {
     <RowShell onClick={onClick}>
       <p className="truncate text-sm font-medium text-foreground">{p.client_name || 'موكّل'}</p>
       <div className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
-        {p.poa_number && <span dir="ltr">وكالة {p.poa_number}</span>}
+        {p.poa_number && (
+          <span>
+            وكالة <Ltr>{p.poa_number}</Ltr>
+          </span>
+        )}
         <span className={cn('font-medium', urgent ? 'text-destructive' : 'text-amber-600 dark:text-amber-400')}>
-          {d === 0 ? 'تنتهي اليوم' : d === 1 ? 'تنتهي غداً' : `تنتهي بعد ${fmtNumber(d ?? 0)} يوم`}
+          {d === 0 ? 'تنتهي اليوم' : d === 1 ? 'تنتهي غداً' : `تنتهي بعد ${daysLabel(d ?? 0)}`}
         </span>
       </div>
     </RowShell>

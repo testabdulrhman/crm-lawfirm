@@ -49,7 +49,13 @@ export function RejectDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    // أثناء الرفض (تحديث الحالة + SMS اعتذار) لا يُغلق الحوار حتى الانتهاء
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        if (!rejectM.isPending) onOpenChange(o)
+      }}
+    >
       <DialogContent>
         <DialogHeader>
           <DialogTitle>رفض الطلب</DialogTitle>
@@ -96,7 +102,11 @@ export function RejectDialog({
             {rejectM.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
             تأكيد الرفض
           </Button>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button
+            variant="outline"
+            disabled={rejectM.isPending}
+            onClick={() => onOpenChange(false)}
+          >
             إلغاء
           </Button>
         </DialogFooter>

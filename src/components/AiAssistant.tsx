@@ -34,12 +34,17 @@ interface Attachment {
   type: string | null
 }
 
+// شاشة لمسية بلا مؤشر دقيق (آيفون) — يتغير سلوك Enter في حقل الكتابة
+const isCoarsePointer = () =>
+  typeof window !== 'undefined' &&
+  window.matchMedia('(pointer: coarse)').matches
+
 const WELCOME =
   'مرحباً! أنا المساعد الذكي للمكتب. اسألني عن الوكالات والقضايا وجهات الاتصال، أو اطلب مني إجراءً مثل:\n«الوكالة 466650258 منتهية، أرسل لصاحبها طلب إعادة إصدار وكالة»'
 
 // اقتراحات البداية (قبل أول رسالة)
 const STARTERS = [
-  'وش جلساتي هذا الأسبوع؟',
+  'ما جلساتي هذا الأسبوع؟',
   'المهام المتأخرة',
   'وكالات تنتهي خلال شهر',
   'من أفضل المتقدمين للوظائف؟',
@@ -59,6 +64,16 @@ export function AiAssistant() {
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight })
   }, [messages, busy, open])
+
+  // إغلاق اللوحة بـ Escape (اللوحة ليست Dialog نمطياً)
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [open])
 
   // اختيار ملف ورفعه للتخزين — يبقى معلّقاً حتى ترسل الرسالة
   const attachFile = async () => {
@@ -85,6 +100,8 @@ export function AiAssistant() {
     // المرفق وحده يكفي للإرسال (بنص افتراضي)
     if ((!text && !attachment) || busy) return
     const shown = text || `أرفقت ملفاً: ${attachment?.name}`
+    // نحتفظ بهما محلياً لإرجاعهما لحقل الكتابة عند فشل الإرسال
+    const sentAttachment = attachment
     const next: ChatMsg[] = [
       ...messages,
       {
@@ -117,9 +134,17 @@ export function AiAssistant() {
           suggestions: Array.isArray(data?.suggestions) ? data.suggestions : [],
         },
       ])
-    } catch {
-      toast({ variant: 'destructive', title: 'تعذّر الاتصال بالمساعد، حاول مرة أخرى' })
-      setMessages(next) // تبقى رسالتك لتعيد الإرسال
+    } catch (e) {
+      toast({
+        variant: 'destructive',
+        title: 'تعذّر الاتصال بالمساعد',
+        description: errMessage(e),
+      })
+      // نعيد النص والمرفق لحقل الكتابة ليعيد الإرسال دون إعادة كتابة —
+      // إلا إذا كتب المستخدم شيئاً جديداً أثناء الانتظار فلا نمحوه
+      setMessages(messages)
+      setInput((cur) => (cur.trim() !== '' ? cur : text))
+      setAttachment((cur) => cur ?? sentAttachment)
     } finally {
       setBusy(false)
     }
@@ -147,7 +172,11 @@ export function AiAssistant() {
 
       {/* لوحة المحادثة */}
       {open && (
-        <div className="fixed inset-x-2 bottom-2 z-50 flex max-h-[85vh] flex-col overflow-hidden rounded-2xl border bg-card shadow-2xl sm:inset-x-auto sm:bottom-5 sm:left-5 sm:h-[560px] sm:w-[400px]">
+        <div
+          role="dialog"
+          aria-label="المساعد الذكي"
+          className="fixed inset-x-2 bottom-2 z-50 flex max-h-[85vh] flex-col overflow-hidden rounded-2xl border bg-card shadow-2xl sm:inset-x-auto sm:bottom-5 sm:left-5 sm:h-[560px] sm:w-[400px]"
+        >
           {/* الرأس */}
           <div className="flex items-center justify-between gap-2 border-b bg-gradient-to-l from-violet-600 to-violet-800 px-4 py-3 text-white">
             <div className="flex items-center gap-2">
@@ -159,7 +188,8 @@ export function AiAssistant() {
             </div>
             <button
               onClick={() => setOpen(false)}
-              className="rounded-full p-1 hover:bg-white/15"
+              aria-label="إغلاق المساعد"
+              className="-m-1 rounded-full p-2 hover:bg-white/15"
             >
               <X className="h-5 w-5" />
             </button>
@@ -250,7 +280,9 @@ export function AiAssistant() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
+                  // على الشاشات اللمسية (لا Shift في كيبورد iOS) زر الرجوع
+                  // يُدرج سطراً جديداً والإرسال بزر الإرسال فقط
+                  if (e.key === 'Enter' && !e.shiftKey && !isCoarsePointer()) {
                     e.preventDefault()
                     send()
                   }
@@ -261,6 +293,7 @@ export function AiAssistant() {
               />
               <Button
                 size="icon"
+                aria-label="إرسال"
                 className="h-10 w-10 shrink-0 bg-violet-600 text-white hover:bg-violet-700"
                 disabled={busy || uploading || (input.trim() === '' && !attachment)}
                 onClick={() => send()}

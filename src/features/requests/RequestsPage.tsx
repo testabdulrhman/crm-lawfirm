@@ -1,13 +1,16 @@
 import { useMemo, useState } from 'react'
 import { useLocation } from 'wouter'
-import { Plus, Inbox, Phone, User, ChevronLeft } from 'lucide-react'
+import { Plus, Inbox, Search, Phone, User, ChevronLeft } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { Card, CardContent } from '@/components/ui/card'
-import { fmtDatePref } from '@/lib/format'
+import { EmptyState, FilteredEmptyState } from '@/components/EmptyState'
+import { QueryErrorState } from '@/components/QueryErrorState'
+import { fmtDatePref, fmtNumber } from '@/lib/format'
 import { useRequests } from '@/hooks/useRequests'
 import { usePageState } from '@/hooks/usePageState'
 import { RequestForm } from './RequestForm'
@@ -22,9 +25,10 @@ import type { IncomingRequest, RequestStatus } from '@/types/db'
 type Filter = RequestStatus | 'all'
 
 export function RequestsPage() {
-  const { data, isLoading } = useRequests('all')
+  const { data, isLoading, isError, error, refetch } = useRequests('all')
   const [, navigate] = useLocation()
   const [filter, setFilter] = usePageState<Filter>('req:filter', 'all')
+  const [search, setSearch] = usePageState('req:q', '')
   const [dialogOpen, setDialogOpen] = useState(false)
 
   const counts = useMemo(() => {
@@ -37,9 +41,19 @@ export function RequestsPage() {
   }, [data])
 
   const list = useMemo(() => {
-    if (filter === 'all') return data ?? []
-    return (data ?? []).filter((r) => (r.status ?? 'under_review') === filter)
-  }, [data, filter])
+    const q = search.trim().toLowerCase()
+    return (data ?? []).filter((r) => {
+      if (q) {
+        const hay = [r.client_name, r.client_phone]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase()
+        if (!hay.includes(q)) return false
+      }
+      if (filter !== 'all' && (r.status ?? 'under_review') !== filter) return false
+      return true
+    })
+  }, [data, filter, search])
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -49,6 +63,17 @@ export function RequestsPage() {
           <Plus className="h-4 w-4" />
           طلب جديد
         </Button>
+      </div>
+
+      {/* البحث */}
+      <div className="relative">
+        <Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="بحث باسم العميل أو جواله…"
+          className="pr-9"
+        />
       </div>
 
       {/* الفلاتر مع العدّادات */}
@@ -77,8 +102,29 @@ export function RequestsPage() {
             <Skeleton key={i} className="h-44 w-full" />
           ))}
         </div>
+      ) : isError ? (
+        <QueryErrorState
+          title="تعذّر تحميل الطلبات"
+          error={error}
+          onRetry={() => refetch()}
+        />
       ) : list.length === 0 ? (
-        <EmptyState />
+        (data ?? []).length > 0 ? (
+          <FilteredEmptyState
+            onClear={() => {
+              setFilter('all')
+              setSearch('')
+            }}
+          />
+        ) : (
+          <EmptyState
+            icon={Inbox}
+            title="لا توجد طلبات"
+            description="أضِف أول طلب عبر زر «طلب جديد»."
+            actionLabel="طلب جديد"
+            onAction={() => setDialogOpen(true)}
+          />
+        )
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {list.map((r) => (
@@ -120,7 +166,7 @@ function FilterButton({
           (active ? 'bg-white/20' : 'bg-muted text-muted-foreground')
         }
       >
-        {count}
+        {fmtNumber(count)}
       </span>
     </Button>
   )
@@ -134,7 +180,18 @@ function RequestCard({
   onOpen: () => void
 }) {
   return (
-    <Card className="flex flex-col">
+    <Card
+      className="flex cursor-pointer flex-col transition-colors hover:bg-muted/40"
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onOpen()
+        }
+      }}
+    >
       <CardContent className="flex flex-1 flex-col gap-3 p-4">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
@@ -174,7 +231,14 @@ function RequestCard({
             <User className="h-3 w-3" />
             {r.assigned_to_name ?? 'غير مُسند'}
           </span>
-          <Button size="sm" variant="ghost" onClick={onOpen}>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={(e) => {
+              e.stopPropagation()
+              onOpen()
+            }}
+          >
             تفاصيل
             <ChevronLeft className="h-4 w-4" />
           </Button>
@@ -184,16 +248,3 @@ function RequestCard({
   )
 }
 
-function EmptyState() {
-  return (
-    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-16 text-center">
-      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-        <Inbox className="h-6 w-6 text-muted-foreground" />
-      </div>
-      <p className="font-medium text-foreground">لا توجد طلبات</p>
-      <p className="text-sm text-muted-foreground">
-        أضِف أول طلب عبر زر «طلب جديد».
-      </p>
-    </div>
-  )
-}

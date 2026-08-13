@@ -33,6 +33,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { openExternal } from '@/lib/external'
+import { QueryErrorState } from '@/components/QueryErrorState'
 import {
   useLookups,
   useCreateLookup,
@@ -54,10 +55,15 @@ const normalizeUrl = (raw: string) => {
 }
 
 export function IntegrationsTab() {
-  const { data, isLoading } = useLookups()
+  const { data, isLoading, isError, error, refetch } = useLookups()
   const createM = useCreateLookup()
   const updateM = useUpdateLookup()
   const deleteM = useDeleteLookup()
+  // نسختان مستقلتان لإعدادات التقويم — كي لا يتشارك مفتاح التفعيل وحفظ
+  // المعرّف وحوار الروابط علم pending واحداً
+  const createCfgM = useCreateLookup()
+  const updateCfgM = useUpdateLookup()
+  const [savingKey, setSavingKey] = useState<string | null>(null)
 
   const links = useMemo(
     () => (data ?? []).filter((l) => l.type === INTEGRATION_LINK_TYPE),
@@ -73,19 +79,27 @@ export function IntegrationsTab() {
   }, [data])
 
   const setConfig = (key: string, value: string) => {
+    setSavingKey(key)
+    const done = { onSettled: () => setSavingKey(null) }
     const existing = config.get(key)
     if (existing) {
-      updateM.mutate({
-        id: existing.id,
-        input: { type: INTEGRATION_CONFIG_TYPE, label: key, value },
-      })
+      updateCfgM.mutate(
+        {
+          id: existing.id,
+          input: { type: INTEGRATION_CONFIG_TYPE, label: key, value },
+        },
+        done
+      )
     } else {
-      createM.mutate({
-        type: INTEGRATION_CONFIG_TYPE,
-        label: key,
-        value,
-        sort_order: 0,
-      })
+      createCfgM.mutate(
+        {
+          type: INTEGRATION_CONFIG_TYPE,
+          label: key,
+          value,
+          sort_order: 0,
+        },
+        done
+      )
     }
   }
 
@@ -162,6 +176,12 @@ export function IntegrationsTab() {
                 <Skeleton key={i} className="h-14 w-full" />
               ))}
             </div>
+          ) : isError ? (
+            <QueryErrorState
+              title="تعذّر تحميل روابط المنصات"
+              error={error}
+              onRetry={() => refetch()}
+            />
           ) : links.length === 0 ? (
             <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-10 text-center">
               <Link2 className="mb-2 h-6 w-6 text-muted-foreground" />
@@ -177,29 +197,24 @@ export function IntegrationsTab() {
                     <Link2 className="h-4 w-4 text-gold" />
                   </span>
                   <button
-                    className="min-w-0 flex-1 text-right"
+                    className="flex min-w-0 flex-1 items-center gap-2 rounded-lg text-right focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     onClick={() => openExternal(l.value)}
                     title="فتح الرابط"
                   >
-                    <p className="truncate text-sm font-medium text-foreground">
-                      {l.label}
-                    </p>
-                    <p
-                      dir="ltr"
-                      className="truncate text-right text-xs text-muted-foreground"
-                    >
-                      {l.value}
-                    </p>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium text-foreground">
+                        {l.label}
+                      </span>
+                      <span
+                        dir="ltr"
+                        className="block truncate text-right text-xs text-muted-foreground"
+                      >
+                        {l.value}
+                      </span>
+                    </span>
+                    {/* دلالة بصرية فقط — الصف كله هو زر الفتح */}
+                    <ExternalLink className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                   </button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    title="فتح"
-                    onClick={() => openExternal(l.value)}
-                  >
-                    <ExternalLink className="h-4 w-4" />
-                  </Button>
                   <Button
                     variant="ghost"
                     size="icon"
@@ -244,6 +259,7 @@ export function IntegrationsTab() {
             </div>
             <Switch
               checked={gcalEnabled}
+              aria-label="تفعيل تكامل Google Calendar"
               onCheckedChange={(v) =>
                 setConfig('google_calendar_enabled', v ? 'true' : 'false')
               }
@@ -264,10 +280,16 @@ export function IntegrationsTab() {
               <Button
                 variant="outline"
                 className="shrink-0"
-                disabled={!gcalEnabled || pending || gcalId.trim() === gcalIdSaved}
+                disabled={
+                  !gcalEnabled ||
+                  savingKey === 'google_calendar_id' ||
+                  gcalId.trim() === gcalIdSaved
+                }
                 onClick={() => setConfig('google_calendar_id', gcalId.trim())}
               >
-                {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                {savingKey === 'google_calendar_id' ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : null}
                 حفظ
               </Button>
             </div>

@@ -48,6 +48,8 @@ import {
 } from '@/components/ui/alert-dialog'
 import { FilePreviewDialog } from '@/components/FilePreviewDialog'
 import { DualDatePicker } from '@/components/DualDatePicker'
+import { QueryErrorState } from '@/components/QueryErrorState'
+import { EmptyState } from '@/components/EmptyState'
 
 import { fmtDatePref } from '@/lib/format'
 import { pickFile } from '@/lib/files'
@@ -72,7 +74,7 @@ import {
 import type { Memo, MemoDocument } from '@/types/db'
 
 export function MemosTab({ caseId }: { caseId: string }) {
-  const { data, isLoading } = useCaseMemos(caseId)
+  const { data, isLoading, isError, error, refetch } = useCaseMemos(caseId)
   const deleteM = useDeleteMemo(caseId)
 
   const [formOpen, setFormOpen] = useState(false)
@@ -89,6 +91,16 @@ export function MemosTab({ caseId }: { caseId: string }) {
           <Skeleton key={i} className="h-40 w-full" />
         ))}
       </div>
+    )
+  }
+
+  if (isError) {
+    return (
+      <QueryErrorState
+        title="تعذّر تحميل المذكرات"
+        error={error}
+        onRetry={() => refetch()}
+      />
     )
   }
 
@@ -110,7 +122,16 @@ export function MemosTab({ caseId }: { caseId: string }) {
       </div>
 
       {memos.length === 0 ? (
-        <EmptyState />
+        <EmptyState
+          icon={ScrollText}
+          title="لا توجد مذكرات"
+          description="وثّق مذكرات الأطراف ومرفقاتها وحالة تقديمها."
+          actionLabel="مذكرة جديدة"
+          onAction={() => {
+            setEditing(null)
+            setFormOpen(true)
+          }}
+        />
       ) : (
         <div className="space-y-3">
           {memos.map((m) => (
@@ -202,9 +223,12 @@ function MemoCard({
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="min-w-0">
             <p className="font-semibold text-foreground">{m.title || 'مذكرة'}</p>
-            {m.memo_type && (
-              <p className="text-xs text-muted-foreground">{m.memo_type}</p>
-            )}
+            {/* طريقة التقديم معلومة ثانوية — في سطر الميتا لا كشارة ثالثة */}
+            <p className="text-xs text-muted-foreground">
+              {[m.memo_type, memoMethodLabel(m.submit_method)]
+                .filter(Boolean)
+                .join(' · ')}
+            </p>
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
             <Badge variant={memoPartyBadge(m.party_side)}>
@@ -213,7 +237,6 @@ function MemoCard({
             <Badge variant={submitted ? 'success' : 'warning'}>
               {submitted ? 'مُقدّمة' : 'مسودة'}
             </Badge>
-            <Badge variant="outline">{memoMethodLabel(m.submit_method)}</Badge>
           </div>
         </div>
 
@@ -268,12 +291,16 @@ function MemoCard({
                   <span className="truncate">{d.name ?? 'ملف'}</span>
                 </button>
                 {isDirector && (
-                  <button
-                    className="shrink-0 text-destructive"
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 shrink-0 text-destructive"
+                    title="حذف المرفق"
+                    aria-label="حذف المرفق"
                     onClick={() => setToDeleteDoc(d)}
                   >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 )}
               </div>
             ))
@@ -284,21 +311,19 @@ function MemoCard({
           <Button
             variant="outline"
             size="sm"
+            disabled={toggleM.isPending}
             onClick={() =>
               toggleM.mutate({ id: m.id, submitted: !submitted })
             }
           >
-            {submitted ? (
-              <>
-                <RotateCcw className="h-4 w-4" />
-                إرجاع لمسودة
-              </>
+            {toggleM.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : submitted ? (
+              <RotateCcw className="h-4 w-4" />
             ) : (
-              <>
-                <CheckCircle2 className="h-4 w-4" />
-                تعليم كمُقدّمة
-              </>
+              <CheckCircle2 className="h-4 w-4" />
             )}
+            {submitted ? 'إرجاع لمسودة' : 'تعليم كمُقدّمة'}
           </Button>
           <Button variant="ghost" size="sm" onClick={onEdit}>
             <Pencil className="h-4 w-4" />
@@ -348,18 +373,6 @@ function MemoCard({
         </AlertDialogContent>
       </AlertDialog>
     </Card>
-  )
-}
-
-function EmptyState() {
-  return (
-    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-16 text-center">
-      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-        <ScrollText className="h-6 w-6 text-muted-foreground" />
-      </div>
-      <p className="font-medium text-foreground">لا توجد مذكرات</p>
-      <p className="text-sm text-muted-foreground">أضِف أول مذكرة عبر «مذكرة جديدة».</p>
-    </div>
   )
 }
 

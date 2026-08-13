@@ -22,8 +22,10 @@ import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Card } from '@/components/ui/card'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { EmptyState, FilteredEmptyState } from '@/components/EmptyState'
+import { QueryErrorState } from '@/components/QueryErrorState'
 import { cn } from '@/lib/utils'
-import { fmtNumber, fmtHijri, fmtGregorian, fmtTime, todayISO } from '@/lib/format'
+import { fmtNumber, fmtHijri, fmtGregorian, fmtTime, todayISO, daysLabel } from '@/lib/format'
 import { useAppointments } from '@/hooks/useAppointments'
 import { usePageState } from '@/hooks/usePageState'
 import { AppointmentForm } from './AppointmentForm'
@@ -47,11 +49,11 @@ function countdown(dateStr: string | null): { text: string; soon: boolean } | nu
   if (days < 0) return null
   if (days === 0) return { text: 'اليوم', soon: true }
   if (days === 1) return { text: 'غداً', soon: true }
-  return { text: `بعد ${fmtNumber(days)} يوم`, soon: days <= 3 }
+  return { text: `بعد ${daysLabel(days)}`, soon: days <= 3 }
 }
 
 export function AppointmentsPage() {
-  const { data, isLoading } = useAppointments()
+  const { data, isLoading, isError, error, refetch } = useAppointments()
   const [, navigate] = useLocation()
 
   const [search, setSearch] = usePageState('appts:q', '')
@@ -90,7 +92,12 @@ export function AppointmentsPage() {
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-2xl font-bold tracking-tight text-foreground">المواعيد</h2>
+        <h2 className="text-2xl font-bold tracking-tight text-foreground">
+          المواعيد{' '}
+          <span className="text-base font-normal text-muted-foreground">
+            ({fmtNumber(data?.length ?? 0)})
+          </span>
+        </h2>
         <Button variant="gold" onClick={() => setDialogOpen(true)}>
           <Plus className="h-4 w-4" />
           موعد جديد
@@ -125,8 +132,29 @@ export function AppointmentsPage() {
             <Skeleton key={i} className="h-16 w-full" />
           ))}
         </div>
+      ) : isError ? (
+        <QueryErrorState
+          title="تعذّر تحميل المواعيد"
+          error={error}
+          onRetry={() => refetch()}
+        />
       ) : filtered.length === 0 ? (
-        <EmptyState />
+        (data ?? []).length > 0 ? (
+          <FilteredEmptyState
+            onClear={() => {
+              setSearch('')
+              setStatus('all')
+            }}
+          />
+        ) : (
+          <EmptyState
+            icon={CalendarClock}
+            title="لا توجد مواعيد"
+            description="أضِف أول موعد عبر «موعد جديد»."
+            actionLabel="موعد جديد"
+            onAction={() => setDialogOpen(true)}
+          />
+        )
       ) : (
         <>
           <Section title="المواعيد القادمة" count={upcoming.length}>
@@ -193,7 +221,7 @@ function Section({
         <span className="text-xs text-muted-foreground">({fmtNumber(count)})</span>
       </h3>
       <Card className="overflow-hidden">
-        <ul className="divide-y">{children}</ul>
+        <ul className="divide-y divide-border/60">{children}</ul>
       </Card>
     </div>
   )
@@ -214,7 +242,7 @@ function AppointmentRow({
       <button
         type="button"
         onClick={onOpen}
-        className="flex w-full items-center gap-3 px-4 py-3 text-right transition-colors hover:bg-muted/50"
+        className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-right transition-colors hover:bg-muted/60"
       >
         {/* التاريخ والوقت — عمود ثابت يجعل المسح البصري سهلاً.
             التاريخان معاً دائماً: الهجري أعلى والميلادي تحته. */}
@@ -261,7 +289,7 @@ function AppointmentRow({
             {a.reference_no && (
               <span className="flex items-center gap-1 font-mono">
                 <Hash className="h-3 w-3 shrink-0" />
-                {a.reference_no}
+                <span dir="ltr">{a.reference_no}</span>
               </span>
             )}
             {cd && (
@@ -300,8 +328,8 @@ function AppointmentRow({
         <div className="flex shrink-0 flex-col items-end gap-1">
           <Badge variant={apptStatusBadge(a.status)}>{apptStatusLabel(a.status)}</Badge>
           {a.source === 'website' && (
-            <Badge variant="outline" className="gap-1 text-[10px]">
-              <Globe className="h-2.5 w-2.5" />
+            <Badge variant="outline" className="gap-1 text-xs">
+              <Globe className="h-3 w-3" />
               من الموقع
             </Badge>
           )}
@@ -313,14 +341,3 @@ function AppointmentRow({
   )
 }
 
-function EmptyState() {
-  return (
-    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-16 text-center">
-      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-        <CalendarClock className="h-6 w-6 text-muted-foreground" />
-      </div>
-      <p className="font-medium text-foreground">لا توجد مواعيد</p>
-      <p className="text-sm text-muted-foreground">أضِف أول موعد عبر «موعد جديد».</p>
-    </div>
-  )
-}

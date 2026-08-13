@@ -23,6 +23,7 @@ import {
   Lock,
   CalendarPlus,
   Sparkles,
+  MoreVertical,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -49,9 +50,17 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { FilePreviewDialog } from '@/components/FilePreviewDialog'
 import { DualDatePicker } from '@/components/DualDatePicker'
 import { Switch } from '@/components/ui/switch'
+import { QueryErrorState } from '@/components/QueryErrorState'
+import { EmptyState } from '@/components/EmptyState'
 
 import { cn } from '@/lib/utils'
 import {
@@ -59,6 +68,8 @@ import {
   fmtDatePref,
   fmtTime,
   todayISO,
+  arPlural,
+  daysLabel,
 } from '@/lib/format'
 import { pickFile, uploadFile } from '@/lib/files'
 import { getTemplate, fillTemplate } from '@/lib/templates'
@@ -92,10 +103,10 @@ function countdown(dateStr: string | null): { text: string; soon: boolean } | nu
   const now = new Date()
   now.setHours(0, 0, 0, 0)
   const days = Math.round((d.getTime() - now.getTime()) / 86400000)
-  if (days < 0) return { text: `فات موعدها منذ ${fmtNumber(-days)} يوم`, soon: false }
+  if (days < 0) return { text: `فات موعدها منذ ${daysLabel(-days)}`, soon: false }
   if (days === 0) return { text: 'اليوم', soon: true }
   if (days === 1) return { text: 'غداً', soon: true }
-  return { text: `بعد ${fmtNumber(days)} أيام`, soon: days <= 3 }
+  return { text: `بعد ${daysLabel(days)}`, soon: days <= 3 }
 }
 
 export function SessionsTab({
@@ -109,7 +120,7 @@ export function SessionsTab({
   clientName?: string | null
   clientPhone?: string | null
 }) {
-  const { data, isLoading } = useCaseSessions(caseId)
+  const { data, isLoading, isError, error, refetch } = useCaseSessions(caseId)
   const deleteM = useDeleteSession(caseId)
   const syncCalM = useSyncSessionCalendar(caseId)
 
@@ -172,6 +183,16 @@ export function SessionsTab({
     )
   }
 
+  if (isError) {
+    return (
+      <QueryErrorState
+        title="تعذّر تحميل الجلسات"
+        error={error}
+        onRetry={() => refetch()}
+      />
+    )
+  }
+
   return (
     <div className="space-y-5">
       <div className="flex justify-end">
@@ -182,7 +203,13 @@ export function SessionsTab({
       </div>
 
       {(data?.length ?? 0) === 0 ? (
-        <EmptyState />
+        <EmptyState
+          icon={CalendarOff}
+          title="لا توجد جلسات"
+          description="أضِف أول جلسة لمتابعة مواعيد القضية وتذكيراتها."
+          actionLabel="جلسة جديدة"
+          onAction={openNew}
+        />
       ) : (
         <>
           <Section title="الجلسات القادمة" count={upcoming.length}>
@@ -197,7 +224,7 @@ export function SessionsTab({
                 onPreview={setPreview}
                 onResend={setResendFor}
                 onSyncCalendar={(x) => syncCalM.mutate(x)}
-                syncingCalendar={syncCalM.isPending}
+                syncingCalendar={syncCalM.isPending && syncCalM.variables?.id === s.id}
               />
             ))}
           </Section>
@@ -213,7 +240,7 @@ export function SessionsTab({
                 onPreview={setPreview}
                 onResend={setResendFor}
                 onSyncCalendar={(x) => syncCalM.mutate(x)}
-                syncingCalendar={syncCalM.isPending}
+                syncingCalendar={syncCalM.isPending && syncCalM.variables?.id === s.id}
               />
             ))}
           </Section>
@@ -477,6 +504,7 @@ function SessionCard({
           </div>
         )}
 
+        {/* الإجراءات الأساسية ظاهرة، والنادرة (تأجيل/تعديل/حذف) في قائمة — تخفيفاً للازدحام على الجوال */}
         <div className="flex flex-wrap items-center gap-1.5 border-t pt-2">
           {s.minutes_url && (
             <Button variant="outline" size="sm" onClick={() => onPreview(s)}>
@@ -488,18 +516,6 @@ function SessionCard({
             <Button variant="gold" size="sm" onClick={() => onClose(s)}>
               <CheckCircle2 className="h-4 w-4" />
               تسجيل نتيجة الجلسة
-            </Button>
-          )}
-          {canPostpone && (
-            <Button variant="outline" size="sm" onClick={() => onPostpone(s)}>
-              <CalendarOff className="h-4 w-4" />
-              تأجيل
-            </Button>
-          )}
-          {isClosed && (
-            <Button variant="outline" size="sm" onClick={() => onClose(s)}>
-              <Pencil className="h-4 w-4" />
-              تعديل الإغلاق
             </Button>
           )}
           {/* إرسال/إعادة إرسال تقرير الجلسة (بعد تسجيل النتيجة) */}
@@ -514,34 +530,47 @@ function SessionCard({
               {s.report_sent_at ? 'إعادة إرسال التقرير' : 'إرسال التقرير'}
             </Button>
           )}
-          <Button variant="ghost" size="sm" onClick={() => onEdit(s)}>
-            <Pencil className="h-4 w-4" />
-            تعديل
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-destructive"
-            onClick={() => onDelete(s)}
-          >
-            <Trash2 className="h-4 w-4" />
-            حذف
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="ms-auto h-8 w-8 text-muted-foreground"
+                title="إجراءات أخرى"
+                aria-label="إجراءات أخرى"
+              >
+                <MoreVertical className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {canPostpone && (
+                <DropdownMenuItem onClick={() => onPostpone(s)}>
+                  <CalendarOff className="h-4 w-4" />
+                  تأجيل
+                </DropdownMenuItem>
+              )}
+              {isClosed && (
+                <DropdownMenuItem onClick={() => onClose(s)}>
+                  <CheckCircle2 className="h-4 w-4" />
+                  تعديل الإغلاق
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem onClick={() => onEdit(s)}>
+                <Pencil className="h-4 w-4" />
+                تعديل
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="text-destructive focus:text-destructive"
+                onClick={() => onDelete(s)}
+              >
+                <Trash2 className="h-4 w-4" />
+                حذف
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </CardContent>
     </Card>
-  )
-}
-
-function EmptyState() {
-  return (
-    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-16 text-center">
-      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-        <CalendarOff className="h-6 w-6 text-muted-foreground" />
-      </div>
-      <p className="font-medium text-foreground">لا توجد جلسات</p>
-      <p className="text-sm text-muted-foreground">أضِف أول جلسة عبر «جلسة جديدة».</p>
-    </div>
   )
 }
 
@@ -597,7 +626,7 @@ function PostponeDialog({
           </p>
 
           <div className="space-y-2 rounded-lg border border-dashed p-3">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid gap-3 sm:grid-cols-2">
               <DualDatePicker
                 label="التاريخ الجديد (اختياري)"
                 value={newDate || null}
@@ -679,8 +708,9 @@ function ResendReportDialog({
   const [msg, setMsg] = useState('')
   const [touched, setTouched] = useState(false)
   const [phone, setPhone] = useState('')
-  const [wa, setWa] = useState(true)
-  const [sms, setSms] = useState(false)
+  // الافتراضي SMS: حساب الواتساب موقوف حالياً — خيار الواتساب باقٍ لمن يرغب
+  const [wa, setWa] = useState(false)
+  const [sms, setSms] = useState(true)
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
@@ -688,8 +718,8 @@ function ResendReportDialog({
     setTouched(false)
     setMsg('')
     setPhone(clientPhone ?? '')
-    setWa(true)
-    setSms(false)
+    setWa(false)
+    setSms(true)
     getTemplate('session_report')
       .then((b) => setTpl(b || REPORT_FALLBACK))
       .catch(() => setTpl(REPORT_FALLBACK))
@@ -764,7 +794,7 @@ function ResendReportDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+    <Dialog open={open} onOpenChange={(o) => !o && !busy && onClose()}>
       <DialogContent className="max-h-[88vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
@@ -824,7 +854,7 @@ function ResendReportDialog({
             {busy && <Loader2 className="h-4 w-4 animate-spin" />}
             إرسال
           </Button>
-          <Button variant="outline" onClick={onClose}>
+          <Button variant="outline" onClick={onClose} disabled={busy}>
             إلغاء
           </Button>
         </DialogFooter>
@@ -1029,18 +1059,31 @@ function CloseSessionDialog({
             sentBy: null,
           })
           if (ok) channels.push('sms')
+          else
+            // فشل صامت هنا يوهم الموظف أن العميل استلم التقرير — نُظهره صراحةً
+            toast({
+              variant: 'destructive',
+              title: 'تعذّر إرسال التقرير عبر SMS',
+              description: 'تحقّق من الرقم ورصيد الرسائل، ثم أعد الإرسال من زر «إرسال التقرير».',
+            })
         }
       }
       if (channels.length > 0) {
         await markSessionReportSent(session.id, channels.join(','))
       }
 
-      // 4) رسالة نجاح حسب الخطوة
+      // 4) رسالة نجاح حسب الخطوة — مع القنوات التي أُرسل التقرير عبرها فعلاً
       let extra = ''
       if (next === 'next_session') extra = ' · أُنشئت الجلسة القادمة'
       else if (next === 'await_ruling') extra = ' · سُجّل موعد استلام الحكم'
       else if (next === 'case_closed') extra = ' · أُقفلت القضية'
-      toast({ variant: 'success', title: `تم إغلاق الجلسة${extra}` })
+      const sent =
+        channels.length > 0
+          ? ` · أُرسل التقرير (${channels
+              .map((c) => (c === 'whatsapp' ? 'واتساب' : 'SMS'))
+              .join(' + ')})`
+          : ''
+      toast({ variant: 'success', title: `تم إغلاق الجلسة${extra}${sent}` })
       onClose()
     } catch {
       // أخطاء الإغلاق يعرضها الهوك؛ نُبقي الحوار مفتوحاً
@@ -1232,7 +1275,7 @@ function CloseSessionDialog({
             </div>
 
             {next === 'next_session' && (
-              <div className="grid grid-cols-2 gap-3 rounded-lg border border-dashed p-3">
+              <div className="grid gap-3 rounded-lg border border-dashed p-3 sm:grid-cols-2">
                 <DualDatePicker
                   label="تاريخ الجلسة القادمة *"
                   required
@@ -1335,13 +1378,13 @@ function getSessionDateWarning(
     const sdiff = Math.round((suggested.getTime() - today.getTime()) / DAY)
     if (sdiff >= 0 && sdiff <= 400) {
       return {
-        message: `تاريخ الجلسة في الماضي (قبل ${fmtNumber(n)} يوم). هل تقصد ${fmtDatePref(toIso(suggested))}؟`,
+        message: `تاريخ الجلسة في الماضي (قبل ${daysLabel(n)}). هل تقصد ${fmtDatePref(toIso(suggested))}؟`,
         suggestionIso: toIso(suggested),
         suggestionYear: y + 1,
       }
     }
     return {
-      message: `تاريخ الجلسة في الماضي (قبل ${fmtNumber(n)} يوم). تأكّد من صحة التاريخ — هل تقصد سنة ${String(today.getFullYear())}؟`,
+      message: `تاريخ الجلسة في الماضي (قبل ${daysLabel(n)}). تأكّد من صحة التاريخ — هل تقصد سنة ${String(today.getFullYear())}؟`,
     }
   }
 
@@ -1349,7 +1392,7 @@ function getSessionDateWarning(
   if (diff > 730) {
     const years = Math.max(2, Math.floor(diff / 365))
     return {
-      message: `التاريخ بعيد جداً (بعد ${fmtNumber(years)} سنة تقريباً). تأكّد من صحته.`,
+      message: `التاريخ بعيد جداً (بعد ${arPlural(years, { one: 'سنة', two: 'سنتين', many: 'سنوات' })} تقريباً). تأكّد من صحته.`,
     }
   }
 
@@ -1491,7 +1534,7 @@ function SessionForm({
           </p>
         )}
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Controller
               control={control}

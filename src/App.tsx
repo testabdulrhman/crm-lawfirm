@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { Route, Switch, Redirect, Router, useLocation } from 'wouter'
+import { Route, Switch, Redirect, Router, useLocation, Link } from 'wouter'
 import { useHashLocation } from 'wouter/use-hash-location'
 import { Loader2 } from 'lucide-react'
 
@@ -105,9 +105,9 @@ function ProtectedRoutes() {
         </Route>
         <Route path="/staff-applications" component={StaffApplicationsPage} />
         <Route path="/settings" component={SettingsPage} />
-        {/* أي مسار غير معروف → لوحة التحكم */}
+        {/* مسار غير معروف: تفسير + مخرج — روابط SMS القديمة كانت تحوَّل بصمت */}
         <Route>
-          <Redirect to="/" />
+          <NotFoundPage />
         </Route>
       </Switch>
     </AppLayout>
@@ -147,5 +147,24 @@ export default function App() {
     <Router hook={useHashLocation}>
       <AppRoutes />
     </Router>
+  )
+}
+
+// الرابط غير صالح (غالباً رابط SMS قديم) — تفسير ومخرجان بدل تحويل صامت محيّر
+function NotFoundPage() {
+  return (
+    <div className="mx-auto flex max-w-md flex-col items-center justify-center py-24 text-center">
+      <p className="text-5xl font-bold text-gold">404</p>
+      <h1 className="mt-3 text-lg font-bold text-foreground">الصفحة غير موجودة</h1>
+      <p className="mt-1 text-sm text-muted-foreground">
+        الرابط غير صالح أو قديم — ربما حُذف السجل أو تغيّر عنوانه.
+      </p>
+      <Link
+        href="/"
+        className="mt-5 rounded-xl bg-gold px-5 py-2.5 text-sm font-semibold text-navy shadow-sm hover:bg-gold/90"
+      >
+        الرجوع للوحة التحكم
+      </Link>
+    </div>
   )
 }

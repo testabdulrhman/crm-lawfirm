@@ -22,6 +22,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { QueryErrorState } from '@/components/QueryErrorState'
+import { EmptyState, FilteredEmptyState } from '@/components/EmptyState'
 import { cn } from '@/lib/utils'
 import { fmtNumber, fmtDatePref } from '@/lib/format'
 import { useLegalServices } from '@/hooks/useLegalServices'
@@ -41,7 +43,7 @@ import type { LegalService } from '@/types/db'
 const ALL = '__all__'
 
 export function LegalServicesPage() {
-  const { data, isLoading } = useLegalServices('all')
+  const { data, isLoading, isError, error, refetch } = useLegalServices('all')
   const { data: members } = useTeamMembers()
   const [, navigate] = useLocation()
 
@@ -80,7 +82,7 @@ export function LegalServicesPage() {
     <div className="mx-auto max-w-6xl space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-2xl font-bold tracking-tight text-foreground">
-          الاستشارات واللوائح والعقود{' '}
+          الاستشارات واللوائح وصياغة العقود{' '}
           <span className="text-base font-normal text-muted-foreground">
             ({fmtNumber(data?.length ?? 0)})
           </span>
@@ -150,22 +152,44 @@ export function LegalServicesPage() {
         </Select>
       </div>
 
-      {!isLoading && (
+      {/* يظهر فقط عندما تُغيّر الفلاتر العدد — وإلا فهو مكرر مع العنوان */}
+      {!isLoading && !isError && filtered.length !== (data ?? []).length && (
         <p className="text-sm text-muted-foreground">
           النتائج: {fmtNumber(filtered.length)}
         </p>
       )}
 
       {isLoading ? (
-        <div className="divide-y overflow-hidden rounded-xl border bg-card">
+        <div className="divide-y divide-border/60 overflow-hidden rounded-xl border bg-card">
           {Array.from({ length: 6 }).map((_, i) => (
             <Skeleton key={i} className="h-16 w-full rounded-none" />
           ))}
         </div>
+      ) : isError ? (
+        <QueryErrorState
+          title="تعذّر تحميل الخدمات"
+          error={error}
+          onRetry={() => refetch()}
+        />
+      ) : (data ?? []).length === 0 ? (
+        <EmptyState
+          icon={FileText}
+          title="لا توجد خدمات"
+          description="سجّل أول استشارة أو لائحة أو صياغة عقد عبر «خدمة جديدة»."
+          actionLabel="خدمة جديدة"
+          onAction={() => setDialogOpen(true)}
+        />
       ) : filtered.length === 0 ? (
-        <EmptyState />
+        <FilteredEmptyState
+          onClear={() => {
+            setSearch('')
+            setType('all')
+            setStatus('all')
+            setAssignee(ALL)
+          }}
+        />
       ) : (
-        <div className="divide-y overflow-hidden rounded-xl border bg-card">
+        <div className="divide-y divide-border/60 overflow-hidden rounded-xl border bg-card">
           {filtered.map((s) => (
             <ServiceRow
               key={s.id}
@@ -205,7 +229,7 @@ function TypeChip({
           active ? 'bg-white/20' : 'bg-muted text-muted-foreground'
         )}
       >
-        {count}
+        {fmtNumber(count)}
       </span>
     </Button>
   )
@@ -226,7 +250,7 @@ function ServiceRow({
   return (
     <button
       onClick={onOpen}
-      className="block w-full px-4 py-3 text-right transition-colors hover:bg-accent/10"
+      className="block w-full rounded-xl px-3 py-3 text-right transition-colors hover:bg-muted/60"
     >
       {/* السطر العلوي: العنوان + النوع/الحالة */}
       <div className="flex items-center gap-2">
@@ -281,14 +305,3 @@ function ServiceRow({
   )
 }
 
-function EmptyState() {
-  return (
-    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-16 text-center">
-      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-        <FileText className="h-6 w-6 text-muted-foreground" />
-      </div>
-      <p className="font-medium text-foreground">لا توجد خدمات</p>
-      <p className="text-sm text-muted-foreground">جرّب تعديل الفلاتر أو أضِف خدمة جديدة.</p>
-    </div>
-  )
-}

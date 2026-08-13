@@ -38,7 +38,6 @@ import {
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -50,13 +49,16 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { FilePreviewDialog } from '@/components/FilePreviewDialog'
+import { QueryErrorState } from '@/components/QueryErrorState'
+import { useConfirm } from '@/components/ConfirmDialog'
 
-import { fmtDatePref } from '@/lib/format'
+import { fmtDatePref, fmtNumber, todayISO } from '@/lib/format'
 import { pickFile } from '@/lib/files'
 import { openExternal } from '@/lib/external'
 import { useAuth } from '@/stores/auth'
 import { useIsDirector } from '@/hooks/useIsDirector'
 import { useTeamMembers } from '@/hooks/useTeam'
+import { useCreateCase } from '@/hooks/useCases'
 import {
   useRequest,
   useAssignRequest,
@@ -67,11 +69,15 @@ import {
 } from '@/hooks/useRequests'
 import { EvaluationForm } from './EvaluationForm'
 import { statusBadgeVariant, statusLabel, typeLabel } from './labels'
-import type { RequestDocument, RequestEvaluation } from '@/types/db'
+import type {
+  IncomingRequest,
+  RequestDocument,
+  RequestEvaluation,
+} from '@/types/db'
 
 export function RequestDetail({ id }: { id: string }) {
   const [, navigate] = useLocation()
-  const { data, isLoading, isError } = useRequest(id)
+  const { data, isLoading, isError, error, refetch } = useRequest(id)
 
   if (isLoading) {
     return (
@@ -85,16 +91,13 @@ export function RequestDetail({ id }: { id: string }) {
 
   if (isError || !data) {
     return (
-      <div className="space-y-4">
-        <Button variant="ghost" onClick={() => navigate('/requests')}>
-          <ArrowRight className="h-4 w-4" />
-          رجوع
-        </Button>
-        <Alert variant="destructive">
-          <AlertTitle>تعذّر تحميل الطلب</AlertTitle>
-          <AlertDescription>قد يكون الطلب محذوفاً أو غير متاح.</AlertDescription>
-        </Alert>
-      </div>
+      <QueryErrorState
+        title="تعذّر تحميل الطلب"
+        error={error}
+        onRetry={() => refetch()}
+        backTo="/requests"
+        backLabel="رجوع للطلبات"
+      />
     )
   }
 
@@ -146,13 +149,7 @@ export function RequestDetail({ id }: { id: string }) {
       {/* الإسناد + القرار */}
       <div className="grid gap-4 md:grid-cols-2">
         <AssignmentCard requestId={r.id} currentName={r.assigned_to_name} />
-        <DecisionCard
-          requestId={r.id}
-          status={r.status}
-          decisionAt={r.decision_at}
-          decisionBy={r.decision_by}
-          rejectionReason={r.rejection_reason}
-        />
+        <DecisionCard request={r} />
       </div>
 
       {/* الوصف */}
@@ -219,18 +216,23 @@ function AssignmentCard({
             <span className="text-muted-foreground">غير مُسند</span>
           )}
         </p>
-        <Select value={value} onValueChange={onAssign}>
-          <SelectTrigger>
-            <SelectValue placeholder={currentName ? 'تغيير المحامي' : 'إسناد محامٍ'} />
-          </SelectTrigger>
-          <SelectContent>
-            {active.map((m) => (
-              <SelectItem key={m.id} value={m.id}>
-                {m.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-2">
+          <Select value={value} onValueChange={onAssign} disabled={assignM.isPending}>
+            <SelectTrigger>
+              <SelectValue placeholder={currentName ? 'تغيير المحامي' : 'إسناد محامٍ'} />
+            </SelectTrigger>
+            <SelectContent>
+              {active.map((m) => (
+                <SelectItem key={m.id} value={m.id}>
+                  {m.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {assignM.isPending && (
+            <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" />
+          )}
+        </div>
       </CardContent>
     </Card>
   )
@@ -238,21 +240,15 @@ function AssignmentCard({
 
 /* ===================== القرار ===================== */
 
-function DecisionCard({
-  requestId,
-  status,
-  decisionAt,
-  decisionBy,
-  rejectionReason,
-}: {
-  requestId: string
-  status: string | null
-  decisionAt: string | null
-  decisionBy: string | null
-  rejectionReason: string | null
-}) {
+function DecisionCard({ request: r }: { request: IncomingRequest }) {
+  const requestId = r.id
+  const { status, decision_at: decisionAt, decision_by: decisionBy } = r
+  const rejectionReason = r.rejection_reason
+  const [, navigate] = useLocation()
   const { teamMember } = useAuth()
   const decideM = useDecideRequest()
+  const createCaseM = useCreateCase()
+  const { confirm, dialog } = useConfirm()
   const [rejectOpen, setRejectOpen] = useState(false)
   const [reason, setReason] = useState('')
 
@@ -265,6 +261,30 @@ function DecisionCard({
       status: s,
       decisionBy: teamMember?.name ?? '—',
       rejectionReason: rejReason,
+    })
+  }
+
+  const pendingStatus = decideM.isPending ? decideM.variables?.status : null
+
+  const convertToCase = () => {
+    confirm({
+      title: 'تحويل الطلب لقضية',
+      description: `ستُنشأ قضية جديدة باسم «${r.client_name}» ببيانات الطلب، وتُنقل لصفحتها لإكمال بياناتها.`,
+      confirmLabel: 'تحويل',
+      destructive: false,
+      onConfirm: () => {
+        createCaseM
+          .mutateAsync({
+            title: r.client_name,
+            contact_id: r.client_id ?? null,
+            subject: r.description ?? null,
+            open_date: todayISO(),
+          })
+          .then((c) => navigate(`/cases/${c.id}`))
+          .catch(() => {
+            /* الفشل يعرضه onError في useCreateCase عبر toast */
+          })
+      },
     })
   }
 
@@ -302,9 +322,21 @@ function DecisionCard({
             variant="default"
             className="bg-emerald-600 hover:bg-emerald-700"
             disabled={decideM.isPending}
-            onClick={() => decide('accepted')}
+            onClick={() =>
+              confirm({
+                title: 'قبول الطلب',
+                description: `سيُسجَّل قبول طلب «${r.client_name}» رسمياً باسمك.`,
+                confirmLabel: 'قبول',
+                destructive: false,
+                onConfirm: () => decide('accepted'),
+              })
+            }
           >
-            <Check className="h-4 w-4" />
+            {pendingStatus === 'accepted' ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Check className="h-4 w-4" />
+            )}
             قبول
           </Button>
           <Button
@@ -313,7 +345,11 @@ function DecisionCard({
             disabled={decideM.isPending}
             onClick={() => setRejectOpen(true)}
           >
-            <X className="h-4 w-4" />
+            {pendingStatus === 'rejected' ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <X className="h-4 w-4" />
+            )}
             رفض
           </Button>
           <Button
@@ -322,16 +358,29 @@ function DecisionCard({
             disabled={decideM.isPending}
             onClick={() => decide('deferred')}
           >
-            <Clock className="h-4 w-4" />
+            {pendingStatus === 'deferred' ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Clock className="h-4 w-4" />
+            )}
             تأجيل
           </Button>
         </div>
 
-        {/* تحويل لقضية: يتوفّر في وحدة القضايا لاحقاً */}
-        <Button size="sm" variant="ghost" disabled className="w-full">
-          تحويل لقضية (يتوفّر في وحدة القضايا)
+        {/* تحويل الطلب لقضية مرتبطة بنفس العميل */}
+        <Button
+          size="sm"
+          variant="outline"
+          className="w-full"
+          disabled={createCaseM.isPending}
+          onClick={convertToCase}
+        >
+          {createCaseM.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+          تحويل لقضية
         </Button>
       </CardContent>
+
+      {dialog}
 
       {/* نافذة سبب الرفض */}
       <Dialog open={rejectOpen} onOpenChange={setRejectOpen}>
@@ -358,6 +407,9 @@ function DecisionCard({
                 setReason('')
               }}
             >
+              {pendingStatus === 'rejected' && (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              )}
               تأكيد الرفض
             </Button>
             <Button variant="outline" onClick={() => setRejectOpen(false)}>
@@ -372,6 +424,16 @@ function DecisionCard({
 
 /* ===================== التقييمات ===================== */
 
+/** لون شارة التوصية حسب مضمونها — «رفض» لا يصح أن يظهر بلون احتفالي */
+function recommendationBadgeVariant(
+  rec: string
+): 'success' | 'destructive' | 'warning' | 'gold' {
+  if (rec === 'قبول') return 'success'
+  if (rec === 'رفض') return 'destructive'
+  if (rec === 'بحاجة لمعلومات') return 'warning'
+  return 'gold'
+}
+
 function EvaluationsSection({
   requestId,
   evaluations,
@@ -380,6 +442,7 @@ function EvaluationsSection({
   evaluations: RequestEvaluation[]
 }) {
   const deleteM = useDeleteEvaluation()
+  const { confirm, dialog } = useConfirm()
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<RequestEvaluation | null>(null)
 
@@ -398,7 +461,7 @@ function EvaluationsSection({
         <CardTitle className="text-base">
           التقييمات{' '}
           <span className="text-sm text-muted-foreground">
-            ({evaluations.length})
+            ({fmtNumber(evaluations.length)})
           </span>
         </CardTitle>
         <Button size="sm" variant="gold" onClick={openNew}>
@@ -420,7 +483,9 @@ function EvaluationsSection({
                     {e.evaluator_name ?? 'مقيّم'}
                   </span>
                   {e.recommendation && (
-                    <Badge variant="gold">{e.recommendation}</Badge>
+                    <Badge variant={recommendationBadgeVariant(e.recommendation)}>
+                      {e.recommendation}
+                    </Badge>
                   )}
                 </div>
                 <div className="flex items-center gap-1">
@@ -430,7 +495,9 @@ function EvaluationsSection({
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-7 w-7"
+                    className="h-9 w-9"
+                    title="تعديل"
+                    aria-label="تعديل التقييم"
                     onClick={() => openEdit(e)}
                   >
                     <Pencil className="h-3.5 w-3.5" />
@@ -438,8 +505,16 @@ function EvaluationsSection({
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-7 w-7 text-destructive"
-                    onClick={() => deleteM.mutate(e.id)}
+                    className="h-9 w-9 text-destructive"
+                    title="حذف"
+                    aria-label="حذف التقييم"
+                    onClick={() =>
+                      confirm({
+                        title: 'تأكيد حذف التقييم',
+                        description: `سيُحذف تقييم «${e.evaluator_name ?? 'مقيّم'}» نهائياً. هل أنت متأكد؟`,
+                        onConfirm: () => deleteM.mutate(e.id),
+                      })
+                    }
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
@@ -467,6 +542,8 @@ function EvaluationsSection({
           ))
         )}
       </CardContent>
+
+      {dialog}
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-xl">
@@ -519,7 +596,7 @@ function DocumentsSection({
           <Paperclip className="h-4 w-4" />
           المرفقات{' '}
           <span className="text-sm text-muted-foreground">
-            ({documents.length})
+            ({fmtNumber(documents.length)})
           </span>
         </CardTitle>
         <Button

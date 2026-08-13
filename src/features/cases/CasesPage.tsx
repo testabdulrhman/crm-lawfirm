@@ -15,6 +15,9 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { QueryErrorState } from '@/components/QueryErrorState'
+import { EmptyState, FilteredEmptyState } from '@/components/EmptyState'
+import { Ltr } from '@/components/Ltr'
 import {
   Select,
   SelectContent,
@@ -62,7 +65,7 @@ function isHearingSoon(d: string | null): boolean {
 }
 
 export function CasesPage() {
-  const { data, isLoading } = useCases()
+  const { data, isLoading, isError, error, refetch } = useCases()
   const { data: members } = useTeamMembers()
   const [, navigate] = useLocation()
 
@@ -244,24 +247,46 @@ export function CasesPage() {
         </Select>
       </div>
 
-      {!isLoading && (
+      {!isLoading && !isError && (
         <p className="text-sm text-muted-foreground">
           النتائج: {fmtNumber(filtered.length)}
         </p>
       )}
 
       {/* المحتوى — قائمة صفوف */}
-      {isLoading ? (
-        <div className="divide-y overflow-hidden rounded-xl border bg-card">
+      {isError ? (
+        <QueryErrorState
+          title="تعذّر تحميل القضايا"
+          error={error}
+          onRetry={() => refetch()}
+        />
+      ) : isLoading ? (
+        <div className="divide-y divide-border/60 overflow-hidden rounded-xl border">
           {Array.from({ length: 8 }).map((_, i) => (
             <Skeleton key={i} className="h-16 w-full rounded-none" />
           ))}
         </div>
+      ) : (data?.length ?? 0) === 0 ? (
+        <EmptyState
+          icon={Scale}
+          title="لا توجد قضايا بعد"
+          description="ابدأ بإضافة أول قضية لمتابعتها هنا."
+          actionLabel="قضية جديدة"
+          onAction={() => setDialogOpen(true)}
+        />
       ) : filtered.length === 0 ? (
-        <EmptyState />
+        <FilteredEmptyState
+          onClear={() => {
+            setSearch('')
+            setStatus('all')
+            setType(ALL)
+            setAssignee(ALL)
+            resetPage()
+          }}
+        />
       ) : (
         <>
-          <div className="divide-y overflow-hidden rounded-xl border bg-card">
+          <div className="divide-y divide-border/60 overflow-hidden rounded-xl border">
             {shown.map((c) => (
               <CaseRow
                 key={c.id}
@@ -309,7 +334,7 @@ function StatusChip({
           active ? 'bg-white/20' : 'bg-muted text-muted-foreground'
         )}
       >
-        {count}
+        {fmtNumber(count)}
       </span>
     </Button>
   )
@@ -324,15 +349,10 @@ function CaseRow({
 }) {
   const soon = isHearingSoon(c.hearing_date)
 
-  // أرقام المكتب/المحكمة (لاتينية)
-  const nums: string[] = []
-  if (c.office_num) nums.push(`مكتب ${c.office_num}`)
-  if (c.court_num) nums.push(`محكمة ${c.court_num}`)
-
   return (
     <button
       onClick={onOpen}
-      className="block w-full px-4 py-3 text-right transition-colors hover:bg-accent/10"
+      className="block w-full px-3 py-3 text-right transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
     >
       {/* السطر العلوي: العنوان + الحالة/النوع */}
       <div className="flex items-center gap-2">
@@ -369,9 +389,14 @@ function CaseRow({
             </span>
           </span>
         )}
-        {nums.length > 0 && (
-          <span dir="ltr" className="text-right">
-            {nums.join(' · ')}
+        {c.office_num && (
+          <span>
+            مكتب <Ltr>{c.office_num}</Ltr>
+          </span>
+        )}
+        {c.court_num && (
+          <span>
+            محكمة <Ltr>{c.court_num}</Ltr>
           </span>
         )}
         {/* الجلسة على الجوال (أو غير القريبة) */}
@@ -390,19 +415,5 @@ function CaseRow({
         )}
       </div>
     </button>
-  )
-}
-
-function EmptyState() {
-  return (
-    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-16 text-center">
-      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-        <Scale className="h-6 w-6 text-muted-foreground" />
-      </div>
-      <p className="font-medium text-foreground">لا توجد قضايا</p>
-      <p className="text-sm text-muted-foreground">
-        جرّب تعديل الفلاتر أو أضِف قضية جديدة.
-      </p>
-    </div>
   )
 }

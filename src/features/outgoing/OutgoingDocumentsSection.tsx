@@ -45,17 +45,25 @@ export function OutgoingDocumentsSection({ letterId }: { letterId: string }) {
   const [preview, setPreview] = useState<OutgoingDocument | null>(null)
   const [toDelete, setToDelete] = useState<OutgoingDocument | null>(null)
 
-  // رفع عدة ملفات معاً — كلٌّ يُرفع على حدة ليظهر تقدّم صحيح
+  // رفع عدة ملفات معاً — كلٌّ يُرفع على حدة ليظهر تقدّم صحيح،
+  // وفشل ملف (كتجاوز 10 م.ب) لا يعلّق العدّاد ولا يُسقط بقية الملفات
   const onFiles = async (files: File[]) => {
     setUploading(files.length)
-    for (const file of files) {
-      await uploadM.mutateAsync({
-        file,
-        uploadedBy: teamMember?.name ?? null,
-      })
-      setUploading((n) => n - 1)
+    try {
+      for (const file of files) {
+        try {
+          await uploadM.mutateAsync({
+            file,
+            uploadedBy: teamMember?.name ?? null,
+          })
+        } catch {
+          // الهوك أظهر توست الفشل بسببه — نكمل بقية الملفات
+        }
+        setUploading((n) => Math.max(0, n - 1))
+      }
+    } finally {
+      setUploading(0)
     }
-    setUploading(0)
   }
 
   const docs = data ?? []
@@ -93,9 +101,9 @@ export function OutgoingDocumentsSection({ letterId }: { letterId: string }) {
             لا مرفقات — ملف الخطاب نفسه في الأعلى.
           </p>
         ) : (
-          <div className="divide-y overflow-hidden rounded-xl border">
+          <div className="divide-y divide-border/60 overflow-hidden rounded-xl border">
             {docs.map((d) => (
-              <div key={d.id} className="flex items-center gap-3 px-4 py-2.5">
+              <div key={d.id} className="flex items-center gap-3 px-3 py-2.5">
                 <FileText className="h-4 w-4 shrink-0 text-gold" />
                 <button
                   className="min-w-0 flex-1 text-right"
@@ -115,7 +123,12 @@ export function OutgoingDocumentsSection({ letterId }: { letterId: string }) {
                   </p>
                 </button>
                 {d.file_url && (
-                  <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="-m-1 h-10 w-10"
+                    asChild
+                  >
                     <a
                       href={d.file_url}
                       target="_blank"
@@ -130,7 +143,7 @@ export function OutgoingDocumentsSection({ letterId }: { letterId: string }) {
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                    className="-m-1 h-10 w-10 text-muted-foreground hover:text-destructive"
                     title="حذف"
                     onClick={() => setToDelete(d)}
                   >

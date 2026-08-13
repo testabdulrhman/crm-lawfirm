@@ -31,6 +31,8 @@ import { fmtNumber } from '@/lib/format'
 import { openExternal } from '@/lib/external'
 import { useContacts, useContactWorkLinks } from '@/hooks/useContacts'
 import { usePageState } from '@/hooks/usePageState'
+import { QueryErrorState } from '@/components/QueryErrorState'
+import { EmptyState, FilteredEmptyState } from '@/components/EmptyState'
 import { ContactForm } from './ContactForm'
 import {
   CATEGORY_OPTIONS,
@@ -77,7 +79,7 @@ function sourceIcon(source: string | null) {
 }
 
 export function ContactsPage() {
-  const { data, isLoading } = useContacts()
+  const { data, isLoading, isError, error, refetch } = useContacts()
   const { data: workLinks } = useContactWorkLinks()
   const [, navigate] = useLocation()
 
@@ -138,6 +140,16 @@ export function ContactsPage() {
 
   // أعد ضبط الصفحات عند تغيير أي فلتر
   const resetPage = () => setVisible(PAGE)
+
+  // مسح البحث وكل الفلاتر (زر «مسح الفلاتر» في حالة لا نتائج)
+  const clearFilters = () => {
+    setSearch('')
+    setCategory('all')
+    setEntity('all')
+    setLinkFilter('all')
+    setSource('all')
+    resetPage()
+  }
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -228,8 +240,24 @@ export function ContactsPage() {
             <Skeleton key={i} className="h-36 w-full" />
           ))}
         </div>
+      ) : isError ? (
+        <QueryErrorState
+          title="تعذّر تحميل جهات الاتصال"
+          error={error}
+          onRetry={() => refetch()}
+        />
       ) : filtered.length === 0 ? (
-        <EmptyState />
+        (data ?? []).length === 0 ? (
+          <EmptyState
+            icon={BookUser}
+            title="لا توجد جهات اتصال بعد"
+            description="أضف أول جهة اتصال لبناء دفتر التواصل."
+            actionLabel="جهة اتصال جديدة"
+            onAction={() => setDialogOpen(true)}
+          />
+        ) : (
+          <FilteredEmptyState onClear={clearFilters} />
+        )
       ) : (
         <>
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -253,7 +281,10 @@ export function ContactsPage() {
       )}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent
+          className="max-w-2xl"
+          onInteractOutside={(e) => e.preventDefault()}
+        >
           <ContactForm onDone={() => setDialogOpen(false)} />
         </DialogContent>
       </Dialog>
@@ -304,7 +335,15 @@ function ContactCard({
   const total = links?.total_links ?? 0
   const SourceIcon = sourceIcon(c.source)
   return (
-    <Card className="flex flex-col">
+    <Card
+      className="flex cursor-pointer flex-col"
+      role="link"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') onOpen()
+      }}
+    >
       <CardContent className="flex flex-1 flex-col gap-3 p-4">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
@@ -331,8 +370,12 @@ function ContactCard({
         {c.phone && (
           <button
             dir="ltr"
-            className="flex items-center justify-end gap-1 text-xs text-muted-foreground hover:text-gold"
-            onClick={() => openExternal(`tel:${c.phone}`)}
+            className="-my-3 flex items-center justify-end gap-1 py-3 text-xs text-muted-foreground hover:text-gold"
+            aria-label={`اتصال بـ ${c.name ?? c.phone}`}
+            onClick={(e) => {
+              e.stopPropagation()
+              openExternal(`tel:${c.phone}`)
+            }}
           >
             <span>{c.phone}</span>
             <Phone className="h-3 w-3" />
@@ -349,26 +392,19 @@ function ContactCard({
         )}
 
         <div className="mt-auto flex justify-end pt-1">
-          <Button size="sm" variant="ghost" onClick={onOpen}>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={(e) => {
+              e.stopPropagation()
+              onOpen()
+            }}
+          >
             عرض
             <ChevronLeft className="h-4 w-4" />
           </Button>
         </div>
       </CardContent>
     </Card>
-  )
-}
-
-function EmptyState() {
-  return (
-    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-16 text-center">
-      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-        <BookUser className="h-6 w-6 text-muted-foreground" />
-      </div>
-      <p className="font-medium text-foreground">لا توجد نتائج</p>
-      <p className="text-sm text-muted-foreground">
-        جرّب تعديل الفلاتر أو البحث، أو أضِف جهة اتصال جديدة.
-      </p>
-    </div>
   )
 }

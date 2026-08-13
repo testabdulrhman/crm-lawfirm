@@ -139,7 +139,7 @@ export function OfficeInfoTab() {
     register,
     handleSubmit,
     reset,
-    formState: { errors },
+    formState: { errors, isDirty },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: toDefaults(data),
@@ -155,11 +155,25 @@ export function OfficeInfoTab() {
   }
 
   if (isLoading) {
+    // يحاكي البنية الفعلية: بطاقة هوية بثلاث خانات ثم بطاقة نموذج بحقول ثنائية
     return (
-      <div className="grid gap-4 sm:grid-cols-2">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <Skeleton key={i} className="h-16 w-full" />
-        ))}
+      <div className="space-y-4">
+        <div className="rounded-xl border bg-card p-6">
+          <Skeleton className="h-8 w-40" />
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <Skeleton key={i} className="h-44 w-full rounded-xl" />
+            ))}
+          </div>
+        </div>
+        <div className="rounded-xl border bg-card p-6">
+          <Skeleton className="h-8 w-40" />
+          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton key={i} className="h-10 w-full" />
+            ))}
+          </div>
+        </div>
       </div>
     )
   }
@@ -273,7 +287,12 @@ export function OfficeInfoTab() {
               </FormField>
             </section>
 
-            <div className="flex justify-end border-t pt-4">
+            <div className="flex items-center justify-end gap-3 border-t pt-4">
+              {isDirty && (
+                <span className="text-xs font-medium text-amber-600 dark:text-amber-500">
+                  تغييرات غير محفوظة
+                </span>
+              )}
               <Button type="submit" variant="gold" disabled={updateM.isPending}>
                 {updateM.isPending && (
                   <Loader2 className="h-4 w-4 animate-spin" />

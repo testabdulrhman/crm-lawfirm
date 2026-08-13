@@ -62,8 +62,10 @@ export function useSaveCaseProject(caseId: string) {
       if (error) throw error
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['case_project', caseId] })
       toast({ variant: 'success', title: 'حُفظت بطاقة المشروع' })
+      // نُرجع الوعد فينتظره React Query قبل نداء onSuccess للمكوّن —
+      // مسح المسودة قبل تحديث الكاش كان يرتدّ بالنص للقيمة القديمة
+      return qc.invalidateQueries({ queryKey: ['case_project', caseId] })
     },
     onError: (e: unknown) =>
       toast({

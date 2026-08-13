@@ -24,6 +24,8 @@ import { ContactPicker } from '@/components/ContactPicker'
 import { CasePicker } from '@/components/CasePicker'
 import { DualDatePicker } from '@/components/DualDatePicker'
 import { pickFile, uploadFile } from '@/lib/files'
+import { toast } from '@/hooks/use-toast'
+import { errMessage } from '@/lib/errors'
 import { useContacts } from '@/hooks/useContacts'
 import { useCases } from '@/hooks/useCases'
 import { useCreatePOA, useUpdatePOA } from '@/hooks/usePOAs'
@@ -87,6 +89,13 @@ export function POAForm({
       try {
         const { publicUrl } = await uploadFile(file, { folder: 'poa' })
         documentUrl = publicUrl
+      } catch (e) {
+        toast({
+          variant: 'destructive',
+          title: 'تعذّر رفع مستند الوكالة',
+          description: errMessage(e),
+        })
+        return // نبقي الحوار مفتوحاً ولا نحفظ بدون المستند
       } finally {
         setUploading(false)
       }

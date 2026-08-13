@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'wouter'
 import {
   UserPlus,
@@ -9,12 +9,15 @@ import {
   Scale,
   Sparkles,
   Loader2,
+  Square,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Card, CardContent } from '@/components/ui/card'
+import { EmptyState, FilteredEmptyState } from '@/components/EmptyState'
+import { QueryErrorState } from '@/components/QueryErrorState'
 import { fmtDatePref, fmtNumber } from '@/lib/format'
 import { toast } from '@/hooks/use-toast'
 import { useAuth } from '@/stores/auth'
@@ -33,7 +36,7 @@ import { TeamNavTabs } from '@/features/team/TeamNavTabs'
 type Filter = StaffApplicationStatus | 'all'
 
 export function StaffApplicationsPage() {
-  const { data, isLoading } = useStaffApplications('all')
+  const { data, isLoading, isError, error, refetch } = useStaffApplications('all')
   const [, navigate] = useLocation()
   const [filter, setFilter] = usePageState<Filter>('apps:filter', 'all')
   const { teamMember } = useAuth()
@@ -42,6 +45,17 @@ export function StaffApplicationsPage() {
 
   // تحليل كل الطلبات المعلّقة ذات السير غير المحلَّلة — واحداً تلو الآخر
   const [batch, setBatch] = useState<{ done: number; total: number } | null>(null)
+  // علم الإلغاء: يضبطه زر «إيقاف» أو مغادرة الصفحة، وتفحصه الحلقة قبل كل عنصر
+  const cancelRef = useRef(false)
+  const mountedRef = useRef(true)
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+      cancelRef.current = true
+    }
+  }, [])
+
   const runBatchAnalysis = async () => {
     if (batch) return
     const analyzedIds = new Set((analyses ?? []).map((x) => x.application_id))
@@ -55,9 +69,11 @@ export function StaffApplicationsPage() {
       toast({ title: 'لا طلبات معلّقة (بسيرة ذاتية) تحتاج تحليلاً' })
       return
     }
+    cancelRef.current = false
     setBatch({ done: 0, total: targets.length })
     let ok = 0
     for (const a of targets) {
+      if (cancelRef.current) break
       try {
         await analyzeM.mutateAsync({
           application_id: a.id,
@@ -71,9 +87,17 @@ export function StaffApplicationsPage() {
       } catch {
         /* الهوك يعرض الخطأ — نكمل البقية */
       }
-      setBatch((b) => (b ? { done: b.done + 1, total: b.total } : b))
+      if (mountedRef.current)
+        setBatch((b) => (b ? { done: b.done + 1, total: b.total } : b))
     }
+    if (!mountedRef.current) return
     setBatch(null)
+    if (cancelRef.current) {
+      toast({
+        title: `أُوقف التحليل — اكتمل ${fmtNumber(ok)} من ${fmtNumber(targets.length)}`,
+      })
+      return
+    }
     toast({
       variant: 'success',
       title: `اكتمل تحليل ${fmtNumber(ok)} من ${fmtNumber(targets.length)} متقدماً`,
@@ -99,27 +123,46 @@ export function StaffApplicationsPage() {
     <div className="mx-auto max-w-6xl space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-2xl font-bold tracking-tight text-foreground">
-          طلبات التوظيف
-        </h2>
-        <Button
-          variant="outline"
-          size="sm"
-          className="border-violet-300 text-violet-700 hover:bg-violet-50 dark:border-violet-800 dark:text-violet-300 dark:hover:bg-violet-950/40"
-          onClick={runBatchAnalysis}
-          disabled={!!batch || isLoading}
-        >
-          {batch ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              جارٍ التحليل {fmtNumber(batch.done)}/{fmtNumber(batch.total)}…
-            </>
-          ) : (
-            <>
-              <Sparkles className="h-4 w-4" />
-              تحليل الكل بالذكاء الاصطناعي
-            </>
+          طلبات التوظيف{' '}
+          {!isLoading && !isError && (
+            <span className="text-base font-normal text-muted-foreground">
+              ({fmtNumber(data?.length ?? 0)})
+            </span>
           )}
-        </Button>
+        </h2>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="border-violet-300 text-violet-700 hover:bg-violet-50 dark:border-violet-800 dark:text-violet-300 dark:hover:bg-violet-950/40"
+            onClick={runBatchAnalysis}
+            disabled={!!batch || isLoading}
+          >
+            {batch ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                جارٍ التحليل {fmtNumber(batch.done)}/{fmtNumber(batch.total)}…
+              </>
+            ) : (
+              <>
+                <Sparkles className="h-4 w-4" />
+                تحليل الكل بالذكاء الاصطناعي
+              </>
+            )}
+          </Button>
+          {batch && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                cancelRef.current = true
+              }}
+            >
+              <Square className="h-4 w-4" />
+              إيقاف
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* التنقل: الموظفون / طلبات التوظيف */}
@@ -149,8 +192,20 @@ export function StaffApplicationsPage() {
             <Skeleton key={i} className="h-44 w-full" />
           ))}
         </div>
+      ) : isError ? (
+        <QueryErrorState
+          title="تعذّر تحميل طلبات التوظيف"
+          error={error}
+          onRetry={() => refetch()}
+        />
+      ) : (data ?? []).length === 0 ? (
+        <EmptyState
+          icon={UserPlus}
+          title="لا توجد طلبات توظيف"
+          description="تصل الطلبات من نموذج التوظيف في الموقع العام."
+        />
       ) : list.length === 0 ? (
-        <EmptyState />
+        <FilteredEmptyState onClear={() => setFilter('all')} />
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {list.map((a) => (
@@ -186,7 +241,7 @@ function FilterButton({
           (active ? 'bg-white/20' : 'bg-muted text-muted-foreground')
         }
       >
-        {count}
+        {fmtNumber(count)}
       </span>
     </Button>
   )
@@ -218,7 +273,18 @@ function ApplicationCard({
   onOpen: () => void
 }) {
   return (
-    <Card className="flex flex-col">
+    <Card
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onOpen()
+        }
+      }}
+      className="flex cursor-pointer flex-col transition-colors hover:border-gold/50"
+    >
       <CardContent className="flex flex-1 flex-col gap-3 p-4">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
@@ -230,8 +296,8 @@ function ApplicationCard({
                 dir="ltr"
                 className="flex items-center justify-end gap-1 text-xs text-muted-foreground"
               >
-                <span>{a.phone}</span>
                 <Phone className="h-3 w-3" />
+                <span>{a.phone}</span>
               </p>
             )}
           </div>
@@ -252,26 +318,19 @@ function ApplicationCard({
         </div>
 
         <div className="mt-auto flex justify-end pt-2">
-          <Button size="sm" variant="ghost" onClick={onOpen}>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={(e) => {
+              e.stopPropagation()
+              onOpen()
+            }}
+          >
             عرض
             <ChevronLeft className="h-4 w-4" />
           </Button>
         </div>
       </CardContent>
     </Card>
-  )
-}
-
-function EmptyState() {
-  return (
-    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-16 text-center">
-      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-        <UserPlus className="h-6 w-6 text-muted-foreground" />
-      </div>
-      <p className="font-medium text-foreground">لا توجد طلبات توظيف</p>
-      <p className="text-sm text-muted-foreground">
-        تصل الطلبات من نموذج التوظيف في الموقع العام.
-      </p>
-    </div>
   )
 }

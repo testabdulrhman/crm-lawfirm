@@ -94,7 +94,7 @@ export function DualDatePicker({
             type="button"
             onClick={() => setMode('gregorian')}
             className={cn(
-              'px-2 py-0.5 transition-colors',
+              'px-2.5 py-1.5 transition-colors',
               mode === 'gregorian'
                 ? 'bg-gold text-navy'
                 : 'text-muted-foreground hover:bg-muted'
@@ -106,7 +106,7 @@ export function DualDatePicker({
             type="button"
             onClick={() => setMode('hijri')}
             className={cn(
-              'px-2 py-0.5 transition-colors',
+              'px-2.5 py-1.5 transition-colors',
               mode === 'hijri'
                 ? 'bg-gold text-navy'
                 : 'text-muted-foreground hover:bg-muted'
@@ -126,13 +126,22 @@ export function DualDatePicker({
         />
       ) : (
         <div className="grid grid-cols-3 gap-2">
+          {/* ⚠️ قيمة فارغة تُعرض فارغة («اليوم/الشهر/السنة») لا كتاريخ اليوم —
+              كانت القوائم توحي بأن تاريخاً اختير بينما onChange لم يُستدعَ قط،
+              فيُرسل النموذج والتاريخ null دون أن يدري الموظف. أول اختيار لأي
+              جزء يعتمد اليوم الحالي للجزأين الآخرين. */}
           {/* اليوم */}
           <select
             aria-label="اليوم"
-            value={hd}
+            value={value ? hd : ''}
             onChange={(e) => commitHijri(hy, hm, Number(e.target.value))}
             className="h-10 rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           >
+            {!value && (
+              <option value="" disabled>
+                اليوم
+              </option>
+            )}
             {Array.from({ length: hijriMonthLength(hy, hm) }, (_, i) => i + 1).map(
               (d) => (
                 <option key={d} value={d}>
@@ -144,10 +153,15 @@ export function DualDatePicker({
           {/* الشهر */}
           <select
             aria-label="الشهر"
-            value={hm}
+            value={value ? hm : ''}
             onChange={(e) => commitHijri(hy, Number(e.target.value), hd)}
             className="h-10 rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           >
+            {!value && (
+              <option value="" disabled>
+                الشهر
+              </option>
+            )}
             {HIJRI_MONTHS.map((name, i) => (
               <option key={i} value={i + 1}>
                 {name}
@@ -157,10 +171,15 @@ export function DualDatePicker({
           {/* السنة */}
           <select
             aria-label="السنة"
-            value={hy}
+            value={value ? hy : ''}
             onChange={(e) => commitHijri(Number(e.target.value), hm, hd)}
             className="h-10 rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           >
+            {!value && (
+              <option value="" disabled>
+                السنة
+              </option>
+            )}
             {YEARS.map((y) => (
               <option key={y} value={y}>
                 {y}

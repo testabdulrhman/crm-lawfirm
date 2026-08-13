@@ -14,7 +14,6 @@ import {
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Card, CardContent } from '@/components/ui/card'
-import { Alert, AlertTitle } from '@/components/ui/alert'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import {
   AlertDialog,
@@ -27,6 +26,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { FilePreviewDialog } from '@/components/FilePreviewDialog'
+import { QueryErrorState } from '@/components/QueryErrorState'
 
 import { fmtDatePref } from '@/lib/format'
 import { useAuth } from '@/stores/auth'
@@ -44,7 +44,7 @@ export function OutgoingLetterDetail({ id }: { id: string }) {
   const [, navigate] = useLocation()
   const { teamMember } = useAuth()
   const isDirector = useIsDirector()
-  const { data: l, isLoading, isError } = useOutgoingLetter(id)
+  const { data: l, isLoading, isError, error, refetch } = useOutgoingLetter(id)
   const deleteM = useDeleteOutgoingLetter()
 
   const [editOpen, setEditOpen] = useState(false)
@@ -54,7 +54,7 @@ export function OutgoingLetterDetail({ id }: { id: string }) {
 
   if (isLoading) {
     return (
-      <div className="space-y-4">
+      <div className="mx-auto max-w-4xl space-y-5">
         <Skeleton className="h-8 w-40" />
         <Skeleton className="h-48 w-full" />
       </div>
@@ -63,14 +63,14 @@ export function OutgoingLetterDetail({ id }: { id: string }) {
 
   if (isError || !l) {
     return (
-      <div className="space-y-4">
-        <Button variant="ghost" onClick={() => navigate('/outgoing')}>
-          <ArrowRight className="h-4 w-4" />
-          رجوع
-        </Button>
-        <Alert variant="destructive">
-          <AlertTitle>تعذّر تحميل الخطاب</AlertTitle>
-        </Alert>
+      <div className="mx-auto max-w-4xl space-y-5">
+        <QueryErrorState
+          title="تعذّر تحميل الخطاب"
+          error={error}
+          onRetry={() => refetch()}
+          backTo="/outgoing"
+          backLabel="رجوع للصادر"
+        />
       </div>
     )
   }
@@ -168,7 +168,11 @@ export function OutgoingLetterDetail({ id }: { id: string }) {
       <SendLetterDialog letter={l} open={sendOpen} onOpenChange={setSendOpen} />
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="max-w-xl">
+        {/* نقرة الخلفية لا تُغلق النموذج — حتى لا تضيع التعديلات بلا تحذير */}
+        <DialogContent
+          className="max-w-xl"
+          onInteractOutside={(e) => e.preventDefault()}
+        >
           <OutgoingLetterForm letter={l} onDone={() => setEditOpen(false)} />
         </DialogContent>
       </Dialog>

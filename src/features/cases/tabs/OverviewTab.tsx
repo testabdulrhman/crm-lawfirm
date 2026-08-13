@@ -74,7 +74,7 @@ export function OverviewTab({ caseData: c }: { caseData: Case }) {
               {c.contact.phone && (
                 <button
                   dir="ltr"
-                  className="flex items-center justify-end gap-1 text-sm text-muted-foreground hover:text-gold"
+                  className="flex items-center justify-end gap-1 rounded-sm text-sm text-muted-foreground hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   onClick={() => openExternal(`tel:${c.contact!.phone}`)}
                 >
                   <span>{c.contact.phone}</span>

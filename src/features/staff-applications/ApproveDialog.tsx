@@ -110,7 +110,13 @@ export function ApproveDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    // أثناء الاعتماد (إنشاء حساب + SMS) لا يُغلق الحوار — يمنع تكرار الإنشاء
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        if (!approveM.isPending) onOpenChange(o)
+      }}
+    >
       <DialogContent>
         <form onSubmit={handleSubmit(onSubmit)}>
           <DialogHeader>

@@ -153,18 +153,25 @@ export function AppointmentForm({
         </div>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Controller
-            control={control}
-            name="appointment_date"
-            render={({ field }) => (
-              <DualDatePicker
-                label="التاريخ"
-                required
-                value={field.value || null}
-                onChange={(v) => field.onChange(v ?? '')}
-              />
+          <div className="space-y-1.5">
+            <Controller
+              control={control}
+              name="appointment_date"
+              render={({ field }) => (
+                <DualDatePicker
+                  label="التاريخ"
+                  required
+                  value={field.value || null}
+                  onChange={(v) => field.onChange(v ?? '')}
+                />
+              )}
+            />
+            {errors.appointment_date && (
+              <p className="text-xs text-destructive">
+                {errors.appointment_date.message}
+              </p>
             )}
-          />
+          </div>
           <div className="space-y-1.5">
             <Label htmlFor="appt_time">الوقت</Label>
             <Input id="appt_time" type="time" {...register('appointment_time')} />
@@ -200,13 +207,14 @@ export function AppointmentForm({
             />
           </div>
         </div>
-        {errors.appointment_date && (
-          <p className="text-xs text-destructive">
-            {errors.appointment_date.message}
-          </p>
-        )}
 
         {/* حالة الفترة: محجوزة أم شاغرة */}
+        {wDate && wTime && checkingConflict && (
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            جارٍ التحقق من توفر الوقت…
+          </p>
+        )}
         {wDate && wTime && !checkingConflict && (
           conflict ? (
             <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-2.5">
@@ -237,7 +245,11 @@ export function AppointmentForm({
       </div>
 
       <DialogFooter className="gap-2">
-        <Button type="submit" variant="gold" disabled={pending || !!conflict}>
+        <Button
+          type="submit"
+          variant="gold"
+          disabled={pending || !!conflict || checkingConflict}
+        >
           {pending && <Loader2 className="h-4 w-4 animate-spin" />}
           {isEdit ? 'حفظ التعديلات' : 'إضافة'}
         </Button>

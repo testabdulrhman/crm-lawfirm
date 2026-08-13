@@ -15,11 +15,11 @@ import {
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Alert, AlertTitle } from '@/components/ui/alert'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { QueryErrorState } from '@/components/QueryErrorState'
+import { useConfirm } from '@/components/ConfirmDialog'
 import {
   Select,
   SelectContent,
@@ -50,17 +50,13 @@ import {
   useSendThankYou,
 } from '@/hooks/useAppointments'
 import { AppointmentForm } from './AppointmentForm'
-import {
-  APPT_STATUS_OPTIONS,
-  apptStatusBadge,
-  apptStatusLabel,
-} from '@/lib/appointmentLabels'
+import { APPT_STATUS_OPTIONS, apptStatusLabel } from '@/lib/appointmentLabels'
 
 export function AppointmentDetail({ id }: { id: string }) {
   const [, navigate] = useLocation()
   const { teamMember } = useAuth()
   const isDirector = useIsDirector()
-  const { data: a, isLoading, isError } = useAppointment(id)
+  const { data: a, isLoading, isError, error, refetch } = useAppointment(id)
   const statusM = useUpdateAppointmentStatus()
   const deleteM = useDeleteAppointment()
   const confirmM = useSendConfirmation()
@@ -68,6 +64,7 @@ export function AppointmentDetail({ id }: { id: string }) {
 
   const [editOpen, setEditOpen] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const { confirm, dialog } = useConfirm()
 
   if (isLoading) {
     return (
@@ -80,15 +77,13 @@ export function AppointmentDetail({ id }: { id: string }) {
 
   if (isError || !a) {
     return (
-      <div className="space-y-4">
-        <Button variant="ghost" onClick={() => navigate('/appointments')}>
-          <ArrowRight className="h-4 w-4" />
-          رجوع
-        </Button>
-        <Alert variant="destructive">
-          <AlertTitle>تعذّر تحميل الموعد</AlertTitle>
-        </Alert>
-      </div>
+      <QueryErrorState
+        title="تعذّر تحميل الموعد"
+        error={error}
+        onRetry={() => refetch()}
+        backTo="/appointments"
+        backLabel="رجوع للمواعيد"
+      />
     )
   }
 
@@ -104,17 +99,23 @@ export function AppointmentDetail({ id }: { id: string }) {
           <ArrowRight className="h-4 w-4" />
           رجوع للمواعيد
         </Button>
-        {isDirector && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-destructive"
-            onClick={() => setConfirmDelete(true)}
-          >
-            <Trash2 className="h-4 w-4" />
-            حذف
+        <div className="flex items-center gap-1">
+          <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
+            <Pencil className="h-4 w-4" />
+            تعديل
           </Button>
-        )}
+          {isDirector && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-destructive"
+              onClick={() => setConfirmDelete(true)}
+            >
+              <Trash2 className="h-4 w-4" />
+              حذف
+            </Button>
+          )}
+        </div>
       </div>
 
       <Card>
@@ -143,28 +144,31 @@ export function AppointmentDetail({ id }: { id: string }) {
                 )}
               </div>
             </div>
-            <Select
-              value={a.status ?? 'confirmed'}
-              onValueChange={(v) => statusM.mutate({ id: a.id, status: v })}
-            >
-              <SelectTrigger className="h-9 w-28">
-                <SelectValue>{apptStatusLabel(a.status)}</SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {APPT_STATUS_OPTIONS.map((o) => (
-                  <SelectItem key={o.value} value={o.value}>
-                    {o.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="flex items-center gap-2">
+              {statusM.isPending && (
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              )}
+              <Select
+                value={a.status ?? 'confirmed'}
+                disabled={statusM.isPending}
+                onValueChange={(v) => statusM.mutate({ id: a.id, status: v })}
+              >
+                <SelectTrigger className="h-9 w-28">
+                  <SelectValue>{apptStatusLabel(a.status)}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {APPT_STATUS_OPTIONS.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>
+                      {o.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           {/* العميل */}
           <div className="flex flex-wrap items-center gap-3 border-t pt-4 text-sm">
-            <Badge variant={apptStatusBadge(a.status)}>
-              {apptStatusLabel(a.status)}
-            </Badge>
             {clientPhone && (
               <button
                 dir="ltr"
@@ -208,15 +212,41 @@ export function AppointmentDetail({ id }: { id: string }) {
             title="تأكيد الموعد"
             sentAt={a.confirmation_sent_at}
             pending={confirmM.isPending}
-            onSend={() =>
-              confirmM.mutate({ appointment: a, sentBy })
-            }
+            hasPhone={!!clientPhone}
+            onSend={() => {
+              const send = () => confirmM.mutate({ appointment: a, sentBy })
+              if (a.confirmation_sent_at) {
+                confirm({
+                  title: 'إعادة إرسال رسالة التأكيد؟',
+                  description: 'أُرسلت رسالة التأكيد سابقاً — ستصل العميل رسالة SMS جديدة.',
+                  confirmLabel: 'إرسال',
+                  destructive: false,
+                  onConfirm: send,
+                })
+              } else {
+                send()
+              }
+            }}
           />
           <SmsRow
             title="رسالة شكر بعد الموعد"
             sentAt={a.thank_you_sent_at}
             pending={thankM.isPending}
-            onSend={() => thankM.mutate({ appointment: a, sentBy })}
+            hasPhone={!!clientPhone}
+            onSend={() => {
+              const send = () => thankM.mutate({ appointment: a, sentBy })
+              if (a.thank_you_sent_at) {
+                confirm({
+                  title: 'إعادة إرسال رسالة الشكر؟',
+                  description: 'أُرسلت رسالة الشكر سابقاً — ستصل العميل رسالة SMS جديدة.',
+                  confirmLabel: 'إرسال',
+                  destructive: false,
+                  onConfirm: send,
+                })
+              } else {
+                send()
+              }
+            }}
           />
           {!clientPhone && (
             <p className="text-xs text-destructive">
@@ -226,14 +256,8 @@ export function AppointmentDetail({ id }: { id: string }) {
         </CardContent>
       </Card>
 
-      <div className="flex justify-end">
-        <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
-          <Pencil className="h-4 w-4" />
-          تعديل
-        </Button>
-      </div>
-
       {/* الحوارات */}
+      {dialog}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent className="max-w-xl">
           <AppointmentForm appointment={a} onDone={() => setEditOpen(false)} />
@@ -269,11 +293,13 @@ function SmsRow({
   title,
   sentAt,
   pending,
+  hasPhone,
   onSend,
 }: {
   title: string
   sentAt: string | null
   pending: boolean
+  hasPhone: boolean
   onSend: () => void
 }) {
   return (
@@ -289,7 +315,13 @@ function SmsRow({
           <p className="text-xs text-muted-foreground">لم يُرسل بعد</p>
         )}
       </div>
-      <Button variant="outline" size="sm" onClick={onSend} disabled={pending}>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={onSend}
+        disabled={pending || !hasPhone}
+        title={!hasPhone ? 'لا يوجد رقم جوال للعميل' : undefined}
+      >
         {pending && <Loader2 className="h-4 w-4 animate-spin" />}
         {sentAt ? 'إعادة الإرسال' : 'إرسال'}
       </Button>

@@ -30,6 +30,8 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Card, CardContent } from '@/components/ui/card'
+import { QueryErrorState } from '@/components/QueryErrorState'
+import { useConfirm } from '@/components/ConfirmDialog'
 import { Alert, AlertTitle } from '@/components/ui/alert'
 import {
   Dialog,
@@ -97,7 +99,7 @@ export function TaskRoomPage({ id }: { id: string }) {
   const { teamMember } = useAuth()
   const isDirector = useIsDirector()
 
-  const { data: task, isLoading, isError } = useTaskDetail(id)
+  const { data: task, isLoading, isError, error, refetch } = useTaskDetail(id)
   const { data: participants } = useTaskParticipants(id)
   const { data: files } = useTaskFiles(id)
   const { data: comments } = useTaskComments(id)
@@ -125,15 +127,29 @@ export function TaskRoomPage({ id }: { id: string }) {
   }
 
   if (isError || !task) {
+    // PGRST116 = ‏.single()‎ لم يجد صفاً — المهمة غير موجودة فعلاً (حُذفت غالباً)،
+    // وما عداه خطأ حقيقي (شبكة/صلاحيات) يُعرض سببه مع إعادة محاولة.
+    const notFound =
+      !task && (!isError || (error as { code?: string } | null)?.code === 'PGRST116')
     return (
       <div className="mx-auto max-w-3xl space-y-4">
         <Button variant="ghost" onClick={() => navigate('/tasks')}>
           <ArrowRight className="h-4 w-4" />
           رجوع للمهام
         </Button>
-        <Alert variant="destructive">
-          <AlertTitle>تعذّر تحميل المهمة — قد تكون حُذفت</AlertTitle>
-        </Alert>
+        {notFound ? (
+          <QueryErrorState
+            title="المهمة غير موجودة — قد تكون حُذفت"
+            backTo="/tasks"
+            backLabel="رجوع للمهام"
+          />
+        ) : (
+          <QueryErrorState
+            title="تعذّر تحميل المهمة"
+            error={error}
+            onRetry={() => refetch()}
+          />
+        )}
       </div>
     )
   }
@@ -277,9 +293,9 @@ export function TaskRoomPage({ id }: { id: string }) {
       {/* الخط الزمني + التعليق */}
       <Card>
         <CardContent className="space-y-4 p-5">
-          <h3 className="flex items-center gap-2 text-[15px] font-semibold text-foreground">
+          <h3 className="flex items-center gap-2 text-base font-semibold text-foreground">
             <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gold/10">
-              <History className="h-[18px] w-[18px] text-gold" />
+              <History className="h-5 w-5 text-gold" />
             </span>
             سير العمل والنقاش
             {timeline.length > 0 && (
@@ -324,7 +340,7 @@ export function TaskRoomPage({ id }: { id: string }) {
           <AlertDialogHeader>
             <AlertDialogTitle>حذف المهمة</AlertDialogTitle>
             <AlertDialogDescription>
-              سيُحذف «{task.title}» مع إمكانية الاسترجاع من قِبل المدير. متابعة؟
+              سيُحذف «{task.title}» ويمكن للمدير استرجاعه. متابعة؟
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -392,6 +408,7 @@ function TeamStrip({
 }) {
   const addM = useAddParticipant(taskId)
   const removeM = useRemoveParticipant(taskId)
+  const { confirm, dialog } = useConfirm()
   const [pickOpen, setPickOpen] = useState(false)
 
   const inTeam = new Set([
@@ -414,7 +431,7 @@ function TeamStrip({
           <span className="text-xs font-medium text-foreground">
             {assignee.short_name || assignee.name}
           </span>
-          <span className="text-[10px] text-muted-foreground">مسؤول</span>
+          <span className="text-xs text-muted-foreground">مسؤول</span>
         </span>
       )}
       {participants.map((p) => (
@@ -432,8 +449,15 @@ function TeamStrip({
             {p.member?.short_name || p.member?.name}
           </span>
           <button
-            onClick={() => removeM.mutate(p.id)}
-            className="rounded-full p-0.5 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+            onClick={() =>
+              confirm({
+                title: 'إزالة من الفريق',
+                description: `سيُزال «${p.member?.short_name || p.member?.name || 'الموظف'}» من فريق المهمة.`,
+                confirmLabel: 'إزالة',
+                onConfirm: () => removeM.mutate(p.id),
+              })
+            }
+            className="-m-1.5 rounded-full p-2 text-muted-foreground transition-opacity hover:text-destructive focus-visible:opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
             aria-label="إزالة من الفريق"
           >
             <X className="h-3 w-3" />
@@ -443,12 +467,14 @@ function TeamStrip({
       <Button
         variant="outline"
         size="sm"
-        className="h-7 rounded-full px-2.5 text-xs"
+        className="h-9 rounded-full px-3 text-xs"
         onClick={() => setPickOpen(true)}
       >
         <UserPlus className="h-3.5 w-3.5" />
         إضافة
       </Button>
+
+      {dialog}
 
       <Dialog open={pickOpen} onOpenChange={setPickOpen}>
         <DialogContent className="max-w-sm">
@@ -536,14 +562,25 @@ function WorkFileCard({
     <Card>
       <CardContent className="space-y-3 p-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3 className="flex items-center gap-2 text-[15px] font-semibold text-foreground">
+          <h3 className="flex items-center gap-2 text-base font-semibold text-foreground">
             <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gold/10">
-              <FileText className="h-[18px] w-[18px] text-gold" />
+              <FileText className="h-5 w-5 text-gold" />
             </span>
             ملف العمل
           </h3>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={onPick} disabled={uploadM.isPending}>
+            {/* الرفع مقفول أثناء الاعتماد/بعد الإنجاز — حتى لا تُعتمد نسخة غير التي رُفعت */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onPick}
+              disabled={uploadM.isPending || !canSubmit}
+              title={
+                !canSubmit
+                  ? 'لا يمكن رفع نسخة أثناء الاعتماد أو بعد الإنجاز — أرجِع المهمة للعمل أولاً'
+                  : undefined
+              }
+            >
               <FileUp className="h-4 w-4" />
               {latest ? 'تحديث النسخة' : 'رفع الملف'}
             </Button>
@@ -627,7 +664,7 @@ function WorkFileCard({
                             {f.file_name || 'ملف'}
                             {f.note && ` — ${f.note}`}
                           </p>
-                          <p className="text-[11px] text-muted-foreground">
+                          <p className="text-xs text-muted-foreground">
                             {f.uploader?.short_name || f.uploader?.name || '—'} ·{' '}
                             {fmtDateTime(f.created_at)}
                           </p>
@@ -885,6 +922,7 @@ function ChecklistCard({ taskId, readOnly }: { taskId: string; readOnly: boolean
   const addM = useAddSubtask(taskId)
   const toggleM = useToggleSubtask(taskId)
   const deleteM = useDeleteSubtask(taskId)
+  const { confirm, dialog } = useConfirm()
   const [title, setTitle] = useState('')
 
   const list = subtasks ?? []
@@ -901,9 +939,9 @@ function ChecklistCard({ taskId, readOnly }: { taskId: string; readOnly: boolean
   return (
     <Card>
       <CardContent className="space-y-3 p-5">
-        <h3 className="flex items-center gap-2 text-[15px] font-semibold text-foreground">
+        <h3 className="flex items-center gap-2 text-base font-semibold text-foreground">
           <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gold/10">
-            <CheckCircle2 className="h-[18px] w-[18px] text-gold" />
+            <CheckCircle2 className="h-5 w-5 text-gold" />
           </span>
           قائمة التحقق
           {list.length > 0 && (
@@ -917,14 +955,17 @@ function ChecklistCard({ taskId, readOnly }: { taskId: string; readOnly: boolean
           <ul className="space-y-1">
             {list.map((s) => (
               <li key={s.id} className="group flex items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-accent/5">
-                <input
-                  type="checkbox"
-                  checked={s.is_done}
-                  disabled={readOnly}
-                  onChange={(e) => toggleM.mutate({ id: s.id, done: e.target.checked })}
-                  className="h-4 w-4 shrink-0 cursor-pointer accent-gold"
-                  aria-label={s.title}
-                />
+                {/* هدف لمس موسّع حول المربع مع إبقاء حجمه البصري */}
+                <label className="-m-2 flex shrink-0 cursor-pointer p-2">
+                  <input
+                    type="checkbox"
+                    checked={s.is_done}
+                    disabled={readOnly}
+                    onChange={(e) => toggleM.mutate({ id: s.id, done: e.target.checked })}
+                    className="h-4 w-4 shrink-0 cursor-pointer accent-gold disabled:cursor-not-allowed"
+                    aria-label={s.title}
+                  />
+                </label>
                 <span
                   className={cn(
                     'flex-1 text-sm',
@@ -935,8 +976,14 @@ function ChecklistCard({ taskId, readOnly }: { taskId: string; readOnly: boolean
                 </span>
                 {!readOnly && (
                   <button
-                    onClick={() => deleteM.mutate(s.id)}
-                    className="text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+                    onClick={() =>
+                      confirm({
+                        title: 'حذف البند',
+                        description: `سيُحذف بند «${s.title}» نهائياً.`,
+                        onConfirm: () => deleteM.mutate(s.id),
+                      })
+                    }
+                    className="-m-2 p-2 text-muted-foreground transition-opacity hover:text-destructive focus-visible:opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
                     aria-label="حذف البند"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
@@ -967,6 +1014,8 @@ function ChecklistCard({ taskId, readOnly }: { taskId: string; readOnly: boolean
             </Button>
           </div>
         )}
+
+        {dialog}
       </CardContent>
     </Card>
   )
@@ -986,6 +1035,7 @@ function TimelineRow({
   isDirector: boolean
 }) {
   const deleteM = useDeleteComment(taskId)
+  const { confirm, dialog } = useConfirm()
 
   if (item.kind === 'file') {
     const f = item.file
@@ -1053,13 +1103,19 @@ function TimelineRow({
           <span className="text-xs font-semibold text-foreground">
             {c.author?.short_name || c.author?.name || 'موظف'}
           </span>
-          <span className="text-[11px] text-muted-foreground">
+          <span className="text-xs text-muted-foreground">
             {fmtDateTime(c.created_at)}
           </span>
           {(mine || isDirector) && (
             <button
-              onClick={() => deleteM.mutate(c.id)}
-              className="mr-auto text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+              onClick={() =>
+                confirm({
+                  title: 'حذف التعليق',
+                  description: 'سيُحذف التعليق من نقاش المهمة.',
+                  onConfirm: () => deleteM.mutate(c.id),
+                })
+              }
+              className="mr-auto -m-2 p-2 text-muted-foreground transition-opacity hover:text-destructive focus-visible:opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
               aria-label="حذف التعليق"
             >
               <Trash2 className="h-3 w-3" />
@@ -1070,6 +1126,7 @@ function TimelineRow({
           {renderMentions(c.body)}
         </p>
       </div>
+      {dialog}
     </li>
   )
 }
@@ -1104,6 +1161,7 @@ function Composer({
   // من ذُكر فعلاً عبر القائمة — لا نخمّن من النص
   const [mentions, setMentions] = useState<Map<string, string>>(new Map())
   const [mentionQuery, setMentionQuery] = useState<string | null>(null)
+  const [activeIdx, setActiveIdx] = useState(0)
   const areaRef = useRef<HTMLTextAreaElement>(null)
 
   const onChange = (v: string) => {
@@ -1113,6 +1171,7 @@ function Composer({
     const upto = el ? v.slice(0, el.selectionStart ?? v.length) : v
     const m = upto.match(/@([\p{L}\p{N}_]*)$/u)
     setMentionQuery(m ? m[1] : null)
+    setActiveIdx(0)
   }
 
   const pickMention = (member: { id: string; name: string; short_name: string | null }) => {
@@ -1157,10 +1216,15 @@ function Composer({
       {/* قائمة المنشن */}
       {matches.length > 0 && (
         <div className="absolute bottom-full right-0 z-10 mb-1 w-56 overflow-hidden rounded-xl border bg-card shadow-lg">
-          {matches.map((m) => (
+          {matches.map((m, i) => (
             <button
               key={m.id}
-              className="flex w-full items-center gap-2 px-3 py-2 text-right text-sm hover:bg-accent/10"
+              className={cn(
+                'flex w-full items-center gap-2 px-3 py-2 text-right text-sm hover:bg-accent/10',
+                i === activeIdx && 'bg-accent/10'
+              )}
+              // منع سرقة التركيز من الحقل حتى لا تُغلق القائمة قبل النقر
+              onMouseDown={(e) => e.preventDefault()}
               onClick={() => pickMention(m)}
             >
               <AtSign className="h-3.5 w-3.5 text-gold" />
@@ -1175,7 +1239,31 @@ function Composer({
           rows={2}
           value={body}
           onChange={(e) => onChange(e.target.value)}
+          onBlur={() => setTimeout(() => setMentionQuery(null), 150)}
           onKeyDown={(e) => {
+            // تنقّل قائمة المنشن: أسهم + Enter للاختيار + Escape للإغلاق
+            if (matches.length > 0) {
+              if (e.key === 'ArrowDown') {
+                e.preventDefault()
+                setActiveIdx((i) => (i + 1) % matches.length)
+                return
+              }
+              if (e.key === 'ArrowUp') {
+                e.preventDefault()
+                setActiveIdx((i) => (i - 1 + matches.length) % matches.length)
+                return
+              }
+              if (e.key === 'Escape') {
+                e.preventDefault()
+                setMentionQuery(null)
+                return
+              }
+              if (e.key === 'Enter' && !e.metaKey && !e.ctrlKey && !e.shiftKey) {
+                e.preventDefault()
+                pickMention(matches[activeIdx] ?? matches[0])
+                return
+              }
+            }
             if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) send()
           }}
           placeholder="اكتب تعليقاً… استخدم @ لذكر موظف"

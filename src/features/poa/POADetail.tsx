@@ -10,14 +10,16 @@ import {
   BookUser,
   Scale,
   AlertTriangle,
+  Loader2,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Card, CardContent } from '@/components/ui/card'
-import { Alert, AlertTitle } from '@/components/ui/alert'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { QueryErrorState } from '@/components/QueryErrorState'
+import { useConfirm } from '@/components/ConfirmDialog'
 import {
   Select,
   SelectContent,
@@ -64,20 +66,19 @@ export function POADetail({ id }: { id: string }) {
   const [, navigate] = useLocation()
   const { teamMember } = useAuth()
   const isDirector = useIsDirector()
-  const { data: poa, isLoading, isError } = usePOA(id)
+  const { data: poa, isLoading, isError, error, refetch } = usePOA(id)
   const statusM = useUpdatePOAStatus()
   const deleteM = useDeletePOA()
 
   const [editOpen, setEditOpen] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const { confirm, dialog: confirmDialog } = useConfirm()
 
   // رفع/استبدال مستند الوكالة بالإفلات
   const updateM = useUpdatePOA()
   const [uploadingDoc, setUploadingDoc] = useState(false)
-  const onDocFile = async (files: File[]) => {
-    const f = files[0]
-    if (!f || uploadingDoc) return
+  const uploadDoc = async (f: File) => {
     setUploadingDoc(true)
     try {
       const { publicUrl } = await uploadFile(f, { folder: `poa/${id}` })
@@ -92,6 +93,23 @@ export function POADetail({ id }: { id: string }) {
       setUploadingDoc(false)
     }
   }
+  const onDocFile = (files: File[]) => {
+    const f = files[0]
+    if (!f || uploadingDoc) return
+    // استبدال مستند قائم لا رجوع عنه — يمرّ بتأكيد صريح
+    if (poa?.document_url) {
+      confirm({
+        title: 'استبدال مستند الوكالة',
+        description: `سيحلّ «${f.name}» محل المستند الحالي ولا يمكن استرجاع القديم. هل تريد المتابعة؟`,
+        confirmLabel: 'استبدال',
+        onConfirm: () => {
+          void uploadDoc(f)
+        },
+      })
+    } else {
+      void uploadDoc(f)
+    }
+  }
 
   if (isLoading) {
     return (
@@ -104,15 +122,13 @@ export function POADetail({ id }: { id: string }) {
 
   if (isError || !poa) {
     return (
-      <div className="space-y-4">
-        <Button variant="ghost" onClick={() => navigate('/poa')}>
-          <ArrowRight className="h-4 w-4" />
-          رجوع
-        </Button>
-        <Alert variant="destructive">
-          <AlertTitle>تعذّر تحميل الوكالة</AlertTitle>
-        </Alert>
-      </div>
+      <QueryErrorState
+        title="تعذّر تحميل الوكالة"
+        error={error}
+        onRetry={() => refetch()}
+        backTo="/poa"
+        backLabel="رجوع للوكالات"
+      />
     )
   }
 
@@ -168,21 +184,27 @@ export function POADetail({ id }: { id: string }) {
               </div>
             </div>
             {/* مبدّل الحالة */}
-            <Select
-              value={poa.status ?? 'active'}
-              onValueChange={(v) => statusM.mutate({ id: poa.id, status: v })}
-            >
-              <SelectTrigger className="h-9 w-28">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {POA_STATUS_OPTIONS.map((o) => (
-                  <SelectItem key={o.value} value={o.value}>
-                    {o.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="flex items-center gap-2">
+              {statusM.isPending && (
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              )}
+              <Select
+                value={poa.status ?? 'active'}
+                disabled={statusM.isPending}
+                onValueChange={(v) => statusM.mutate({ id: poa.id, status: v })}
+              >
+                <SelectTrigger className="h-9 w-28">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {POA_STATUS_OPTIONS.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>
+                      {o.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           <dl className="grid grid-cols-1 gap-x-6 gap-y-3 border-t pt-4 sm:grid-cols-2">
@@ -255,8 +277,12 @@ export function POADetail({ id }: { id: string }) {
       </Card>
 
       {/* الحوارات */}
+      {confirmDialog}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="max-w-xl">
+        <DialogContent
+          className="max-w-xl"
+          onInteractOutside={(e) => e.preventDefault()}
+        >
           <POAForm poa={poa} onDone={() => setEditOpen(false)} />
         </DialogContent>
       </Dialog>

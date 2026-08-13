@@ -5,7 +5,7 @@ import type { LegalServiceStatus, LegalServiceType } from '@/types/db'
 export const LS_TYPE_LABELS: Record<LegalServiceType, string> = {
   consultation: 'استشارة',
   regulation: 'لائحة',
-  contract: 'عقد',
+  contract: 'صياغة عقد',
 }
 
 export const LS_TYPE_BADGE: Record<LegalServiceType, BadgeProps['variant']> = {

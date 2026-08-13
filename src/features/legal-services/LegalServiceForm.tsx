@@ -268,7 +268,7 @@ export function LegalServiceForm({
                 )}
               />
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label htmlFor="ls_p1">الطرف الأول</Label>
                 <Input id="ls_p1" {...register('party_first')} />
@@ -299,11 +299,18 @@ export function LegalServiceForm({
               control={control}
               name="assignee_id"
               render={({ field }) => (
-                <Select value={field.value || undefined} onValueChange={field.onChange}>
+                <Select
+                  value={field.value || undefined}
+                  onValueChange={(v) =>
+                    field.onChange(v === '__none__' ? '' : v)
+                  }
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="اختر المسؤول" />
                   </SelectTrigger>
                   <SelectContent>
+                    {/* يسمح بإفراغ الإسناد بعد اختياره — تصحيح إسناد خاطئ */}
+                    <SelectItem value="__none__">بدون مسؤول</SelectItem>
                     {activeMembers.map((m) => (
                       <SelectItem key={m.id} value={m.id}>
                         {m.name}

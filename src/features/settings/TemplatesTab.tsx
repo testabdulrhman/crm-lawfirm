@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { EmptyState } from '@/components/EmptyState'
+import { QueryErrorState } from '@/components/QueryErrorState'
 import {
   useMessageTemplates,
   useUpdateMessageTemplate,
@@ -13,7 +15,7 @@ import {
 } from '@/hooks/useMessageTemplates'
 
 export function TemplatesTab() {
-  const { data, isLoading } = useMessageTemplates()
+  const { data, isLoading, isError, error, refetch } = useMessageTemplates()
 
   if (isLoading) {
     return (
@@ -25,6 +27,16 @@ export function TemplatesTab() {
     )
   }
 
+  if (isError) {
+    return (
+      <QueryErrorState
+        title="تعذّر تحميل قوالب الرسائل"
+        error={error}
+        onRetry={() => refetch()}
+      />
+    )
+  }
+
   return (
     <div className="space-y-3">
       <p className="text-sm text-muted-foreground">
@@ -32,9 +44,15 @@ export function TemplatesTab() {
         أقواس (مثل <code className="text-gold">{'{name}'}</code>) تُستبدل تلقائياً
         عند الإرسال.
       </p>
-      {(data ?? []).map((t) => (
-        <TemplateCard key={t.id} template={t} />
-      ))}
+      {(data ?? []).length === 0 ? (
+        <EmptyState
+          icon={MessageSquareText}
+          title="لا توجد قوالب رسائل"
+          description="تُهيَّأ القوالب مع إعداد النظام وتظهر هنا فور توفّرها — راجع مدير النظام إن لم تظهر."
+        />
+      ) : (
+        (data ?? []).map((t) => <TemplateCard key={t.id} template={t} />)
+      )}
     </div>
   )
 }
@@ -56,6 +74,14 @@ function TemplateCard({ template }: { template: MessageTemplate }) {
             {template.key && (
               <Badge variant="outline" className="font-mono text-xs">
                 {template.key}
+              </Badge>
+            )}
+            {dirty && (
+              <Badge
+                variant="outline"
+                className="border-amber-500/50 text-amber-600 dark:text-amber-500"
+              >
+                غير محفوظ
               </Badge>
             )}
           </div>

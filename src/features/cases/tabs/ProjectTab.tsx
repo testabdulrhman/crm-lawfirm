@@ -1,7 +1,7 @@
 // تبويب «بطاقة المشروع» — الطبقة الإدارية للقضية وفق إطار إدارة المشاريع القانونية:
 // الغاية، نطاق العمل وما لا يشمله، المخرجات المتفق عليها، الافتراضات.
 // (المشروع القانوني إطار تنظيم العمل، والملف القضائي وعاء الوثائق)
-import { useEffect, useState } from 'react'
+import { useMemo } from 'react'
 import {
   Target,
   Briefcase,
@@ -19,8 +19,10 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Card, CardContent } from '@/components/ui/card'
+import { QueryErrorState } from '@/components/QueryErrorState'
 import { fmtDateTime } from '@/lib/format'
 import { useAuth } from '@/stores/auth'
+import { usePageState } from '@/hooks/usePageState'
 import {
   useCaseProject,
   useSaveCaseProject,
@@ -71,38 +73,30 @@ const FIELDS: {
   },
 ]
 
-const EMPTY: CaseProjectInput = {
-  goal: '',
-  scope_in: '',
-  scope_out: '',
-  deliverables: '',
-  assumptions: '',
-}
-
 export function ProjectTab({ caseId }: { caseId: string }) {
   const { teamMember } = useAuth()
-  const { data, isLoading } = useCaseProject(caseId)
+  const { data, isLoading, isError, error, refetch } = useCaseProject(caseId)
   const saveM = useSaveCaseProject(caseId)
 
-  const [form, setForm] = useState<CaseProjectInput>(EMPTY)
-  const [loaded, setLoaded] = useState(false)
-
-  // تعبئة النموذج عند وصول البيانات (مرة واحدة كي لا يُمسح ما يكتبه المستخدم)
-  useEffect(() => {
-    if (isLoading || loaded) return
-    setForm({
+  // مسودة الكتابة في sessionStorage بمفتاح القضية: TabsContent يُفكَّك عند
+  // تبديل التبويب، وأي كتابة غير محفوظة في حالة محلية بحتة كانت تضيع بصمت.
+  const [draft, setDraft] = usePageState<CaseProjectInput | null>(
+    `case-project-draft:${caseId}`,
+    null
+  )
+  const base = useMemo<CaseProjectInput>(
+    () => ({
       goal: data?.goal ?? '',
       scope_in: data?.scope_in ?? '',
       scope_out: data?.scope_out ?? '',
       deliverables: data?.deliverables ?? '',
       assumptions: data?.assumptions ?? '',
-    })
-    setLoaded(true)
-  }, [data, isLoading, loaded])
+    }),
+    [data]
+  )
+  const form = draft ?? base
 
-  const dirty =
-    loaded &&
-    FIELDS.some((f) => (form[f.key] ?? '') !== (data?.[f.key] ?? ''))
+  const dirty = FIELDS.some((f) => (form[f.key] ?? '') !== (data?.[f.key] ?? ''))
 
   const save = () => {
     const clean: CaseProjectInput = {
@@ -112,7 +106,10 @@ export function ProjectTab({ caseId }: { caseId: string }) {
       deliverables: form.deliverables?.trim() || null,
       assumptions: form.assumptions?.trim() || null,
     }
-    saveM.mutate({ input: clean, updatedBy: teamMember?.name ?? null })
+    saveM.mutate(
+      { input: clean, updatedBy: teamMember?.name ?? null },
+      { onSuccess: () => setDraft(null) }
+    )
   }
 
   if (isLoading) {
@@ -125,15 +122,25 @@ export function ProjectTab({ caseId }: { caseId: string }) {
     )
   }
 
+  if (isError) {
+    return (
+      <QueryErrorState
+        title="تعذّر تحميل بطاقة المشروع"
+        error={error}
+        onRetry={() => refetch()}
+      />
+    )
+  }
+
   return (
     <div className="space-y-5">
       <Card>
         <CardContent className="space-y-4 p-5">
           <div className="flex items-center gap-2.5">
             <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gold/10">
-              <Briefcase className="h-[18px] w-[18px] text-gold" />
+              <Briefcase className="h-5 w-5 text-gold" />
             </span>
-            <h3 className="text-[15px] font-semibold text-foreground">
+            <h3 className="text-base font-semibold text-foreground">
               بطاقة المشروع
             </h3>
           </div>
@@ -159,7 +166,7 @@ export function ProjectTab({ caseId }: { caseId: string }) {
                   rows={f.rows}
                   value={form[f.key] ?? ''}
                   onChange={(e) =>
-                    setForm((p) => ({ ...p, [f.key]: e.target.value }))
+                    setDraft((p) => ({ ...(p ?? base), [f.key]: e.target.value }))
                   }
                 />
               </div>

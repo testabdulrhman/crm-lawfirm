@@ -13,6 +13,7 @@ import {
   Ban,
   RotateCcw,
   Sparkles,
+  AlertTriangle,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -41,6 +42,9 @@ import {
 } from '@/components/ui/alert-dialog'
 import { FilePreviewDialog } from '@/components/FilePreviewDialog'
 import { DualDatePicker } from '@/components/DualDatePicker'
+import { QueryErrorState } from '@/components/QueryErrorState'
+import { EmptyState } from '@/components/EmptyState'
+import { Ltr } from '@/components/Ltr'
 
 import { cn } from '@/lib/utils'
 import { fmtDatePref, todayISO } from '@/lib/format'
@@ -58,7 +62,7 @@ import {
 import type { Ruling, RulingInput } from '@/types/db'
 
 export function RulingsTab({ caseId }: { caseId: string }) {
-  const { data, isLoading } = useCaseRulings(caseId)
+  const { data, isLoading, isError, error, refetch } = useCaseRulings(caseId)
   const deleteM = useDeleteRuling(caseId)
   const undropM = useUndropRuling(caseId)
 
@@ -80,6 +84,16 @@ export function RulingsTab({ caseId }: { caseId: string }) {
     )
   }
 
+  if (isError) {
+    return (
+      <QueryErrorState
+        title="تعذّر تحميل الأحكام"
+        error={error}
+        onRetry={() => refetch()}
+      />
+    )
+  }
+
   const rulings = data ?? []
 
   return (
@@ -98,7 +112,16 @@ export function RulingsTab({ caseId }: { caseId: string }) {
       </div>
 
       {rulings.length === 0 ? (
-        <EmptyState />
+        <EmptyState
+          icon={Gavel}
+          title="لا توجد أحكام"
+          description="سجّل الأحكام الصادرة في القضية وأرفق صكوكها."
+          actionLabel="حكم جديد"
+          onAction={() => {
+            setEditing(null)
+            setFormOpen(true)
+          }}
+        />
       ) : (
         <div className="space-y-3">
           {rulings.map((r) => (
@@ -198,7 +221,11 @@ function RulingCard({
               {r.title || 'حكم'}
             </p>
             <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-              {r.ruling_number && <span dir="ltr">رقم: {r.ruling_number}</span>}
+              {r.ruling_number && (
+                <span>
+                  رقم: <Ltr>{r.ruling_number}</Ltr>
+                </span>
+              )}
               {r.ruling_date && <span>{fmtDatePref(r.ruling_date)}</span>}
               {r.court_name && <span>{r.court_name}</span>}
             </div>
@@ -292,18 +319,6 @@ function RulingCard({
   )
 }
 
-function EmptyState() {
-  return (
-    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-16 text-center">
-      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-        <Gavel className="h-6 w-6 text-muted-foreground" />
-      </div>
-      <p className="font-medium text-foreground">لا توجد أحكام</p>
-      <p className="text-sm text-muted-foreground">أضِف أول حكم عبر «حكم جديد».</p>
-    </div>
-  )
-}
-
 /* ===================== نموذج الحكم ===================== */
 
 const schema = z.object({
@@ -335,6 +350,7 @@ function RulingForm({
   // رابط الصك المرفوع (يُعاد استخدامه بين الاستخراج والحفظ لتفادي رفع مزدوج)
   const [uploadedUrl, setUploadedUrl] = useState<string | null>(null)
   const [hijriHint, setHijriHint] = useState<string | null>(null)
+  const [formError, setFormError] = useState<string | null>(null)
   const pending = addM.isPending || updateM.isPending || uploading
 
   const {
@@ -391,7 +407,13 @@ function RulingForm({
     }
     const url = await ensureDocUrl(f)
     if (!url) return
-    const parsed = await extractM.mutateAsync(url)
+    // الهوك يُظهر سبب الفشل في toast — نلتقط الرمي حتى لا يبقى وعد مرفوض معلّقاً
+    let parsed
+    try {
+      parsed = await extractM.mutateAsync(url)
+    } catch {
+      return
+    }
     if (!parsed) return
     const set = (k: keyof FormValues, v: string | null | undefined) => {
       if (v && String(v).trim() !== '') setValue(k, String(v).trim())
@@ -410,6 +432,21 @@ function RulingForm({
 
   const onSubmit = async (values: FormValues) => {
     const t = (v: string | undefined) => (v && v.trim() !== '' ? v.trim() : null)
+
+    // حد أدنى قبل الحفظ — كل الحقول اختيارية، وبدونه يُنشأ حكم فارغ تماماً
+    const hasContent =
+      t(values.title) ||
+      t(values.ruling_number) ||
+      t(values.result) ||
+      file ||
+      uploadedUrl ||
+      ruling?.document_url
+    if (!hasContent) {
+      setFormError('أدخل بيانات الحكم (عنوان أو رقم أو نتيجة) أو أرفق الصك.')
+      return
+    }
+    setFormError(null)
+
     let documentUrl: string | null | undefined = uploadedUrl ?? undefined
     let uploadedByName: string | null | undefined =
       uploadedUrl ? (teamMember?.name ?? null) : undefined
@@ -531,6 +568,13 @@ function RulingForm({
           existing={ruling?.document_url}
           onPick={onPickFile}
         />
+
+        {formError && (
+          <p className="flex items-center gap-1 text-xs text-destructive">
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+            {formError}
+          </p>
+        )}
       </div>
 
       <DialogFooter className="gap-2">
@@ -596,8 +640,10 @@ function DropDialog({
     )
   }
 
+  const busy = dropM.isPending || uploading
+
   return (
-    <Dialog open={!!ruling} onOpenChange={(o) => !o && onClose()}>
+    <Dialog open={!!ruling} onOpenChange={(o) => !o && !busy && onClose()}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>إسقاط الحكم</DialogTitle>
@@ -626,15 +672,13 @@ function DropDialog({
         <DialogFooter className="gap-2">
           <Button
             variant="destructive"
-            disabled={dropM.isPending || uploading || reason.trim() === ''}
+            disabled={busy || reason.trim() === ''}
             onClick={submit}
           >
-            {(dropM.isPending || uploading) && (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            )}
+            {busy && <Loader2 className="h-4 w-4 animate-spin" />}
             تأكيد الإسقاط
           </Button>
-          <Button variant="outline" onClick={onClose}>
+          <Button variant="outline" onClick={onClose} disabled={busy}>
             إلغاء
           </Button>
         </DialogFooter>

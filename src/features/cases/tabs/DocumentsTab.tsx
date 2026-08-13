@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   Plus,
   Trash2,
@@ -9,6 +10,11 @@ import {
   Paperclip,
   Eye,
   FolderOpen,
+  CheckCircle2,
+  XCircle,
+  RotateCw,
+  X,
+  AlertTriangle,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -36,18 +42,142 @@ import {
 } from '@/components/ui/alert-dialog'
 import { FilePreviewDialog } from '@/components/FilePreviewDialog'
 import { DualDatePicker } from '@/components/DualDatePicker'
+import { QueryErrorState } from '@/components/QueryErrorState'
+import { EmptyState } from '@/components/EmptyState'
 
-import { fmtDatePref, fmtFileSize, todayISO } from '@/lib/format'
+import { fmtDatePref, fmtFileSize, fmtNumber, todayISO } from '@/lib/format'
 import { pickFile } from '@/lib/files'
 import { DropZone } from '@/components/DropZone'
 import { useAuth } from '@/stores/auth'
 import { useIsDirector } from '@/hooks/useIsDirector'
+import { errMessage } from '@/lib/errors'
+import { toast } from '@/hooks/use-toast'
 import {
   useCaseDocuments,
   useAddDocument,
   useDeleteDocument,
+  addDocumentDirect,
 } from '@/hooks/useCaseDocuments'
 import type { CaseDocument } from '@/types/db'
+
+/* ===== تقرير رفع الدفعة — دائم حتى يُغلق، لأن المستخدم يحذف الأصل من جهازه ===== */
+
+interface BatchItem {
+  id: string
+  file: File
+  status: 'pending' | 'uploading' | 'ok' | 'failed'
+  error?: string
+}
+
+function BatchReport({
+  batch,
+  uploading,
+  onRetry,
+  onClose,
+}: {
+  batch: BatchItem[]
+  uploading: boolean
+  onRetry: () => void
+  onClose: () => void
+}) {
+  const ok = batch.filter((b) => b.status === 'ok').length
+  const failed = batch.filter((b) => b.status === 'failed').length
+  const total = batch.length
+  const allOk = !uploading && ok === total
+
+  return (
+    <div
+      className={
+        failed > 0 && !uploading
+          ? 'space-y-2 rounded-xl border-2 border-destructive/60 bg-destructive/5 p-4'
+          : 'space-y-2 rounded-xl border p-4 ' + (allOk ? 'border-green-600/40 bg-green-500/5' : 'bg-card')
+      }
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="flex items-center gap-2 text-sm font-semibold text-foreground">
+          {uploading ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin text-gold" />
+              جارٍ الرفع… {fmtNumber(ok + failed)}/{fmtNumber(total)}
+            </>
+          ) : failed > 0 ? (
+            <>
+              <AlertTriangle className="h-4 w-4 text-destructive" />
+              <span className="text-destructive">
+                {fmtNumber(failed)} من {fmtNumber(total)} لم يُرفع — لا تحذف هذه
+                الملفات من جهازك
+              </span>
+            </>
+          ) : (
+            <>
+              <CheckCircle2 className="h-4 w-4 text-green-600" />
+              رُفعت كل الملفات ({fmtNumber(total)}) — يمكنك حذفها من جهازك بأمان
+            </>
+          )}
+        </p>
+        <div className="flex items-center gap-1.5">
+          {failed > 0 && !uploading && (
+            <Button variant="outline" size="sm" className="h-7 text-xs" onClick={onRetry}>
+              <RotateCw className="h-3.5 w-3.5" />
+              إعادة محاولة الفاشلة
+            </Button>
+          )}
+          {!uploading && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-muted-foreground"
+              onClick={onClose}
+              aria-label="إغلاق التقرير"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {uploading && (
+        <p className="text-xs text-muted-foreground">
+          لا تغلق الصفحة حتى يكتمل الرفع ويظهر الملخّص.
+        </p>
+      )}
+
+      <ul className="max-h-56 divide-y overflow-y-auto rounded-lg border bg-card">
+        {batch.map((b) => (
+          <li key={b.id} className="flex items-center gap-2.5 px-3 py-2">
+            {b.status === 'ok' ? (
+              <CheckCircle2 className="h-4 w-4 shrink-0 text-green-600" />
+            ) : b.status === 'failed' ? (
+              <XCircle className="h-4 w-4 shrink-0 text-destructive" />
+            ) : b.status === 'uploading' ? (
+              <Loader2 className="h-4 w-4 shrink-0 animate-spin text-gold" />
+            ) : (
+              <span className="h-4 w-4 shrink-0 rounded-full border-2 border-muted" />
+            )}
+            <div className="min-w-0 flex-1">
+              <p
+                className={
+                  'truncate text-xs ' +
+                  (b.status === 'failed'
+                    ? 'font-semibold text-destructive'
+                    : 'text-foreground')
+                }
+              >
+                {b.file.name}
+              </p>
+              {b.error && (
+                <p className="truncate text-xs text-destructive/80">{b.error}</p>
+              )}
+            </div>
+            <span className="shrink-0 text-xs text-muted-foreground">
+              {fmtFileSize(b.file.size)}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
 
 function docIcon(d: CaseDocument) {
   const s = `${d.file_type ?? ''} ${d.name ?? ''}`.toLowerCase()
@@ -57,46 +187,110 @@ function docIcon(d: CaseDocument) {
 }
 
 export function DocumentsTab({ caseId }: { caseId: string }) {
-  const { data, isLoading } = useCaseDocuments(caseId)
+  const { data, isLoading, isError, error, refetch } = useCaseDocuments(caseId)
   const { teamMember } = useAuth()
   const isDirector = useIsDirector()
   const deleteM = useDeleteDocument(caseId)
-  const addM = useAddDocument(caseId)
 
   const [uploadOpen, setUploadOpen] = useState(false)
   const [preview, setPreview] = useState<CaseDocument | null>(null)
   const [toDelete, setToDelete] = useState<CaseDocument | null>(null)
 
-  // عدّاد رفع الدفعة (سحب وإفلات)
-  const [batchLeft, setBatchLeft] = useState(0)
+  // رفع الدفعة بتقرير دائم: المستخدم يحذف الملفات من جهازه بعد الرفع،
+  // فرسالة فشل تختفي بعد ثوانٍ = خطر ضياع ملف بلا رجعة. التقرير يبقى
+  // معروضاً باسم كل ملف ومصيره حتى يُغلق بيده.
+  const qc = useQueryClient()
+  const [batch, setBatch] = useState<BatchItem[]>([])
+  const uploading = batch.some((b) => b.status === 'uploading' || b.status === 'pending')
 
-  // رفع مجموعة ملفات مباشرة (الاسم = اسم الملف، التاريخ = اليوم)
-  const uploadBatch = async (files: File[]) => {
-    if (files.length === 0 || batchLeft > 0) return
-    setBatchLeft(files.length)
-    for (const f of files) {
-      try {
-        await addM.mutateAsync({
-          file: f,
-          name: f.name,
-          documentDate: todayISO(),
-          description: null,
-          uploadedByName: teamMember?.name ?? null,
-        })
-      } catch {
-        /* الهوك يعرض سبب الفشل لكل ملف */
+  const runBatch = useCallback(
+    async (items: BatchItem[]) => {
+      for (const item of items) {
+        setBatch((s) =>
+          s.map((b) => (b.id === item.id ? { ...b, status: 'uploading' } : b))
+        )
+        try {
+          await addDocumentDirect(caseId, {
+            file: item.file,
+            name: item.file.name,
+            documentDate: todayISO(),
+            description: null,
+            uploadedByName: teamMember?.name ?? null,
+          })
+          setBatch((s) =>
+            s.map((b) => (b.id === item.id ? { ...b, status: 'ok' } : b))
+          )
+        } catch (e) {
+          setBatch((s) =>
+            s.map((b) =>
+              b.id === item.id
+                ? { ...b, status: 'failed', error: errMessage(e) ?? 'سبب غير معروف' }
+                : b
+            )
+          )
+          // شبكة أمان: لو غادر المستخدم التبويب فتفكّك التقرير، يبقى التوست
+          // (يظهر في أي شاشة وينجو من التفكيك) — لا فشل رفع صامتاً أبداً
+          toast({
+            variant: 'destructive',
+            title: `لم يُرفع: ${item.file.name}`,
+            description: errMessage(e) ?? undefined,
+          })
+        }
+        // الشبكة تُحدَّث أولاً بأول حتى تظهر البطاقات المرفوعة فوراً
+        qc.invalidateQueries({ queryKey: ['case_documents', caseId] })
       }
-      setBatchLeft((n) => Math.max(0, n - 1))
+    },
+    [caseId, teamMember?.name, qc]
+  )
+
+  // إغلاق المتصفح أثناء الرفع يقطع الدفعة بصمت — نعترض بسؤال تأكيد
+  useEffect(() => {
+    if (!uploading) return
+    const warn = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = ''
     }
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [uploading])
+
+  const uploadBatch = (files: File[]) => {
+    if (files.length === 0 || uploading) return
+    const items: BatchItem[] = files.map((f, i) => ({
+      id: `${Date.now()}-${i}`,
+      file: f,
+      status: 'pending',
+    }))
+    setBatch(items) // تقرير جديد يحل محل السابق
+    void runBatch(items)
+  }
+
+  const retryFailed = () => {
+    const failed = batch.filter((b) => b.status === 'failed')
+    if (failed.length === 0 || uploading) return
+    setBatch((s) =>
+      s.map((b) => (b.status === 'failed' ? { ...b, status: 'pending', error: undefined } : b))
+    )
+    void runBatch(failed)
   }
 
   if (isLoading) {
     return (
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {Array.from({ length: 6 }).map((_, i) => (
           <Skeleton key={i} className="h-36 w-full" />
         ))}
       </div>
+    )
+  }
+
+  if (isError) {
+    return (
+      <QueryErrorState
+        title="تعذّر تحميل المستندات"
+        error={error}
+        onRetry={() => refetch()}
+      />
     )
   }
 
@@ -113,14 +307,29 @@ export function DocumentsTab({ caseId }: { caseId: string }) {
 
       <DropZone
         onFiles={uploadBatch}
-        uploadingCount={batchLeft}
+        uploadingCount={batch.filter((b) => b.status === 'pending' || b.status === 'uploading').length}
         hint="تُرفع مباشرة باسم الملف وتاريخ اليوم. للتسمية والوصف استخدم «رفع مستند»."
       />
 
+      {batch.length > 0 && (
+        <BatchReport
+          batch={batch}
+          uploading={uploading}
+          onRetry={retryFailed}
+          onClose={() => setBatch([])}
+        />
+      )}
+
       {docs.length === 0 ? (
-        <EmptyState />
+        <EmptyState
+          icon={FolderOpen}
+          title="لا توجد مستندات"
+          description="ارفع أول مستند بسحبه هنا أو عبر زر الرفع."
+          actionLabel="رفع مستند"
+          onAction={() => setUploadOpen(true)}
+        />
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {docs.map((d) => (
             <DocCard
               key={d.id}
@@ -201,6 +410,7 @@ function DocCard({
     <Card className="flex flex-col">
       <CardContent className="flex flex-1 flex-col gap-3 p-4">
         {/* الأيقونة + الاسم (قابلة للنقر للمعاينة) */}
+        {/* button لا يقبل إلا phrasing content — لذلك span بدل p */}
         <button
           className="flex flex-1 flex-col items-center gap-2 text-center"
           onClick={onPreview}
@@ -209,21 +419,21 @@ function DocCard({
           <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-gold/10">
             <Icon className="h-6 w-6 text-gold" />
           </span>
-          <p
+          <span
             title={name}
-            className="w-full truncate text-sm font-medium text-foreground"
+            className="block w-full truncate text-sm font-medium text-foreground"
           >
             {name}
-          </p>
+          </span>
           {meta && (
-            <p className="w-full truncate text-xs text-muted-foreground">
+            <span className="block w-full truncate text-xs text-muted-foreground">
               {meta}
-            </p>
+            </span>
           )}
           {d.uploaded_by_name && (
-            <p className="w-full truncate text-xs text-muted-foreground">
+            <span className="block w-full truncate text-xs text-muted-foreground">
               رفعه: {d.uploaded_by_name}
-            </p>
+            </span>
           )}
         </button>
 
@@ -253,18 +463,6 @@ function DocCard({
         </div>
       </CardContent>
     </Card>
-  )
-}
-
-function EmptyState() {
-  return (
-    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-16 text-center">
-      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-        <FolderOpen className="h-6 w-6 text-muted-foreground" />
-      </div>
-      <p className="font-medium text-foreground">لا توجد مستندات</p>
-      <p className="text-sm text-muted-foreground">ارفع أول مستند عبر «رفع مستند».</p>
-    </div>
   )
 }
 
@@ -314,6 +512,8 @@ function UploadDialog({
     <Dialog
       open={open}
       onOpenChange={(o) => {
+        // لا إغلاق أثناء الرفع — الإغلاق يوهم أن الرفع أُلغي بينما يستمر خلف الكواليس
+        if (addM.isPending) return
         if (!o) reset()
         onOpenChange(o)
       }}
@@ -383,7 +583,11 @@ function UploadDialog({
             {addM.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
             رفع
           </Button>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={addM.isPending}
+          >
             إلغاء
           </Button>
         </DialogFooter>

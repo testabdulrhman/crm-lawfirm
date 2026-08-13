@@ -16,6 +16,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { CasePicker } from '@/components/CasePicker'
+import { Ltr } from '@/components/Ltr'
 import { fmtNumber, fmtDateTime } from '@/lib/format'
 import {
   useIncomingSms,
@@ -54,6 +55,7 @@ export function IncomingMessagesPage() {
   }, [data, search])
 
   return (
+    // استثناء مقصود عن max-w-6xl: قوائم الرسائل نصية طويلة تُقرأ أفضل بعرض أضيق
     <div className="mx-auto max-w-4xl space-y-6">
       <h2 className="text-2xl font-bold tracking-tight text-foreground">
         الرسائل الواردة{' '}
@@ -81,7 +83,7 @@ export function IncomingMessagesPage() {
       ) : filtered.length === 0 ? (
         <EmptyState />
       ) : (
-        <div className="divide-y overflow-hidden rounded-xl border bg-card">
+        <div className="divide-y divide-border/60 overflow-hidden rounded-xl border bg-card">
           {filtered.map((m) => (
             <MessageRow key={m.id} m={m} matchedCase={matchCase(m, byCourtNum)} />
           ))}
@@ -147,7 +149,8 @@ function MessageRow({
     <div className="space-y-1.5 px-4 py-3">
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant="gold" className="shrink-0">
-          {m.recipient_name || m.phone || 'مجهول'}
+          {m.recipient_name ||
+            (m.phone ? <Ltr>{m.phone}</Ltr> : 'مجهول')}
         </Badge>
         {senderIsPhone && m.recipient_name && m.recipient_name !== m.phone && (
           <span dir="ltr" className="text-xs text-muted-foreground">
@@ -173,11 +176,16 @@ function MessageRow({
             <Button
               variant="ghost"
               size="icon"
-              className="h-6 w-6 text-muted-foreground hover:text-destructive"
+              className="-m-1 h-8 w-8 text-muted-foreground hover:text-destructive"
               title="فك الربط"
+              disabled={linkM.isPending}
               onClick={() => linkM.mutate({ smsId: m.id, caseId: null })}
             >
-              <X className="h-3.5 w-3.5" />
+              {linkM.isPending ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <X className="h-3.5 w-3.5" />
+              )}
             </Button>
           </>
         ) : (
@@ -194,7 +202,7 @@ function MessageRow({
             <Button
               variant="outline"
               size="sm"
-              className="h-7 text-xs"
+              className="text-xs"
               onClick={() => {
                 // إن وُجدت مطابقة تلقائية نقترحها جاهزة في المنتقي
                 setPickedCase(matchedCase?.id ?? null)

@@ -16,6 +16,9 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 
+import { QueryErrorState } from '@/components/QueryErrorState'
+import { EmptyState } from '@/components/EmptyState'
+import { cn } from '@/lib/utils'
 import { fmtDateTime } from '@/lib/format'
 import { useAuth } from '@/stores/auth'
 import { useIsDirector } from '@/hooks/useIsDirector'
@@ -30,7 +33,7 @@ export function NotesTab({
   caseId: string
   caseTitle?: string | null
 }) {
-  const { data, isLoading } = useCaseNotes(caseId)
+  const { data, isLoading, isError, error, refetch } = useCaseNotes(caseId)
   const { teamMember } = useAuth()
   const isDirector = useIsDirector()
   const { data: members } = useTeamMembers()
@@ -44,6 +47,8 @@ export function NotesTab({
   const taRef = useRef<HTMLTextAreaElement>(null)
   const [mentionQuery, setMentionQuery] = useState<string | null>(null)
   const [mentionedIds, setMentionedIds] = useState<Set<string>>(new Set())
+  // العنصر النشط في قائمة المنشن (تنقّل بالأسهم + Enter للاختيار)
+  const [activeIdx, setActiveIdx] = useState(0)
 
   const activeMembers = useMemo(
     () => (members ?? []).filter((m) => m.is_active),
@@ -79,6 +84,25 @@ export function NotesTab({
     const before = v.slice(0, caret)
     const m = before.match(/@([^\s@]*)$/)
     setMentionQuery(m ? m[1] : null)
+    setActiveIdx(0)
+  }
+
+  // تنقّل كيبورد داخل قائمة المنشن وهي مفتوحة
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (mentionQuery == null || suggestions.length === 0) return
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setActiveIdx((i) => (i + 1) % suggestions.length)
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setActiveIdx((i) => (i - 1 + suggestions.length) % suggestions.length)
+    } else if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault()
+      pickMention(suggestions[Math.min(activeIdx, suggestions.length - 1)])
+    } else if (e.key === 'Escape') {
+      e.preventDefault()
+      setMentionQuery(null)
+    }
   }
 
   // اختيار عضو من القائمة: استبدال «@جزء» بـ «@الاسم الكامل »
@@ -135,20 +159,31 @@ export function NotesTab({
               ref={taRef}
               value={content}
               onChange={(e) => handleChange(e.target.value)}
+              onKeyDown={handleKeyDown}
               onClick={(e) =>
                 handleChange((e.target as HTMLTextAreaElement).value)
               }
               placeholder="أضف ملاحظة… اكتب @ لذكر محامٍ"
               rows={2}
             />
-            {/* قائمة المنشن */}
+            {/* قائمة المنشن — تنقّل بالأسهم، Enter للاختيار، Escape للإغلاق */}
             {mentionQuery != null && suggestions.length > 0 && (
-              <div className="absolute right-0 top-full z-20 mt-1 w-64 overflow-hidden rounded-lg border bg-card shadow-lg">
-                {suggestions.map((m) => (
+              <div
+                role="listbox"
+                aria-label="اختيار عضو للمنشن"
+                className="absolute right-0 top-full z-20 mt-1 w-64 overflow-hidden rounded-lg border bg-card shadow-lg"
+              >
+                {suggestions.map((m, i) => (
                   <button
                     key={m.id}
                     type="button"
-                    className="flex w-full items-center gap-2 px-3 py-2 text-right text-sm hover:bg-accent/10"
+                    role="option"
+                    aria-selected={i === activeIdx}
+                    className={cn(
+                      'flex w-full items-center gap-2 px-3 py-2 text-right text-sm hover:bg-accent/10',
+                      i === activeIdx && 'bg-accent/10'
+                    )}
+                    onMouseEnter={() => setActiveIdx(i)}
                     onClick={() => pickMention(m)}
                   >
                     <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gold/15 text-xs font-bold text-gold-700 dark:text-gold-300">
@@ -191,8 +226,18 @@ export function NotesTab({
             <Skeleton key={i} className="h-20 w-full" />
           ))}
         </div>
+      ) : isError ? (
+        <QueryErrorState
+          title="تعذّر تحميل الملاحظات"
+          error={error}
+          onRetry={() => refetch()}
+        />
       ) : (data?.length ?? 0) === 0 ? (
-        <EmptyState />
+        <EmptyState
+          icon={MessageSquare}
+          title="لا ملاحظات بعد"
+          description="أضِف أول ملاحظة من الحقل أعلاه — والمذكور بـ @ يصله تنبيه."
+        />
       ) : (
         <div className="space-y-3">
           {(data ?? []).map((n) => {
@@ -212,17 +257,21 @@ export function NotesTab({
                         <p className="text-sm font-medium text-foreground">
                           {name}
                         </p>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1">
                           <span className="text-xs text-muted-foreground">
                             {fmtDateTime(n.created_at)}
                           </span>
                           {canDelete && (
-                            <button
-                              className="text-muted-foreground hover:text-destructive"
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="-my-2 h-8 w-8 text-muted-foreground hover:text-destructive"
+                              title="حذف الملاحظة"
+                              aria-label="حذف الملاحظة"
                               onClick={() => setToDelete(n)}
                             >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
                           )}
                         </div>
                       </div>
@@ -289,14 +338,3 @@ function NoteContent({ text, names }: { text: string; names: string[] }) {
   return <>{parts}</>
 }
 
-function EmptyState() {
-  return (
-    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-16 text-center">
-      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-        <MessageSquare className="h-6 w-6 text-muted-foreground" />
-      </div>
-      <p className="font-medium text-foreground">لا ملاحظات بعد</p>
-      <p className="text-sm text-muted-foreground">أضِف أول ملاحظة من الحقل أعلاه.</p>
-    </div>
-  )
-}

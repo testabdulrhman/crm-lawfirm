@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Loader2, Paperclip } from 'lucide-react'
+import { Loader2, Paperclip, X } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -23,6 +23,8 @@ import {
 } from '@/components/ui/select'
 import { ContactPicker } from '@/components/ContactPicker'
 import { DualDatePicker } from '@/components/DualDatePicker'
+import { toast } from '@/hooks/use-toast'
+import { errMessage } from '@/lib/errors'
 import { pickFile, uploadFile } from '@/lib/files'
 import { todayISO } from '@/lib/format'
 import { useAuth } from '@/stores/auth'
@@ -141,6 +143,14 @@ export function EngagementForm({
       try {
         const { publicUrl } = await uploadFile(file, { folder: 'engagements' })
         fileUrl = publicUrl
+      } catch (err) {
+        // فشل الرفع يوقف الحفظ برسالة واضحة — لا حفظ عقد بلا ملفه المختار
+        toast({
+          variant: 'destructive',
+          title: 'تعذّر رفع ملف العقد',
+          description: errMessage(err),
+        })
+        return
       } finally {
         setUploading(false)
       }
@@ -329,13 +339,16 @@ export function EngagementForm({
               <span className="text-xs text-muted-foreground">يوجد ملف مرفق</span>
             ) : null}
             {file && (
-              <button
+              <Button
                 type="button"
-                className="text-xs text-destructive"
+                variant="ghost"
+                size="sm"
+                className="h-8 px-2 text-xs text-destructive hover:text-destructive"
                 onClick={() => setFile(null)}
               >
+                <X className="h-3.5 w-3.5" />
                 إزالة
-              </button>
+              </Button>
             )}
           </div>
         </div>

@@ -18,8 +18,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import { QueryErrorState } from '@/components/QueryErrorState'
+import { EmptyState } from '@/components/EmptyState'
 import { cn } from '@/lib/utils'
-import { fmtNumber, fmtDatePref, todayISO } from '@/lib/format'
+import { arPlural, fmtDatePref, todayISO } from '@/lib/format'
 import {
   taskPriorityBadge,
   taskPriorityLabel,
@@ -30,7 +32,7 @@ import type { Task } from '@/types/db'
 
 export function TasksTab({ caseId }: { caseId: string }) {
   const [, navigate] = useLocation()
-  const { data: tasks, isLoading } = useCaseTasks(caseId)
+  const { data: tasks, isLoading, isError, error, refetch } = useCaseTasks(caseId)
   const toggleM = useToggleTask(caseId)
   const deleteM = useDeleteTask(caseId)
 
@@ -56,12 +58,26 @@ export function TasksTab({ caseId }: { caseId: string }) {
     )
   }
 
+  if (isError) {
+    return (
+      <QueryErrorState
+        title="تعذّر تحميل المهام"
+        error={error}
+        onRetry={() => refetch()}
+      />
+    )
+  }
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
         <p className="text-sm text-muted-foreground">
           {openCount > 0
-            ? `${fmtNumber(openCount)} مهمة مفتوحة`
+            ? arPlural(openCount, {
+                one: 'مهمة مفتوحة',
+                two: 'مهمتان مفتوحتان',
+                many: 'مهام مفتوحة',
+              })
             : 'لا مهام مفتوحة'}
         </p>
         <Button variant="gold" size="sm" onClick={openNew}>
@@ -71,12 +87,13 @@ export function TasksTab({ caseId }: { caseId: string }) {
       </div>
 
       {list.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-12 text-center">
-          <ListTodo className="mb-2 h-6 w-6 text-muted-foreground" />
-          <p className="text-sm text-muted-foreground">
-            لا مهام لهذه القضية بعد.
-          </p>
-        </div>
+        <EmptyState
+          icon={ListTodo}
+          title="لا مهام لهذه القضية بعد"
+          description="أنشئ مهمة مرتبطة بالقضية لتظهر هنا وفي غرفة المهام."
+          actionLabel="مهمة جديدة"
+          onAction={openNew}
+        />
       ) : (
         <div className="divide-y overflow-hidden rounded-xl border bg-card">
           {list.map((t) => {
@@ -88,17 +105,20 @@ export function TasksTab({ caseId }: { caseId: string }) {
                 key={t.id}
                 className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-accent/5"
               >
-                <input
-                  type="checkbox"
-                  checked={done}
-                  disabled={inReview}
-                  onChange={(e) =>
-                    toggleM.mutate({ id: t.id, done: e.target.checked })
-                  }
-                  className="mt-1 h-4 w-4 shrink-0 cursor-pointer accent-gold disabled:cursor-not-allowed disabled:opacity-40"
-                  aria-label={done ? 'إرجاع للمهام' : 'إنجاز المهمة'}
-                  title={inReview ? 'بانتظار الاعتماد — تُدار من غرفة المهمة' : undefined}
-                />
+                {/* label بحشوة توسّع هدف اللمس حول الصندوق دون تغيير التخطيط */}
+                <label className="-m-2 flex shrink-0 cursor-pointer p-2">
+                  <input
+                    type="checkbox"
+                    checked={done}
+                    disabled={inReview}
+                    onChange={(e) =>
+                      toggleM.mutate({ id: t.id, done: e.target.checked })
+                    }
+                    className="mt-1 h-4 w-4 cursor-pointer accent-gold disabled:cursor-not-allowed disabled:opacity-40"
+                    aria-label={done ? 'إرجاع للمهام' : 'إنجاز المهمة'}
+                    title={inReview ? 'بانتظار الاعتماد — تُدار من غرفة المهمة' : undefined}
+                  />
+                </label>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-1.5">
                     {t.is_urgent && !done && (

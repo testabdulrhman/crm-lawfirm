@@ -17,6 +17,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { EmptyState } from '@/components/EmptyState'
+import { QueryErrorState } from '@/components/QueryErrorState'
+import { useConfirm } from '@/components/ConfirmDialog'
 import {
   useLookups,
   useCreateLookup,
@@ -24,6 +27,20 @@ import {
   useDeleteLookup,
 } from '@/hooks/useSettings'
 import type { LookupValue, LookupValueInput } from '@/types/db'
+
+// تسميات عربية للأنواع المعروفة — تُعرض عنواناً والمفتاح الإنجليزي شارة بجانبها
+const TYPE_LABELS: Record<string, string> = {
+  case_type: 'أنواع القضايا',
+  case_types: 'أنواع القضايا',
+  case_status: 'حالات القضايا',
+  courts: 'المحاكم',
+  booking_config: 'إعدادات الحجز الإلكتروني',
+  appt_templates: 'قوالب المواعيد',
+  sms_config: 'إعدادات الرسائل النصية',
+  sms_inbox_config: 'إعدادات وارد الرسائل',
+  gmail_config: 'إعدادات البريد الإلكتروني',
+  ai_config: 'إعدادات الذكاء الاصطناعي',
+}
 
 const schema = z.object({
   type: z.string().min(1, 'النوع مطلوب'),
@@ -36,8 +53,9 @@ const schema = z.object({
 type FormValues = z.infer<typeof schema>
 
 export function LookupsTab() {
-  const { data, isLoading } = useLookups()
+  const { data, isLoading, isError, error, refetch } = useLookups()
   const deleteM = useDeleteLookup()
+  const { confirm, dialog } = useConfirm()
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<LookupValue | null>(null)
   const [presetType, setPresetType] = useState<string | undefined>(undefined)
@@ -89,6 +107,16 @@ export function LookupsTab() {
     )
   }
 
+  if (isError) {
+    return (
+      <QueryErrorState
+        title="تعذّر تحميل التصنيفات"
+        error={error}
+        onRetry={() => refetch()}
+      />
+    )
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
@@ -99,16 +127,28 @@ export function LookupsTab() {
       </div>
 
       {grouped.length === 0 ? (
-        <EmptyState />
+        <EmptyState
+          icon={Tags}
+          title="لا توجد تصنيفات"
+          description="التصنيفات (أنواع القضايا وحالاتها وغيرها) تُغذّي قوائم النظام كلها."
+          actionLabel="تصنيف جديد"
+          onAction={() => openNew()}
+        />
       ) : (
         <div className="grid gap-4 sm:grid-cols-2">
           {grouped.map(([type, values]) => (
             <Card key={type}>
               <CardHeader className="flex-row items-center justify-between gap-2 space-y-0">
-                <CardTitle className="text-base">
-                  <span className="font-mono text-xs text-muted-foreground">
-                    {type}
-                  </span>
+                <CardTitle className="flex min-w-0 items-center gap-2 text-base">
+                  <span className="truncate">{TYPE_LABELS[type] ?? type}</span>
+                  {TYPE_LABELS[type] && (
+                    <Badge
+                      variant="outline"
+                      className="shrink-0 font-mono text-xs font-normal text-muted-foreground"
+                    >
+                      {type}
+                    </Badge>
+                  )}
                 </CardTitle>
                 <Button
                   variant="ghost"
@@ -119,46 +159,56 @@ export function LookupsTab() {
                   إضافة
                 </Button>
               </CardHeader>
-              <CardContent className="space-y-2">
-                {values.map((l) => (
-                  <div
-                    key={l.id}
-                    className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2"
-                  >
-                    <div className="flex items-center gap-2">
-                      {l.color && (
-                        <span
-                          className="h-3 w-3 shrink-0 rounded-full"
-                          style={{ backgroundColor: l.color }}
-                        />
-                      )}
-                      <span className="text-sm font-medium">{l.label}</span>
-                      <Badge variant="outline" className="font-mono text-xs">
-                        {l.value}
-                      </Badge>
+              <CardContent>
+                <div className="divide-y divide-border/60">
+                  {values.map((l) => (
+                    <div
+                      key={l.id}
+                      className="flex items-center justify-between gap-2 rounded-xl px-3 py-3 hover:bg-muted/60"
+                    >
+                      <div className="flex min-w-0 items-center gap-2">
+                        {l.color && (
+                          <span
+                            className="h-3 w-3 shrink-0 rounded-full"
+                            style={{ backgroundColor: l.color }}
+                          />
+                        )}
+                        <span className="text-sm font-medium">{l.label}</span>
+                        <Badge variant="outline" className="font-mono text-xs">
+                          {l.value}
+                        </Badge>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-9 w-9"
+                          onClick={() => openEdit(l)}
+                          title="تعديل"
+                          aria-label="تعديل"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-9 w-9 text-destructive"
+                          onClick={() =>
+                            confirm({
+                              title: 'حذف التصنيف',
+                              description: `سيُحذف «${l.label}» نهائياً — والسجلات التي تعتمد عليه قد تفقد تسميتها في القوائم. متابعة؟`,
+                              onConfirm: () => deleteM.mutate(l.id),
+                            })
+                          }
+                          title="حذف"
+                          aria-label="حذف"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7"
-                        onClick={() => openEdit(l)}
-                        title="تعديل"
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-destructive"
-                        onClick={() => deleteM.mutate(l.id)}
-                        title="حذف"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </CardContent>
             </Card>
           ))}
@@ -175,6 +225,8 @@ export function LookupsTab() {
           />
         </DialogContent>
       </Dialog>
+
+      {dialog}
     </div>
   )
 }
@@ -198,6 +250,8 @@ function LookupForm({
   const {
     register,
     handleSubmit,
+    watch,
+    setValue,
     formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -209,6 +263,9 @@ function LookupForm({
       sort_order: lookup?.sort_order ?? 0,
     },
   })
+
+  // اللون قيمة مضبوطة واحدة — المنتقي وحقل hex يعكس كلٌّ منهما تغيير الآخر
+  const colorValue = watch('color') ?? ''
 
   const onSubmit = async (values: FormValues) => {
     const input: LookupValueInput = {
@@ -277,9 +334,19 @@ function LookupForm({
                 id="color"
                 type="color"
                 className="h-10 w-14 p-1"
-                {...register('color')}
+                value={/^#[0-9a-fA-F]{6}$/.test(colorValue) ? colorValue : '#c9a84c'}
+                onChange={(e) =>
+                  setValue('color', e.target.value, { shouldDirty: true })
+                }
               />
-              <Input dir="ltr" placeholder="#C9A84C" {...register('color')} />
+              <Input
+                dir="ltr"
+                placeholder="#C9A84C"
+                value={colorValue}
+                onChange={(e) =>
+                  setValue('color', e.target.value, { shouldDirty: true })
+                }
+              />
             </div>
           </div>
           <div className="space-y-1.5">
@@ -307,16 +374,3 @@ function LookupForm({
   )
 }
 
-function EmptyState() {
-  return (
-    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-16 text-center">
-      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-        <Tags className="h-6 w-6 text-muted-foreground" />
-      </div>
-      <p className="font-medium text-foreground">لا توجد تصنيفات</p>
-      <p className="text-sm text-muted-foreground">
-        أضِف أول تصنيف عبر زر «تصنيف جديد».
-      </p>
-    </div>
-  )
-}

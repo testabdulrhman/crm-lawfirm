@@ -1,8 +1,9 @@
 // نموذج مهمة موحّد — يعمل من صفحة المهام أو من داخل قضية.
 // القضية اختيارية: تُترك فارغة للمهام الإدارية.
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 
+import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -58,6 +59,7 @@ export function TaskFormDialog({
   const [isUrgent, setIsUrgent] = useState(false)
   const [caseId, setCaseId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const titleRef = useRef<HTMLInputElement>(null)
 
   // تعبئة القيم عند كل فتح (جديدة أو تعديل)
   useEffect(() => {
@@ -74,7 +76,9 @@ export function TaskFormDialog({
 
   const submit = () => {
     if (!title.trim()) {
+      // الرسالة تحت الحقل نفسه + تركيز وحد أحمر حتى يربطها المستخدم به
       setError('عنوان المهمة مطلوب.')
+      titleRef.current?.focus()
       return
     }
     setError(null)
@@ -108,11 +112,20 @@ export function TaskFormDialog({
             <Label htmlFor="task_title">ما المطلوب عمله؟ *</Label>
             <Input
               id="task_title"
+              ref={titleRef}
               value={title}
-              onChange={(e) => setTitle(e.target.value)}
+              onChange={(e) => {
+                setTitle(e.target.value)
+                if (error) setError(null)
+              }}
               placeholder="مثال: تقديم لائحة اعتراضية"
               autoFocus
+              aria-invalid={!!error}
+              className={cn(error && 'border-destructive')}
             />
+            {error && (
+              <p className="text-xs font-medium text-destructive">{error}</p>
+            )}
           </div>
 
           <div className="space-y-1.5">
@@ -127,9 +140,9 @@ export function TaskFormDialog({
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label>المسؤول</Label>
+              <Label htmlFor="task_assignee">المسؤول</Label>
               <Select value={assigneeId} onValueChange={setAssigneeId}>
-                <SelectTrigger>
+                <SelectTrigger id="task_assignee">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -144,9 +157,9 @@ export function TaskFormDialog({
             </div>
 
             <div className="space-y-1.5">
-              <Label>الأولوية</Label>
+              <Label htmlFor="task_priority">الأولوية</Label>
               <Select value={priority} onValueChange={setPriority}>
-                <SelectTrigger>
+                <SelectTrigger id="task_priority">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -169,13 +182,14 @@ export function TaskFormDialog({
           {/* القضية — تُخفى عند الفتح من داخل قضية */}
           {!fixedCaseId && (
             <div className="space-y-1.5">
-              <Label>
+              <Label htmlFor="task_case">
                 القضية{' '}
                 <span className="font-normal text-muted-foreground">
                   (اختياري — اتركها فارغة للمهام الإدارية)
                 </span>
               </Label>
               <CasePicker
+                inputId="task_case"
                 cases={cases ?? []}
                 value={caseId}
                 onChange={setCaseId}
@@ -185,15 +199,22 @@ export function TaskFormDialog({
 
           <div className="flex items-center justify-between rounded-xl border p-3">
             <div>
-              <p className="text-sm font-medium text-foreground">عاجلة</p>
-              <p className="text-xs text-muted-foreground">
+              <Label
+                htmlFor="task_urgent"
+                className="block text-sm font-medium text-foreground"
+              >
+                عاجلة
+              </Label>
+              <p className="mt-0.5 text-xs text-muted-foreground">
                 تظهر في أعلى القائمة بعلامة حمراء
               </p>
             </div>
-            <Switch checked={isUrgent} onCheckedChange={setIsUrgent} />
+            <Switch
+              id="task_urgent"
+              checked={isUrgent}
+              onCheckedChange={setIsUrgent}
+            />
           </div>
-
-          {error && <p className="text-xs font-medium text-destructive">{error}</p>}
         </div>
 
         <DialogFooter className="gap-2">

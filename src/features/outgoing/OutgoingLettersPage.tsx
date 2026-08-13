@@ -7,6 +7,8 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { EmptyState, FilteredEmptyState } from '@/components/EmptyState'
+import { QueryErrorState } from '@/components/QueryErrorState'
 import { fmtNumber, fmtDatePref } from '@/lib/format'
 import { useOutgoingLetters } from '@/hooks/useOutgoingLetters'
 import { usePageState } from '@/hooks/usePageState'
@@ -14,7 +16,7 @@ import { OutgoingLetterForm } from './OutgoingLetterForm'
 import type { OutgoingLetter } from '@/types/db'
 
 export function OutgoingLettersPage() {
-  const { data, isLoading } = useOutgoingLetters()
+  const { data, isLoading, isError, error, refetch } = useOutgoingLetters()
   const [, navigate] = useLocation()
   const [search, setSearch] = usePageState('out:q', '')
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -56,22 +58,37 @@ export function OutgoingLettersPage() {
         />
       </div>
 
-      {!isLoading && (
+      {/* عدّاد النتائج يفيد أثناء الفلترة فقط — العدد الكلي ظاهر بجوار العنوان */}
+      {!isLoading && !isError && search.trim() !== '' && (
         <p className="text-sm text-muted-foreground">
           النتائج: {fmtNumber(filtered.length)}
         </p>
       )}
 
       {isLoading ? (
-        <div className="divide-y overflow-hidden rounded-xl border bg-card">
+        <div className="divide-y divide-border/60 overflow-hidden rounded-xl border bg-card">
           {Array.from({ length: 6 }).map((_, i) => (
             <Skeleton key={i} className="h-16 w-full rounded-none" />
           ))}
         </div>
+      ) : isError ? (
+        <QueryErrorState
+          title="تعذّر تحميل الصادر"
+          error={error}
+          onRetry={() => refetch()}
+        />
+      ) : (data ?? []).length === 0 ? (
+        <EmptyState
+          icon={Send}
+          title="لا توجد خطابات"
+          description="أضِف أول خطاب صادر وسيظهر هنا مع رقمه وحالة اعتماده."
+          actionLabel="خطاب جديد"
+          onAction={() => setDialogOpen(true)}
+        />
       ) : filtered.length === 0 ? (
-        <EmptyState />
+        <FilteredEmptyState onClear={() => setSearch('')} />
       ) : (
-        <div className="divide-y overflow-hidden rounded-xl border bg-card">
+        <div className="divide-y divide-border/60 overflow-hidden rounded-xl border bg-card">
           {filtered.map((l) => (
             <LetterRow
               key={l.id}
@@ -83,7 +100,11 @@ export function OutgoingLettersPage() {
       )}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-xl">
+        {/* نقرة الخلفية لا تُغلق النموذج — حتى لا تضيع المدخلات بلا تحذير */}
+        <DialogContent
+          className="max-w-xl"
+          onInteractOutside={(e) => e.preventDefault()}
+        >
           <OutgoingLetterForm onDone={() => setDialogOpen(false)} />
         </DialogContent>
       </Dialog>
@@ -101,7 +122,7 @@ function LetterRow({
   return (
     <button
       onClick={onOpen}
-      className="block w-full px-4 py-3 text-right transition-colors hover:bg-accent/10"
+      className="block w-full px-3 py-3 text-right transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
     >
       {/* السطر العلوي: الموضوع + رقم الخطاب */}
       <div className="flex items-center gap-2">
@@ -163,17 +184,5 @@ function LetterRow({
         )}
       </div>
     </button>
-  )
-}
-
-function EmptyState() {
-  return (
-    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-16 text-center">
-      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-        <Send className="h-6 w-6 text-muted-foreground" />
-      </div>
-      <p className="font-medium text-foreground">لا توجد خطابات</p>
-      <p className="text-sm text-muted-foreground">أضِف أول خطاب عبر «خطاب جديد».</p>
-    </div>
   )
 }

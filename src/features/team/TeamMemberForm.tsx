@@ -21,6 +21,7 @@ import { pickFile, uploadFile } from '@/lib/files'
 import { toast } from '@/hooks/use-toast'
 import type { TeamMember, TeamMemberInput } from '@/types/db'
 import { errMessage } from '@/lib/errors'
+import { normalizeSaudiPhone } from '@/lib/format'
 
 // حقل نصي اختياري: يقبل الفراغ
 const optionalText = z.string().optional()
@@ -34,7 +35,16 @@ const schema = z.object({
     .email('صيغة البريد غير صحيحة')
     .optional()
     .or(z.literal('')),
-  phone: optionalText,
+  // الرقم يُستخدم لاحقاً في SMS ودخول OTP — نتحقق بعد التطبيع لا من الخام،
+  // فالأرقام المحفوظة قديماً بصيغ شتى (00966/966/مسافات) وطبقة الإرسال تتسامح معها
+  phone: z
+    .string()
+    .refine(
+      (v) => v.trim() === '' || /^9665\d{8}$/.test(normalizeSaudiPhone(v)),
+      'رقم جوال غير صحيح (مثال: 05xxxxxxxx)'
+    )
+    .optional()
+    .or(z.literal('')),
   is_director: z.boolean(),
   is_active: z.boolean(),
   date_of_birth: optionalText,
@@ -245,7 +255,7 @@ export function TeamMemberForm({ member, onDone }: Props) {
           >
             <Input id="email" type="email" dir="ltr" {...register('email')} />
           </Field>
-          <Field label="الجوال" htmlFor="phone">
+          <Field label="الجوال" htmlFor="phone" error={errors.phone?.message}>
             <Input id="phone" dir="ltr" {...register('phone')} />
           </Field>
           <div className="flex items-center gap-6 pt-2">

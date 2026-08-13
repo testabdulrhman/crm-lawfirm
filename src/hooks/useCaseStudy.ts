@@ -58,8 +58,9 @@ export function useSaveCaseStudy(caseId: string) {
       if (error) throw error
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: [KEY, caseId] })
       toast({ variant: 'success', title: 'حُفظت الدراسة' })
+      // ننتظر تحديث الكاش قبل onSuccess المكوّن — يمنع ارتداد النص القديم
+      return qc.invalidateQueries({ queryKey: [KEY, caseId] })
     },
     onError: (e) =>
       toast({

@@ -38,6 +38,8 @@ import {
 } from '@/components/ui/alert-dialog'
 
 import { pickFile } from '@/lib/files'
+import { openExternal } from '@/lib/external'
+import { QueryErrorState } from '@/components/QueryErrorState'
 import { useAuth } from '@/stores/auth'
 import { useIsDirector } from '@/hooks/useIsDirector'
 import { AUTO_KEYS } from '@/lib/docxTemplate'
@@ -53,7 +55,13 @@ import {
 export function ContractTemplatesTab() {
   const { teamMember } = useAuth()
   const isDirector = useIsDirector()
-  const { data: templates, isLoading } = useContractTemplates(true)
+  const {
+    data: templates,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useContractTemplates(true)
   const uploadM = useUploadContractTemplate()
   const updateM = useUpdateContractTemplate()
   const deleteM = useDeleteContractTemplate()
@@ -125,6 +133,12 @@ export function ContractTemplatesTab() {
             <Skeleton key={i} className="h-24 w-full" />
           ))}
         </div>
+      ) : isError ? (
+        <QueryErrorState
+          title="تعذّر تحميل قوالب العقود"
+          error={error}
+          onRetry={() => refetch()}
+        />
       ) : (templates ?? []).length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-12 text-center">
           <FileType2 className="mb-2 h-7 w-7 text-muted-foreground" />
@@ -153,9 +167,10 @@ export function ContractTemplatesTab() {
                     )}
                   </div>
                   <div className="flex items-center gap-1">
-                    <div className="ml-2 flex items-center gap-2">
+                    <div className="me-2 flex items-center gap-2">
                       <Switch
                         checked={t.is_active}
+                        aria-label="تفعيل القالب"
                         onCheckedChange={(v) =>
                           updateM.mutate({ id: t.id, input: { is_active: v } })
                         }
@@ -165,28 +180,30 @@ export function ContractTemplatesTab() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-8 w-8"
+                      className="h-9 w-9"
                       title="تسمية المتغيرات"
+                      aria-label="تسمية المتغيرات"
                       onClick={() => setEditing(t)}
                     >
                       <Pencil className="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
-                      <a
-                        href={t.file_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        title="تنزيل القالب"
-                      >
-                        <Download className="h-4 w-4" />
-                      </a>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9"
+                      title="تنزيل القالب"
+                      aria-label="تنزيل القالب"
+                      onClick={() => openExternal(t.file_url)}
+                    >
+                      <Download className="h-4 w-4" />
                     </Button>
                     {isDirector && (
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                        className="ms-2 h-9 w-9 text-muted-foreground hover:text-destructive"
                         title="حذف"
+                        aria-label="حذف"
                         onClick={() => setConfirmDelete(t)}
                       >
                         <Trash2 className="h-4 w-4" />
@@ -264,7 +281,13 @@ export function ContractTemplatesTab() {
               {uploadM.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
               حفظ القالب
             </Button>
-            <Button variant="outline" onClick={() => setAddOpen(false)}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setAddOpen(false)
+                reset()
+              }}
+            >
               إلغاء
             </Button>
           </DialogFooter>

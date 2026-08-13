@@ -40,6 +40,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { FilePreviewDialog } from '@/components/FilePreviewDialog'
+import { useConfirm } from '@/components/ConfirmDialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -93,6 +94,7 @@ export function ApplicationDetail({ id }: { id: string }) {
 
   // رفع/استبدال مرفق يدوياً من المكتب
   const updateM = useUpdateApplication()
+  const { confirm, dialog: confirmReplaceDialog } = useConfirm()
   const [uploadingKind, setUploadingKind] = useState<string | null>(null)
   const uploadAttachment = async (
     kind: string,
@@ -121,6 +123,26 @@ export function ApplicationDetail({ id }: { id: string }) {
     }
   }
 
+  // استبدال ملف موجود يمرّ بتأكيد قصير — الرفع الأول مباشر
+  const requestUpload = (
+    kind: string,
+    urlCol: string,
+    nameCol: string,
+    existingUrl: string | null
+  ) => {
+    if (existingUrl) {
+      confirm({
+        title: 'استبدال المرفق',
+        description: 'سيحل الملف الجديد محل الملف الحالي. متابعة؟',
+        confirmLabel: 'استبدال',
+        destructive: false,
+        onConfirm: () => void uploadAttachment(kind, urlCol, nameCol),
+      })
+    } else {
+      void uploadAttachment(kind, urlCol, nameCol)
+    }
+  }
+
   // إرسال رابط الاستكمال SMS
   const [sendingLink, setSendingLink] = useState(false)
   const sendLink = async () => {
@@ -140,7 +162,7 @@ export function ApplicationDetail({ id }: { id: string }) {
 
   if (isLoading) {
     return (
-      <div className="space-y-4">
+      <div className="mx-auto max-w-4xl space-y-5">
         <Skeleton className="h-8 w-40" />
         <Skeleton className="h-40 w-full" />
         <Skeleton className="h-40 w-full" />
@@ -150,7 +172,7 @@ export function ApplicationDetail({ id }: { id: string }) {
 
   if (isError || !a) {
     return (
-      <div className="space-y-4">
+      <div className="mx-auto max-w-4xl space-y-5">
         <Button variant="ghost" onClick={() => navigate('/staff-applications')}>
           <ArrowRight className="h-4 w-4" />
           رجوع
@@ -257,22 +279,29 @@ export function ApplicationDetail({ id }: { id: string }) {
 
       {/* المرفقات */}
       <Card>
-        <CardHeader className="flex-row items-center justify-between gap-2 space-y-0">
+        <CardHeader className="flex-row flex-wrap items-center justify-between gap-2 space-y-0">
           <CardTitle className="text-base">المرفقات</CardTitle>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={sendLink}
-            disabled={sendingLink || !a.phone}
-            title="يرسل للمتقدم SMS برابط يرفع فيه مستنداته على نفس الطلب"
-          >
-            {sendingLink ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Send className="h-4 w-4" />
+          <div className="flex flex-wrap items-center gap-2">
+            {!a.phone && (
+              <span className="text-xs text-muted-foreground">
+                لا يوجد رقم جوال
+              </span>
             )}
-            إرسال رابط الاستكمال
-          </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={sendLink}
+              disabled={sendingLink || !a.phone}
+              title="يرسل للمتقدم SMS برابط يرفع فيه مستنداته على نفس الطلب"
+            >
+              {sendingLink ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Send className="h-4 w-4" />
+              )}
+              إرسال رابط الاستكمال
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="space-y-2">
           <Attachment
@@ -282,7 +311,7 @@ export function ApplicationDetail({ id }: { id: string }) {
             url={a.cv_url}
             onPreview={setPreview}
             uploading={uploadingKind === 'cv'}
-            onUpload={() => uploadAttachment('cv', 'cv_url', 'cv_name')}
+            onUpload={() => requestUpload('cv', 'cv_url', 'cv_name', a.cv_url)}
           />
           <Attachment
             icon={Award}
@@ -292,10 +321,11 @@ export function ApplicationDetail({ id }: { id: string }) {
             onPreview={setPreview}
             uploading={uploadingKind === 'qual'}
             onUpload={() =>
-              uploadAttachment(
+              requestUpload(
                 'qual',
                 'qualification_doc_url',
-                'qualification_doc_name'
+                'qualification_doc_name',
+                a.qualification_doc_url
               )
             }
           />
@@ -307,18 +337,29 @@ export function ApplicationDetail({ id }: { id: string }) {
             onPreview={setPreview}
             uploading={uploadingKind === 'license'}
             onUpload={() =>
-              uploadAttachment('license', 'lawyer_license_url', 'lawyer_license_name')
+              requestUpload(
+                'license',
+                'lawyer_license_url',
+                'lawyer_license_name',
+                a.lawyer_license_url
+              )
             }
           />
         </CardContent>
       </Card>
 
-      {/* تعديل بيانات الطلب */}
-      <EditApplicationDialog
-        app={a}
-        open={editOpen}
-        onOpenChange={setEditOpen}
-      />
+      {/* تعديل بيانات الطلب — يُركَّب عند الفتح فقط ليقرأ أحدث البيانات
+          (قد يحدّثها المتقدّم عبر رابط الاستكمال) */}
+      {editOpen && (
+        <EditApplicationDialog
+          app={a}
+          open={editOpen}
+          onOpenChange={setEditOpen}
+        />
+      )}
+
+      {/* تأكيد استبدال مرفق موجود */}
+      {confirmReplaceDialog}
 
       {/* الحوارات */}
       <FilePreviewDialog
@@ -510,7 +551,7 @@ function AiAnalysisCard({ app: a }: { app: StaffApplication }) {
               احصل على تحليل سريع لمساعدتك في فرز هذا المتقدّم.
             </p>
             <Button
-              variant="gold"
+              variant="default"
               onClick={run}
               className="bg-violet-600 text-white hover:bg-violet-700"
             >
@@ -523,7 +564,7 @@ function AiAnalysisCard({ app: a }: { app: StaffApplication }) {
         {analyzeM.isPending && (
           <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
             <Loader2 className="h-5 w-5 animate-spin text-violet-500" />
-            {hasCv ? 'جارٍ قراءة السيرة الذاتية وتحليلها...' : 'جارٍ التحليل...'}
+            {hasCv ? 'جارٍ قراءة السيرة الذاتية وتحليلها…' : 'جارٍ التحليل…'}
           </div>
         )}
 

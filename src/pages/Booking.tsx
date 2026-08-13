@@ -254,7 +254,7 @@ export default function Booking() {
           <>
             <div className="mb-1 grid grid-cols-7 gap-1 text-center">
               {WEEKDAYS.map((w) => (
-                <span key={w} className="text-[11px] font-medium text-muted-foreground">
+                <span key={w} className="text-xs font-medium text-muted-foreground">
                   {w}
                 </span>
               ))}
@@ -285,7 +285,7 @@ export default function Booking() {
                     </span>
                     <span
                       className={cn(
-                        'mt-0.5 text-[10px] leading-none',
+                        'mt-0.5 text-xs leading-none',
                         active ? 'text-navy/70' : 'text-muted-foreground'
                       )}
                     >
@@ -295,7 +295,7 @@ export default function Booking() {
                 )
               })}
             </div>
-            <p className="mt-2 text-center text-[11px] text-muted-foreground">
+            <p className="mt-2 text-center text-xs text-muted-foreground">
               الرقم الكبير هجري (أم القرى) والصغير ميلادي — الأيام المتاحة فقط
               قابلة للاختيار
             </p>

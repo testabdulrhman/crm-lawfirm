@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { X } from 'lucide-react'
 
 import { Input } from '@/components/ui/input'
@@ -10,14 +10,33 @@ export function CasePicker({
   value,
   onChange,
   placeholder = 'ابحث عن قضية…',
+  inputId,
 }: {
   cases: Case[]
   value: string | null
   onChange: (id: string | null) => void
   placeholder?: string
+  /** لربط <Label htmlFor> الخارجي بحقل البحث الداخلي */
+  inputId?: string
 }) {
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
+  const rootRef = useRef<HTMLDivElement>(null)
+
+  // إغلاق القائمة عند النقر/اللمس خارجها (كانت تبقى مفتوحة فوق أزرار الحوار)
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e: MouseEvent | TouchEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node))
+        setOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('touchstart', onDown)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('touchstart', onDown)
+    }
+  }, [open])
 
   const selected = useMemo(
     () => cases.find((c) => c.id === value) ?? null,
@@ -44,7 +63,8 @@ export function CasePicker({
         <span className="truncate text-sm">{selected.title || 'قضية'}</span>
         <button
           type="button"
-          className="shrink-0 text-muted-foreground hover:text-destructive"
+          title="مسح الاختيار"
+          className="-m-2 shrink-0 p-2 text-muted-foreground hover:text-destructive"
           onClick={() => onChange(null)}
         >
           <X className="h-4 w-4" />
@@ -54,8 +74,9 @@ export function CasePicker({
   }
 
   return (
-    <div className="relative">
+    <div ref={rootRef} className="relative">
       <Input
+        id={inputId}
         value={query}
         placeholder={placeholder}
         onChange={(e) => {
@@ -88,6 +109,14 @@ export function CasePicker({
               </button>
             ))
           )}
+          <button
+            type="button"
+            className="flex w-full items-center gap-1 border-t px-3 py-2 text-xs text-muted-foreground hover:bg-accent/20"
+            onClick={() => setOpen(false)}
+          >
+            <X className="h-3 w-3" />
+            إغلاق
+          </button>
         </div>
       )}
     </div>

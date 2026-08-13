@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/select'
 import { ContactPicker } from '@/components/ContactPicker'
 import { DualDatePicker } from '@/components/DualDatePicker'
+import { Ltr } from '@/components/Ltr'
 
 import { todayISO } from '@/lib/format'
 import { uploadFile } from '@/lib/files'
@@ -138,11 +139,14 @@ export function NewDebtContractDialog({ onDone }: { onDone: () => void }) {
           <FileText className="h-5 w-5 text-gold" />
           عقد تحصيل ديون من النموذج
         </DialogTitle>
+        <p className="text-xs text-muted-foreground">
+          رقم العقد المقترح: <Ltr className="font-medium">{nextNumber}</Ltr>
+        </p>
       </DialogHeader>
 
       <div className="my-4 max-h-[62vh] space-y-3 overflow-y-auto pl-1 pr-1">
         <div className="space-y-1.5">
-          <Label>الموكّل (اختيار من جهات الاتصال يعبئ الاسم والجوال)</Label>
+          <Label>الموكّل (اختيار من جهات الاتصال يعبئ الاسم والجوال والبريد)</Label>
           <ContactPicker
             contacts={contacts ?? []}
             value={clientId}
@@ -233,11 +237,12 @@ export function NewDebtContractDialog({ onDone }: { onDone: () => void }) {
             onChange={setSignedDate}
           />
         </div>
-
-        {error && (
-          <p className="text-xs font-medium text-destructive">{error}</p>
-        )}
       </div>
+
+      {/* الخطأ خارج منطقة التمرير — يظهر دائماً فوق أزرار الحوار */}
+      {error && (
+        <p className="mb-2 text-xs font-medium text-destructive">{error}</p>
+      )}
 
       <DialogFooter className="gap-2">
         <Button variant="gold" disabled={busy} onClick={submit}>

@@ -23,9 +23,10 @@ import { useAuth } from '@/stores/auth'
 import { todayISO } from '@/lib/format'
 import { useContacts } from '@/hooks/useContacts'
 import { useCreateRequest, useUpdateRequest } from '@/hooks/useRequests'
+import { ContactPicker } from '@/components/ContactPicker'
 import { DualDatePicker } from '@/components/DualDatePicker'
 import { TYPE_OPTIONS } from './labels'
-import type { IncomingRequest, IncomingRequestInput } from '@/types/db'
+import type { Contact, IncomingRequest, IncomingRequestInput } from '@/types/db'
 
 const NONE = '__none__'
 
@@ -69,6 +70,7 @@ export function RequestForm({
     register,
     handleSubmit,
     control,
+    setValue,
     formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -139,44 +141,50 @@ export function RequestForm({
                 </Select>
               )}
             />
-          </div>
-          <Controller
-            control={control}
-            name="received_at"
-            render={({ field }) => (
-              <DualDatePicker
-                label="تاريخ الاستلام"
-                required
-                value={field.value || null}
-                onChange={(v) => field.onChange(v ?? '')}
-              />
+            {errors.request_type && (
+              <p className="text-xs text-destructive">
+                {errors.request_type.message}
+              </p>
             )}
-          />
+          </div>
+          <div className="space-y-1.5">
+            <Controller
+              control={control}
+              name="received_at"
+              render={({ field }) => (
+                <DualDatePicker
+                  label="تاريخ الاستلام"
+                  required
+                  value={field.value || null}
+                  onChange={(v) => field.onChange(v ?? '')}
+                />
+              )}
+            />
+            {errors.received_at && (
+              <p className="text-xs text-destructive">
+                {errors.received_at.message}
+              </p>
+            )}
+          </div>
 
-          {/* ربط بجهة اتصال (اختياري). لاحقاً: بحث متقدّم في contacts. */}
+          {/* ربط بجهة اتصال (اختياري) — الاختيار يعبّئ الاسم والجوال تلقائياً */}
           <div className="space-y-1.5 sm:col-span-2">
             <Label>ربط بجهة اتصال (اختياري)</Label>
             <Controller
               control={control}
               name="client_id"
               render={({ field }) => (
-                <Select
-                  value={field.value || NONE}
-                  onValueChange={field.onChange}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="بدون" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={NONE}>بدون</SelectItem>
-                    {(contacts ?? []).map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.name}
-                        {c.phone ? ` — ${c.phone}` : ''}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <ContactPicker
+                  contacts={contacts ?? []}
+                  value={field.value && field.value !== NONE ? field.value : null}
+                  onSelect={(c: Contact | null) => {
+                    field.onChange(c?.id ?? NONE)
+                    if (c) {
+                      setValue('client_name', c.name ?? '')
+                      setValue('client_phone', c.phone ?? '')
+                    }
+                  }}
+                />
               )}
             />
           </div>

@@ -6,7 +6,9 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
-import { fmtNumber, fmtDatePref, fmtTime } from '@/lib/format'
+import { EmptyState, FilteredEmptyState } from '@/components/EmptyState'
+import { QueryErrorState } from '@/components/QueryErrorState'
+import { fmtNumber, fmtDatePref, fmtTime, daysLabel } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useAllSessions } from '@/hooks/useCaseSessions'
 import { usePageState } from '@/hooks/usePageState'
@@ -43,17 +45,28 @@ function countdownText(days: number | null): string {
   if (days == null || days < 0) return ''
   if (days === 0) return 'اليوم'
   if (days === 1) return 'غداً'
-  return `بعد ${fmtNumber(days)} يوم`
+  return `بعد ${daysLabel(days)}`
 }
 
 export function SessionsPage() {
-  const { data, isLoading } = useAllSessions()
+  const { data, isLoading, isError, error, refetch } = useAllSessions()
   const [, navigate] = useLocation()
   const [search, setSearch] = usePageState('sessions:q', '')
   const [filter, setFilter] = usePageState<SessionDisplayStatus | 'all'>(
     'sessions:filter',
     'all'
   )
+
+  // افتح القضية على تبويب الجلسات مباشرة (لا التبويب الأخير المحفوظ)
+  const openCase = (s: SessionWithCase) => {
+    if (!s.case_id) return
+    try {
+      sessionStorage.setItem('ps:case-tab:' + s.case_id, JSON.stringify('sessions'))
+    } catch {
+      /* تخزين معطّل — سيفتح على التبويب الافتراضي */
+    }
+    navigate(`/cases/${s.case_id}`)
+  }
 
   // احسب الحالة التلقائية لكل جلسة مرة واحدة
   const withStatus = useMemo(
@@ -109,7 +122,7 @@ export function SessionsPage() {
         <Input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="بحث باسم القضية أو المحكمة…"
+          placeholder="بحث باسم القضية أو الجلسة أو المحكمة…"
           className="pr-9"
         />
       </div>
@@ -119,7 +132,6 @@ export function SessionsPage() {
         {FILTERS.map((f) => (
           <Button
             key={f.value}
-            size="sm"
             variant={filter === f.value ? 'default' : 'outline'}
             onClick={() => setFilter(f.value)}
           >
@@ -136,37 +148,44 @@ export function SessionsPage() {
         ))}
       </div>
 
-      {isLoading ? (
-        <div className="divide-y overflow-hidden rounded-xl border bg-card">
+      {isError ? (
+        <QueryErrorState
+          title="تعذّر تحميل الجلسات"
+          error={error}
+          onRetry={() => refetch()}
+        />
+      ) : isLoading ? (
+        <div className="divide-y divide-border/60 overflow-hidden rounded-xl border">
           {Array.from({ length: 6 }).map((_, i) => (
             <Skeleton key={i} className="h-16 w-full rounded-none" />
           ))}
         </div>
+      ) : (data?.length ?? 0) === 0 ? (
+        <EmptyState
+          icon={CalendarDays}
+          title="لا توجد جلسات"
+          description="تُضاف الجلسات من داخل صفحة القضية."
+        />
       ) : filtered.length === 0 ? (
-        <EmptyState />
+        <FilteredEmptyState
+          onClear={() => {
+            setSearch('')
+            setFilter('all')
+          }}
+        />
       ) : (
         <div className="space-y-6">
           {upcoming.length > 0 && (
             <Group title="القادمة والمنعقدة" count={upcoming.length}>
               {upcoming.map(({ s, st }) => (
-                <SessionRow
-                  key={s.id}
-                  s={s}
-                  st={st}
-                  onClick={() => s.case_id && navigate(`/cases/${s.case_id}`)}
-                />
+                <SessionRow key={s.id} s={s} st={st} onClick={() => openCase(s)} />
               ))}
             </Group>
           )}
           {past.length > 0 && (
             <Group title="الجلسات السابقة" count={past.length}>
               {past.map(({ s, st }) => (
-                <SessionRow
-                  key={s.id}
-                  s={s}
-                  st={st}
-                  onClick={() => s.case_id && navigate(`/cases/${s.case_id}`)}
-                />
+                <SessionRow key={s.id} s={s} st={st} onClick={() => openCase(s)} />
               ))}
             </Group>
           )}
@@ -191,7 +210,7 @@ function Group({
         {title}{' '}
         <span className="font-normal">({fmtNumber(count)})</span>
       </h3>
-      <div className="divide-y overflow-hidden rounded-xl border bg-card">
+      <div className="divide-y divide-border/60 overflow-hidden rounded-xl border">
         {children}
       </div>
     </div>
@@ -211,11 +230,17 @@ function SessionRow({
   const cd =
     st === 'منعقدة' ? 'منعقدة الآن' : days != null ? countdownText(days) : ''
   const soon = days != null && days <= 3
+  // جلسة بلا قضية مرتبطة: لا وجهة للنقر — عطّل الصف بصرياً بدل نقرة ميتة
+  const clickable = !!s.case_id
 
   return (
     <button
       onClick={onClick}
-      className="block w-full px-4 py-3 text-right transition-colors hover:bg-accent/10"
+      disabled={!clickable}
+      className={cn(
+        'block w-full px-3 py-3 text-right transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+        clickable ? 'hover:bg-muted/60' : 'cursor-default'
+      )}
     >
       {/* السطر العلوي: عنوان القضية + الحالة */}
       <div className="flex items-center gap-2">
@@ -268,19 +293,5 @@ function SessionRow({
         )}
       </div>
     </button>
-  )
-}
-
-function EmptyState() {
-  return (
-    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-16 text-center">
-      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-        <CalendarDays className="h-6 w-6 text-muted-foreground" />
-      </div>
-      <p className="font-medium text-foreground">لا توجد جلسات</p>
-      <p className="text-sm text-muted-foreground">
-        تُضاف الجلسات من داخل صفحة القضية.
-      </p>
-    </div>
   )
 }

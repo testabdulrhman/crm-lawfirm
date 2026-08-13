@@ -33,38 +33,45 @@ export function useCaseDocuments(caseId: string) {
   })
 }
 
+export interface AddDocumentArgs {
+  file: File
+  name?: string | null
+  documentDate?: string | null
+  description?: string | null
+  uploadedByName: string | null
+}
+
+/**
+ * الرفع الفعلي: التخزين ثم صف القاعدة. بلا toasts — النداء المباشر يخدم رفع
+ * الدفعات حيث يُجمع مصير كل ملف في تقرير دائم بدل رسائل تختفي.
+ * ⚠️ الملف لا يُعد «في النظام» إلا بعد نجاح **الخطوتين**: رفعٌ للتخزين نجح
+ *    وفشل الإدراج بعده = ملف يتيم لا يظهر في أي شاشة.
+ */
+export async function addDocumentDirect(
+  caseId: string,
+  args: AddDocumentArgs
+): Promise<void> {
+  const { publicUrl, path } = await uploadFile(args.file, {
+    folder: `case_documents/${caseId}`,
+  })
+  const { error } = await supabase.from('documents').insert({
+    case_id: caseId,
+    name: args.name?.trim() || args.file.name,
+    file_url: publicUrl,
+    file_path: path,
+    file_type: args.file.type || null,
+    file_size: args.file.size,
+    document_date: args.documentDate || null,
+    description: args.description?.trim() || null,
+    uploaded_by_name: args.uploadedByName,
+  })
+  if (error) throw error
+}
+
 export function useAddDocument(caseId: string) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({
-      file,
-      name,
-      documentDate,
-      description,
-      uploadedByName,
-    }: {
-      file: File
-      name?: string | null
-      documentDate?: string | null
-      description?: string | null
-      uploadedByName: string | null
-    }): Promise<void> => {
-      const { publicUrl, path } = await uploadFile(file, {
-        folder: `case_documents/${caseId}`,
-      })
-      const { error } = await supabase.from('documents').insert({
-        case_id: caseId,
-        name: name?.trim() || file.name,
-        file_url: publicUrl,
-        file_path: path,
-        file_type: file.type || null,
-        file_size: file.size,
-        document_date: documentDate || null,
-        description: description?.trim() || null,
-        uploaded_by_name: uploadedByName,
-      })
-      if (error) throw error
-    },
+    mutationFn: (args: AddDocumentArgs) => addDocumentDirect(caseId, args),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['case_documents', caseId] })
       toast({ variant: 'success', title: 'تم رفع المستند' })

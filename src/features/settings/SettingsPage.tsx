@@ -71,7 +71,7 @@ export function SettingsPage() {
     OFFICE_TABS.some((t) => t.value === tab) ? GROUPS[1] : GROUPS[0]
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5">
+    <div className="mx-auto max-w-6xl space-y-6">
       <div>
         <h2 className="text-2xl font-bold tracking-tight text-foreground">الإعدادات</h2>
         <p className="mt-1 text-sm text-muted-foreground">{group.hint}</p>
@@ -88,6 +88,7 @@ export function SettingsPage() {
               onClick={() => setTab(g.tabs[0].value)}
               className={cn(
                 'flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-colors',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
                 active
                   ? 'bg-gold text-navy shadow-sm'
                   : 'text-muted-foreground hover:bg-muted hover:text-foreground'
@@ -116,7 +117,8 @@ export function SettingsPage() {
           </TabsList>
         </div>
 
-        <TabsContent value="office">
+        {/* forceMount: التبويبان يحملان نماذج — التفكيك يُفقد التعديلات غير المحفوظة */}
+        <TabsContent value="office" forceMount className="data-[state=inactive]:hidden">
           <OfficeInfoTab />
         </TabsContent>
 
@@ -124,7 +126,7 @@ export function SettingsPage() {
           <LookupsTab />
         </TabsContent>
 
-        <TabsContent value="templates">
+        <TabsContent value="templates" forceMount className="data-[state=inactive]:hidden">
           <TemplatesTab />
         </TabsContent>
 
@@ -183,7 +185,11 @@ function AppearanceTab() {
               </p>
             </div>
           </div>
-          <Switch checked={isDark} onCheckedChange={toggle} />
+          <Switch
+            checked={isDark}
+            onCheckedChange={toggle}
+            aria-label="الوضع الليلي"
+          />
         </div>
 
         {/* عرض التاريخ */}

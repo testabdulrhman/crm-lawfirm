@@ -18,7 +18,6 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Alert, AlertTitle } from '@/components/ui/alert'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import {
   Select,
@@ -39,6 +38,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { FilePreviewDialog } from '@/components/FilePreviewDialog'
 import { DropZone } from '@/components/DropZone'
+import { QueryErrorState } from '@/components/QueryErrorState'
 
 import { toast } from '@/hooks/use-toast'
 import { fmtDatePref, fmtNumber, fmtFileSize } from '@/lib/format'
@@ -70,7 +70,7 @@ export function LegalServiceDetail({ id }: { id: string }) {
   const [, navigate] = useLocation()
   const { teamMember } = useAuth()
   const isDirector = useIsDirector()
-  const { data: s, isLoading, isError } = useLegalService(id)
+  const { data: s, isLoading, isError, error, refetch } = useLegalService(id)
   const statusM = useUpdateLegalServiceStatus()
   const deleteM = useDeleteLegalService()
 
@@ -88,15 +88,13 @@ export function LegalServiceDetail({ id }: { id: string }) {
 
   if (isError || !s) {
     return (
-      <div className="space-y-4">
-        <Button variant="ghost" onClick={() => navigate('/legal-services')}>
-          <ArrowRight className="h-4 w-4" />
-          رجوع
-        </Button>
-        <Alert variant="destructive">
-          <AlertTitle>تعذّر تحميل الخدمة</AlertTitle>
-        </Alert>
-      </div>
+      <QueryErrorState
+        title="تعذّر تحميل الخدمة"
+        error={error}
+        onRetry={() => refetch()}
+        backTo="/legal-services"
+        backLabel="رجوع للخدمات"
+      />
     )
   }
 
@@ -139,7 +137,10 @@ export function LegalServiceDetail({ id }: { id: string }) {
               value={s.status ?? 'draft'}
               onValueChange={(v) => statusM.mutate({ id: s.id, status: v })}
             >
-              <SelectTrigger className="h-9 w-28">
+              <SelectTrigger className="h-9 w-28" disabled={statusM.isPending}>
+                {statusM.isPending && (
+                  <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />
+                )}
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

@@ -38,6 +38,8 @@ import {
 } from '@/components/ui/alert-dialog'
 import { fmtNumber } from '@/lib/format'
 import { openExternal } from '@/lib/external'
+import { QueryErrorState } from '@/components/QueryErrorState'
+import { Ltr } from '@/components/Ltr'
 import { ContactPicker } from '@/components/ContactPicker'
 import { useContacts } from '@/hooks/useContacts'
 import {
@@ -54,11 +56,12 @@ import {
 import type { CaseParty, Contact } from '@/types/db'
 
 export function PartiesTab({ caseId }: { caseId: string }) {
-  const { data, isLoading } = useCaseParties(caseId)
+  const { data, isLoading, isError, error, refetch } = useCaseParties(caseId)
   const deleteM = useDeleteParty(caseId)
 
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<CaseParty | null>(null)
+  const [defaultSide, setDefaultSide] = useState('defendant')
   const [toDelete, setToDelete] = useState<CaseParty | null>(null)
 
   const { plaintiffs, defendants } = useMemo(() => {
@@ -69,8 +72,9 @@ export function PartiesTab({ caseId }: { caseId: string }) {
     }
   }, [data])
 
-  const openNew = () => {
+  const openNew = (side = 'defendant') => {
     setEditing(null)
+    setDefaultSide(side)
     setFormOpen(true)
   }
   const openEdit = (p: CaseParty) => {
@@ -79,19 +83,39 @@ export function PartiesTab({ caseId }: { caseId: string }) {
   }
 
   if (isLoading) {
+    // سكيلتون يطابق الشكل النهائي: صف الزر ثم شبكة العمودين
     return (
-      <div className="space-y-3">
-        {Array.from({ length: 3 }).map((_, i) => (
-          <Skeleton key={i} className="h-24 w-full" />
-        ))}
+      <div className="space-y-5">
+        <div className="flex justify-end">
+          <Skeleton className="h-9 w-28" />
+        </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {Array.from({ length: 2 }).map((_, i) => (
+            <div key={i} className="space-y-2">
+              <Skeleton className="h-5 w-24" />
+              <Skeleton className="h-28 w-full" />
+              <Skeleton className="h-28 w-full" />
+            </div>
+          ))}
+        </div>
       </div>
+    )
+  }
+
+  if (isError) {
+    return (
+      <QueryErrorState
+        title="تعذّر تحميل الأطراف"
+        error={error}
+        onRetry={() => refetch()}
+      />
     )
   }
 
   return (
     <div className="space-y-5">
       <div className="flex justify-end">
-        <Button variant="gold" onClick={openNew}>
+        <Button variant="gold" onClick={() => openNew()}>
           <Plus className="h-4 w-4" />
           إضافة طرف
         </Button>
@@ -103,12 +127,16 @@ export function PartiesTab({ caseId }: { caseId: string }) {
         <PartySection
           title="المدّعون"
           parties={plaintiffs}
+          emptyText="لم يُسجَّل مدّعون بعد"
+          onAdd={() => openNew('plaintiff')}
           onEdit={openEdit}
           onDelete={setToDelete}
         />
         <PartySection
           title="المدّعى عليهم"
           parties={defendants}
+          emptyText="لم يُسجَّل مدّعى عليهم بعد"
+          onAdd={() => openNew('defendant')}
           onEdit={openEdit}
           onDelete={setToDelete}
         />
@@ -120,13 +148,19 @@ export function PartiesTab({ caseId }: { caseId: string }) {
           <PartyForm
             caseId={caseId}
             party={editing}
+            defaultSide={defaultSide}
             onDone={() => setFormOpen(false)}
           />
         </DialogContent>
       </Dialog>
 
-      {/* تأكيد الحذف */}
-      <AlertDialog open={!!toDelete} onOpenChange={(o) => !o && setToDelete(null)}>
+      {/* تأكيد الحذف — يبقى مفتوحاً مع مؤشر حتى اكتمال الحذف */}
+      <AlertDialog
+        open={!!toDelete}
+        onOpenChange={(o) => {
+          if (!o && !deleteM.isPending) setToDelete(null)
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>تأكيد حذف الطرف</AlertDialogTitle>
@@ -135,14 +169,19 @@ export function PartiesTab({ caseId }: { caseId: string }) {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <AlertDialogCancel disabled={deleteM.isPending}>إلغاء</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => {
-                if (toDelete) deleteM.mutate(toDelete.id)
-                setToDelete(null)
+              disabled={deleteM.isPending}
+              onClick={(e) => {
+                e.preventDefault()
+                if (!toDelete) return
+                deleteM.mutate(toDelete.id, {
+                  onSuccess: () => setToDelete(null),
+                })
               }}
             >
+              {deleteM.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
               حذف
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -155,11 +194,15 @@ export function PartiesTab({ caseId }: { caseId: string }) {
 function PartySection({
   title,
   parties,
+  emptyText,
+  onAdd,
   onEdit,
   onDelete,
 }: {
   title: string
   parties: CaseParty[]
+  emptyText: string
+  onAdd: () => void
   onEdit: (p: CaseParty) => void
   onDelete: (p: CaseParty) => void
 }) {
@@ -172,8 +215,12 @@ function PartySection({
         </span>
       </h3>
       {parties.length === 0 ? (
-        <div className="rounded-lg border border-dashed py-6 text-center text-sm text-muted-foreground">
-          لا يوجد
+        <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed py-6 text-center text-sm text-muted-foreground">
+          <span>{emptyText}</span>
+          <Button variant="outline" size="sm" onClick={onAdd}>
+            <Plus className="h-3.5 w-3.5" />
+            إضافة طرف
+          </Button>
         </div>
       ) : (
         <div className="space-y-2">
@@ -219,22 +266,26 @@ function PartyCard({
               )}
             </div>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="-my-1 flex items-center gap-2">
             <Button
               variant="ghost"
               size="icon"
-              className="h-7 w-7"
+              className="h-9 w-9"
+              aria-label="تعديل الطرف"
+              title="تعديل الطرف"
               onClick={() => onEdit(p)}
             >
-              <Pencil className="h-3.5 w-3.5" />
+              <Pencil className="h-4 w-4" />
             </Button>
             <Button
               variant="ghost"
               size="icon"
-              className="h-7 w-7 text-destructive"
+              className="h-9 w-9 text-destructive"
+              aria-label="حذف الطرف"
+              title="حذف الطرف"
               onClick={() => onDelete(p)}
             >
-              <Trash2 className="h-3.5 w-3.5" />
+              <Trash2 className="h-4 w-4" />
             </Button>
           </div>
         </div>
@@ -243,7 +294,7 @@ function PartyCard({
           {p.phone && (
             <button
               dir="ltr"
-              className="flex items-center justify-end gap-1 hover:text-gold"
+              className="flex items-center justify-end gap-1 rounded-sm hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               onClick={() => openExternal(`tel:${p.phone}`)}
             >
               <span>{p.phone}</span>
@@ -251,8 +302,8 @@ function PartyCard({
             </button>
           )}
           {p.id_number && (
-            <p dir="ltr" className="text-right">
-              هوية: {p.id_number}
+            <p>
+              هوية: <Ltr>{p.id_number}</Ltr>
             </p>
           )}
           {p.nationality && <p>الجنسية: {p.nationality}</p>}
@@ -279,10 +330,13 @@ type FormValues = z.infer<typeof schema>
 function PartyForm({
   caseId,
   party,
+  defaultSide = 'defendant',
   onDone,
 }: {
   caseId: string
   party: CaseParty | null
+  /** الصفة المبدئية عند الإضافة (حسب العمود الذي فُتح منه النموذج) */
+  defaultSide?: string
   onDone: () => void
 }) {
   const isEdit = Boolean(party)
@@ -304,7 +358,11 @@ function PartyForm({
     resolver: zodResolver(schema),
     defaultValues: {
       name: party?.name ?? '',
-      party_side: party?.party_side === 'plaintiff' ? 'plaintiff' : 'defendant',
+      party_side: party
+        ? party.party_side === 'plaintiff'
+          ? 'plaintiff'
+          : 'defendant'
+        : defaultSide,
       role: party?.role && party.role !== 'opponent' ? party.role : '',
       phone: party?.phone ?? '',
       id_number: party?.id_number ?? '',

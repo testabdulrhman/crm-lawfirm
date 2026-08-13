@@ -101,9 +101,11 @@ export function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
       {/* يسار: الإشعارات + التحديث + الثيم + قائمة المستخدم */}
       <div className="flex items-center gap-2">
         <NotificationBell />
+        {/* على الجوال ينتقل الزرّان إلى قائمة المستخدم لإفساح مكان للبحث */}
         <Button
           variant="ghost"
           size="icon"
+          className="hidden sm:inline-flex"
           onClick={() => {
             setRefreshing(true)
             void hardRefresh()
@@ -117,6 +119,7 @@ export function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
         <Button
           variant="ghost"
           size="icon"
+          className="hidden sm:inline-flex"
           onClick={toggle}
           aria-label="تبديل الوضع الليلي"
         >
@@ -148,6 +151,27 @@ export function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
               )}
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
+            {/* بنود الجوال فقط — بديل الزرّين المخفيين في الشريط */}
+            <DropdownMenuItem
+              className="gap-2 sm:hidden"
+              disabled={refreshing}
+              onClick={() => {
+                setRefreshing(true)
+                void hardRefresh()
+              }}
+            >
+              <RefreshCw className={refreshing ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />
+              تحديث التطبيق
+            </DropdownMenuItem>
+            <DropdownMenuItem className="gap-2 sm:hidden" onClick={toggle}>
+              {theme === 'dark' ? (
+                <Sun className="h-4 w-4" />
+              ) : (
+                <Moon className="h-4 w-4" />
+              )}
+              {theme === 'dark' ? 'الوضع النهاري' : 'الوضع الليلي'}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator className="sm:hidden" />
             {teamMember?.id && (
               <DropdownMenuItem
                 className="gap-2"
