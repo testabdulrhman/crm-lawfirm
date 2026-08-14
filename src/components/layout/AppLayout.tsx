@@ -1,9 +1,11 @@
 import { useEffect, useState, type ReactNode } from 'react'
+import { useLocation } from 'wouter'
 
 import { cn } from '@/lib/utils'
 import { usePrefs } from '@/stores/prefs'
 import { useAuth } from '@/stores/auth'
 import { startUsageTracking } from '@/lib/usageTracker'
+import { registerPush } from '@/lib/push'
 import { Sidebar } from './Sidebar'
 import { TopBar } from './TopBar'
 import { AiAssistant } from '@/components/AiAssistant'
@@ -11,6 +13,7 @@ import { AiAssistant } from '@/components/AiAssistant'
 export function AppLayout({ children }: { children: ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false)
   const { teamMember } = useAuth()
+  const [, navigate] = useLocation()
 
   // تسجيل جلسة الاستخدام (مرة واحدة لكل فتح للتطبيق)
   useEffect(() => {
@@ -18,6 +21,13 @@ export function AppLayout({ children }: { children: ReactNode }) {
       void startUsageTracking(teamMember.name, teamMember.role)
     }
   }, [teamMember?.name, teamMember?.role])
+
+  // الإشعارات الفورية على الآيفون: تسجيل جهاز الموظف، والضغط على الإشعار
+  // يفتح غرفة المهمة مباشرة. على الويب لا شيء يحدث (no-op).
+  useEffect(() => {
+    if (!teamMember?.id) return
+    void registerPush(teamMember.id, (route) => navigate(route))
+  }, [teamMember?.id, navigate])
   // مفتاح يعيد بناء المحتوى عند تغيير تفضيل عرض التاريخ (تحديث فوري للتواريخ)
   const dateDisplay = usePrefs((s) => s.dateDisplay)
 

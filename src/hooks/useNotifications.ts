@@ -111,28 +111,62 @@ export async function notify(args: {
   taskId?: string | null
 }): Promise<void> {
   if (!args.recipientId) return
-  try {
-    await supabase.from('notifications').insert({
-      recipient_id: args.recipientId,
-      type: args.type,
-      title: args.title,
-      message: args.message ?? null,
-      case_id: args.caseId ?? null,
-      task_id: args.taskId ?? null,
-      is_read: false,
-      channels: ['app'],
-    })
-  } catch {
-    /* الإشعار ثانوي — لا يعطّل شيئاً */
-  }
+  await notifyMany([args.recipientId], args)
 }
 
-/** إشعار لعدة مستلمين دفعة واحدة */
+/** وجهة الإشعار داخل التطبيق — يفتحها الضغط على الإشعار الفوري */
+function routeOf(a: { taskId?: string | null; caseId?: string | null }): string | null {
+  if (a.taskId) return `/tasks/${a.taskId}`
+  if (a.caseId) return `/cases/${a.caseId}`
+  return null
+}
+
+/**
+ * إشعار لعدة مستلمين: يُحفظ داخل النظام ثم يُدفع لجوالاتهم (APNs).
+ * صامتة عمداً تجاه المُستدعي: فشل الإشعار لا يُفشل العملية الأصلية — لكن
+ * سبب فشل الدفع يُسجَّل في notifications.push_error فلا يضيع بلا أثر.
+ */
 export async function notifyMany(
   recipientIds: (string | null | undefined)[],
   args: Omit<Parameters<typeof notify>[0], 'recipientId'>
 ): Promise<void> {
-  await Promise.all(
-    recipientIds.filter(Boolean).map((id) => notify({ ...args, recipientId: id }))
-  )
+  const ids = recipientIds.filter((v): v is string => !!v)
+  if (ids.length === 0) return
+
+  let inserted: { id: string }[] = []
+  try {
+    const { data } = await supabase
+      .from('notifications')
+      .insert(
+        ids.map((id) => ({
+          recipient_id: id,
+          type: args.type,
+          title: args.title,
+          message: args.message ?? null,
+          case_id: args.caseId ?? null,
+          task_id: args.taskId ?? null,
+          is_read: false,
+          channels: ['app', 'push'],
+        }))
+      )
+      .select('id')
+    inserted = data ?? []
+  } catch {
+    return /* لم يُحفظ شيء — لا معنى لدفع إشعار بلا سجل */
+  }
+
+  // الدفع للجوالات — طبقة فوق الإشعار المحفوظ، فشلها لا يُلغيه
+  try {
+    await supabase.functions.invoke('push-send', {
+      body: {
+        member_ids: ids,
+        title: args.title,
+        message: args.message ?? '',
+        route: routeOf(args),
+        notification_ids: inserted.map((n) => n.id),
+      },
+    })
+  } catch {
+    /* بلا إنترنت أو الدالة غير مُعدّة — الإشعار داخل النظام قائم */
+  }
 }

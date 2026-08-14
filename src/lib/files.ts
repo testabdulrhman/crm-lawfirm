@@ -9,6 +9,38 @@ export interface PickFileOptions {
   multiple?: boolean
 }
 
+/**
+ * التقاط مستند بالكاميرا (الآيفون) وإرجاعه ملفاً جاهزاً للرفع.
+ * يُرجع null على الويب أو عند الإلغاء — فالمنادي يعرض منتقي الملفات بدله.
+ */
+export async function captureDocument(): Promise<File | null> {
+  const { Capacitor } = await import('@capacitor/core')
+  if (!Capacitor.isNativePlatform()) return null
+  try {
+    const { Camera, CameraResultType, CameraSource } = await import(
+      '@capacitor/camera'
+    )
+    const photo = await Camera.getPhoto({
+      quality: 85,
+      resultType: CameraResultType.Uri,
+      source: CameraSource.Camera,
+      // تصوير مستند: السماح بالقصّ يعطي نتيجة أنظف من الصورة الخام
+      allowEditing: true,
+      correctOrientation: true,
+    })
+    if (!photo.webPath) return null
+    const blob = await (await fetch(photo.webPath)).blob()
+    const ext = photo.format || 'jpeg'
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')
+    return new File([blob], `مستند-${stamp}.${ext}`, {
+      type: blob.type || `image/${ext}`,
+    })
+  } catch {
+    // إلغاء المستخدم يصل كاستثناء في Capacitor — ليس خطأ يستحق رسالة
+    return null
+  }
+}
+
 // اختيار ملف عبر input مخفي (الويب). لاحقاً: Capacitor Camera/Filesystem.
 export function pickFile(options: PickFileOptions = {}): Promise<File | null> {
   return new Promise((resolve) => {

@@ -66,5 +66,11 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>يُستخدم لتصوير المستندات وإرفاقها بالقضايا والمهام.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>يُستخدم لاختيار صور المستندات وإرفاقها بالقضايا والمهام.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>لحفظ المستندات المُنزَّلة في صورك.</string>
 </dict>
 </plist>

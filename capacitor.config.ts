@@ -1,14 +1,15 @@
 import type { CapacitorConfig } from '@capacitor/cli'
 
-// تطبيق iOS «رضوان» — يعرض النظام المنشور مباشرة:
-// أي تحديث يُنشر على app.redwan.sa يظهر في الجوالات فوراً بدون إصدار جديد.
-// (للتحول لنسخة مدموجة داخل التطبيق: احذف server.url وأعد cap sync)
+// تطبيق iOS «رضوان» — الواجهة **مدموجة داخل التطبيق** (لا تُحمَّل من الشبكة):
+// يفتح فوراً بلا انتظار، ويعمل في المحاكم ضعيفة التغطية بدل الشاشة البيضاء.
+// المقابل: التحديث يحتاج بناءً ورفعاً جديداً (توزيع داخلي عبر TestFlight).
+// (للعودة لوضع المراية: أعِد server.url ثم npx cap sync ios)
 const config: CapacitorConfig = {
   appId: 'sa.redwan.crm',
   appName: 'رضوان',
   webDir: 'dist',
   server: {
-    url: 'https://app.redwan.sa',
+    // نطاقات مسموح التنقل إليها من داخل التطبيق (التخزين والدوال)
     allowNavigation: ['app.redwan.sa', '*.supabase.co'],
   },
   ios: {

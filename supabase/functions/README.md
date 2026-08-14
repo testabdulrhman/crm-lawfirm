@@ -20,6 +20,7 @@
 | `extract-minutes` | استخراج بيانات محضر الجلسة — زر «تعبئة تلقائية من المحضر» | ✓ |
 | `session-reminders` | تذكير المحامين بالجلسات — **رسائل نصية** (Msegat) منذ v3 | ✓ |
 | `extract-contract` | استخراج بيانات العقد والتزاماته من ملفه — زر «استخراج البيانات من ملف العقد» | ✓ |
+| `push-send` | إشعارات فورية (APNs) لتطبيق الآيفون — المنشن والاعتماد وإسناد المهام | ✓ |
 
 ## ⚠️ دوال منشورة وغير محفوظة هنا
 
@@ -54,4 +55,6 @@
 تُقرأ من Supabase Secrets ولا تُكتب في الكود إطلاقاً:
 `ANTHROPIC_API_KEY` · `MSEGAT_USERNAME/API_KEY/SENDER` ·
 `GOOGLE_CLIENT_ID/SECRET/REFRESH_TOKEN` · `GOOGLE_CALENDAR_ID` ·
-`EVOLUTION_API_URL/INSTANCE/API_KEY` · `HATIF_WEBHOOK_SECRET`
+`EVOLUTION_API_URL/INSTANCE/API_KEY` · `HATIF_WEBHOOK_SECRET` ·
+`APNS_KEY_ID/TEAM_ID/BUNDLE_ID/PRIVATE_KEY/ENV` (⚠️ غير مضبوطة بعد — الإشعارات
+الفورية تُرجع خطأً صريحاً حتى تُضبط، والإشعار داخل النظام يعمل بدونها)

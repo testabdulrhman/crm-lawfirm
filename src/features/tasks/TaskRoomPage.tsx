@@ -9,6 +9,7 @@ import {
   Flame,
   Scale,
   FileUp,
+  Camera,
   FileText,
   Download,
   Send,
@@ -60,7 +61,8 @@ import {
 
 import { cn } from '@/lib/utils'
 import { fmtDatePref, fmtDateTime, fmtNumber } from '@/lib/format'
-import { pickFile } from '@/lib/files'
+import { pickFile, captureDocument } from '@/lib/files'
+import { isNative, tapFeedback } from '@/lib/push'
 import { useAuth } from '@/stores/auth'
 import { useIsDirector } from '@/hooks/useIsDirector'
 import { useTeamMembers } from '@/hooks/useTeam'
@@ -545,6 +547,15 @@ function WorkFileCard({
     if (f) setPendingFile(f)
   }
 
+  // تصوير مستند بالكاميرا مباشرة — أقصر طريق من الورقة إلى نسخة العمل
+  const onCapture = async () => {
+    const f = await captureDocument()
+    if (f) {
+      void tapFeedback('light')
+      setPendingFile(f)
+    }
+  }
+
   const doUpload = () => {
     if (!pendingFile) return
     uploadM.mutate(
@@ -584,6 +595,18 @@ function WorkFileCard({
               <FileUp className="h-4 w-4" />
               {latest ? 'تحديث النسخة' : 'رفع الملف'}
             </Button>
+            {isNative() && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onCapture}
+                disabled={uploadM.isPending || !canSubmit}
+                title="تصوير مستند بالكاميرا"
+              >
+                <Camera className="h-4 w-4" />
+                تصوير
+              </Button>
+            )}
             {canSubmit && latest && (
               <Button variant="gold" size="sm" onClick={() => setSubmitOpen(true)}>
                 <Stamp className="h-4 w-4" />
