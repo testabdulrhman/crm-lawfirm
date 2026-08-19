@@ -36,7 +36,7 @@ body{
   position:absolute;top:16px;right:16px;z-index:2;
   display:flex;align-items:center;gap:9px;
   background:rgba(17,29,58,.82);border:1px solid var(--line);
-  border-radius:999px;padding:9px 16px;font-size:19px;font-weight:600;
+  border-radius:999px;padding:8px 15px;font-size:clamp(13px,1.75vh,18px);font-weight:600;
 }
 .dot{width:11px;height:11px;border-radius:50%;background:var(--danger);
      animation:pulse 1.6s infinite}
@@ -53,46 +53,48 @@ body{
   background:linear-gradient(160deg,var(--card) 0%,var(--card-2) 100%);
   border:1px solid var(--line);border-radius:18px;padding:18px 22px;text-align:center
 }
-.brand h1{font-size:26px;font-weight:700;color:var(--gold);line-height:1.4}
-.clock{font-size:64px;font-weight:700;letter-spacing:1px;margin-top:6px;line-height:1.1}
-.clock .mer{font-size:28px;color:var(--muted);margin-right:8px}
-.date{font-size:21px;color:var(--muted);margin-top:4px}
+.brand h1{font-size:clamp(15px,2.05vh,23px);font-weight:700;color:var(--gold);line-height:1.5}
+.clock{font-size:clamp(34px,5.6vh,62px);font-weight:700;letter-spacing:1px;margin-top:4px;line-height:1.1}
+.clock .mer{font-size:clamp(16px,2.4vh,27px);color:var(--muted);margin-right:8px}
+.date{font-size:clamp(13px,1.8vh,20px);color:var(--muted);margin-top:2px}
 
 .panel{
   background:var(--card-2);border:1px solid var(--line);border-radius:18px;
   padding:16px 18px;display:flex;flex-direction:column;min-height:0
 }
 /* الجلسات بقدر محتواها، والمهام تملأ ما تبقّى فلا تُقصّ */
-.panel.sessions{flex:0 1 auto;max-height:42%}
+.panel.sessions{flex:0 0 auto;max-height:44%}
 .panel.tasks{flex:1 1 auto}
 .panel h2{
-  font-size:22px;font-weight:700;color:var(--gold);
+  font-size:clamp(14px,1.95vh,21px);font-weight:700;color:var(--gold);
   padding-bottom:8px;margin-bottom:8px;border-bottom:1px solid var(--line);
   display:flex;align-items:center;justify-content:space-between
 }
-.panel h2 .count{font-size:17px;color:var(--muted);font-weight:500}
-.list{overflow:hidden;display:flex;flex-direction:column;gap:4px;flex:1}
+.panel h2 .count{font-size:clamp(11px,1.5vh,16px);color:var(--muted);font-weight:500}
+.list{overflow:hidden;display:flex;flex-direction:column;gap:4px;flex:1;min-height:0}
 
 .row{display:flex;align-items:flex-start;gap:12px;padding:5px 4px;
      border-bottom:1px solid rgba(255,255,255,.05)}
 .row:last-child{border-bottom:0}
 .time{
   flex:0 0 auto;background:var(--gold);color:var(--navy);
-  border-radius:9px;padding:5px 11px;font-size:19px;font-weight:700;white-space:nowrap
+  border-radius:9px;padding:4px 10px;font-size:clamp(12px,1.7vh,18px);font-weight:700;white-space:nowrap
 }
 .row .body{min-width:0;flex:1;display:block}
-.row .t{display:block;font-size:20px;font-weight:600;line-height:1.35;
+.row .t{display:block;font-size:clamp(13px,1.8vh,19px);font-weight:600;line-height:1.35;
         overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.row .s{display:block;font-size:16px;color:var(--muted);margin-top:2px;
+.row .s{display:block;font-size:clamp(11px,1.45vh,15px);color:var(--muted);margin-top:2px;
         overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.tag{flex:0 0 auto;font-size:15px;border-radius:7px;padding:3px 9px;font-weight:600}
+.tag{flex:0 0 auto;font-size:clamp(10px,1.35vh,14px);border-radius:7px;padding:3px 9px;font-weight:600}
 .tag.urgent{background:rgba(224,82,74,.18);color:#ff9a94}
 .tag.review{background:rgba(201,168,76,.18);color:var(--gold)}
 .tag.late{background:rgba(224,82,74,.18);color:#ff9a94}
 
-.empty{color:var(--ok);font-size:22px;text-align:center;padding:26px 0;font-weight:600}
+.more{color:var(--gold);font-size:clamp(11px,1.45vh,15px);text-align:center;
+      padding:5px 0 2px;font-weight:600;opacity:.85}
+.empty{color:var(--ok);font-size:clamp(14px,1.9vh,20px);text-align:center;padding:14px 0;font-weight:600}
 .err{color:#ffb1ab;font-size:19px;text-align:center;padding:22px 0;line-height:1.6}
-.foot{font-size:16px;color:var(--muted);text-align:center;
+.foot{font-size:clamp(11px,1.45vh,15px);color:var(--muted);text-align:center;
       padding-top:8px;margin-top:auto;border-top:1px solid rgba(255,255,255,.06)}
 </style>
 </head>
@@ -111,7 +113,7 @@ body{
   <!-- الجانب -->
   <div class="side">
     <div class="brand">
-      <h1 id="brandName">رضوان المشيقح للمحاماة</h1>
+      <h1 id="brandName">شركة عبدالرحمن بن رضوان المشيقح<br>للمحاماة وإدارة إجراءات الإفلاس</h1>
       <div class="clock"><span id="clockTime">--:--</span><span class="mer" id="clockMer"></span></div>
       <div class="date" id="dateLine">—</div>
     </div>
@@ -249,6 +251,7 @@ function renderSessions(list){
          '</div>';
   }
   el.innerHTML = h;
+  trimToFit(el, list.length);
 }
 
 function renderTasks(list){
@@ -277,6 +280,33 @@ function renderTasks(list){
          '</div>';
   }
   el.innerHTML = h;
+  trimToFit(el, list.length);
+}
+
+/* ⚠️ القائمة كانت تُقصّ بصمت: عشر مهام مكتوبة وثلاث ظاهرة على التلفزيون.
+   ارتفاع شاشة التلفزيون لا يطابق 1080 دائماً، فنقيس الفعلي ونُخفي ما لا
+   يتّسع **معلنين عنه** بدل ابتلاعه. */
+function trimToFit(el, total){
+  var rows = el.getElementsByClassName('row');
+  if (!rows.length) return;
+  var guard = 0;
+  /* أزل الأخير ما دام المحتوى يتجاوز الحاوية (مع سطر «+N» المحجوز) */
+  while (el.scrollHeight > el.clientHeight + 2 && rows.length > 1 && guard < 60) {
+    rows[rows.length - 1].parentNode.removeChild(rows[rows.length - 1]);
+    guard++;
+  }
+  var shown = rows.length;
+  if (shown < total) {
+    var more = document.createElement('div');
+    more.className = 'more';
+    more.innerHTML = '+ ' + (total - shown) + ' أخرى — افتح النظام لعرضها';
+    el.appendChild(more);
+    /* لو دفع السطر الجديد الحاوية، أزل صفاً إضافياً */
+    if (el.scrollHeight > el.clientHeight + 2 && rows.length > 1) {
+      rows[rows.length - 1].parentNode.removeChild(rows[rows.length - 1]);
+      more.innerHTML = '+ ' + (total - rows.length) + ' أخرى — افتح النظام لعرضها';
+    }
+  }
 }
 
 function showError(msg){
