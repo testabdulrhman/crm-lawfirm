@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { useLocation } from 'wouter'
 import {
   Plus,
@@ -14,7 +14,6 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { QueryErrorState } from '@/components/QueryErrorState'
 import { EmptyState, FilteredEmptyState } from '@/components/EmptyState'
 import { Ltr } from '@/components/Ltr'
@@ -29,7 +28,6 @@ import { fmtNumber, fmtDatePref } from '@/lib/format'
 import { useCases } from '@/hooks/useCases'
 import { usePageState } from '@/hooks/usePageState'
 import { useTeamMembers } from '@/hooks/useTeam'
-import { CaseForm } from './CaseForm'
 import {
   CASE_STATUS_OPTIONS,
   CASE_STATUS_ORDER,
@@ -75,7 +73,6 @@ export function CasesPage() {
   const [assignee, setAssignee] = usePageState<string>('cases:assignee', ALL)
   const [sort, setSort] = usePageState<string>('cases:sort', 'default')
   const [visible, setVisible] = usePageState('cases:visible', PAGE)
-  const [dialogOpen, setDialogOpen] = useState(false)
 
   const resetPage = () => setVisible(PAGE)
 
@@ -165,7 +162,7 @@ export function CasesPage() {
             ({fmtNumber(data?.length ?? 0)})
           </span>
         </h2>
-        <Button variant="gold" onClick={() => setDialogOpen(true)}>
+        <Button variant="gold" onClick={() => navigate('/cases/new')}>
           <Plus className="h-4 w-4" />
           قضية جديدة
         </Button>
@@ -272,7 +269,7 @@ export function CasesPage() {
           title="لا توجد قضايا بعد"
           description="ابدأ بإضافة أول قضية لمتابعتها هنا."
           actionLabel="قضية جديدة"
-          onAction={() => setDialogOpen(true)}
+          onAction={() => navigate('/cases/new')}
         />
       ) : filtered.length === 0 ? (
         <FilteredEmptyState
@@ -305,11 +302,6 @@ export function CasesPage() {
         </>
       )}
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-2xl">
-          <CaseForm onDone={() => setDialogOpen(false)} />
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }
