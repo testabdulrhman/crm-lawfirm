@@ -416,6 +416,9 @@ function PartyForm({
             contacts={contacts ?? []}
             value={contactId}
             onSelect={onPickContact}
+            // منتقٍ مساعد لا سجلّ موكّلين: الطرف قد يكون خصماً، والإدخال
+            // اليدوي متاح أدناه — فإنشاء جهة اتصال هنا يلوّث القائمة.
+            allowCreate={false}
           />
           <p className="text-xs text-muted-foreground">
             للأطراف المسجّلين — يعبّئ الاسم/الجوال/الهوية/الجنسية (تبقى قابلة

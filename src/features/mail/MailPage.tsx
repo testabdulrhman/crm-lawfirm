@@ -375,6 +375,9 @@ function ComposeForm({
           <ContactPicker
             contacts={withEmail}
             placeholder="ابحث بالاسم أو الجوال أو البريد…"
+            // القائمة مقصورة على من له بريد، والإنشاء السريع لا يأخذ بريداً
+            // فتسقط الجهة الجديدة من القائمة فور إنشائها.
+            allowCreate={false}
             value={contactId}
             onSelect={(c) => {
               setContactId(c?.id ?? null)
