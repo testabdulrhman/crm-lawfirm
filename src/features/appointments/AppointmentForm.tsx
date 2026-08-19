@@ -47,9 +47,15 @@ type FormValues = z.infer<typeof schema>
 export function AppointmentForm({
   appointment,
   onDone,
+  defaultDate,
+  defaultTime,
 }: {
   appointment?: Appointment | null
   onDone: () => void
+  /** تعبئة مسبقة عند الإنشاء من التقويم — اليوم الذي نُقر عليه */
+  defaultDate?: string | null
+  /** الساعة التي نُقر عليها في عرض الأسبوع (HH:MM) */
+  defaultTime?: string | null
 }) {
   const isEdit = Boolean(appointment)
   const { teamMember } = useAuth()
@@ -74,10 +80,10 @@ export function AppointmentForm({
     defaultValues: {
       client_name: appointment?.client_name ?? '',
       client_phone: appointment?.client_phone ?? '',
-      appointment_date: appointment?.appointment_date ?? '',
+      appointment_date: appointment?.appointment_date ?? defaultDate ?? '',
       appointment_time: appointment?.appointment_time
         ? appointment.appointment_time.slice(0, 5)
-        : '',
+        : (defaultTime ?? ''),
       duration_minutes:
         appointment?.duration_minutes != null
           ? String(appointment.duration_minutes)

@@ -163,3 +163,14 @@ export function groupByDate(items: CalItem[]): Map<string, CalItem[]> {
   }
   return m
 }
+
+/** أيام الأسبوع الذي يقع فيه التاريخ — من الأحد إلى السبت */
+export function weekDays(anchor: Date): Date[] {
+  const start = new Date(anchor)
+  start.setDate(anchor.getDate() - anchor.getDay())
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(start)
+    d.setDate(start.getDate() + i)
+    return d
+  })
+}

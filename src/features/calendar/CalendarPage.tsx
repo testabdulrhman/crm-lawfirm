@@ -8,11 +8,16 @@ import {
   Gavel,
   ListTodo,
   CalendarClock,
+  Check,
+  Plus,
   type LucideIcon,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { AppointmentForm } from '@/features/appointments/AppointmentForm'
+import { CalendarWeek } from './CalendarWeek'
 import { Skeleton } from '@/components/ui/skeleton'
 import { QueryErrorState } from '@/components/QueryErrorState'
 import { useAuth } from '@/stores/auth'
@@ -22,6 +27,7 @@ import {
   useCalendarRange,
   groupByDate,
   gridDays,
+  weekDays,
   type CalItem,
   type CalKind,
 } from '@/hooks/useCalendar'
@@ -106,8 +112,20 @@ export function CalendarPage() {
   const anchor = useMemo(() => new Date(`${anchorISO}T00:00:00`), [anchorISO])
 
   const [selected, setSelected] = useState<string>(todayISO())
+  const [view, setView] = usePageState<'month' | 'week'>('calendar.view', 'month')
 
-  const days = useMemo(() => gridDays(anchor), [anchor])
+  // الطبقات: أيّ الأنواع تُعرض. الإخفاء يخصّ العرض لا البيانات — نجلب الكل
+  // ونصفّي محلياً، فالتبديل فوري بلا انتظار الشبكة.
+  const [hidden, setHidden] = usePageState<CalKind[]>('calendar.hidden', [])
+  const toggleKind = (k: CalKind) =>
+    setHidden(hidden.includes(k) ? hidden.filter((x) => x !== k) : [...hidden, k])
+
+  // إنشاء موعد من التقويم: التاريخ (والساعة في عرض الأسبوع) مُعبّآن مسبقاً
+  const [creating, setCreating] = useState<{ date: string; time: string | null } | null>(null)
+
+  const monthCells = useMemo(() => gridDays(anchor), [anchor])
+  const weekCells = useMemo(() => weekDays(new Date(`${selected}T00:00:00`)), [selected])
+  const days = view === 'week' ? weekCells : monthCells
   const from = days[0]
   const to = days[days.length - 1]
 
@@ -117,9 +135,21 @@ export function CalendarPage() {
     effectiveScope,
     teamMember?.id
   )
-  const byDate = useMemo(() => groupByDate(data ?? []), [data])
+  const visible = useMemo(
+    () => (data ?? []).filter((x) => !hidden.includes(x.kind)),
+    [data, hidden]
+  )
+  const byDate = useMemo(() => groupByDate(visible), [visible])
 
-  const shiftMonth = (delta: number) => {
+  // في عرض الأسبوع ننقل أسبوعاً، وفي الشهر شهراً — السهم يعني «التالي» لا أكثر
+  const shift = (delta: number) => {
+    if (view === 'week') {
+      const d = new Date(`${selected}T00:00:00`)
+      d.setDate(d.getDate() + delta * 7)
+      setSelected(localISO(d))
+      setAnchorISO(localISO(new Date(d.getFullYear(), d.getMonth(), 1)))
+      return
+    }
     const d = new Date(anchor.getFullYear(), anchor.getMonth() + delta, 1)
     setAnchorISO(localISO(d))
   }
@@ -172,9 +202,45 @@ export function CalendarPage() {
               </button>
             </div>
           )}
+          <div className="inline-flex rounded-full bg-muted p-1 text-sm">
+            <button
+              type="button"
+              onClick={() => setView('month')}
+              className={cn(
+                'rounded-full px-4 py-1.5 transition-colors',
+                view === 'month'
+                  ? 'bg-card font-semibold text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              شهر
+            </button>
+            <button
+              type="button"
+              onClick={() => setView('week')}
+              className={cn(
+                'rounded-full px-4 py-1.5 transition-colors',
+                view === 'week'
+                  ? 'bg-card font-semibold text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              أسبوع
+            </button>
+          </div>
+
           <Button variant="outline" size="sm" onClick={goToday}>
             <CalendarDays className="h-4 w-4" />
             اليوم
+          </Button>
+
+          <Button
+            variant="gold"
+            size="sm"
+            onClick={() => setCreating({ date: selected, time: null })}
+          >
+            <Plus className="h-4 w-4" />
+            موعد جديد
           </Button>
         </div>
       </div>
@@ -184,8 +250,8 @@ export function CalendarPage() {
         {/* في RTL: «السابق» يمينُه سهم لليمين */}
         <button
           type="button"
-          onClick={() => shiftMonth(-1)}
-          title="الشهر السابق"
+          onClick={() => shift(-1)}
+          title={view === 'week' ? 'الأسبوع السابق' : 'الشهر السابق'}
           className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
         >
           <ChevronRight className="h-5 w-5" />
@@ -198,8 +264,8 @@ export function CalendarPage() {
 
         <button
           type="button"
-          onClick={() => shiftMonth(1)}
-          title="الشهر التالي"
+          onClick={() => shift(1)}
+          title={view === 'week' ? 'الأسبوع التالي' : 'الشهر التالي'}
           className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
         >
           <ChevronLeft className="h-5 w-5" />
@@ -211,6 +277,15 @@ export function CalendarPage() {
       ) : (
         <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
           {/* الشبكة */}
+          {view === 'week' ? (
+            <CalendarWeek
+              days={days}
+              byDate={byDate}
+              kindMeta={KIND}
+              onOpen={navigate}
+              onCreate={(date, time) => setCreating({ date, time })}
+            />
+          ) : (
           <Card>
             <CardContent className="p-2 sm:p-3">
               <div className="grid grid-cols-7 gap-px">
@@ -300,20 +375,51 @@ export function CalendarPage() {
                     })}
               </div>
 
-              {/* مفتاح الألوان */}
-              <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-border/60 px-1 pt-2.5">
-                {(Object.keys(KIND) as CalKind[]).map((k) => (
-                  <span key={k} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                    <span className={cn('h-2 w-2 rounded-full', KIND[k].dot)} />
-                    {KIND[k].label}
-                  </span>
-                ))}
+            </CardContent>
+          </Card>
+          )}
+
+          {/* الطبقات + تفاصيل اليوم المختار */}
+          <div className="space-y-4 lg:sticky lg:top-4">
+          <Card>
+            <CardContent className="p-4">
+              <p className="mb-2.5 text-sm font-semibold text-foreground">الطبقات</p>
+              <div className="space-y-1">
+                {(Object.keys(KIND) as CalKind[]).map((k) => {
+                  const on = !hidden.includes(k)
+                  const n = (data ?? []).filter((x) => x.kind === k).length
+                  return (
+                    <button
+                      key={k}
+                      type="button"
+                      onClick={() => toggleKind(k)}
+                      className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-right transition-colors hover:bg-muted/60"
+                    >
+                      <span
+                        className={cn(
+                          'flex h-4 w-4 shrink-0 items-center justify-center rounded border',
+                          on ? cn(KIND[k].dot, 'border-transparent') : 'border-border'
+                        )}
+                      >
+                        {on && <Check className="h-3 w-3 text-white" />}
+                      </span>
+                      <span
+                        className={cn(
+                          'flex-1 text-sm',
+                          on ? 'text-foreground' : 'text-muted-foreground line-through'
+                        )}
+                      >
+                        {KIND[k].label}
+                      </span>
+                      <span className="text-xs text-muted-foreground">{fmtNumber(n)}</span>
+                    </button>
+                  )
+                })}
               </div>
             </CardContent>
           </Card>
 
-          {/* تفاصيل اليوم المختار */}
-          <Card className="lg:sticky lg:top-4">
+          <Card>
             <CardContent className="p-4">
               <p className="text-sm font-semibold text-foreground">
                 {selected === today ? 'اليوم' : fmtDate(selected)}
@@ -331,10 +437,37 @@ export function CalendarPage() {
                   selectedItems.map((it) => <DayRow key={it.id} it={it} onOpen={navigate} />)
                 )}
               </div>
+
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-3 w-full"
+                onClick={() => setCreating({ date: selected, time: null })}
+              >
+                <Plus className="h-4 w-4" />
+                موعد في هذا اليوم
+              </Button>
             </CardContent>
           </Card>
+          </div>
         </div>
       )}
+
+      {/* الإنشاء من التقويم — التاريخ والساعة مُعبّآن مسبقاً */}
+      <Dialog open={!!creating} onOpenChange={(v) => !v && setCreating(null)}>
+        <DialogContent className="max-w-2xl">
+          {creating && (
+            <AppointmentForm
+              defaultDate={creating.date}
+              defaultTime={creating.time}
+              onDone={() => {
+                setCreating(null)
+                void refetch()
+              }}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
