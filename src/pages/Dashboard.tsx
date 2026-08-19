@@ -17,6 +17,9 @@ import {
   CheckCircle2,
   Loader2,
   AlertTriangle,
+  Gavel,
+  Stamp,
+  Sun,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -29,14 +32,17 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ThankYouCard } from '@/components/ThankYouCard'
 import { cn } from '@/lib/utils'
-import { fmtNumber, fmtDatePref, fmtTime, daysLabel } from '@/lib/format'
+import { fmtNumber, fmtDatePref, fmtTime, daysLabel, arPlural, todayISO } from '@/lib/format'
 import { Ltr } from '@/components/Ltr'
 import { taskPriorityBadge, taskPriorityLabel } from '@/lib/caseLabels'
 import { typeLabel as requestTypeLabel } from '@/features/requests/labels'
 import {
   useDashboardOverview,
   useCompleteTask,
+  usePendingApprovals,
+  useTodayAgenda,
   type DashboardScope,
+  type AgendaItem,
 } from '@/hooks/useDashboard'
 import { useSessionsNeedClosure } from '@/hooks/useCaseSessions'
 import type {
@@ -82,113 +88,133 @@ export default function Dashboard() {
   const s = data?.stats
   const completeM = useCompleteTask()
 
+  const { data: agenda = [], isLoading: agendaLoading } = useTodayAgenda(
+    effectiveScope,
+    teamMember?.id
+  )
+  const { data: approvals } = usePendingApprovals(teamMember?.id, isDirector)
+
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
-      {/* الترحيب */}
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
+    <div className="mx-auto max-w-6xl space-y-5">
+      {/* ===== الترحيب + التبويب ===== */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
           <h2 className="text-2xl font-bold tracking-tight text-foreground">
-            {teamMember?.name ? `مرحباً، ${teamMember.name}` : 'مرحباً بك'} 👋
+            {teamMember?.name ? `مرحباً، ${teamMember.name}` : 'مرحباً بك'}
           </h2>
-          <p className="mt-1.5 text-sm text-muted-foreground">
-            {isAll
-              ? 'نظرة شاملة على أعمال المكتب'
-              : 'متطلباتك القادمة: جلساتك ومهامك'}
+          <p className="mt-1 text-sm text-muted-foreground">
+            {fmtDatePref(todayISO())}
           </p>
         </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => refetch()}
-          disabled={isFetching}
-          className="text-muted-foreground"
-        >
-          <RefreshCw className={cn('h-4 w-4', isFetching && 'animate-spin')} />
-          تحديث
-        </Button>
+
+        <div className="flex items-center gap-2">
+          {isDirector && (
+            <div className="inline-flex rounded-full bg-muted p-1 text-sm">
+              <ScopeBtn
+                active={scope === 'mine'}
+                onClick={() => setScope('mine')}
+                label="لوحتي"
+              />
+              <ScopeBtn
+                active={scope === 'all'}
+                onClick={() => setScope('all')}
+                label="لوحة المكتب"
+              />
+            </div>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => refetch()}
+            disabled={isFetching}
+            className="text-muted-foreground"
+          >
+            <RefreshCw className={cn('h-4 w-4', isFetching && 'animate-spin')} />
+            تحديث
+          </Button>
+        </div>
       </div>
 
-      {/* مبدّل النطاق — للمدير فقط */}
-      {isDirector && (
-        <div className="inline-flex rounded-full bg-muted p-1 text-sm">
-          <ScopeBtn
-            active={scope === 'mine'}
-            onClick={() => setScope('mine')}
-            label="متطلباتي"
-          />
-          <ScopeBtn
-            active={scope === 'all'}
-            onClick={() => setScope('all')}
-            label="المكتب"
-          />
-        </div>
-      )}
-
-      {/* بطاقات KPI */}
+      {/* ===== شريط المؤشّرات — الأرقام أولاً ===== */}
       {isLoading || !s ? (
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-4">
-          {Array.from({ length: isAll ? 9 : 2 }).map((_, i) => (
-            <Skeleton key={i} className="h-[92px] w-full rounded-2xl" />
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-[86px] w-full rounded-2xl" />
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-4">
-          {/* الأهم دائماً: الجلسات + المهام */}
-          <Kpi
-            label="الجلسات القادمة"
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <Stat
+            label={isAll ? 'جلسات قادمة' : 'جلساتي القادمة'}
             value={s.upcoming_sessions}
-            icon={CalendarDays}
-            tone="gold"
             onClick={() => navigate('/sessions')}
           />
-          <Kpi
-            label="المهام المفتوحة"
-            value={s.open_tasks}
-            icon={ListTodo}
-            tone={s.overdue_tasks > 0 ? 'red' : 'blue'}
+          <Stat
+            label="مهام متأخرة"
+            value={s.overdue_tasks}
+            tone={s.overdue_tasks > 0 ? 'danger' : 'plain'}
             note={
-              s.overdue_tasks > 0
-                ? `منها ${fmtNumber(s.overdue_tasks)} متأخرة`
+              s.open_tasks > 0
+                ? `من ${fmtNumber(s.open_tasks)} مفتوحة`
                 : undefined
             }
             onClick={() => navigate('/tasks')}
           />
-
-          {/* بطاقات إدارية — وضع «المكتب» (المدير) فقط */}
-          {isAll && (
-            <>
-              <Kpi label="إجمالي القضايا" value={s.cases_total} icon={Scale} tone="navy" onClick={() => navigate('/cases')} />
-              <Kpi label="القضايا الجارية" value={s.cases_active} icon={Scale} tone="green" onClick={() => navigate('/cases')} />
-              <Kpi label="جهات الاتصال" value={s.contacts} icon={BookUser} tone="gold" onClick={() => navigate('/contacts')} />
-              <Kpi label="الموظفون النشطون" value={s.staff_active} icon={Users} tone="navy" onClick={() => navigate('/team')} />
-              <Kpi
-                label="طلبات التوظيف"
-                value={s.pending_applications}
-                icon={UserPlus}
-                tone={s.pending_applications > 0 ? 'gold' : 'navy'}
-                onClick={() => navigate('/staff-applications')}
-              />
-              <Kpi
-                label="الطلبات الواردة"
-                value={s.pending_requests}
-                icon={Inbox}
-                tone={s.pending_requests > 0 ? 'blue' : 'navy'}
-                onClick={() => navigate('/requests')}
-              />
-              <Kpi
-                label="وكالات تنتهي قريباً"
-                value={s.expiring_poas}
-                icon={FileSignature}
-                tone={s.expiring_poas > 0 ? 'amber' : 'navy'}
-                onClick={() => navigate('/poa')}
-              />
-            </>
-          )}
+          <Stat
+            label={isAll ? 'بانتظار الاعتماد' : 'بانتظار اعتمادي'}
+            value={approvals?.total ?? 0}
+            tone={(approvals?.total ?? 0) > 0 ? 'warn' : 'plain'}
+            note={
+              approvals && approvals.letters > 0
+                ? `منها ${fmtNumber(approvals.letters)} خطاب صادر`
+                : undefined
+            }
+            onClick={() =>
+              navigate(
+                approvals && approvals.letters > 0 && approvals.tasks === 0
+                  ? '/outgoing'
+                  : '/tasks'
+              )
+            }
+          />
+          <Stat
+            label="قضايا جارية"
+            value={s.cases_active}
+            onClick={() => navigate('/cases')}
+          />
         </div>
       )}
 
-      {/* جلسات تحتاج إغلاق (حسب النطاق) */}
-      <SessionsNeedClosureSection scope={effectiveScope} />
+      {/* ===== جدول اليوم + ما يحتاج انتباهك ===== */}
+      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+        <TodayAgendaCard
+          items={agenda}
+          loading={agendaLoading}
+          onOpen={(href) => navigate(href)}
+        />
+
+        <div className="space-y-4">
+          <SessionsNeedClosureSection scope={effectiveScope} />
+          <ApprovalsCard
+            approvals={approvals}
+            isAll={isAll}
+            onTasks={() => navigate('/tasks')}
+            onLetters={() => navigate('/outgoing')}
+          />
+        </div>
+      </div>
+
+      {/* ===== مؤشّرات إدارية ثانوية — «لوحة المكتب» فقط ===== */}
+      {isAll && s && (
+        <div className="flex flex-wrap gap-2">
+          <MiniStat label="إجمالي القضايا" value={s.cases_total} icon={Scale} onClick={() => navigate('/cases')} />
+          <MiniStat label="جهات الاتصال" value={s.contacts} icon={BookUser} onClick={() => navigate('/contacts')} />
+          <MiniStat label="الموظفون" value={s.staff_active} icon={Users} onClick={() => navigate('/team')} />
+          <MiniStat label="طلبات التوظيف" value={s.pending_applications} icon={UserPlus} alert={s.pending_applications > 0} onClick={() => navigate('/staff-applications')} />
+          <MiniStat label="الطلبات الواردة" value={s.pending_requests} icon={Inbox} alert={s.pending_requests > 0} onClick={() => navigate('/requests')} />
+          <MiniStat label="وكالات تنتهي قريباً" value={s.expiring_poas} icon={FileSignature} alert={s.expiring_poas > 0} onClick={() => navigate('/poa')} />
+        </div>
+      )}
 
       {/* القسمان الأبرز: الجلسات + المهام */}
       <div className="grid gap-5 lg:grid-cols-2">
@@ -325,52 +351,237 @@ function ScopeBtn({
   )
 }
 
-const TONES: Record<string, string> = {
-  navy: 'text-navy bg-navy/10 dark:text-navy-100 dark:bg-navy-100/10',
-  gold: 'text-gold-600 bg-gold/15 dark:text-gold-300',
-  green: 'text-emerald-600 bg-emerald-500/10 dark:text-emerald-300',
-  blue: 'text-blue-600 bg-blue-500/10 dark:text-blue-300',
-  amber: 'text-amber-600 bg-amber-500/10 dark:text-amber-300',
-  red: 'text-destructive bg-destructive/10',
+/* ===================== المؤشّرات ===================== */
+
+// بطاقة مؤشّر: عنوان صغير هادئ فوق رقم كبير. لا أيقونة — الرقم هو البطل.
+function Stat({
+  label,
+  value,
+  note,
+  tone = 'plain',
+  onClick,
+}: {
+  label: string
+  value: number
+  note?: string
+  tone?: 'plain' | 'danger' | 'warn'
+  onClick: () => void
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        'rounded-2xl border bg-card p-4 text-right transition-all hover:border-gold/50 hover:shadow-sm',
+        tone === 'danger' && value > 0
+          ? 'border-destructive/30'
+          : tone === 'warn' && value > 0
+            ? 'border-amber-400/40'
+            : 'border-border/70'
+      )}
+    >
+      <p className="truncate text-[13px] text-muted-foreground">{label}</p>
+      <p
+        className={cn(
+          'mt-1.5 text-[30px] font-bold leading-none',
+          tone === 'danger' && value > 0
+            ? 'text-destructive'
+            : tone === 'warn' && value > 0
+              ? 'text-amber-600 dark:text-amber-400'
+              : 'text-foreground'
+        )}
+      >
+        {fmtNumber(value)}
+      </p>
+      {note && (
+        <p className="mt-1.5 truncate text-xs text-muted-foreground">{note}</p>
+      )}
+    </button>
+  )
 }
 
-function Kpi({
+// مؤشّر إداري مضغوط — معلومة تحت الطلب، لا تزاحم الأربعة الكبار
+function MiniStat({
   label,
   value,
   icon: Icon,
-  tone,
-  note,
+  alert,
   onClick,
 }: {
   label: string
   value: number
   icon: LucideIcon
-  tone: keyof typeof TONES
-  note?: string
+  alert?: boolean
   onClick: () => void
 }) {
-  const highlight = tone === 'red' || tone === 'amber'
   return (
     <button
       onClick={onClick}
       className={cn(
-        'group rounded-2xl border border-border/70 bg-card p-4 text-right transition-all hover:border-gold/50 hover:shadow-sm sm:p-5',
-        highlight && (tone === 'red' ? 'border-destructive/30' : 'border-amber-400/30')
+        'inline-flex items-center gap-2 rounded-full border bg-card px-3.5 py-2 text-sm transition-colors hover:border-gold/50',
+        alert ? 'border-amber-400/40' : 'border-border/70'
       )}
     >
-      <div className="flex items-center gap-3.5">
-        <span className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl sm:h-11 sm:w-11', TONES[tone])}>
-          <Icon className="h-[18px] w-[18px] sm:h-[22px] sm:w-[22px]" />
-        </span>
-        <div className="min-w-0">
-          <p className="line-clamp-2 text-sm text-muted-foreground">{label}</p>
-          <p className="mt-0.5 text-[28px] font-bold leading-none text-foreground">
-            {fmtNumber(value)}
-          </p>
-          {note && <p className="mt-1 text-xs font-medium text-destructive">{note}</p>}
-        </div>
-      </div>
+      <Icon className={cn('h-4 w-4', alert ? 'text-amber-500' : 'text-muted-foreground')} />
+      <span className="text-muted-foreground">{label}</span>
+      <span className="font-semibold text-foreground">{fmtNumber(value)}</span>
     </button>
+  )
+}
+
+/* ===================== جدول اليوم ===================== */
+
+const AGENDA_META: Record<
+  AgendaItem['kind'],
+  { icon: LucideIcon; label: string; cls: string }
+> = {
+  session: { icon: Gavel, label: 'جلسة', cls: 'text-gold-600 bg-gold/15 dark:text-gold-300' },
+  appointment: { icon: CalendarClock, label: 'موعد', cls: 'text-emerald-600 bg-emerald-500/10 dark:text-emerald-300' },
+  task: { icon: ListTodo, label: 'مهمة', cls: 'text-blue-600 bg-blue-500/10 dark:text-blue-300' },
+}
+
+function TodayAgendaCard({
+  items,
+  loading,
+  onOpen,
+}: {
+  items: AgendaItem[]
+  loading: boolean
+  onOpen: (href: string) => void
+}) {
+  return (
+    <Card>
+      <CardHeader className="flex-row items-center gap-2.5 space-y-0 px-5 pb-3 pt-5">
+        <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gold/10">
+          <Sun className="h-[18px] w-[18px] text-gold" />
+        </span>
+        <CardTitle className="text-[15px] font-semibold">
+          جدول اليوم
+          {items.length > 0 && (
+            <span className="mr-1.5 text-sm font-normal text-muted-foreground">
+              {fmtNumber(items.length)}
+            </span>
+          )}
+        </CardTitle>
+      </CardHeader>
+
+      <CardContent className="px-2.5 pb-3">
+        {loading ? (
+          <div className="space-y-2 px-1.5">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <Skeleton key={i} className="h-12 w-full rounded-xl" />
+            ))}
+          </div>
+        ) : items.length === 0 ? (
+          <div className="flex flex-col items-center gap-1.5 py-8 text-center">
+            <p className="text-sm text-foreground">لا شيء مجدول اليوم</p>
+            <p className="text-xs text-muted-foreground">
+              لا جلسات ولا مواعيد ولا مهام مستحقة
+            </p>
+          </div>
+        ) : (
+          <div className="divide-y divide-border/60">
+            {items.map((it) => {
+              const m = AGENDA_META[it.kind]
+              const Icon = m.icon
+              return (
+                <button
+                  key={it.id}
+                  onClick={() => onOpen(it.href)}
+                  className="group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-right transition-colors hover:bg-muted/60"
+                >
+                  <span className="w-12 shrink-0 text-center">
+                    {it.time ? (
+                      <Ltr className="text-[13px] font-semibold tabular-nums text-foreground">
+                        {it.time}
+                      </Ltr>
+                    ) : (
+                      <span className="text-[11px] text-muted-foreground">اليوم</span>
+                    )}
+                  </span>
+
+                  <span className={cn('flex h-7 w-7 shrink-0 items-center justify-center rounded-lg', m.cls)}>
+                    <Icon className="h-4 w-4" />
+                  </span>
+
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium text-foreground">
+                      {it.title}
+                    </span>
+                    <span className="block truncate text-xs text-muted-foreground">
+                      {it.subtitle ? `${m.label} · ${it.subtitle}` : m.label}
+                    </span>
+                  </span>
+
+                  <ChevronLeft className="h-4 w-4 shrink-0 text-muted-foreground/40 transition-transform group-hover:-translate-x-0.5 group-hover:text-gold" />
+                </button>
+              )
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+/* ===================== بانتظار الاعتماد ===================== */
+
+function ApprovalsCard({
+  approvals,
+  isAll,
+  onTasks,
+  onLetters,
+}: {
+  approvals?: { tasks: number; letters: number; total: number }
+  isAll: boolean
+  onTasks: () => void
+  onLetters: () => void
+}) {
+  // لا نعرض البطاقة فارغة — الصفر يظهر في شريط المؤشّرات أعلاه
+  if (!approvals || approvals.total === 0) return null
+
+  return (
+    <Card className="border-amber-300/70 bg-amber-50/50 dark:border-amber-900/40 dark:bg-amber-950/20">
+      <CardHeader className="flex-row items-center gap-2.5 space-y-0 px-5 pb-3 pt-5">
+        <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-amber-400/20">
+          <Stamp className="h-[18px] w-[18px] text-amber-500" />
+        </span>
+        <CardTitle className="text-[15px] font-semibold">
+          {isAll ? 'بانتظار الاعتماد' : 'بانتظار اعتمادك'}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="px-2.5 pb-2.5">
+        <div className="divide-y divide-amber-300/30">
+          {approvals.tasks > 0 && (
+            <RowShell onClick={onTasks}>
+              <p className="text-sm font-medium text-foreground">
+                {arPlural(approvals.tasks, {
+                  one: 'مهمة مرفوعة للاعتماد',
+                  two: 'مهمتان مرفوعتان للاعتماد',
+                  many: `${fmtNumber(approvals.tasks)} مهام مرفوعة للاعتماد`,
+                })}
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                راجع ملف العمل ثم اعتمد أو أعِد للتعديل
+              </p>
+            </RowShell>
+          )}
+          {approvals.letters > 0 && (
+            <RowShell onClick={onLetters}>
+              <p className="text-sm font-medium text-foreground">
+                {arPlural(approvals.letters, {
+                  one: 'خطاب صادر ينتظر الختم',
+                  two: 'خطابان صادران ينتظران الختم',
+                  many: `${fmtNumber(approvals.letters)} خطابات صادرة تنتظر الختم`,
+                })}
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                معاينة مختومة قبل الاعتماد
+              </p>
+            </RowShell>
+          )}
+        </div>
+      </CardContent>
+    </Card>
   )
 }
 

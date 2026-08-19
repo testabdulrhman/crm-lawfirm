@@ -74,7 +74,18 @@ export const fmtDateTime = (d: string | Date | null | undefined): string => {
 }
 
 // قيمة تاريخ لحقول التاريخ بصيغة YYYY-MM-DD (أرقام لاتينية)
-export const todayISO = (): string => new Date().toISOString().slice(0, 10)
+//
+// ⚠️ لا تستخدم toISOString(): فهي تُرجع التاريخ بتوقيت UTC، والرياض +03:00.
+//    فبين منتصف الليل والثالثة فجراً كانت تُرجع **تاريخ الأمس** — فتُفتح
+//    القضية بتاريخ أمس، وتظهر مهمة اليوم «متأخّرة»، ويشمل فلتر المواعيد
+//    مواعيد أمس. نبني التاريخ من مكوّناته المحلية بدل ذلك.
+export const todayISO = (): string => localISO(new Date())
+
+// تاريخ محلي بصيغة YYYY-MM-DD من كائن Date (بلا انزياح المنطقة الزمنية)
+export const localISO = (d: Date): string => {
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+}
 
 /* ===== التقويم الهجري (أم القرى) — عرض فقط، الأصل ميلادي ===== */
 
