@@ -12,9 +12,12 @@ import {
   MessageSquare,
   CheckCircle2,
   Loader2,
+  Video,
+  Send,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
@@ -47,6 +50,8 @@ import {
   useUpdateAppointmentStatus,
   useDeleteAppointment,
   useSendConfirmation,
+  useSaveMeetingLink,
+  useSendMeetingLink,
   useSendThankYou,
 } from '@/hooks/useAppointments'
 import { AppointmentForm } from './AppointmentForm'
@@ -60,6 +65,9 @@ export function AppointmentDetail({ id }: { id: string }) {
   const statusM = useUpdateAppointmentStatus()
   const deleteM = useDeleteAppointment()
   const confirmM = useSendConfirmation()
+  const saveLinkM = useSaveMeetingLink()
+  const sendLinkM = useSendMeetingLink()
+  const [linkDraft, setLinkDraft] = useState(a?.meeting_link ?? '')
   const thankM = useSendThankYou()
 
   const [editOpen, setEditOpen] = useState(false)
@@ -228,6 +236,57 @@ export function AppointmentDetail({ id }: { id: string }) {
               }
             }}
           />
+          {/* رابط الاجتماع — للمواعيد عن بُعد فقط. الرابط يُجهَّز بعد الحجز
+              (التأكيد وصل الموكّل فوراً بأن الرابط سيصله لاحقاً). */}
+          {a.meeting_method === 'remote' && (
+            <div className="space-y-2 rounded-xl border bg-muted/30 p-3">
+              <p className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
+                <Video className="h-4 w-4 text-gold" />
+                رابط الاجتماع عن بُعد
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Input
+                  dir="ltr"
+                  value={linkDraft}
+                  onChange={(e) => setLinkDraft(e.target.value)}
+                  placeholder="https://meet.google.com/…"
+                  className="min-w-[12rem] flex-1"
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={saveLinkM.isPending || linkDraft.trim() === (a.meeting_link ?? '')}
+                  onClick={() => saveLinkM.mutate({ id: a.id, link: linkDraft })}
+                >
+                  {saveLinkM.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+                  حفظ
+                </Button>
+                <Button
+                  variant="gold"
+                  size="sm"
+                  disabled={!a.meeting_link || sendLinkM.isPending || !clientPhone}
+                  title={
+                    !a.meeting_link
+                      ? 'احفظ الرابط أولاً'
+                      : !clientPhone
+                        ? 'لا يوجد رقم جوال للعميل'
+                        : undefined
+                  }
+                  onClick={() => sendLinkM.mutate({ appointment: a, sentBy })}
+                >
+                  {sendLinkM.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+                  <Send className="h-4 w-4" />
+                  {a.meeting_link_sent_at ? 'إعادة إرسال الرابط' : 'إرسال الرابط للموكّل'}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {a.meeting_link_sent_at
+                  ? `أُرسل الرابط ${fmtDateTime(a.meeting_link_sent_at)}`
+                  : 'لم يُرسل الرابط بعد — الموكّل يعلم أنه سيصله قبل الموعد.'}
+              </p>
+            </div>
+          )}
+
           <SmsRow
             title="رسالة شكر بعد الموعد"
             sentAt={a.thank_you_sent_at}

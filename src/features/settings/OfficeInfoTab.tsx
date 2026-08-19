@@ -36,6 +36,7 @@ export const SIGNATURE_CONFIG_KEY = 'director_signature_url'
 const schema = z.object({
   office_name: z.string().optional(),
   address: z.string().optional(),
+  location_url: z.string().url('الرابط غير صحيح').optional().or(z.literal('')),
   phone: z.string().optional(),
   email: z.string().email('صيغة البريد غير صحيحة').optional().or(z.literal('')),
   tax_number: z.string().optional(),
@@ -53,6 +54,7 @@ function toDefaults(o?: OfficeInfo | null): FormValues {
   return {
     office_name: o?.office_name ?? '',
     address: o?.address ?? '',
+    location_url: o?.location_url ?? '',
     phone: o?.phone ?? '',
     email: o?.email ?? '',
     tax_number: o?.tax_number ?? '',
@@ -222,6 +224,18 @@ export function OfficeInfoTab() {
                 </FormField>
                 <FormField label="العنوان" id="address">
                   <Input id="address" {...register('address')} />
+                </FormField>
+                <FormField
+                  label="رابط موقع المكتب (خرائط)"
+                  id="location_url"
+                  error={errors.location_url?.message}
+                >
+                  <Input
+                    id="location_url"
+                    dir="ltr"
+                    placeholder="https://maps.app.goo.gl/…"
+                    {...register('location_url')}
+                  />
                 </FormField>
                 <FormField label="الهاتف" id="phone">
                   <Input id="phone" dir="ltr" {...register('phone')} />

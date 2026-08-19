@@ -101,6 +101,7 @@ export interface OfficeInfo {
   logo_url: string | null
   stamp_url: string | null
   favicon_url: string | null
+  location_url: string | null
   updated_at: string | null
 }
 
@@ -812,6 +813,8 @@ export interface Appointment {
   // حقول الحجز من الموقع (migration 20260808_booking_website_phase1)
   service_type: string | null
   meeting_method: string | null
+  meeting_link: string | null
+  meeting_link_sent_at: string | null
   client_email: string | null
   company_name: string | null
   source: string | null

@@ -8,6 +8,7 @@ import { errMessage } from '@/lib/errors'
 import { todayISO } from '@/lib/format'
 import { useAuth } from '@/stores/auth'
 import { notify } from '@/hooks/useNotifications'
+import { tapFeedback } from '@/lib/push'
 import type { Task, TaskInput } from '@/types/db'
 
 export interface TaskRow extends Task {
@@ -94,7 +95,10 @@ export function useToggleTaskDone() {
     },
     onSuccess: (done) => {
       invalidateAll(qc)
-      if (done) toast({ variant: 'success', title: 'أُنجزت المهمة ✅' })
+      if (done) {
+        void tapFeedback('success') // ارتداد لمسي عند الإنجاز — إحساس أصيل
+        toast({ variant: 'success', title: 'أُنجزت المهمة ✅' })
+      }
     },
     onError: errToast('تعذّر تحديث حالة المهمة'),
   })

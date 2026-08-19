@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1920, initial-scale=1">
+<title>شاشة المكتب — شركة عبدالرحمن بن رضوان المشيقح للمحاماة وإدارة إجراءات الإفلاس</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* هوية المشروع: كحلي #111D3A · ذهبي #C9A84C · خط IBM Plex Sans Arabic
+   (نسخة داكنة لأن الشاشة معلّقة على الحائط طوال اليوم) */
+:root{
+  --navy:#111D3A; --navy-2:#16224a; --card:#1a2547; --card-2:#131c38;
+  --gold:#C9A84C; --gold-dim:#a98c37;
+  --text:#F4F1E8; --muted:#93a0c0; --line:rgba(201,168,76,.22);
+  --danger:#e0524a; --ok:#4ba36b;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{
+  background:var(--navy); color:var(--text);
+  font-family:'IBM Plex Sans Arabic',Tahoma,Arial,sans-serif;
+  /* أرقام لاتينية دائماً — مطابقة للنظام */
+  font-variant-numeric:lining-nums;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{display:flex;height:100vh;width:100vw;gap:18px;padding:18px}
+
+/* ===== الكاميرا (~60%) ===== */
+.cam{
+  position:relative;flex:0 0 60%;border-radius:18px;overflow:hidden;
+  background:#000;border:1px solid var(--line)
+}
+.cam iframe{width:100%;height:100%;border:0;display:block}
+.cam-badge{
+  position:absolute;top:16px;right:16px;z-index:2;
+  display:flex;align-items:center;gap:9px;
+  background:rgba(17,29,58,.82);border:1px solid var(--line);
+  border-radius:999px;padding:9px 16px;font-size:19px;font-weight:600;
+}
+.dot{width:11px;height:11px;border-radius:50%;background:var(--danger);
+     animation:pulse 1.6s infinite}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.82)}}
+.cam-fallback{
+  position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  flex-direction:column;gap:10px;color:var(--muted);font-size:22px;text-align:center;padding:30px
+}
+
+/* ===== الجانب (~40%) ===== */
+.side{flex:1;display:flex;flex-direction:column;gap:14px;min-width:0}
+
+.brand{
+  background:linear-gradient(160deg,var(--card) 0%,var(--card-2) 100%);
+  border:1px solid var(--line);border-radius:18px;padding:18px 22px;text-align:center
+}
+.brand h1{font-size:26px;font-weight:700;color:var(--gold);line-height:1.4}
+.clock{font-size:64px;font-weight:700;letter-spacing:1px;margin-top:6px;line-height:1.1}
+.clock .mer{font-size:28px;color:var(--muted);margin-right:8px}
+.date{font-size:21px;color:var(--muted);margin-top:4px}
+
+.panel{
+  background:var(--card-2);border:1px solid var(--line);border-radius:18px;
+  padding:16px 18px;display:flex;flex-direction:column;min-height:0
+}
+/* الجلسات بقدر محتواها، والمهام تملأ ما تبقّى فلا تُقصّ */
+.panel.sessions{flex:0 1 auto;max-height:42%}
+.panel.tasks{flex:1 1 auto}
+.panel h2{
+  font-size:22px;font-weight:700;color:var(--gold);
+  padding-bottom:8px;margin-bottom:8px;border-bottom:1px solid var(--line);
+  display:flex;align-items:center;justify-content:space-between
+}
+.panel h2 .count{font-size:17px;color:var(--muted);font-weight:500}
+.list{overflow:hidden;display:flex;flex-direction:column;gap:4px;flex:1}
+
+.row{display:flex;align-items:flex-start;gap:12px;padding:5px 4px;
+     border-bottom:1px solid rgba(255,255,255,.05)}
+.row:last-child{border-bottom:0}
+.time{
+  flex:0 0 auto;background:var(--gold);color:var(--navy);
+  border-radius:9px;padding:5px 11px;font-size:19px;font-weight:700;white-space:nowrap
+}
+.row .body{min-width:0;flex:1;display:block}
+.row .t{display:block;font-size:20px;font-weight:600;line-height:1.35;
+        overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row .s{display:block;font-size:16px;color:var(--muted);margin-top:2px;
+        overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tag{flex:0 0 auto;font-size:15px;border-radius:7px;padding:3px 9px;font-weight:600}
+.tag.urgent{background:rgba(224,82,74,.18);color:#ff9a94}
+.tag.review{background:rgba(201,168,76,.18);color:var(--gold)}
+.tag.late{background:rgba(224,82,74,.18);color:#ff9a94}
+
+.empty{color:var(--ok);font-size:22px;text-align:center;padding:26px 0;font-weight:600}
+.err{color:#ffb1ab;font-size:19px;text-align:center;padding:22px 0;line-height:1.6}
+.foot{font-size:16px;color:var(--muted);text-align:center;
+      padding-top:8px;margin-top:auto;border-top:1px solid rgba(255,255,255,.06)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <!-- الكاميرا -->
+  <div class="cam">
+    <div class="cam-fallback" id="camFallback">
+      <div>جارٍ تشغيل البث…</div>
+      <div style="font-size:17px">إن لم يظهر خلال ثوانٍ، تحقّق من تشغيل go2rtc على الـiMac</div>
+    </div>
+    <iframe id="camFrame" allow="autoplay; fullscreen" allowfullscreen></iframe>
+    <div class="cam-badge"><span class="dot"></span><span id="camLabel">بث مباشر</span></div>
+  </div>
+
+  <!-- الجانب -->
+  <div class="side">
+    <div class="brand">
+      <h1 id="brandName">رضوان المشيقح للمحاماة</h1>
+      <div class="clock"><span id="clockTime">--:--</span><span class="mer" id="clockMer"></span></div>
+      <div class="date" id="dateLine">—</div>
+    </div>
+
+    <div class="panel sessions">
+      <h2>جلسات اليوم <span class="count" id="sessCount"></span></h2>
+      <div class="list" id="sessList"><div class="err">جارٍ التحميل…</div></div>
+    </div>
+
+    <div class="panel tasks">
+      <h2>المهام <span class="count" id="taskCount"></span></h2>
+      <div class="list" id="taskList"><div class="err">جارٍ التحميل…</div></div>
+      <div class="foot" id="lastUpdate">—</div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   CONFIG — كل ما قد تحتاج تعديله لاحقاً في مكان واحد
+   ============================================================ */
+var CONFIG = {
+  /* ١. الكاميرا: رابط go2rtc على الـiMac داخل شبكة المكتب */
+  CAMERA_URL  : 'http://192.168.8.180:1984/stream.html?src=cam1&mode=webrtc,mse',
+  CAMERA_LABEL: 'بث مباشر — مدخل المكتب',
+
+  /* ٢. مصدر البيانات: دالة tv-board على Supabase.
+        ⚠️ لا نقرأ الجداول بمفتاح anon مباشرةً: مفتاح anon منشور في كود
+        الموقع، وسياسات sessions/tasks لدور authenticated فقط — ففتحها
+        كان سيُظهر عناوين القضايا والمحاكم لأي أحد على الإنترنت.
+        الدالة تُرجع الحد الأدنى للعرض فقط، خلف سر مستقل. */
+  SUPABASE_URL : 'https://zwaahunavepleczuamuy.supabase.co',
+  SUPABASE_ANON: 'ANON_KEY_HERE',
+  BOARD_SECRET : 'BOARD_SECRET_HERE',
+
+  /* ٣. الجداول المستخدمة داخل الدالة (للتوثيق — تُعدَّل في الدالة لا هنا)
+        الجلسات : public.sessions (session_date, session_time, title, court)
+                  + cases (title, court, court_division)
+        المهام  : public.tasks (title, due_date, is_urgent, status, deleted_at) */
+
+  /* ٤. التوقيت */
+  REFRESH_MS : 5 * 60 * 1000,        /* تحديث البيانات كل ٥ دقائق */
+  RELOAD_MS  : 12 * 60 * 60 * 1000,  /* إعادة تحميل كاملة كل ١٢ ساعة */
+  MAX_TASKS  : 10
+};
+/* ==================== نهاية CONFIG ==================== */
+
+/* --------- أدوات --------- */
+function esc(s){
+  if (s === null || s === undefined) return '';
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+function pad2(n){ return n < 10 ? '0' + n : '' + n; }
+
+var AR_DAYS   = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+var AR_MONTHS = ['يناير','فبراير','مارس','أبريل','مايو','يونيو',
+                 'يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+
+/* --------- الساعة والتاريخ --------- */
+function tickClock(){
+  var d = new Date();
+  var h = d.getHours();
+  var mer = h >= 12 ? 'م' : 'ص';
+  var h12 = h % 12; if (h12 === 0) h12 = 12;
+  document.getElementById('clockTime').innerHTML = h12 + ':' + pad2(d.getMinutes());
+  document.getElementById('clockMer').innerHTML  = mer;
+  document.getElementById('dateLine').innerHTML =
+    AR_DAYS[d.getDay()] + ' ' + d.getDate() + ' ' + AR_MONTHS[d.getMonth()] + ' ' + d.getFullYear();
+}
+
+/* --------- وقت الجلسة بصيغة ١٢ ساعة --------- */
+function fmtTime(hhmm){
+  if (!hhmm) return '—';
+  var p = String(hhmm).split(':');
+  var h = parseInt(p[0], 10);
+  if (isNaN(h)) return esc(hhmm);
+  var mer = h >= 12 ? 'م' : 'ص';
+  var h12 = h % 12; if (h12 === 0) h12 = 12;
+  return h12 + ':' + (p[1] || '00') + ' ' + mer;
+}
+
+/* --------- تاريخ الاستحقاق مختصراً --------- */
+function fmtDue(iso){
+  if (!iso) return '';
+  var p = String(iso).split('-');
+  if (p.length < 3) return esc(iso);
+  var m = parseInt(p[1], 10) - 1;
+  return parseInt(p[2], 10) + ' ' + (AR_MONTHS[m] || '');
+}
+function todayISO(){
+  var d = new Date();
+  return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+}
+
+/* --------- الكاميرا --------- */
+function initCamera(){
+  var f = document.getElementById('camFrame');
+  var fb = document.getElementById('camFallback');
+  document.getElementById('camLabel').innerHTML = esc(CONFIG.CAMERA_LABEL);
+  f.onload = function(){ fb.style.display = 'none'; };
+  f.src = CONFIG.CAMERA_URL;
+  /* لو لم يُحمَّل خلال ١٥ ثانية نُبقي الرسالة ونوضّحها */
+  setTimeout(function(){
+    if (fb.style.display !== 'none') {
+      fb.innerHTML = '<div>تعذّر تشغيل البث</div>' +
+        '<div style="font-size:17px">تحقّق من go2rtc على ' +
+        esc(CONFIG.CAMERA_URL.replace(/^https?:\/\//,'').split('/')[0]) + '</div>';
+    }
+  }, 15000);
+}
+
+/* --------- الرسم --------- */
+function renderSessions(list){
+  var el = document.getElementById('sessList');
+  var cnt = document.getElementById('sessCount');
+  if (!list.length){
+    cnt.innerHTML = '';
+    el.innerHTML = '<div class="empty">لا توجد جلسات اليوم ✓</div>';
+    return;
+  }
+  cnt.innerHTML = '(' + list.length + ')';
+  var h = '';
+  for (var i = 0; i < list.length; i++){
+    var s = list[i];
+    var sub = s.court || '';
+    if (s.division) sub = sub ? (sub + ' — ' + s.division) : s.division;
+    h += '<div class="row">' +
+           '<span class="time">' + esc(fmtTime(s.time)) + '</span>' +
+           '<span class="body">' +
+             '<span class="t">' + esc(s.title) + '</span>' +
+             (sub ? '<span class="s">' + esc(sub) + '</span>' : '') +
+           '</span>' +
+         '</div>';
+  }
+  el.innerHTML = h;
+}
+
+function renderTasks(list){
+  var el = document.getElementById('taskList');
+  var cnt = document.getElementById('taskCount');
+  if (!list.length){
+    cnt.innerHTML = '';
+    el.innerHTML = '<div class="empty">لا مهام معلّقة ✓</div>';
+    return;
+  }
+  cnt.innerHTML = '(' + list.length + ')';
+  var today = todayISO();
+  var h = '';
+  for (var i = 0; i < list.length && i < CONFIG.MAX_TASKS; i++){
+    var t = list[i];
+    var late = t.due && t.due < today;
+    var tag = '';
+    if (t.review)      tag = '<span class="tag review">بانتظار الاعتماد</span>';
+    else if (late)     tag = '<span class="tag late">متأخرة</span>';
+    else if (t.urgent) tag = '<span class="tag urgent">عاجلة</span>';
+    h += '<div class="row">' +
+           '<span class="body">' +
+             '<span class="t">' + esc(t.title) + '</span>' +
+             (t.due ? '<span class="s">الاستحقاق: ' + esc(fmtDue(t.due)) + '</span>' : '') +
+           '</span>' + tag +
+         '</div>';
+  }
+  el.innerHTML = h;
+}
+
+function showError(msg){
+  var m = '<div class="err">' + esc(msg) + '</div>';
+  document.getElementById('sessList').innerHTML = m;
+  document.getElementById('taskList').innerHTML = m;
+}
+
+/* --------- جلب البيانات --------- */
+function loadData(){
+  var url = CONFIG.SUPABASE_URL + '/functions/v1/tv-board?k=' +
+            encodeURIComponent(CONFIG.BOARD_SECRET);
+
+  var xhr = new XMLHttpRequest(); /* أوسع توافقاً من fetch على متصفحات التلفزيون */
+  xhr.open('GET', url, true);
+  xhr.setRequestHeader('apikey', CONFIG.SUPABASE_ANON);
+  xhr.setRequestHeader('Authorization', 'Bearer ' + CONFIG.SUPABASE_ANON);
+  xhr.timeout = 20000;
+
+  xhr.onload = function(){
+    var data = null;
+    try { data = JSON.parse(xhr.responseText); } catch (e) { data = null; }
+    if (xhr.status !== 200 || !data || !data.ok){
+      var why = (data && data.error) ? data.error : ('رمز الاستجابة ' + xhr.status);
+      showError('تعذّر تحديث البيانات — ' + why + '. ستُعاد المحاولة تلقائياً.');
+      return;
+    }
+    renderSessions(data.sessions || []);
+    renderTasks(data.tasks || []);
+    var d = new Date();
+    var h = d.getHours(); var mer = h >= 12 ? 'م' : 'ص';
+    var h12 = h % 12; if (h12 === 0) h12 = 12;
+    document.getElementById('lastUpdate').innerHTML =
+      'آخر تحديث: ' + h12 + ':' + pad2(d.getMinutes()) + ' ' + mer;
+  };
+  xhr.onerror = function(){
+    showError('تعذّر الوصول للخادم — تحقّق من اتصال الشبكة. ستُعاد المحاولة تلقائياً.');
+  };
+  xhr.ontimeout = function(){
+    showError('انتهت مهلة الاتصال بالخادم. ستُعاد المحاولة تلقائياً.');
+  };
+  xhr.send();
+}
+
+/* --------- الإقلاع --------- */
+tickClock();
+setInterval(tickClock, 1000 * 10);
+initCamera();
+loadData();
+setInterval(loadData, CONFIG.REFRESH_MS);
+/* إعادة تحميل كاملة كل ١٢ ساعة — تنظيف ذاكرة متصفح التلفزيون */
+setTimeout(function(){ window.location.reload(); }, CONFIG.RELOAD_MS);
+</script>
+</body>
+</html>

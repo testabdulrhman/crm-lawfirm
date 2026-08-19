@@ -2,7 +2,15 @@
 // الربط بالقضية: يدوي دائم (case_id) أو تلقائي بمطابقة أرقام المحكمة في النص
 import { useMemo, useState } from 'react'
 import { useLocation } from 'wouter'
-import { Link2, Loader2, MessageSquare, Scale, Search, X } from 'lucide-react'
+import {
+  CheckCheck,
+  Link2,
+  Loader2,
+  MessageSquare,
+  Scale,
+  Search,
+  X,
+} from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -15,22 +23,40 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { CasePicker } from '@/components/CasePicker'
+import { QueryErrorState } from '@/components/QueryErrorState'
 import { Ltr } from '@/components/Ltr'
 import { fmtNumber, fmtDateTime } from '@/lib/format'
 import {
   useIncomingSms,
   useLinkSmsToCase,
+  useMarkSmsRead,
+  useReclassifySms,
+  SMS_CATEGORIES,
+  smsCategoryLabel,
   type IncomingSms,
+  type SmsCategory,
 } from '@/hooks/useIncomingSms'
 import { useCases } from '@/hooks/useCases'
 import { usePageState } from '@/hooks/usePageState'
 import type { Case } from '@/types/db'
 
+// «الكل» = المهم فقط افتراضياً — استقبال كل الرسائل يعني ضجيجاً كثيراً
+type Tab = 'important' | SmsCategory | 'all'
+
 export function IncomingMessagesPage() {
-  const { data, isLoading } = useIncomingSms()
+  const { data, isLoading, isError, error, refetch } = useIncomingSms()
   const { data: cases } = useCases()
+  const markReadM = useMarkSmsRead()
   const [search, setSearch] = usePageState('inbox:q', '')
+  const [tab, setTab] = usePageState<Tab>('inbox:tab', 'important')
 
   // خريطة رقم المحكمة (أرقاماً فقط) ← القضية
   const byCourtNum = useMemo(() => {
@@ -42,27 +68,92 @@ export function IncomingMessagesPage() {
     return m
   }, [cases])
 
+  // عدّاد كل تصنيف (يُحسب على الكل لا على المعروض)
+  const counts = useMemo(() => {
+    const c = new Map<string, number>()
+    for (const m of data ?? []) {
+      const k = m.category ?? 'other'
+      c.set(k, (c.get(k) ?? 0) + 1)
+    }
+    return c
+  }, [data])
+
+  const importantCount = (data ?? []).filter((m) => m.is_important).length
+  const unread = (data ?? []).filter((m) => m.is_important && !m.read_at).length
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
-    if (!q) return data ?? []
-    return (data ?? []).filter((m) =>
+    let rows = data ?? []
+    if (tab === 'important') rows = rows.filter((m) => m.is_important)
+    else if (tab !== 'all') rows = rows.filter((m) => (m.category ?? 'other') === tab)
+    if (!q) return rows
+    return rows.filter((m) =>
       [m.recipient_name, m.phone, m.message]
         .filter(Boolean)
         .join(' ')
         .toLowerCase()
         .includes(q)
     )
-  }, [data, search])
+  }, [data, search, tab])
 
   return (
     // استثناء مقصود عن max-w-6xl: قوائم الرسائل نصية طويلة تُقرأ أفضل بعرض أضيق
     <div className="mx-auto max-w-4xl space-y-6">
-      <h2 className="text-2xl font-bold tracking-tight text-foreground">
-        الرسائل الواردة{' '}
-        <span className="text-base font-normal text-muted-foreground">
-          ({fmtNumber(data?.length ?? 0)})
-        </span>
-      </h2>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight text-foreground">
+            الرسائل الواردة{' '}
+            <span className="text-base font-normal text-muted-foreground">
+              ({fmtNumber(data?.length ?? 0)})
+            </span>
+          </h2>
+          {unread > 0 && (
+            <p className="mt-0.5 text-sm font-medium text-gold">
+              {fmtNumber(unread)} غير مقروءة تستحق نظرك
+            </p>
+          )}
+        </div>
+        {unread > 0 && (
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={markReadM.isPending}
+            onClick={() => markReadM.mutate('all')}
+          >
+            <CheckCheck className="h-4 w-4" />
+            تعليم الكل كمقروء
+          </Button>
+        )}
+      </div>
+
+      {/* شرائح التصنيف — الضجيج (إعلانات/رموز/شخصية) مخفيّ افتراضياً */}
+      <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">
+        <FilterChip
+          label="المهم"
+          count={importantCount}
+          active={tab === 'important'}
+          onClick={() => setTab('important')}
+        />
+        {SMS_CATEGORIES.map((c) => {
+          const n = counts.get(c.value) ?? 0
+          if (n === 0) return null
+          return (
+            <FilterChip
+              key={c.value}
+              label={c.label}
+              count={n}
+              active={tab === c.value}
+              onClick={() => setTab(c.value)}
+            />
+          )
+        })}
+        <FilterChip
+          label="الكل"
+          count={data?.length ?? 0}
+          active={tab === 'all'}
+          onClick={() => setTab('all')}
+        />
+      </div>
 
       <div className="relative">
         <Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -80,6 +171,12 @@ export function IncomingMessagesPage() {
             <Skeleton key={i} className="h-24 w-full rounded-xl" />
           ))}
         </div>
+      ) : isError ? (
+        <QueryErrorState
+          title="تعذّر تحميل الرسائل الواردة"
+          error={error}
+          onRetry={() => refetch()}
+        />
       ) : filtered.length === 0 ? (
         <EmptyState />
       ) : (
@@ -138,6 +235,7 @@ function MessageRow({
   const [, navigate] = useLocation()
   const { data: cases } = useCases()
   const linkM = useLinkSmsToCase()
+  const reclassifyM = useReclassifySms()
   const [linkOpen, setLinkOpen] = useState(false)
   const [pickedCase, setPickedCase] = useState<string | null>(null)
   const senderIsPhone = m.phone && /\d{6,}/.test(m.phone)
@@ -157,6 +255,15 @@ function MessageRow({
             {m.phone}
           </span>
         )}
+        <Badge variant="outline" className="shrink-0 font-normal">
+          {smsCategoryLabel(m.category)}
+        </Badge>
+        {m.is_important && !m.read_at && (
+          <span
+            className="h-2 w-2 shrink-0 rounded-full bg-gold"
+            title="غير مقروءة"
+          />
+        )}
         <span className="mr-auto text-xs text-muted-foreground">
           {fmtDateTime(m.created_at)}
         </span>
@@ -164,6 +271,24 @@ function MessageRow({
       {m.message && <MessageBody text={m.message} />}
 
       <div className="flex flex-wrap items-center gap-2">
+        {/* تصحيح تصنيف خاطئ — التصنيف الآلي بالكلمات يخطئ أحياناً */}
+        <Select
+          value={m.category ?? 'other'}
+          onValueChange={(v) =>
+            reclassifyM.mutate({ id: m.id, category: v as SmsCategory })
+          }
+        >
+          <SelectTrigger className="h-7 w-auto gap-1 border-none px-2 text-xs text-muted-foreground hover:bg-muted">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {SMS_CATEGORIES.map((c) => (
+              <SelectItem key={c.value} value={c.value}>
+                {c.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         {linked ? (
           <>
             <button
@@ -264,5 +389,35 @@ function EmptyState() {
         تلقائياً.
       </p>
     </div>
+  )
+}
+
+// شريحة تصنيف — عدّادها من كامل الوارد لا من المعروض
+function FilterChip({
+  label,
+  count,
+  active,
+  onClick,
+}: {
+  label: string
+  count: number
+  active: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={
+        'flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ' +
+        (active
+          ? 'border-gold bg-gold text-navy'
+          : 'border-border bg-card text-muted-foreground hover:bg-muted')
+      }
+    >
+      {label}
+      <span className={active ? 'opacity-80' : 'opacity-60'}>
+        {fmtNumber(count)}
+      </span>
+    </button>
   )
 }

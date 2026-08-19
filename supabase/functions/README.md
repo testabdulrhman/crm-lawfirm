@@ -21,13 +21,15 @@
 | `session-reminders` | تذكير المحامين بالجلسات — **رسائل نصية** (Msegat) منذ v3 | ✓ |
 | `extract-contract` | استخراج بيانات العقد والتزاماته من ملفه — زر «استخراج البيانات من ملف العقد» | ✓ |
 | `push-send` | إشعارات فورية (APNs) لتطبيق الآيفون — المنشن والاعتماد وإسناد المهام | ✓ |
+| `sms-inbox` | استقبال **كل** الرسائل من اختصار الآيفون وتصنيفها (ناجز/حكومي/بنك/موكّل/رمز/إعلان/شخصي) | ✓ |
+| `calendar-sync` | Google Calendar — إضافة/حذف أحداث الجلسات والمواعيد | ✓ |
 
 ## ⚠️ دوال منشورة وغير محفوظة هنا
 
 هذه تعيش في Supabase وحدها — لا نسخة محلية للرجوع إليها:
 
-`swift-endpoint` · `calendar-sync` · `submit-application` · `case-study` ·
-`email-send` · `email-sync` · `email-attach` · `sms-inbox` ·
+`swift-endpoint` · `submit-application` · `case-study` ·
+`email-send` · `email-sync` · `email-attach` ·
 `whatsapp-send` · `whatsapp-webhook` · `staff-login-otp` · `hatif-webhook` ·
 `hatif-sync` · `hatif-bulk-sync` · `wa-inbox` · و`wa-*-temp` (مؤقتة)
 

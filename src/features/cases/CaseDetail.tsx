@@ -1,12 +1,12 @@
 import { useState } from 'react'
-import { Link, useLocation } from 'wouter'
-import { ArrowRight, Handshake, Pencil, Scale } from 'lucide-react'
+import { useLocation } from 'wouter'
+import { ArrowRight, Pencil, Scale } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Card, CardContent } from '@/components/ui/card'
 import { QueryErrorState } from '@/components/QueryErrorState'
+import { Ltr } from '@/components/Ltr'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import {
@@ -17,12 +17,15 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 
-import { fmtDatePref, fmtNumber } from '@/lib/format'
+import { fmtNumber } from '@/lib/format'
 import { useCaseDocuments } from '@/hooks/useCaseDocuments'
 import { useCaseSessions } from '@/hooks/useCaseSessions'
 import { useCaseTasks } from '@/hooks/useCaseTasks'
 import { useCase, useUpdateCaseStatus } from '@/hooks/useCases'
 import { useCaseStudy } from '@/hooks/useCaseStudy'
+import { useCaseRulings } from '@/hooks/useCaseRulings'
+import { CaseJourney } from './CaseJourney'
+import { CaseFactsPanel } from './CaseFactsPanel'
 import { usePageState } from '@/hooks/usePageState'
 import {
   CASE_STATUS_OPTIONS,
@@ -69,6 +72,7 @@ export function CaseDetail({ id }: { id: string }) {
   const { data: caseSessions } = useCaseSessions(id)
   const { data: caseTasks } = useCaseTasks(id)
   const { data: study } = useCaseStudy(id)
+  const { data: caseRulings } = useCaseRulings(id)
   // عدّادات التبويبات — تُظهر المحتوى دون فتحه (وتُسرّع فتح التبويب لاحقاً)
   const counts: Record<string, number> = {
     documents: caseDocs?.length ?? 0,
@@ -102,87 +106,95 @@ export function CaseDetail({ id }: { id: string }) {
   }
 
   return (
-    <div className="mx-auto max-w-4xl space-y-5">
+    <div className="mx-auto max-w-6xl space-y-4">
       <Button variant="ghost" onClick={() => navigate('/cases')}>
         <ArrowRight className="h-4 w-4" />
         رجوع للقضايا
       </Button>
 
-      {/* الرأس */}
-      <Card>
-        <CardContent className="space-y-3 p-5">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <Scale className="h-5 w-5 shrink-0 text-gold" />
-                <h2 className="text-xl font-bold text-foreground">{c.title}</h2>
-              </div>
-              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                <Badge variant={caseStatusBadge(c.status)}>
-                  {caseStatusLabel(c.status)}
-                </Badge>
-                <Badge variant="outline">{caseTypeLabel(c.type)}</Badge>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              {/* مبدّل الحالة السريع — أثناء الحفظ يعرض القيمة المختارة ويُقفل */}
-              <Select
-                value={
-                  statusM.isPending
-                    ? statusM.variables?.status ?? c.status ?? 'jarri'
-                    : c.status ?? 'jarri'
-                }
-                disabled={statusM.isPending}
-                onValueChange={(v) =>
-                  statusM.mutate({ id: c.id, status: v as CaseStatus })
-                }
-              >
-                <SelectTrigger className="h-9 w-32">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {CASE_STATUS_OPTIONS.map((o) => (
-                    <SelectItem key={o.value} value={o.value}>
-                      {o.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
-                <Pencil className="h-4 w-4" />
-                تعديل
-              </Button>
-            </div>
+      {/* الرأس: العنوان والحالة والإجراءات فقط — التفاصيل في العمود الجانبي */}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <Scale className="h-5 w-5 shrink-0 text-gold" />
+            <h2 className="text-2xl font-bold tracking-tight text-foreground">
+              {c.title}
+            </h2>
           </div>
-
-          {/* معلومات سريعة في الرأس */}
-          <div className="flex flex-wrap gap-x-6 gap-y-1 border-t pt-3 text-sm text-muted-foreground">
-            <HeaderInfo label="رقم المكتب" value={c.office_num} dir="ltr" />
-            <HeaderInfo label="رقم المحكمة" value={c.court_num} dir="ltr" />
-            <HeaderInfo label="الموكّل" value={c.contact?.name} />
-            <HeaderInfo label="المسؤول" value={c.assignee?.short_name || c.assignee?.name} />
-            <HeaderInfo label="المحكمة" value={c.court} />
-            <HeaderInfo label="الدائرة" value={c.court_division} />
-            <HeaderInfo
-              label="تاريخ الفتح"
-              value={c.open_date ? fmtDatePref(c.open_date) : null}
-            />
-            {c.engagement && (
-              <span className="flex items-center gap-1">
-                <span className="text-muted-foreground">العقد:</span>
-                <Link
-                  href={`/engagements/${c.engagement.id}`}
-                  className="flex items-center gap-1 font-medium text-foreground hover:text-gold"
-                >
-                  <Handshake className="h-3.5 w-3.5 text-gold" />
-                  {c.engagement.title || c.engagement.engagement_number || 'عقد'}
-                </Link>
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+            <Badge variant={caseStatusBadge(c.status)}>
+              {caseStatusLabel(c.status)}
+            </Badge>
+            <Badge variant="outline">{caseTypeLabel(c.type)}</Badge>
+            {c.office_num && (
+              <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                <Ltr>{c.office_num}</Ltr>
+              </span>
+            )}
+            {c.court && (
+              <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                {c.court}
+                {c.court_division ? ` — ${c.court_division}` : ''}
               </span>
             )}
           </div>
-        </CardContent>
-      </Card>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {/* مبدّل الحالة السريع — أثناء الحفظ يعرض القيمة المختارة ويُقفل */}
+          <Select
+            value={
+              statusM.isPending
+                ? statusM.variables?.status ?? c.status ?? 'jarri'
+                : c.status ?? 'jarri'
+            }
+            disabled={statusM.isPending}
+            onValueChange={(v) =>
+              statusM.mutate({ id: c.id, status: v as CaseStatus })
+            }
+          >
+            <SelectTrigger className="h-9 w-32">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {CASE_STATUS_OPTIONS.map((o) => (
+                <SelectItem key={o.value} value={o.value}>
+                  {o.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
+            <Pencil className="h-4 w-4" />
+            تعديل
+          </Button>
+        </div>
+      </div>
 
+      {/* مسار القضية — يُشتق من البيانات الموجودة بلا إدخال جديد */}
+      <CaseJourney
+        caseData={c}
+        counts={{
+          sessions: counts.sessions,
+          rulings: caseRulings?.length ?? 0,
+        }}
+      />
+
+      {/* عمودان على الشاشات العريضة: الحقائق ثابتة يميناً والنشاط يساراً.
+          على الجوال ينهار لعمود واحد (الحقائق فوق ثم التبويبات). */}
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
+        <div className="lg:sticky lg:top-4">
+          <CaseFactsPanel
+            caseData={c}
+            counts={{
+              sessions: counts.sessions,
+              documents: counts.documents,
+              tasks: counts.tasks,
+            }}
+            onEdit={() => setEditOpen(true)}
+          />
+        </div>
+
+        <div className="min-w-0">
       {/* التبويبات (RTL — تبدأ من اليمين) */}
       <Tabs value={tab} onValueChange={setTab} dir="rtl">
         <div className="overflow-x-auto">
@@ -249,6 +261,8 @@ export function CaseDetail({ id }: { id: string }) {
           <NotesTab caseId={c.id} caseTitle={c.title} />
         </TabsContent>
       </Tabs>
+        </div>
+      </div>
 
       {/* تعديل */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
@@ -257,26 +271,6 @@ export function CaseDetail({ id }: { id: string }) {
         </DialogContent>
       </Dialog>
     </div>
-  )
-}
-
-function HeaderInfo({
-  label,
-  value,
-  dir,
-}: {
-  label: string
-  value: string | null | undefined
-  dir?: 'ltr' | 'rtl'
-}) {
-  if (!value || value.trim() === '') return null
-  return (
-    <span>
-      <span className="text-xs">{label}: </span>
-      <span dir={dir} className="text-foreground">
-        {value}
-      </span>
-    </span>
   )
 }
 

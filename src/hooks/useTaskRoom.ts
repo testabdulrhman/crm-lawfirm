@@ -14,6 +14,7 @@ import { errMessage } from '@/lib/errors'
 import { uploadFile } from '@/lib/files'
 import { useAuth } from '@/stores/auth'
 import { notify, notifyMany } from '@/hooks/useNotifications'
+import { tapFeedback } from '@/lib/push'
 import type {
   Task,
   TaskParticipant,
@@ -460,6 +461,7 @@ export function useApproveTask(taskId: string) {
     },
     onSuccess: (final) => {
       invalidateRoom(qc, taskId)
+      void tapFeedback('success')
       toast({
         variant: 'success',
         title: final ? 'اعتُمدت المهمة وأُنجزت ✓' : 'اعتُمدت وأُحيلت للاعتماد الثاني',

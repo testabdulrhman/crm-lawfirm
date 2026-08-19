@@ -305,7 +305,8 @@ async function sendAppointmentSms(
   appt: Appointment,
   templateKey: string,
   fallback: string,
-  sentBy: string | null
+  sentBy: string | null,
+  extraVars: Record<string, string> = {}
 ): Promise<boolean> {
   const phone = appt.client_phone || appt.client?.phone || ''
   const numbers = normalizeSaudiPhone(phone)
@@ -321,6 +322,8 @@ async function sendAppointmentSms(
       //    الموظف المرسِل، فقد يصل العميل تاريخ واحد فقط حسب إعدادات غيره.
       date: fmtDual(appt.appointment_date),
       time: fmtTime(appt.appointment_time),
+      reference: appt.reference_no ?? '',
+      ...extraVars,
     })
 
     const { data, error } = await supabase.functions.invoke('swift-endpoint', {
@@ -433,5 +436,55 @@ export function useSendThankYou() {
       smsResultToast(res.ok, res.hasPhone, 'تم إرسال رسالة الشكر')
     },
     onError: errToast('تعذّر إرسال الشكر'),
+  })
+}
+
+/* ============ رابط الاجتماع عن بُعد ============ */
+
+/** حفظ رابط الاجتماع على الموعد (يُجهَّز بعد الحجز) */
+export function useSaveMeetingLink() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, link }: { id: string; link: string }) => {
+      const { error } = await supabase
+        .from('appointments')
+        .update({ meeting_link: link.trim() || null })
+        .eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      invalidate(qc)
+      toast({ variant: 'success', title: 'حُفظ رابط الاجتماع' })
+    },
+    onError: errToast('تعذّر حفظ الرابط'),
+  })
+}
+
+/** إرسال رابط الاجتماع للموكّل — عبر دالة appointment-confirm (نفس مسار التأكيد) */
+export function useSendMeetingLink() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ appointment }: { appointment: Appointment; sentBy?: string | null }) => {
+      const hasPhone = !!(appointment.client_phone || appointment.client?.phone)
+      const { data, error } = await supabase.functions.invoke('appointment-confirm', {
+        body: { appointment_id: appointment.id, kind: 'meeting_link' },
+      })
+      if (error) {
+        // أخطاء الدالة تصل بلا نصّها — نقرأ الرد الأصلي لنُظهر السبب الحقيقي
+        let msg = ''
+        try {
+          const res = (error as { context?: Response }).context
+          if (res) msg = (await res.clone().json())?.error ?? ''
+        } catch { /* يبقى العام */ }
+        throw new Error(msg || 'تعذّر الاتصال بخدمة الإرسال.')
+      }
+      if (data?.error) throw new Error(data.error)
+      return { ok: !!data?.ok, hasPhone }
+    },
+    onSuccess: (res) => {
+      invalidate(qc)
+      smsResultToast(res.ok, res.hasPhone, 'أُرسل رابط الاجتماع للموكّل')
+    },
+    onError: errToast('تعذّر إرسال رابط الاجتماع'),
   })
 }

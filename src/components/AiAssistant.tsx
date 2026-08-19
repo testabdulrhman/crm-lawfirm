@@ -14,6 +14,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
+import { isNative } from '@/lib/push'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/stores/auth'
 import { toast } from '@/hooks/use-toast'
@@ -162,7 +163,9 @@ export function AiAssistant() {
         onClick={() => setOpen((v) => !v)}
         title="المساعد الذكي"
         className={cn(
-          'fixed bottom-5 left-5 z-40 flex h-14 w-14 items-center justify-center rounded-full shadow-lg transition-transform hover:scale-105',
+          'fixed left-5 z-40 flex h-14 w-14 items-center justify-center rounded-full shadow-lg transition-transform hover:scale-105',
+          // داخل التطبيق يرتفع فوق شريط التبويبات السفلي فلا يختفي خلفه
+          isNative() ? 'bottom-[5.5rem]' : 'bottom-5',
           'bg-gradient-to-br from-violet-600 to-violet-800 text-white',
           open && 'scale-0'
         )}
@@ -175,7 +178,10 @@ export function AiAssistant() {
         <div
           role="dialog"
           aria-label="المساعد الذكي"
-          className="fixed inset-x-2 bottom-2 z-50 flex max-h-[85vh] flex-col overflow-hidden rounded-2xl border bg-card shadow-2xl sm:inset-x-auto sm:bottom-5 sm:left-5 sm:h-[560px] sm:w-[400px]"
+          className={cn(
+            'fixed inset-x-2 z-50 flex max-h-[85vh] flex-col overflow-hidden rounded-2xl border bg-card shadow-2xl sm:inset-x-auto sm:bottom-5 sm:left-5 sm:h-[560px] sm:w-[400px]',
+            isNative() ? 'bottom-[4.75rem]' : 'bottom-2'
+          )}
         >
           {/* الرأس */}
           <div className="flex items-center justify-between gap-2 border-b bg-gradient-to-l from-violet-600 to-violet-800 px-4 py-3 text-white">
