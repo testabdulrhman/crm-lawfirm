@@ -15,6 +15,7 @@ import {
   Landmark,
   CalendarClock,
   CalendarDays,
+  CalendarRange,
   Send,
   BarChart3,
   LogOut,
@@ -51,7 +52,10 @@ interface NavItem {
 // أقسام التنقل: تجميع منطقي بدل قائمة طويلة مسطّحة
 const navSections: { title?: string; items: NavItem[] }[] = [
   {
-    items: [{ label: 'لوحة التحكم', href: '/', icon: LayoutDashboard }],
+    items: [
+      { label: 'لوحة التحكم', href: '/', icon: LayoutDashboard },
+      { label: 'التقويم', href: '/calendar', icon: CalendarRange },
+    ],
   },
   {
     title: 'الأعمال',

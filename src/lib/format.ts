@@ -185,3 +185,24 @@ export const daysLabel = (n: number): string => {
   if (n >= 3 && n <= 10) return `${fmtNumber(n)} أيام`
   return `${fmtNumber(n)} يوماً`
 }
+
+// يوم الشهر الهجري فقط (رقم لاتيني) — لخلايا التقويم حيث لا مساحة للتاريخ كاملاً
+export const hijriDay = (d: string | Date | null | undefined): string => {
+  if (!d) return ''
+  const date = typeof d === 'string' ? new Date(d) : d
+  if (isNaN(date.getTime())) return ''
+  return safeFormat(
+    () => new Intl.DateTimeFormat(HIJRI_LOCALE, { day: 'numeric' }).format(date),
+    ''
+  )
+}
+
+// «رجب ١٤٤٨ هـ» — ترويسة شهر التقويم
+export const hijriMonthLabel = (d: Date): string =>
+  safeFormat(
+    () =>
+      new Intl.DateTimeFormat(HIJRI_LOCALE, { year: 'numeric', month: 'long' })
+        .format(d)
+        .replace(/\s*هـ\s*$/, '') + ' هـ',
+    ''
+  )

@@ -26,6 +26,7 @@ import { EngagementsPage } from '@/features/engagements/EngagementsPage'
 import { EngagementDetail } from '@/features/engagements/EngagementDetail'
 import { CaseDetail } from '@/features/cases/CaseDetail'
 import CaseNewPage from '@/features/cases/CaseNewPage'
+import { CalendarPage } from '@/features/calendar/CalendarPage'
 import { SessionsPage } from '@/features/sessions/SessionsPage'
 import { POAsPage } from '@/features/poa/POAsPage'
 import { POADetail } from '@/features/poa/POADetail'
@@ -54,6 +55,7 @@ function ProtectedRoutes() {
       <Switch>
         <Route path="/" component={Dashboard} />
         {/* قبل /cases/:id ضرورةً — وإلا فُهمت «new» معرّف قضية */}
+        <Route path="/calendar" component={CalendarPage} />
         <Route path="/cases/new" component={CaseNewPage} />
         <Route path="/cases/:id">
           {(params) => <CaseDetail id={params.id} />}
