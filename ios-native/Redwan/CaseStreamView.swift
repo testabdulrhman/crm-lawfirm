@@ -382,9 +382,18 @@ struct MessageContextMenu: View {
     let reactions: [Reaction]
     let bookmarked: Bool
     let mine: Bool
+    let createdAt: String?
     let onChange: () -> Void
     let onEdit: (() -> Void)?
     @EnvironmentObject private var sb: SB
+
+    /// مهلة التعديل والحذف ساعة — القاعدة تفرضها أيضاً (enforce_edit_window)
+    private var withinEditWindow: Bool {
+        guard let createdAt,
+              let d = ISO8601DateFormatter.flexible.date(from: createdAt)
+        else { return false }
+        return Date().timeIntervalSince(d) < 3600
+    }
 
     var body: some View {
         Group {
@@ -420,7 +429,7 @@ struct MessageContextMenu: View {
                 }
             }
 
-            if mine {
+            if mine && withinEditWindow {
                 Divider()
                 if let onEdit {
                     Button { onEdit() } label: {
@@ -544,6 +553,7 @@ private struct StreamBubble: View {
                     reactions: msg.reactions ?? [],
                     bookmarked: msg.bookmarked ?? false,
                     mine: mine,
+                    createdAt: msg.created_at,
                     onChange: onChange,
                     onEdit: mine ? onEdit : nil
                 )
@@ -799,6 +809,7 @@ private struct ThreadView: View {
                         reactions: r.reactions ?? [],
                         bookmarked: r.bookmarked ?? false,
                         mine: mine,
+                        createdAt: r.created_at,
                         onChange: { Task { await load() } },
                         onEdit: mine ? { editingReply = r; editDraft = r.body ?? "" } : nil
                     )

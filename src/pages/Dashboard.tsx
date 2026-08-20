@@ -30,7 +30,6 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import { ThankYouCard } from '@/components/ThankYouCard'
 import { cn } from '@/lib/utils'
 import { fmtNumber, fmtDatePref, fmtTime, daysLabel, arPlural, todayISO } from '@/lib/format'
 import { Ltr } from '@/components/Ltr'
@@ -277,9 +276,6 @@ export default function Dashboard() {
 
       {/* أقسام ثانوية */}
       <div className="grid gap-5 lg:grid-cols-2">
-        {/* إجراء سريع: شكر العميل على الزيارة + طلب تقييم */}
-        <ThankYouCard />
-
         {/* المواعيد القادمة — تظهر إن وُجدت (في كلا النطاقين) */}
         {(data?.appointments ?? []).length > 0 && (
           <SectionCard icon={CalendarClock} title="المواعيد القادمة" loading={false}>

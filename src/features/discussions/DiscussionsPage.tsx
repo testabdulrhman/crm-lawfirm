@@ -734,12 +734,27 @@ function MessageBubble({
 }
 
 /** أزرار تظهر عند التحويم: تفاعل · حفظ · تعديل · حذف */
+/** مهلة تعديل/حذف الرسالة — القاعدة تفرضها أيضاً (enforce_edit_window) */
+const EDIT_WINDOW_MS = 60 * 60 * 1000
+
+function withinEditWindow(createdAt: string | null): boolean {
+  if (!createdAt) return false
+  const t = new Date(createdAt).getTime()
+  return !isNaN(t) && Date.now() - t < EDIT_WINDOW_MS
+}
+
 function MessageActions({
   msg,
   caseId,
   mine,
 }: {
-  msg: { id: string; body: string | null; reactions: Reaction[] | null; bookmarked: boolean | null }
+  msg: {
+    id: string
+    body: string | null
+    reactions: Reaction[] | null
+    bookmarked: boolean | null
+    created_at: string | null
+  }
   caseId: string | null
   mine: boolean
 }) {
@@ -800,7 +815,7 @@ function MessageActions({
         {msg.bookmarked ? <BookmarkX className="h-3.5 w-3.5" /> : <Bookmark className="h-3.5 w-3.5" />}
       </button>
 
-      {mine && (
+      {mine && withinEditWindow(msg.created_at) && (
         <>
           <button
             type="button"
