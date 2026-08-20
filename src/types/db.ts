@@ -586,6 +586,8 @@ export interface CaseDocument {
   description: string | null
   uploaded_by: string | null
   uploaded_by_name: string | null
+  category: string | null // تصنيف الذكاء: حكم قضائي، وكالة، عقد…
+  suggested_case_id: string | null // اقتراح الذكاء لملف مستندٍ رُفع بلا ملف
   deleted_at: string | null
   deleted_by: string | null
   created_at: string | null

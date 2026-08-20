@@ -425,6 +425,11 @@ function DocCard({
           >
             {name}
           </span>
+          {d.category && (
+            <span className="inline-flex items-center rounded-full bg-gold/10 px-2 py-0.5 text-[11px] font-medium text-gold-700 dark:text-gold-300">
+              {d.category}
+            </span>
+          )}
           {meta && (
             <span className="block w-full truncate text-xs text-muted-foreground">
               {meta}
