@@ -27,6 +27,13 @@ struct BookmarksView: View {
             } else {
                 List {
                     ForEach(rows) { r in
+                        // الضغط يودّي لمحادثة الرسالة (طلب المستخدم 2026-08-22)
+                        NavigationLink {
+                            CaseStreamView(
+                                caseId: r.case_id,
+                                title: r.case_title ?? "عام — المكتب"
+                            )
+                        } label: {
                         VStack(alignment: .leading, spacing: 4) {
                             HStack(spacing: 6) {
                                 Image(systemName: r.case_id == nil ? "megaphone.fill" : "building.columns.fill")
@@ -50,6 +57,7 @@ struct BookmarksView: View {
                                 .foregroundStyle(Theme.muted)
                         }
                         .padding(.vertical, 4)
+                        }
                         .listRowBackground(Theme.card)
                         .swipeActions {
                             Button(role: .destructive) {
