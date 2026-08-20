@@ -43,7 +43,6 @@ import { RulingsTab } from './tabs/RulingsTab'
 import { TasksTab } from './tabs/TasksTab'
 import { DocumentsTab } from './tabs/DocumentsTab'
 import { MemosTab } from './tabs/MemosTab'
-import { NotesTab } from './tabs/NotesTab'
 import { ProjectTab } from './tabs/ProjectTab'
 import type { Case, CaseStatus } from '@/types/db'
 
@@ -59,7 +58,6 @@ const TABS = [
   { value: 'tasks', label: 'المهام' },
   { value: 'memos', label: 'المذكرات' },
   { value: 'documents', label: 'المستندات' },
-  { value: 'notes', label: 'الملاحظات' },
 ] as const
 
 export function CaseDetail({ id }: { id: string }) {
@@ -261,9 +259,6 @@ export function CaseDetail({ id }: { id: string }) {
         </TabsContent>
         <TabsContent value="documents">
           <DocumentsTab caseId={c.id} />
-        </TabsContent>
-        <TabsContent value="notes">
-          <NotesTab caseId={c.id} caseTitle={c.title} />
         </TabsContent>
       </Tabs>
         </div>
