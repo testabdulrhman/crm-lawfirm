@@ -15,6 +15,7 @@ import {
   CalendarDays,
   Activity,
   CalendarRange,
+  MessagesSquare,
   FolderOpen,
   Send,
   BarChart3,
@@ -55,6 +56,7 @@ const navSections: { title?: string; items: NavItem[] }[] = [
     items: [
       { label: 'لوحة التحكم', href: '/', icon: LayoutDashboard },
       { label: 'التقويم', href: '/calendar', icon: CalendarRange },
+      { label: 'النقاشات', href: '/discussions', icon: MessagesSquare },
       { label: 'آخر النشاط', href: '/feed', icon: Activity },
     ],
   },
