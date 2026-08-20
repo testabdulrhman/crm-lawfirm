@@ -59,6 +59,7 @@ export function useEngagementProjects(engagementId: string | null) {
         supabase
           .from('cases')
           .select('id, title, office_num, status')
+          .eq('kind', 'case') // الاستشارات تأتي من فرعها — وإلا تكررت
           .eq('engagement_id', engagementId)
           .order('created_at', { ascending: false }),
         supabase

@@ -33,6 +33,9 @@ export function useCases() {
       const { data, error } = await supabase
         .from('cases')
         .select(SELECT)
+        // ⚠️ بعد توحيد «الملفات»: الجدول يضم الاستشارات والتوثيق أيضاً —
+        //    هذه القائمة (وكل منتقيات القضايا) قضايا محاكم حصراً
+        .eq('kind', 'case')
         .order('created_at', { ascending: false })
       if (error) throw error
       return (data ?? []) as unknown as Case[]

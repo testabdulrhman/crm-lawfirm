@@ -37,14 +37,18 @@ export function useMatters() {
         supabase
           .from('cases')
           .select('id, title, status, open_date, office_num, contact:contacts(name)')
+          .eq('kind', 'case')
+          .is('deleted_at', null)
           .order('created_at', { ascending: false }),
         supabase
           .from('legal_services')
           .select('id, title, type, status, client_name, received_at, created_at')
+          .is('deleted_at', null)
           .order('created_at', { ascending: false }),
         supabase
           .from('property_transfers')
           .select('id, transfer_type, status, seller_name, buyer_name, transfer_date, created_at')
+          .is('deleted_at', null)
           .order('created_at', { ascending: false }),
       ])
       if (cases.error) throw cases.error
