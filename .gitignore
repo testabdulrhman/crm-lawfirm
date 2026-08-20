@@ -37,3 +37,4 @@ dist-ssr
 
 # شاشة عرض المكتب: النسخة الحيّة تحمل مفتاح anon وسرّ اللوحة — القالب فقط يُدفع
 tv-board/index.html
+supabase/.temp/
