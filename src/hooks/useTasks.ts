@@ -155,29 +155,13 @@ export function useRemoveTask() {
     mutationFn: async (id: string) => {
       // ⚠️ حذف ناعم لا نهائي: الصف يبقى ويُسجَّل في سجل النشاط، فلا تختفي
       //    مهمة بلا أثر يعرف منه المدير من حذفها ومتى.
-      const { data: row } = await supabase
-        .from('tasks')
-        .select('title, case_id')
-        .eq('id', id)
-        .maybeSingle()
-
       const { error } = await supabase
         .from('tasks')
         .update({ deleted_at: new Date().toISOString(), deleted_by: byName ?? null })
         .eq('id', id)
       if (error) throw error
 
-      try {
-        await supabase.from('activity_log').insert({
-          type: 'delete',
-          entity: 'task',
-          title: `حذف مهمة: ${row?.title ?? ''}`,
-          case_id: row?.case_id ?? null,
-          user_name: byName ?? null,
-        })
-      } catch {
-        /* التسجيل ثانوي — لا يمنع الحذف */
-      }
+      // تسجيل الحذف صار trigger في القاعدة (feed_tasks_trg) — لا كتابة يدوية
     },
     onSuccess: () => {
       invalidateAll(qc)

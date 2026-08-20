@@ -117,24 +117,13 @@ export function useDeleteTask(caseId: string) {
   return useMutation({
     mutationFn: async (id: string): Promise<void> => {
       // ⚠️ حذف ناعم — نفس سلوك صفحة المهام العامة (انظر useTasks.ts)
-      const { data: row } = await supabase
-        .from('tasks').select('title').eq('id', id).maybeSingle()
-
       const { error } = await supabase
         .from('tasks')
         .update({ deleted_at: new Date().toISOString(), deleted_by: byName })
         .eq('id', id)
       if (error) throw error
 
-      try {
-        await supabase.from('activity_log').insert({
-          type: 'delete', entity: 'task',
-          title: `حذف مهمة: ${row?.title ?? ''}`,
-          case_id: caseId, user_name: byName,
-        })
-      } catch {
-        /* التسجيل ثانوي */
-      }
+      // تسجيل الحذف صار trigger في القاعدة (feed_tasks_trg) — لا كتابة يدوية
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: key(caseId) })

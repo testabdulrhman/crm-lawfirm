@@ -13,6 +13,7 @@ import {
   FileSignature,
   CalendarClock,
   CalendarDays,
+  Activity,
   CalendarRange,
   FolderOpen,
   Send,
@@ -54,6 +55,7 @@ const navSections: { title?: string; items: NavItem[] }[] = [
     items: [
       { label: 'لوحة التحكم', href: '/', icon: LayoutDashboard },
       { label: 'التقويم', href: '/calendar', icon: CalendarRange },
+      { label: 'آخر النشاط', href: '/feed', icon: Activity },
     ],
   },
   {
