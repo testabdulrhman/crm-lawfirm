@@ -185,13 +185,24 @@ extension SB {
         try await rpc("case_thread", params: ["p_root": rootId])
     }
 
-    /// إرسال رسالة/مرفق: جذر أو ردّ، في قضية أو في العامة
+    /// موظفو المكتب النشطون — قائمة المنشن في النقاش
+    func staff() async throws -> [TeamMember] {
+        try await get("team_members", query: [
+            ("select", "id,name,short_name,is_director,avatar_initial,avatar_color"),
+            ("is_active", "not.is.false"),
+            ("order", "name.asc"),
+        ])
+    }
+
+    /// إرسال رسالة/مرفق: جذر أو ردّ، في قضية أو في العامة.
+    /// mentions: معرّفات المذكورين بـ@ — القاعدة تُشعرهم (notify_mentions).
     func postMessage(
         caseId: String?,
         body: String?,
         documentId: String? = nil,
         parentId: String? = nil,
-        alsoToStream: Bool = false
+        alsoToStream: Bool = false,
+        mentions: [String]? = nil
     ) async throws {
         guard let me = member?.id else {
             throw SBError(message: "لم يُحمَّل ملفك بعد — اسحب للتحديث ثم أعد المحاولة")
@@ -204,6 +215,7 @@ extension SB {
             values["parent_id"] = parentId
             values["also_to_stream"] = alsoToStream
         }
+        if let mentions, !mentions.isEmpty { values["mentions"] = mentions }
         try await insertVoid("case_comments", values: values)
     }
 

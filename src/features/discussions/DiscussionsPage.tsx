@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useLocation } from 'wouter'
 import {
   Bookmark,
   BookmarkX,
+  FolderOpen,
   Loader2,
   Megaphone,
   MessagesSquare,
@@ -34,6 +36,7 @@ import { QueryErrorState } from '@/components/QueryErrorState'
 import { EmptyState } from '@/components/EmptyState'
 import { useConfirm } from '@/components/ConfirmDialog'
 import { useAuth } from '@/stores/auth'
+import { useTeamMembers } from '@/hooks/useTeam'
 import { pickFile } from '@/lib/files'
 import { fmtDatePref, fmtNumber, fmtTime } from '@/lib/format'
 import { cn } from '@/lib/utils'
@@ -72,6 +75,224 @@ function stamp(iso: string | null): string {
   const yest = new Date(now.getTime() - 86400000)
   if (d.toDateString() === yest.toDateString()) return 'أمس'
   return fmtDatePref(d.toISOString().slice(0, 10))
+}
+
+/* ===================== منشن الموظفين ===================== */
+
+interface Mentionable {
+  id: string
+  label: string
+  initial: string | null
+  color: string | null
+}
+
+/** موظفو المكتب النشطون بالاسم المختصر — قائمة المنشن */
+function useMentionables(): Mentionable[] {
+  const { data } = useTeamMembers()
+  return useMemo(
+    () =>
+      (data ?? [])
+        .filter((m) => m.is_active !== false)
+        .map((m) => ({
+          id: m.id,
+          label: (m.short_name ?? m.name).trim(),
+          initial: m.avatar_initial,
+          color: m.avatar_color,
+        }))
+        .filter((m) => m.label.length > 0),
+    [data]
+  )
+}
+
+const escRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+/** وجهة «فتح الملف» حسب نوعه — بعد توحيد الملفات لكل نوع صفحته */
+function matterHref(kind: string, id: string): string {
+  switch (kind) {
+    case 'legal_service':
+      return `/legal-services/${id}`
+    case 'property':
+      return `/property/${id}`
+    default:
+      return `/cases/${id}`
+  }
+}
+
+/**
+ * من ذُكر فعلاً في النص عند الإرسال — فحص النص النهائي لا لقطات الاختيار،
+ * فيصح المنشن حتى لو كُتب الاسم يدوياً دون قائمة الاقتراح.
+ * ⚠️ \b لا يعمل مع العربية — نستخدم lookahead يونيكود (درس منشن الذكاء).
+ */
+function extractMentions(body: string, people: Mentionable[]): string[] {
+  if (!body.includes('@')) return []
+  return people
+    .filter((p) => new RegExp('@' + escRe(p.label) + '(?![\\p{L}\\p{N}_])', 'u').test(body))
+    .map((p) => p.id)
+}
+
+/** نص رسالة مع تلوين @الأسماء (الموظفون + الذكاء) */
+function Body({ text, className }: { text: string; className?: string }) {
+  const people = useMentionables()
+  const re = useMemo(() => {
+    const labels = [...people.map((p) => p.label), 'الذكاء', 'ذكاء', 'المساعد']
+      .sort((a, b) => b.length - a.length)
+      .map(escRe)
+    return new RegExp('@\\s?(?:' + labels.join('|') + ')(?![\\p{L}\\p{N}_])', 'gu')
+  }, [people])
+
+  const parts = useMemo(() => {
+    const out: { t: string; hit: boolean }[] = []
+    let last = 0
+    for (const m of text.matchAll(re)) {
+      const i = m.index ?? 0
+      if (i > last) out.push({ t: text.slice(last, i), hit: false })
+      out.push({ t: m[0], hit: true })
+      last = i + m[0].length
+    }
+    if (last < text.length) out.push({ t: text.slice(last), hit: false })
+    return out
+  }, [text, re])
+
+  return (
+    <p className={className}>
+      {parts.map((p, i) =>
+        p.hit ? (
+          <span key={i} className="rounded bg-gold/15 px-0.5 font-medium text-gold-700 dark:text-gold-300">
+            {p.t}
+          </span>
+        ) : (
+          <span key={i}>{p.t}</span>
+        )
+      )}
+    </p>
+  )
+}
+
+/**
+ * Textarea بقائمة اقتراح: كتابة @ تعرض الموظفين (والذكاء) للاختيار
+ * بالأسهم أو بالنقر — بأسلوب سلاك.
+ */
+function MentionInput({
+  value,
+  onChange,
+  onSubmit,
+  placeholder,
+  className,
+}: {
+  value: string
+  onChange: (v: string) => void
+  onSubmit: () => void
+  placeholder: string
+  className?: string
+}) {
+  const people = useMentionables()
+  const taRef = useRef<HTMLTextAreaElement>(null)
+  const [sug, setSug] = useState<{ items: { id: string | null; label: string; initial: string | null; color: string | null }[]; start: number } | null>(null)
+  const [hi, setHi] = useState(0)
+
+  const compute = (v: string, caret: number) => {
+    const m = v.slice(0, caret).match(/@([\p{L}\p{N}_]{0,20})$/u)
+    if (!m) return setSug(null)
+    const q = m[1]
+    const pool = [
+      { id: null, label: 'الذكاء', initial: null, color: null },
+      ...people,
+    ]
+    const items = pool.filter((p) => p.label.includes(q)).slice(0, 7)
+    if (!items.length) return setSug(null)
+    setSug({ items, start: caret - q.length - 1 })
+    setHi(0)
+  }
+
+  const pick = (p: { label: string }) => {
+    if (!sug) return
+    const caret = taRef.current?.selectionStart ?? value.length
+    const next = value.slice(0, sug.start) + '@' + p.label + ' ' + value.slice(caret)
+    onChange(next)
+    setSug(null)
+    const pos = sug.start + p.label.length + 2
+    requestAnimationFrame(() => {
+      taRef.current?.focus()
+      taRef.current?.setSelectionRange(pos, pos)
+    })
+  }
+
+  return (
+    <div className="relative min-w-0 flex-1">
+      {sug && (
+        <div className="absolute bottom-full right-0 z-30 mb-1.5 w-60 overflow-hidden rounded-xl border border-border/70 bg-popover p-1 shadow-lg">
+          {sug.items.map((p, i) => (
+            <button
+              key={p.id ?? 'ai'}
+              type="button"
+              onMouseDown={(e) => {
+                e.preventDefault() // لا تفقد التركيز قبل الإدراج
+                pick(p)
+              }}
+              onMouseEnter={() => setHi(i)}
+              className={cn(
+                'flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-right text-sm',
+                i === hi ? 'bg-gold/15 text-foreground' : 'text-foreground'
+              )}
+            >
+              {p.id === null ? (
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-navy text-gold">
+                  <Sparkles className="h-3 w-3" />
+                </span>
+              ) : (
+                <span
+                  className="flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-semibold text-white"
+                  style={{ backgroundColor: p.color ?? '#8A8F98' }}
+                >
+                  {p.initial ?? p.label.charAt(0)}
+                </span>
+              )}
+              <span className="truncate">{p.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      <Textarea
+        ref={taRef}
+        value={value}
+        onChange={(e) => {
+          onChange(e.target.value)
+          compute(e.target.value, e.target.selectionStart ?? e.target.value.length)
+        }}
+        onKeyDown={(e) => {
+          if (sug) {
+            if (e.key === 'ArrowDown') {
+              e.preventDefault()
+              setHi((h) => (h + 1) % sug.items.length)
+              return
+            }
+            if (e.key === 'ArrowUp') {
+              e.preventDefault()
+              setHi((h) => (h - 1 + sug.items.length) % sug.items.length)
+              return
+            }
+            if (e.key === 'Enter' || e.key === 'Tab') {
+              e.preventDefault()
+              pick(sug.items[hi])
+              return
+            }
+            if (e.key === 'Escape') {
+              setSug(null)
+              return
+            }
+          }
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault()
+            onSubmit()
+          }
+        }}
+        onBlur={() => setTimeout(() => setSug(null), 150)}
+        placeholder={placeholder}
+        rows={1}
+        className={className}
+      />
+    </div>
+  )
 }
 
 export function DiscussionsPage() {
@@ -136,6 +357,7 @@ export function DiscussionsPage() {
             title={current?.case_title ?? (selected === null ? 'عام — المكتب' : 'ملف')}
             officeNum={current?.office_num ?? null}
             openThread={setOpenThreadRoot}
+            caseHref={selected ? matterHref(current?.kind ?? 'case', selected) : null}
           />
         )}
 
@@ -296,13 +518,18 @@ function StreamPane({
   title,
   officeNum,
   openThread,
+  caseHref = null,
 }: {
   caseId: string | null
   title: string
   officeNum: string | null
   openThread: (m: StreamMsg) => void
+  /** وجهة زر «فتح الملف» — يظهر في صفحة النقاشات لا داخل الملف نفسه */
+  caseHref?: string | null
 }) {
   const { teamMember } = useAuth()
+  const [, navigate] = useLocation()
+  const people = useMentionables()
   const { data: msgs, isLoading, error, refetch } = useStream(caseId, true)
   const post = usePostMessage()
   const postFile = usePostAttachment()
@@ -317,7 +544,7 @@ function StreamPane({
     const body = draft.trim()
     if (!body || post.isPending) return
     post.mutate(
-      { caseId, body },
+      { caseId, body, mentions: extractMentions(body, people) },
       {
         onSuccess: () => {
           setDraft('')
@@ -332,7 +559,13 @@ function StreamPane({
   const attach = async () => {
     const file = await pickFile({ accept: '.pdf,image/*,.docx,.xlsx' })
     if (!file) return
-    postFile.mutate({ caseId, file, caption: draft.trim() || undefined })
+    const caption = draft.trim()
+    postFile.mutate({
+      caseId,
+      file,
+      caption: caption || undefined,
+      mentions: caption ? extractMentions(caption, people) : undefined,
+    })
     setDraft('')
   }
 
@@ -351,6 +584,17 @@ function StreamPane({
           <p className="truncate text-[15px] font-semibold text-foreground">{title}</p>
           {officeNum && <p className="text-xs text-muted-foreground">{officeNum}</p>}
         </div>
+        {caseHref && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5 text-xs"
+            onClick={() => navigate(caseHref)}
+          >
+            <FolderOpen className="h-3.5 w-3.5" />
+            فتح الملف
+          </Button>
+        )}
       </div>
 
       <div className="flex-1 space-y-3 overflow-y-auto p-4">
@@ -387,7 +631,7 @@ function StreamPane({
         onAttach={attach}
         sending={post.isPending}
         uploading={postFile.isPending}
-        placeholder="اكتب رسالة… (@الذكاء للسؤال)"
+        placeholder="اكتب رسالة… @ لمنشن زميل أو الذكاء"
       />
     </div>
   )
@@ -440,7 +684,7 @@ function MessageBubble({
         )}
       >
         {msg.body && (
-          <p className="whitespace-pre-wrap text-sm text-foreground">{msg.body}</p>
+          <Body text={msg.body} className="whitespace-pre-wrap text-sm text-foreground" />
         )}
         {msg.document_name && (
           <a
@@ -665,6 +909,7 @@ function ThreadPane({
   onClose: () => void
 }) {
   const { teamMember } = useAuth()
+  const people = useMentionables()
   const { data: replies, isLoading, refetch } = useThread(root.id)
   const post = usePostMessage()
   const [draft, setDraft] = useState('')
@@ -674,7 +919,7 @@ function ThreadPane({
     const body = draft.trim()
     if (!body || post.isPending) return
     post.mutate(
-      { caseId, body, parentId: root.id, alsoToStream },
+      { caseId, body, parentId: root.id, alsoToStream, mentions: extractMentions(body, people) },
       {
         onSuccess: () => {
           setDraft('')
@@ -706,9 +951,10 @@ function ThreadPane({
             </span>{' '}
             · {stamp(root.created_at)}
           </p>
-          <p className="whitespace-pre-wrap text-sm font-medium text-foreground">
-            {root.body ?? root.document_name ?? '—'}
-          </p>
+          <Body
+            text={root.body ?? root.document_name ?? '—'}
+            className="whitespace-pre-wrap text-sm font-medium text-foreground"
+          />
         </div>
 
         {isLoading ? (
@@ -726,17 +972,11 @@ function ThreadPane({
 
       <div className="border-t border-border/60 p-2.5">
         <div className="flex items-end gap-2">
-          <Textarea
+          <MentionInput
             value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault()
-                send()
-              }
-            }}
+            onChange={setDraft}
+            onSubmit={send}
             placeholder="ردّ في الخيط…"
-            rows={1}
             className="min-h-[38px] resize-none text-sm"
           />
           <Button size="icon" variant="gold" disabled={!draft.trim() || post.isPending} onClick={send}>
@@ -795,7 +1035,7 @@ function ThreadReply({
               : 'border-border/60 bg-background/60'
         )}
       >
-        {r.body && <p className="whitespace-pre-wrap text-sm text-foreground">{r.body}</p>}
+        {r.body && <Body text={r.body} className="whitespace-pre-wrap text-sm text-foreground" />}
         {r.document_name && (
           <a
             href={r.document_url ?? '#'}
@@ -863,18 +1103,12 @@ function Composer({
         >
           <Paperclip className="h-[18px] w-[18px]" />
         </button>
-        <Textarea
+        <MentionInput
           value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault()
-              onSend()
-            }
-          }}
+          onChange={setDraft}
+          onSubmit={onSend}
           placeholder={placeholder}
-          rows={1}
-          className="min-h-[42px] flex-1 resize-none"
+          className="min-h-[42px] resize-none"
         />
         <Button variant="gold" size="icon" disabled={!draft.trim() || sending} onClick={onSend}>
           {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}

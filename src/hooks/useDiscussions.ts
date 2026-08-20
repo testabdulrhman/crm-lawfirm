@@ -19,6 +19,7 @@ export interface DiscussionRow {
   last_author: string | null
   has_file: boolean | null
   unread: number | null
+  kind: string | null // case | legal_service | property — وجهة زر «فتح الملف»
 }
 
 export interface Reaction {
@@ -160,6 +161,8 @@ export function usePostMessage() {
       documentId?: string | null
       parentId?: string | null
       alsoToStream?: boolean
+      /** معرّفات الموظفين المذكورين بـ@ — القاعدة تُشعرهم (notify_mentions) */
+      mentions?: string[]
     }) => {
       if (!teamMember?.id) throw new Error('لم يُحمَّل ملفك بعد — أعد تحميل الصفحة')
       const values: Record<string, unknown> = {
@@ -167,6 +170,7 @@ export function usePostMessage() {
         author_id: teamMember.id,
       }
       if (input.body) values.body = input.body
+      if (input.mentions?.length) values.mentions = input.mentions
       if (input.documentId) values.document_id = input.documentId
       if (input.parentId) {
         values.parent_id = input.parentId
@@ -189,7 +193,12 @@ export function usePostAttachment() {
   const qc = useQueryClient()
   const { teamMember } = useAuth()
   return useMutation({
-    mutationFn: async (input: { caseId: string | null; file: File; caption?: string }) => {
+    mutationFn: async (input: {
+      caseId: string | null
+      file: File
+      caption?: string
+      mentions?: string[]
+    }) => {
       if (!teamMember?.id) throw new Error('لم يُحمَّل ملفك بعد — أعد تحميل الصفحة')
       const folder = input.caseId
         ? `case_documents/${input.caseId}/`
@@ -219,6 +228,7 @@ export function usePostAttachment() {
         author_id: teamMember.id,
         body: input.caption || null,
         document_id: doc.id,
+        ...(input.mentions?.length ? { mentions: input.mentions } : {}),
       })
       if (error) throw error
     },

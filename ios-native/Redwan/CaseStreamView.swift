@@ -8,6 +8,75 @@ import UniformTypeIdentifiers
 
 private let QUICK_EMOJIS = ["👍", "❤️", "✅", "😂", "😮", "🙏"]
 
+// MARK: - منشن الموظفين (طلب المستخدم 2026-08-21: «ابي اعمل منشن للي عندي»)
+
+enum Mention {
+    static func label(_ p: TeamMember) -> String {
+        (p.short_name ?? p.name ?? "").trimmingCharacters(in: .whitespaces)
+    }
+
+    /// من ذُكر فعلاً في النص عند الإرسال — فحص النص النهائي، فيصح المنشن
+    /// حتى لو كُتب الاسم يدوياً دون القائمة.
+    /// ⚠️ \b لا يعمل مع العربية — lookahead يونيكود (نفس درس الويب).
+    static func extract(from body: String, people: [TeamMember]) -> [String] {
+        guard body.contains("@") else { return [] }
+        return people.filter { p in
+            let l = label(p)
+            guard !l.isEmpty,
+                  let re = try? NSRegularExpression(
+                      pattern: "@" + NSRegularExpression.escapedPattern(for: l) + "(?![\\p{L}\\p{N}_])"
+                  )
+            else { return false }
+            return re.firstMatch(
+                in: body, range: NSRange(body.startIndex..., in: body)
+            ) != nil
+        }.map(\.id)
+    }
+
+    /// تلوين أي @كلمة بالذهبي (يشمل @الذكاء) — للعرض في الفقاعات
+    static func styled(_ text: String) -> AttributedString {
+        var out = AttributedString(text)
+        guard text.contains("@"),
+              let re = try? NSRegularExpression(pattern: "@[\\p{L}\\p{N}_]+")
+        else { return out }
+        let full = NSRange(text.startIndex..., in: text)
+        for m in re.matches(in: text, range: full) {
+            guard let sr = Range(m.range, in: text),
+                  let lo = AttributedString.Index(sr.lowerBound, within: out),
+                  let up = AttributedString.Index(sr.upperBound, within: out)
+            else { continue }
+            out[lo..<up].foregroundColor = Theme.goldDark
+            out[lo..<up].font = .system(size: 14, weight: .semibold)
+        }
+        return out
+    }
+}
+
+/// زر @ في حقل الكتابة: قائمة الموظفين، والاختيار يُدرج @الاسم في النص
+struct MentionMenu: View {
+    let staff: [TeamMember]
+    @Binding var draft: String
+
+    var body: some View {
+        Menu {
+            ForEach(staff) { p in
+                let l = Mention.label(p)
+                if !l.isEmpty {
+                    Button(l) {
+                        let sep = draft.isEmpty || draft.hasSuffix(" ") ? "" : " "
+                        draft += sep + "@" + l + " "
+                    }
+                }
+            }
+        } label: {
+            Image(systemName: "at")
+                .font(.system(size: 15))
+                .foregroundStyle(Theme.muted)
+        }
+        .disabled(staff.isEmpty)
+    }
+}
+
 struct CaseStreamView: View {
     let caseId: String?
     let title: String
@@ -28,6 +97,9 @@ struct CaseStreamView: View {
     // تحرير رسالة
     @State private var editing: StreamMsg?
     @State private var editDraft = ""
+
+    // قائمة المنشن
+    @State private var staff: [TeamMember] = []
 
     var body: some View {
         VStack(spacing: 0) {
@@ -76,6 +148,7 @@ struct CaseStreamView: View {
         .task {
             await load()
             try? await sb.markRead(caseId: caseId)
+            staff = (try? await sb.staff()) ?? []
         }
         .sheet(item: $editing) { m in
             EditMessageSheet(draft: $editDraft) { newBody in
@@ -136,6 +209,8 @@ struct CaseStreamView: View {
                 }
                 .buttonStyle(.plain)
 
+                MentionMenu(staff: staff, draft: $draft)
+
                 PhotosPicker(selection: $photoItem, matching: .images) {
                     Image(systemName: "photo")
                         .font(.system(size: 15))
@@ -190,7 +265,10 @@ struct CaseStreamView: View {
         sendError = nil
         Task {
             do {
-                try await sb.postMessage(caseId: caseId, body: body)
+                try await sb.postMessage(
+                    caseId: caseId, body: body,
+                    mentions: Mention.extract(from: body, people: staff)
+                )
                 draft = ""
                 await load()
                 Task {
@@ -234,7 +312,8 @@ struct CaseStreamView: View {
             try await sb.postMessage(
                 caseId: caseId,
                 body: caption.isEmpty ? nil : caption,
-                documentId: docId
+                documentId: docId,
+                mentions: caption.isEmpty ? nil : Mention.extract(from: caption, people: staff)
             )
             draft = ""
             await load()
@@ -414,7 +493,7 @@ private struct StreamBubble: View {
 
             VStack(alignment: .leading, spacing: 8) {
                 if let body = msg.body, !body.isEmpty {
-                    Text(body)
+                    Text(Mention.styled(body))
                         .font(.system(size: 14))
                         .foregroundStyle(Theme.navy)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -574,6 +653,7 @@ private struct ThreadView: View {
     @State private var sendError: String?
     @State private var editingReply: ThreadMsg?
     @State private var editDraft = ""
+    @State private var staff: [TeamMember] = []
 
     var body: some View {
         VStack(spacing: 0) {
@@ -588,7 +668,7 @@ private struct ThreadView: View {
                                 .font(.system(size: 10))
                                 .foregroundStyle(Theme.muted.opacity(0.8))
                         }
-                        Text(root.body ?? root.document_name ?? "—")
+                        Text(Mention.styled(root.body ?? root.document_name ?? "—"))
                             .font(.system(size: 14, weight: .medium))
                             .foregroundStyle(Theme.navy)
                     }
@@ -633,7 +713,10 @@ private struct ThreadView: View {
         .background(Theme.ivory.ignoresSafeArea())
         .navigationTitle("خيط")
         .navigationBarTitleDisplayMode(.inline)
-        .task { await load() }
+        .task {
+            await load()
+            staff = (try? await sb.staff()) ?? []
+        }
         .sheet(item: $editingReply) { r in
             EditMessageSheet(draft: $editDraft) { newBody in
                 Task {
@@ -693,7 +776,7 @@ private struct ThreadView: View {
                 }
                 VStack(alignment: .leading, spacing: 6) {
                     if let b = r.body, !b.isEmpty {
-                        Text(b)
+                        Text(Mention.styled(b))
                             .font(.system(size: 14))
                             .foregroundStyle(Theme.navy)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -738,6 +821,8 @@ private struct ThreadView: View {
                     .padding(.horizontal, 12)
             }
             HStack(spacing: 8) {
+                MentionMenu(staff: staff, draft: $draft)
+
                 TextField("ردّ في الخيط…", text: $draft, axis: .vertical)
                     .font(.system(size: 14))
                     .lineLimit(1...4)
@@ -797,7 +882,8 @@ private struct ThreadView: View {
                     caseId: caseId,
                     body: body,
                     parentId: root.id,
-                    alsoToStream: alsoToStream
+                    alsoToStream: alsoToStream,
+                    mentions: Mention.extract(from: body, people: staff)
                 )
                 draft = ""
                 alsoToStream = false

@@ -45,6 +45,8 @@ const ICONS: Record<string, LucideIcon> = {
 function destination(n: AppNotification): string {
   // إشعار مرتبط بمهمة يفتح غرفتها مباشرة — أدق من صفحة القضية
   if (n.task_id) return `/tasks/${n.task_id}`
+  // منشن في نقاش: إلى النقاشات نفسها (العامة إن بلا ملف)
+  if (n.type === 'mention') return '/discussions'
   if (n.case_id) return `/cases/${n.case_id}`
   switch (n.type) {
     case 'task_assigned':
