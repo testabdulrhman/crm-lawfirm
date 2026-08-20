@@ -133,9 +133,9 @@ struct CalItem: Identifiable {
 
 // ===== نقاش القضايا بالخيوط =====
 
-/// صف في تبويب «النقاشات» — من دالة case_discussions()
+/// صف في تبويب «النقاشات» — case_id فارغ = القناة العامة «عام — المكتب»
 struct DiscussionRow: Codable, Identifiable {
-    let case_id: String
+    let case_id: String?
     let case_title: String?
     let office_num: String?
     let last_body: String?
@@ -144,7 +144,15 @@ struct DiscussionRow: Codable, Identifiable {
     let has_file: Bool?
     let unread: Int?
 
-    var id: String { case_id }
+    var id: String { case_id ?? "general" }
+    var isGeneral: Bool { case_id == nil }
+}
+
+/// تفاعل إيموجي مجمّع: الرمز، العدد، وهل أنا منهم
+struct Reaction: Codable, Equatable {
+    let e: String
+    let n: Int
+    let me: Bool
 }
 
 /// رسالة في مجرى القضية — من دالة case_stream()
@@ -157,10 +165,46 @@ struct StreamMsg: Codable, Identifiable {
     let kind: String?
     let document_id: String?
     let document_name: String?
+    let document_url: String?
     let mentions: [String]?
     let created_at: String?
+    let edited_at: String?
     let reply_count: Int?
     let last_reply_at: String?
+    let reactions: [Reaction]?
+    let bookmarked: Bool?
+}
+
+/// ردّ داخل خيط — من دالة case_thread() (نفس تخصيب المجرى)
+struct ThreadMsg: Codable, Identifiable {
+    let id: String
+    let author_id: String?
+    let author_name: String?
+    let avatar_initial: String?
+    let avatar_color: String?
+    let body: String?
+    let kind: String?
+    let document_id: String?
+    let document_name: String?
+    let document_url: String?
+    let created_at: String?
+    let edited_at: String?
+    let reactions: [Reaction]?
+    let bookmarked: Bool?
+}
+
+/// رسالة محفوظة — من دالة my_bookmarks()
+struct BookmarkRow: Codable, Identifiable {
+    let comment_id: String
+    let case_id: String?
+    let case_title: String?
+    let body: String?
+    let kind: String?
+    let author_name: String?
+    let created_at: String?
+    let saved_at: String?
+
+    var id: String { comment_id }
 }
 
 /// ردّ داخل خيط — قراءة مباشرة من case_comments

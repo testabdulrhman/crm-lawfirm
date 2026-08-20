@@ -1,13 +1,15 @@
 import SwiftUI
+import PhotosUI
+import UniformTypeIdentifiers
 
-// مجرى القضية وخيوطها — قلب حلّ مشكلة الواتساب.
-//
-// ملاحظة المستخدم التي شكّلت التصميم: «الواتساب فيه رد لكنه اقتباس لا تجميع»
-// — الرد يهبط في المجرى فيزيده ازدحاماً. هنا الردود تُسحب من المجرى وتُجمع
-// تحت سؤالها، فيبقى المجرى قائمة مواضيع لا سيل رسائل.
+// مجرى القناة وخيوطها — v2 (طلبات المستخدم 2026-08-21):
+// تفاعل إيموجي + حفظ (بوك مارك) + تعديل وحذف رسالتي + إرسال صور وملفات.
+// caseId فارغ = القناة العامة «عام — المكتب».
+
+private let QUICK_EMOJIS = ["👍", "❤️", "✅", "😂", "😮", "🙏"]
 
 struct CaseStreamView: View {
-    let caseId: String
+    let caseId: String?
     let title: String
 
     @EnvironmentObject private var sb: SB
@@ -17,6 +19,15 @@ struct CaseStreamView: View {
     @State private var draft = ""
     @State private var sending = false
     @State private var sendError: String?
+
+    // المرفقات
+    @State private var photoItem: PhotosPickerItem?
+    @State private var showFilePicker = false
+    @State private var uploading = false
+
+    // تحرير رسالة
+    @State private var editing: StreamMsg?
+    @State private var editDraft = ""
 
     var body: some View {
         VStack(spacing: 0) {
@@ -32,22 +43,24 @@ struct CaseStreamView: View {
                             if msgs.isEmpty {
                                 EmptyBox(
                                     icon: "bubble.left",
-                                    text: "لا كلام في هذه القضية بعد",
-                                    subtext: "اكتب أول رسالة — تبقى هنا مربوطة بالقضية"
+                                    text: caseId == nil ? "القناة العامة هادئة" : "لا كلام في هذه القضية بعد",
+                                    subtext: "اكتب أول رسالة — تبقى هنا مربوطة بمكانها"
                                 )
                                 .padding(.top, 30)
                             }
                             ForEach(msgs) { m in
-                                StreamBubble(msg: m, caseId: caseId, mine: m.author_id == sb.member?.id) {
-                                    Task { await load() }
-                                }
+                                StreamBubble(
+                                    msg: m, caseId: caseId,
+                                    mine: m.author_id == sb.member?.id,
+                                    onChange: { Task { await load() } },
+                                    onEdit: { editing = m; editDraft = m.body ?? "" }
+                                )
                                 .id(m.id)
                             }
                         }
                         .padding(12)
                     }
                     .onChange(of: msgs.count) {
-                        // ينزل لآخر رسالة كما تفعل تطبيقات المحادثة
                         if let last = msgs.last?.id {
                             withAnimation { proxy.scrollTo(last, anchor: .bottom) }
                         }
@@ -62,10 +75,37 @@ struct CaseStreamView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task {
             await load()
-            // فتح الشاشة = قراءة — يصفّر عدّاد القضية في القائمة
             try? await sb.markRead(caseId: caseId)
         }
+        .sheet(item: $editing) { m in
+            EditMessageSheet(draft: $editDraft) { newBody in
+                Task {
+                    try? await sb.editMessage(id: m.id, body: newBody)
+                    editing = nil
+                    await load()
+                }
+            }
+        }
+        .fileImporter(
+            isPresented: $showFilePicker,
+            allowedContentTypes: [.pdf, .image, .data]
+        ) { result in
+            if case .success(let url) = result {
+                Task { await uploadFile(url: url) }
+            }
+        }
+        .onChange(of: photoItem) {
+            guard let item = photoItem else { return }
+            Task {
+                if let data = try? await item.loadTransferable(type: Data.self) {
+                    await uploadData(data, fileName: "صورة.jpg", mime: "image/jpeg")
+                }
+                photoItem = nil
+            }
+        }
     }
+
+    // MARK: - حقل الإرسال
 
     private var composer: some View {
         VStack(spacing: 4) {
@@ -76,8 +116,17 @@ struct CaseStreamView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 12)
             }
+            if uploading {
+                HStack(spacing: 6) {
+                    ProgressView().scaleEffect(0.8)
+                    Text("جارٍ رفع المرفق…")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.muted)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 14)
+            }
             HStack(spacing: 8) {
-                // منشن الذكاء بنقرة — أسهل من كتابته
                 Button {
                     if !draft.contains("@الذكاء") { draft = "@الذكاء " + draft }
                 } label: {
@@ -86,6 +135,21 @@ struct CaseStreamView: View {
                         .foregroundStyle(draft.contains("@الذكاء") ? Theme.gold : Theme.muted)
                 }
                 .buttonStyle(.plain)
+
+                PhotosPicker(selection: $photoItem, matching: .images) {
+                    Image(systemName: "photo")
+                        .font(.system(size: 15))
+                        .foregroundStyle(Theme.muted)
+                }
+                .disabled(uploading)
+
+                Button { showFilePicker = true } label: {
+                    Image(systemName: "paperclip")
+                        .font(.system(size: 15))
+                        .foregroundStyle(Theme.muted)
+                }
+                .buttonStyle(.plain)
+                .disabled(uploading)
 
                 TextField("اكتب رسالة…", text: $draft, axis: .vertical)
                     .font(.system(size: 14))
@@ -129,8 +193,6 @@ struct CaseStreamView: View {
                 try await sb.postMessage(caseId: caseId, body: body)
                 draft = ""
                 await load()
-                // ردّ الذكاء/إعلان المهمة يصل بعد ثوانٍ عبر الخادم — جلبتان
-                // مؤجّلتان تلتقطانه بلا Realtime
                 Task {
                     try? await Task.sleep(for: .seconds(5))
                     await load()
@@ -144,6 +206,44 @@ struct CaseStreamView: View {
         }
     }
 
+    // MARK: - المرفقات
+
+    private func uploadFile(url: URL) async {
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        guard let data = try? Data(contentsOf: url) else {
+            sendError = "تعذّرت قراءة الملف"
+            return
+        }
+        let mime = url.pathExtension.lowercased() == "pdf" ? "application/pdf" : "application/octet-stream"
+        await uploadData(data, fileName: url.lastPathComponent, mime: mime)
+    }
+
+    private func uploadData(_ data: Data, fileName: String, mime: String) async {
+        guard data.count <= 15 * 1024 * 1024 else {
+            sendError = "الملف أكبر من ١٥ ميغابايت"
+            return
+        }
+        uploading = true
+        sendError = nil
+        do {
+            let docId = try await sb.uploadAttachment(
+                data: data, fileName: fileName, mime: mime, caseId: caseId
+            )
+            let caption = draft.trimmingCharacters(in: .whitespaces)
+            try await sb.postMessage(
+                caseId: caseId,
+                body: caption.isEmpty ? nil : caption,
+                documentId: docId
+            )
+            draft = ""
+            await load()
+        } catch {
+            sendError = error.localizedDescription
+        }
+        uploading = false
+    }
+
     private func load() async {
         error = nil
         do {
@@ -155,13 +255,120 @@ struct CaseStreamView: View {
     }
 }
 
+// MARK: - شريط التفاعلات تحت الفقاعة
+
+struct ReactionsBar: View {
+    let commentId: String
+    let reactions: [Reaction]
+    let onChange: () -> Void
+    @EnvironmentObject private var sb: SB
+
+    var body: some View {
+        if !reactions.isEmpty {
+            HStack(spacing: 5) {
+                ForEach(reactions, id: \.e) { r in
+                    Button {
+                        Task {
+                            try? await sb.toggleReaction(
+                                commentId: commentId, emoji: r.e, currentlyMine: r.me
+                            )
+                            onChange()
+                        }
+                    } label: {
+                        HStack(spacing: 3) {
+                            Text(r.e).font(.system(size: 12))
+                            Text("\(r.n)")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(r.me ? Theme.goldDark : Theme.muted)
+                        }
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(r.me ? Theme.goldPale : Theme.ivory)
+                        .clipShape(Capsule())
+                        .overlay(
+                            Capsule().stroke(r.me ? Theme.gold.opacity(0.5) : Theme.line, lineWidth: 1)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+}
+
+/// قائمة السياق المشتركة: تفاعل سريع + حفظ + (تعديل/حذف لرسالتي)
+struct MessageContextMenu: View {
+    let commentId: String
+    let messageBody: String?
+    let reactions: [Reaction]
+    let bookmarked: Bool
+    let mine: Bool
+    let onChange: () -> Void
+    let onEdit: (() -> Void)?
+    @EnvironmentObject private var sb: SB
+
+    var body: some View {
+        Group {
+            ForEach(QUICK_EMOJIS, id: \.self) { e in
+                let isMine = reactions.first(where: { $0.e == e })?.me ?? false
+                Button {
+                    Task {
+                        try? await sb.toggleReaction(commentId: commentId, emoji: e, currentlyMine: isMine)
+                        onChange()
+                    }
+                } label: {
+                    Label("\(e) تفاعل", systemImage: isMine ? "checkmark.circle.fill" : "face.smiling")
+                }
+            }
+
+            Divider()
+
+            Button {
+                Task {
+                    try? await sb.toggleBookmark(commentId: commentId, currentlyOn: bookmarked)
+                    onChange()
+                }
+            } label: {
+                Label(bookmarked ? "إزالة من المحفوظات" : "حفظ للرجوع إليها",
+                      systemImage: bookmarked ? "bookmark.slash" : "bookmark")
+            }
+
+            if let messageBody, !messageBody.isEmpty {
+                Button {
+                    UIPasteboard.general.string = messageBody
+                } label: {
+                    Label("نسخ النص", systemImage: "doc.on.doc")
+                }
+            }
+
+            if mine {
+                Divider()
+                if let onEdit {
+                    Button { onEdit() } label: {
+                        Label("تعديل", systemImage: "pencil")
+                    }
+                }
+                Button(role: .destructive) {
+                    Task {
+                        try? await sb.deleteMessage(id: commentId)
+                        onChange()
+                    }
+                } label: {
+                    Label("حذف", systemImage: "trash")
+                }
+            }
+        }
+    }
+}
+
 // MARK: - فقاعة في المجرى (جذر خيط)
 
 private struct StreamBubble: View {
     let msg: StreamMsg
-    let caseId: String
+    let caseId: String?
     let mine: Bool
     let onChange: () -> Void
+    let onEdit: () -> Void
 
     @State private var openThread = false
 
@@ -169,7 +376,6 @@ private struct StreamBubble: View {
     private var isSystem: Bool { msg.kind == "system" }
 
     var body: some View {
-        // إعلان النظام (مهمة أُنشئت): شريحة وسطية هادئة لا فقاعة
         if isSystem {
             Text(msg.body ?? "")
                 .font(.system(size: 11))
@@ -199,6 +405,11 @@ private struct StreamBubble: View {
                 Text(shortStamp(msg.created_at))
                     .font(.system(size: 10))
                     .foregroundStyle(Theme.muted.opacity(0.8))
+                if msg.edited_at != nil {
+                    Text("(معدّلة)")
+                        .font(.system(size: 9))
+                        .foregroundStyle(Theme.muted.opacity(0.7))
+                }
             }
 
             VStack(alignment: .leading, spacing: 8) {
@@ -210,24 +421,9 @@ private struct StreamBubble: View {
                 }
 
                 if let name = msg.document_name {
-                    HStack(spacing: 8) {
-                        Image(systemName: "doc.text.fill")
-                            .font(.system(size: 16))
-                            .foregroundStyle(Theme.goldDark)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(name)
-                                .font(.system(size: 13, weight: .medium))
-                                .foregroundStyle(Theme.navy)
-                                .lineLimit(1)
-                            Text("محفوظ في مستندات القضية")
-                                .font(.system(size: 10))
-                                .foregroundStyle(Theme.success)
-                        }
-                        Spacer(minLength: 0)
-                    }
+                    AttachmentChip(name: name, url: msg.document_url)
                 }
 
-                // شريط الخيط — نمط سلاك: العدد يفتح الردود المجمّعة
                 Divider().overlay(mine ? Theme.gold.opacity(0.35) : Theme.line)
                 Button {
                     openThread = true
@@ -262,6 +458,19 @@ private struct StreamBubble: View {
                 RoundedRectangle(cornerRadius: 14)
                     .stroke(mine ? .clear : (isAI ? Theme.gold.opacity(0.4) : Theme.line), lineWidth: 1)
             )
+            .contextMenu {
+                MessageContextMenu(
+                    commentId: msg.id,
+                    messageBody: msg.body,
+                    reactions: msg.reactions ?? [],
+                    bookmarked: msg.bookmarked ?? false,
+                    mine: mine,
+                    onChange: onChange,
+                    onEdit: mine ? onEdit : nil
+                )
+            }
+
+            ReactionsBar(commentId: msg.id, reactions: msg.reactions ?? [], onChange: onChange)
         }
         .navigationDestination(isPresented: $openThread) {
             ThreadView(root: msg, caseId: caseId, onChange: onChange)
@@ -277,30 +486,102 @@ private struct StreamBubble: View {
     }
 }
 
+/// شريحة مرفق — تفتح الملف
+struct AttachmentChip: View {
+    let name: String
+    let url: String?
+
+    var body: some View {
+        Button {
+            if let url, let u = URL(string: url) {
+                UIApplication.shared.open(u)
+            }
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "doc.text.fill")
+                    .font(.system(size: 16))
+                    .foregroundStyle(Theme.goldDark)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(name)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(Theme.navy)
+                        .lineLimit(1)
+                    Text("محفوظ في المستندات — اضغط للفتح")
+                        .font(.system(size: 10))
+                        .foregroundStyle(Theme.success)
+                }
+                Spacer(minLength: 0)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - ورقة التعديل
+
+private struct EditMessageSheet: View {
+    @Binding var draft: String
+    let onSave: (String) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 12) {
+                TextField("نص الرسالة", text: $draft, axis: .vertical)
+                    .font(.system(size: 15))
+                    .lineLimit(3...10)
+                    .padding(12)
+                    .background(Theme.ivory)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                Spacer()
+            }
+            .padding(16)
+            .background(Theme.card)
+            .navigationTitle("تعديل الرسالة")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("إلغاء") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("حفظ") {
+                        let t = draft.trimmingCharacters(in: .whitespaces)
+                        if !t.isEmpty { onSave(t) }
+                        dismiss()
+                    }
+                    .fontWeight(.semibold)
+                }
+            }
+        }
+        .presentationDetents([.medium])
+    }
+}
+
 // MARK: - داخل الخيط
 
 private struct ThreadView: View {
     let root: StreamMsg
-    let caseId: String
+    let caseId: String?
     let onChange: () -> Void
 
     @EnvironmentObject private var sb: SB
-    @State private var replies: [ReplyRow] = []
+    @State private var replies: [ThreadMsg] = []
     @State private var loaded = false
     @State private var error: String?
     @State private var draft = ""
     @State private var alsoToStream = false
     @State private var sending = false
     @State private var sendError: String?
+    @State private var editingReply: ThreadMsg?
+    @State private var editDraft = ""
 
     var body: some View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
-                    // السؤال الأصل — مميّز بشريط ذهبي
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(spacing: 5) {
-                            Text(root.author_name ?? "—")
+                            Text(root.kind == "ai" ? "الذكاء" : (root.author_name ?? "—"))
                                 .font(.system(size: 11, weight: .medium))
                                 .foregroundStyle(Theme.muted)
                             Text(shortStamp(root.created_at))
@@ -332,7 +613,6 @@ private struct ThreadView: View {
                             .foregroundStyle(Theme.muted)
                             .frame(maxWidth: .infinity)
 
-                        // الردود منزاحة بخط رأسي — يوضّح أنها تابعة للسؤال
                         VStack(alignment: .leading, spacing: 10) {
                             ForEach(replies) { r in
                                 replyBubble(r)
@@ -354,9 +634,18 @@ private struct ThreadView: View {
         .navigationTitle("خيط")
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
+        .sheet(item: $editingReply) { r in
+            EditMessageSheet(draft: $editDraft) { newBody in
+                Task {
+                    try? await sb.editMessage(id: r.id, body: newBody)
+                    editingReply = nil
+                    await load()
+                }
+            }
+        }
     }
 
-    private func replyBubble(_ r: ReplyRow) -> some View {
+    private func replyBubble(_ r: ThreadMsg) -> some View {
         let mine = r.author_id == sb.member?.id
         let isAI = r.kind == "ai"
         let isSystem = r.kind == "system"
@@ -372,28 +661,47 @@ private struct ThreadView: View {
                     .clipShape(Capsule())
                     .frame(maxWidth: .infinity)
             } else {
-            HStack(spacing: 6) {
-                if isAI {
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 11))
-                        .foregroundStyle(Theme.goldDark)
-                        .frame(width: 20, height: 20)
-                        .background(Theme.goldPale)
-                        .clipShape(Circle())
-                } else {
-                    AvatarCircle(member: r.author, size: 20)
+                HStack(spacing: 6) {
+                    if isAI {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 11))
+                            .foregroundStyle(Theme.goldDark)
+                            .frame(width: 20, height: 20)
+                            .background(Theme.goldPale)
+                            .clipShape(Circle())
+                    } else {
+                        AvatarCircle(
+                            member: TeamMember(
+                                id: r.author_id ?? "", name: r.author_name,
+                                short_name: r.author_name, is_director: nil,
+                                avatar_initial: r.avatar_initial, avatar_color: r.avatar_color
+                            ),
+                            size: 20
+                        )
+                    }
+                    Text(isAI ? "الذكاء" : (r.author_name ?? "—"))
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(isAI ? Theme.goldDark : Theme.muted)
+                    Text(shortStamp(r.created_at))
+                        .font(.system(size: 10))
+                        .foregroundStyle(Theme.muted.opacity(0.8))
+                    if r.edited_at != nil {
+                        Text("(معدّلة)")
+                            .font(.system(size: 9))
+                            .foregroundStyle(Theme.muted.opacity(0.7))
+                    }
                 }
-                Text(isAI ? "الذكاء" : (r.author?.short_name ?? r.author?.name ?? "—"))
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(isAI ? Theme.goldDark : Theme.muted)
-                Text(shortStamp(r.created_at))
-                    .font(.system(size: 10))
-                    .foregroundStyle(Theme.muted.opacity(0.8))
-            }
-            Text(r.body ?? "—")
-                .font(.system(size: 14))
-                .foregroundStyle(Theme.navy)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                VStack(alignment: .leading, spacing: 6) {
+                    if let b = r.body, !b.isEmpty {
+                        Text(b)
+                            .font(.system(size: 14))
+                            .foregroundStyle(Theme.navy)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    if let name = r.document_name {
+                        AttachmentChip(name: name, url: r.document_url)
+                    }
+                }
                 .padding(10)
                 .background(mine ? Theme.gold.opacity(0.16) : (isAI ? Theme.goldPale : Theme.card))
                 .clipShape(RoundedRectangle(cornerRadius: 12))
@@ -401,6 +709,21 @@ private struct ThreadView: View {
                     RoundedRectangle(cornerRadius: 12)
                         .stroke(mine ? .clear : (isAI ? Theme.gold.opacity(0.4) : Theme.line), lineWidth: 1)
                 )
+                .contextMenu {
+                    MessageContextMenu(
+                        commentId: r.id,
+                        messageBody: r.body,
+                        reactions: r.reactions ?? [],
+                        bookmarked: r.bookmarked ?? false,
+                        mine: mine,
+                        onChange: { Task { await load() } },
+                        onEdit: mine ? { editingReply = r; editDraft = r.body ?? "" } : nil
+                    )
+                }
+
+                ReactionsBar(commentId: r.id, reactions: r.reactions ?? []) {
+                    Task { await load() }
+                }
             }
         }
     }
@@ -442,7 +765,6 @@ private struct ThreadView: View {
             }
             .padding(.horizontal, 12)
 
-            // علاج عيب سلاك المعروف: الردود تُدفن في الخيوط فلا يراها من ليس فيه
             Button {
                 alsoToStream.toggle()
             } label: {
@@ -450,7 +772,7 @@ private struct ThreadView: View {
                     Image(systemName: alsoToStream ? "checkmark.square.fill" : "square")
                         .font(.system(size: 13))
                         .foregroundStyle(alsoToStream ? Theme.goldDark : Theme.muted)
-                    Text("أرسل أيضاً إلى مجرى القضية")
+                    Text("أرسل أيضاً إلى المجرى")
                         .font(.system(size: 12))
                         .foregroundStyle(Theme.muted)
                     Spacer()
@@ -480,7 +802,7 @@ private struct ThreadView: View {
                 draft = ""
                 alsoToStream = false
                 await load()
-                onChange()   // المجرى يعيد الجلب ليحدّث عدّاد الردود
+                onChange()
                 Task {
                     try? await Task.sleep(for: .seconds(5))
                     await load()
@@ -495,7 +817,7 @@ private struct ThreadView: View {
     private func load() async {
         error = nil
         do {
-            replies = try await sb.replies(rootId: root.id)
+            replies = try await sb.thread(rootId: root.id)
             loaded = true
         } catch {
             self.error = error.localizedDescription

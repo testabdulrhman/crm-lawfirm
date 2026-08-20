@@ -57,12 +57,16 @@ struct DiscussionsView: View {
     @State private var error: String?
     @State private var search = ""
 
+    /// العامة مثبّتة أولاً دائماً — ثم البقية بالأحدث (ترتيب الدالة)
     private var filtered: [DiscussionRow] {
         let q = search.trimmingCharacters(in: .whitespaces)
-        guard !q.isEmpty else { return rows }
-        return rows.filter {
+        let base = q.isEmpty ? rows : rows.filter {
             ($0.case_title ?? "").localizedCaseInsensitiveContains(q)
                 || ($0.last_body ?? "").localizedCaseInsensitiveContains(q)
+        }
+        return base.sorted { a, b in
+            if a.isGeneral != b.isGeneral { return a.isGeneral }
+            return false // استقرار: يبقي ترتيب الدالة
         }
     }
 
@@ -85,7 +89,10 @@ struct DiscussionsView: View {
                 } else {
                     List(filtered) { row in
                         NavigationLink {
-                            CaseStreamView(caseId: row.case_id, title: row.case_title ?? "قضية")
+                            CaseStreamView(
+                                caseId: row.case_id,
+                                title: row.case_title ?? (row.isGeneral ? "عام — المكتب" : "قضية")
+                            )
                         } label: {
                             DiscussionRowView(row: row)
                         }
@@ -99,6 +106,16 @@ struct DiscussionsView: View {
             .background(Theme.ivory.ignoresSafeArea())
             .navigationTitle("النقاشات")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    NavigationLink {
+                        BookmarksView()
+                    } label: {
+                        Image(systemName: "bookmark")
+                            .foregroundStyle(Theme.goldDark)
+                    }
+                }
+            }
         }
         .task { await load() }
     }
@@ -119,11 +136,11 @@ private struct DiscussionRowView: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            Image(systemName: "building.columns.fill")
+            Image(systemName: row.isGeneral ? "megaphone.fill" : "building.columns.fill")
                 .font(.system(size: 15))
-                .foregroundStyle(Theme.goldDark)
+                .foregroundStyle(row.isGeneral ? Theme.gold : Theme.goldDark)
                 .frame(width: 38, height: 38)
-                .background(Theme.goldPale)
+                .background(row.isGeneral ? Theme.navy : Theme.goldPale)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
 
             VStack(alignment: .leading, spacing: 3) {

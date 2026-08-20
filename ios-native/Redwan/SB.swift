@@ -155,13 +155,46 @@ final class SB: ObservableObject {
         )
     }
 
-    /// إدراج-أو-تحديث على مفتاح موجود (Prefer: resolution=merge-duplicates).
-    /// يخدم case_reads: الصف قد يوجد أو لا، ومفتاحه مركّب.
-    func rawUpsert(table: String, body: Data) async throws -> Data {
-        try await raw(
-            path: "rest/v1/\(table)", method: "POST", query: [],
+    /// إدراج-أو-تحديث. ⚠️ on_conflict إلزامي: بدونه يستنتج PostgREST المفتاح
+    /// الأساسي (id عشوائي جديد) فلا يتصادم أبداً ويصطدم الإدراج بفهرس الفرادة
+    /// — كان يجعل markRead يفشل بصمت بعد أول قراءة لكل قضية.
+    func upsert(table: String, values: [String: Any], onConflict: String) async throws {
+        let body = try JSONSerialization.data(withJSONObject: values)
+        _ = try await raw(
+            path: "rest/v1/\(table)", method: "POST",
+            query: [("on_conflict", onConflict)],
             body: body, prefer: "resolution=merge-duplicates,return=minimal"
         )
+    }
+
+    func delete(_ table: String, query: [(String, String)]) async throws {
+        _ = try await raw(
+            path: "rest/v1/\(table)", method: "DELETE", query: query,
+            prefer: "return=minimal"
+        )
+    }
+
+    /// رفع ملف إلى Supabase Storage — يُرجع الرابط العام.
+    /// المسار ASCII فقط: مفاتيح التخزين ترفض الأسماء العربية (درس مُسجَّل)،
+    /// والاسم العربي يُحفظ في documents.name.
+    func storageUpload(bucket: String, path: String, data: Data, mime: String) async throws -> String {
+        guard let s = session else {
+            throw SBError(message: "انتهت الجلسة — سجّل الدخول من جديد")
+        }
+        var req = URLRequest(url: baseURL.appendingPathComponent("storage/v1/object/\(bucket)/\(path)"))
+        req.httpMethod = "POST"
+        req.setValue(anonKey, forHTTPHeaderField: "apikey")
+        req.setValue("Bearer \(s.accessToken)", forHTTPHeaderField: "Authorization")
+        req.setValue(mime, forHTTPHeaderField: "Content-Type")
+        req.httpBody = data
+        let (respData, resp) = try await URLSession.shared.data(for: req)
+        let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+        guard (200..<300).contains(code) else {
+            struct E: Codable { let message: String? }
+            let m = (try? JSONDecoder().decode(E.self, from: respData))?.message
+            throw SBError(message: m ?? "فشل رفع الملف (\(code))")
+        }
+        return baseURL.appendingPathComponent("storage/v1/object/public/\(bucket)/\(path)").absoluteString
     }
 
     func rpc<T: Decodable>(_ fn: String, params: [String: Any]) async throws -> T {
@@ -170,7 +203,7 @@ final class SB: ObservableObject {
         return try JSONDecoder().decode(T.self, from: data)
     }
 
-    fileprivate func raw(
+    func raw(
         path: String,
         method: String,
         query: [(String, String)],

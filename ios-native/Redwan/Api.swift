@@ -167,45 +167,39 @@ extension SB {
     }
 }
 
-// ===== نقاش القضايا بالخيوط =====
+// ===== نقاش القضايا بالخيوط — v2: عامة + تفاعلات + محفوظات + مرفقات =====
 
 extension SB {
-    /// قائمة تبويب «النقاشات» — مرتّبة بالأحدث مع عدّاد غير المقروء
+    /// قائمة تبويب «النقاشات» — العامة تأتي ضمنها (case_id فارغ)
     func discussions() async throws -> [DiscussionRow] {
         try await rpc("case_discussions", params: [:])
     }
 
-    /// مجرى القضية: الجذور فقط (والردود المعلَّمة also_to_stream)
-    func stream(caseId: String) async throws -> [StreamMsg] {
-        try await rpc("case_stream", params: ["p_case_id": caseId])
+    /// مجرى قناة: قضية، أو العامة حين caseId فارغ
+    func stream(caseId: String?) async throws -> [StreamMsg] {
+        try await rpc("case_stream", params: ["p_case_id": caseId ?? NSNull()])
     }
 
-    /// ردود خيط واحد — بترتيب زمني صاعد
-    func replies(rootId: String) async throws -> [ReplyRow] {
-        try await get("case_comments", query: [
-            ("select", "id,author_id,body,kind,document_id,created_at,author:team_members(id,name,short_name,is_director,avatar_initial,avatar_color)"),
-            ("parent_id", "eq.\(rootId)"),
-            ("deleted_at", "is.null"),
-            ("order", "created_at.asc"),
-        ])
+    /// ردود خيط واحد — مخصّبة بالتفاعلات والمحفوظات
+    func thread(rootId: String) async throws -> [ThreadMsg] {
+        try await rpc("case_thread", params: ["p_root": rootId])
     }
 
-    /// إرسال رسالة: جذر في المجرى (parentId = nil) أو ردّ في خيط.
-    /// alsoToStream يعالج عيب سلاك: الردّ المعلَّم يظهر في المجرى أيضاً.
+    /// إرسال رسالة/مرفق: جذر أو ردّ، في قضية أو في العامة
     func postMessage(
-        caseId: String,
-        body: String,
+        caseId: String?,
+        body: String?,
+        documentId: String? = nil,
         parentId: String? = nil,
         alsoToStream: Bool = false
     ) async throws {
         guard let me = member?.id else {
             throw SBError(message: "لم يُحمَّل ملفك بعد — اسحب للتحديث ثم أعد المحاولة")
         }
-        var values: [String: Any] = [
-            "case_id": caseId,
-            "author_id": me,
-            "body": body,
-        ]
+        var values: [String: Any] = ["author_id": me]
+        values["case_id"] = caseId ?? NSNull()
+        if let body, !body.isEmpty { values["body"] = body }
+        if let documentId { values["document_id"] = documentId }
         if let parentId {
             values["parent_id"] = parentId
             values["also_to_stream"] = alsoToStream
@@ -213,15 +207,108 @@ extension SB {
         try await insertVoid("case_comments", values: values)
     }
 
-    /// تعليم القضية مقروءة — يصفّر عدّادها في القائمة.
-    /// upsert لأن الصف قد يوجد أو لا (مفتاح مركّب case_id+member_id).
-    func markRead(caseId: String) async throws {
-        guard let me = member?.id else { return }
-        let body = try JSONSerialization.data(withJSONObject: [
-            "case_id": caseId,
-            "member_id": me,
-            "read_at": ISO8601DateFormatter().string(from: Date()),
+    /// رفع مرفق (صورة/ملف) وتسجيله مستنداً — للقضية أو للعامة.
+    /// الرفع قبل postMessage: المستند أولاً ثم الرسالة التي تشير إليه.
+    func uploadAttachment(
+        data: Data, fileName: String, mime: String, caseId: String?
+    ) async throws -> String {
+        let ext = (fileName as NSString).pathExtension.lowercased()
+        let safeExt = ext.isEmpty ? "bin" : ext.filter { $0.isASCII }
+        let folder = caseId.map { "case_documents/\($0)" } ?? "discussion_general"
+        let path = "\(folder)/\(Int(Date().timeIntervalSince1970))_att.\(safeExt)"
+
+        let url = try await storageUpload(
+            bucket: "documents", path: path, data: data, mime: mime
+        )
+
+        struct DocRow: Codable { let id: String }
+        let inserted = try await rawInsertReturning("documents", values: [
+            "case_id": caseId ?? NSNull(),
+            "name": fileName,
+            "file_url": url,
+            "file_path": path,
+            "file_type": mime,
+            "file_size": data.count,
+            "uploaded_by_name": member?.name ?? NSNull(),
+            "description": "أُرسل في النقاش",
         ])
-        _ = try await rawUpsert(table: "case_reads", body: body)
+        let rows = try JSONDecoder().decode([DocRow].self, from: inserted)
+        guard let doc = rows.first else {
+            throw SBError(message: "رُفع الملف لكن تعذّر تسجيله مستنداً")
+        }
+        return doc.id
+    }
+
+    func rawInsertReturning(_ table: String, values: [String: Any]) async throws -> Data {
+        let body = try JSONSerialization.data(withJSONObject: values)
+        return try await raw(
+            path: "rest/v1/\(table)", method: "POST", query: [],
+            body: body, prefer: "return=representation"
+        )
+    }
+
+    /// تعليم مقروءة — upsert على (case_id, member_id)
+    func markRead(caseId: String?) async throws {
+        guard let me = member?.id else { return }
+        try await upsert(
+            table: "case_reads",
+            values: [
+                "case_id": caseId ?? NSNull(),
+                "member_id": me,
+                "read_at": ISO8601DateFormatter().string(from: Date()),
+            ],
+            onConflict: "case_id,member_id"
+        )
+    }
+
+    // ===== التفاعل والحفظ والتحرير =====
+
+    func toggleReaction(commentId: String, emoji: String, currentlyMine: Bool) async throws {
+        guard let me = member?.id else { return }
+        if currentlyMine {
+            try await delete("case_comment_reactions", query: [
+                ("comment_id", "eq.\(commentId)"),
+                ("member_id", "eq.\(me)"),
+                ("emoji", "eq.\(emoji)"),
+            ])
+        } else {
+            try await insertVoid("case_comment_reactions", values: [
+                "comment_id": commentId, "member_id": me, "emoji": emoji,
+            ])
+        }
+    }
+
+    func toggleBookmark(commentId: String, currentlyOn: Bool) async throws {
+        guard let me = member?.id else { return }
+        if currentlyOn {
+            try await delete("case_comment_bookmarks", query: [
+                ("comment_id", "eq.\(commentId)"),
+                ("member_id", "eq.\(me)"),
+            ])
+        } else {
+            try await insertVoid("case_comment_bookmarks", values: [
+                "comment_id": commentId, "member_id": me,
+            ])
+        }
+    }
+
+    func bookmarks() async throws -> [BookmarkRow] {
+        try await rpc("my_bookmarks", params: [:])
+    }
+
+    /// تعديل رسالتي — RLS يمنع تعديل رسائل الغير أصلاً
+    func editMessage(id: String, body: String) async throws {
+        try await patch("case_comments", query: [("id", "eq.\(id)")], values: [
+            "body": body,
+            "edited_at": ISO8601DateFormatter().string(from: Date()),
+        ])
+    }
+
+    /// حذف ناعم لرسالتي
+    func deleteMessage(id: String) async throws {
+        try await patch("case_comments", query: [("id", "eq.\(id)")], values: [
+            "deleted_at": ISO8601DateFormatter().string(from: Date()),
+            "deleted_by": member?.name ?? "",
+        ])
     }
 }
