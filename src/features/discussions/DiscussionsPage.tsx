@@ -946,3 +946,44 @@ function BookmarksDialog({
     </Dialog>
   )
 }
+
+/* ===================== لوحة نقاش مضمّنة (تبويب داخل الملف) ===================== */
+
+/**
+ * نقاش ملفٍ واحد للتضمين داخل صفحته (تبويب «النقاش» في القضية) —
+ * نفس المجرى والخيط، دون قائمة القنوات.
+ */
+export function CaseDiscussionPanel({
+  caseId,
+  title,
+}: {
+  caseId: string
+  title: string
+}) {
+  const [threadRoot, setThreadRoot] = useState<StreamMsg | null>(null)
+  const markRead = useMarkRead()
+
+  useEffect(() => {
+    markRead.mutate(caseId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [caseId])
+
+  return (
+    <div
+      className={cn(
+        'grid h-[calc(100vh-14rem)] min-h-[420px] gap-3',
+        threadRoot ? 'grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px]' : 'grid-cols-1'
+      )}
+    >
+      <StreamPane
+        caseId={caseId}
+        title={title}
+        officeNum={null}
+        openThread={setThreadRoot}
+      />
+      {threadRoot && (
+        <ThreadPane root={threadRoot} caseId={caseId} onClose={() => setThreadRoot(null)} />
+      )}
+    </div>
+  )
+}

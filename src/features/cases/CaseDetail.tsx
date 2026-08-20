@@ -8,6 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { QueryErrorState } from '@/components/QueryErrorState'
 import { Ltr } from '@/components/Ltr'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { CaseDiscussionPanel } from '@/features/discussions/DiscussionsPage'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import {
   Select,
@@ -49,6 +50,7 @@ import type { Case, CaseStatus } from '@/types/db'
 // ترتيب التبويبات المعتمد
 const TABS = [
   { value: 'overview', label: 'نظرة عامة' },
+  { value: 'discussion', label: 'النقاش' },
   { value: 'study', label: 'دراسة القضية' },
   { value: 'project', label: 'بطاقة المشروع' },
   { value: 'parties', label: 'الأطراف' },
@@ -227,6 +229,9 @@ export function CaseDetail({ id }: { id: string }) {
 
         <TabsContent value="overview">
           <OverviewTab caseData={c} />
+        </TabsContent>
+        <TabsContent value="discussion">
+          <CaseDiscussionPanel caseId={c.id} title={c.title ?? 'القضية'} />
         </TabsContent>
         <TabsContent value="study">
           <StudyTab caseId={c.id} />
