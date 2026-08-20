@@ -28,7 +28,6 @@ import { CaseDetail } from '@/features/cases/CaseDetail'
 import CaseNewPage from '@/features/cases/CaseNewPage'
 import { CalendarPage } from '@/features/calendar/CalendarPage'
 import { MattersPage } from '@/features/matters/MattersPage'
-import { FeedPage } from '@/features/feed/FeedPage'
 import { DiscussionsPage } from '@/features/discussions/DiscussionsPage'
 import { SessionsPage } from '@/features/sessions/SessionsPage'
 import { POAsPage } from '@/features/poa/POAsPage'
@@ -60,7 +59,6 @@ function ProtectedRoutes() {
         {/* قبل /cases/:id ضرورةً — وإلا فُهمت «new» معرّف قضية */}
         <Route path="/calendar" component={CalendarPage} />
         <Route path="/matters" component={MattersPage} />
-        <Route path="/feed" component={FeedPage} />
         <Route path="/discussions" component={DiscussionsPage} />
         <Route path="/cases/new" component={CaseNewPage} />
         <Route path="/cases/:id">

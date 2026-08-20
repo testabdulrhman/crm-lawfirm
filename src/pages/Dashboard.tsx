@@ -36,6 +36,7 @@ import { fmtNumber, fmtDatePref, fmtTime, daysLabel, arPlural, todayISO } from '
 import { Ltr } from '@/components/Ltr'
 import { taskPriorityBadge, taskPriorityLabel } from '@/lib/caseLabels'
 import { typeLabel as requestTypeLabel } from '@/features/requests/labels'
+import { FeedContent } from '@/features/feed/FeedPage'
 import {
   useDashboardOverview,
   useCompleteTask,
@@ -78,10 +79,12 @@ export default function Dashboard() {
   const isDirector = useIsDirector()
   const [, navigate] = useLocation()
 
-  // النطاق: «متطلباتي» افتراضياً؛ «المكتب» للمدير فقط — يدوم خلال الجلسة
-  const [scope, setScope] = usePageState<DashboardScope>('dashboard.scope', 'mine')
+  // تبويبات نمط كليو: لوحتي · لوحة المكتب (للمدير) · آخر النشاط
+  const [tab, setTab] = usePageState<'mine' | 'all' | 'feed'>('dashboard.tab', 'mine')
+  const scope: DashboardScope = tab === 'all' ? 'all' : 'mine'
   const effectiveScope: DashboardScope = isDirector ? scope : 'mine'
   const isAll = effectiveScope === 'all'
+  const isFeed = tab === 'feed'
 
   const { data, isLoading, isFetching, refetch } =
     useDashboardOverview(effectiveScope)
@@ -108,20 +111,25 @@ export default function Dashboard() {
         </div>
 
         <div className="flex items-center gap-2">
-          {isDirector && (
-            <div className="inline-flex rounded-full bg-muted p-1 text-sm">
+          <div className="inline-flex rounded-full bg-muted p-1 text-sm">
+            <ScopeBtn
+              active={tab === 'mine'}
+              onClick={() => setTab('mine')}
+              label="لوحتي"
+            />
+            {isDirector && (
               <ScopeBtn
-                active={scope === 'mine'}
-                onClick={() => setScope('mine')}
-                label="لوحتي"
-              />
-              <ScopeBtn
-                active={scope === 'all'}
-                onClick={() => setScope('all')}
+                active={tab === 'all'}
+                onClick={() => setTab('all')}
                 label="لوحة المكتب"
               />
-            </div>
-          )}
+            )}
+            <ScopeBtn
+              active={tab === 'feed'}
+              onClick={() => setTab('feed')}
+              label="آخر النشاط"
+            />
+          </div>
           <Button
             variant="ghost"
             size="sm"
@@ -135,6 +143,10 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {isFeed ? (
+        <FeedContent />
+      ) : (
+        <>
       {/* ===== شريط المؤشّرات — الأرقام أولاً ===== */}
       {isLoading || !s ? (
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -320,6 +332,8 @@ export default function Dashboard() {
           </>
         )}
       </div>
+        </>
+      )}
     </div>
   )
 }

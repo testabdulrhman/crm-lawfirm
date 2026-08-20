@@ -118,7 +118,7 @@ function dayLabel(key: string): string {
   return fmtDatePref(key)
 }
 
-export function FeedPage() {
+export function FeedContent() {
   const [, navigate] = useLocation()
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['firm_feed'],
@@ -142,14 +142,7 @@ export function FeedPage() {
   }, [data])
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5">
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight text-foreground">آخر النشاط</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          من فعل ماذا ومتى — عبر المكتب كله: الويب والتطبيق والذكاء
-        </p>
-      </div>
-
+    <div className="space-y-5">
       {error ? (
         <QueryErrorState error={error} onRetry={() => refetch()} />
       ) : isLoading ? (
