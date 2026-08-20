@@ -11,11 +11,10 @@ import {
   Settings,
   Scale,
   FileSignature,
-  BookOpen,
-  Landmark,
   CalendarClock,
   CalendarDays,
   CalendarRange,
+  FolderOpen,
   Send,
   BarChart3,
   LogOut,
@@ -61,12 +60,12 @@ const navSections: { title?: string; items: NavItem[] }[] = [
     title: 'الأعمال',
     items: [
       { label: 'العقود', href: '/engagements', icon: Handshake },
-      { label: 'القضايا', href: '/cases', icon: Scale },
+      // «الملفات» يوحّد القضايا والاستشارات واللوائح والتوثيق العقاري
+      // (نموذج Matter — قرار 2026-08-21). المسارات القديمة تعمل للتفاصيل.
+      { label: 'الملفات', href: '/matters', icon: FolderOpen },
       { label: 'المهام', href: '/tasks', icon: ListTodo, badge: 'my_open_tasks' },
       { label: 'الجلسات', href: '/sessions', icon: CalendarDays },
       { label: 'الوكالات', href: '/poa', icon: FileSignature, badge: 'expiring_poas' },
-      { label: 'الاستشارات واللوائح', href: '/legal-services', icon: BookOpen },
-      { label: 'التوثيق العقاري', href: '/property', icon: Landmark },
       {
         label: 'المواعيد',
         href: '/appointments',
