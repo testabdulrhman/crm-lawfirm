@@ -9,8 +9,13 @@ import { errMessage } from '@/lib/errors'
 const LIST_KEY = ['cases'] as const
 
 // الـ join المختصر للموكّل والمسؤول
+// ⚠️ assignee يسمّي القيد صراحةً دفاعاً: PostgREST يعتبر أي جدول مفتاحه
+//    الأساسي مركّبٌ من مفتاحين أجنبيين **جدولَ وصل**، فيصير بين cases و
+//    team_members مساران ويفشل الاستعلام كله بـPGRST201 «تعذّر تحميل القضايا».
+//    حدث فعلاً عند إضافة case_reads (2026-08-21) وأُصلح جذرياً بمفتاح بديل
+//    له؛ والتسمية هنا تبقى حصانةً من أي جدول وصل يُضاف مستقبلاً.
 const SELECT =
-  '*, contact:contacts(id,name,phone), assignee:team_members(id,name,short_name), engagement:engagements(id,title,engagement_number)'
+  '*, contact:contacts(id,name,phone), assignee:team_members!cases_assignee_id_fkey(id,name,short_name), engagement:engagements(id,title,engagement_number)'
 
 function errToast(title: string) {
   return (e: unknown) =>
