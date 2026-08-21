@@ -39,6 +39,7 @@ import { Button } from '@/components/ui/button'
 import { QueryErrorState } from '@/components/QueryErrorState'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import {
   Table,
   TableBody,
@@ -90,6 +91,9 @@ export function ReportsPage() {
     refetch: refetchAssignee,
   } = useReportsByAssignee()
   const [, navigate] = useLocation()
+  const isDirector = useIsDirector()
+  // التبويب المفتوح يدوم للرجوع والتحديث
+  const [tab, setTab] = usePageState('reports:tab', 'overview')
 
   // انتقال ببطاقة التنبيه إلى الصفحة المعنية مع تهيئة فلاترها مسبقاً
   const openExpiringPoas = () => {
@@ -172,6 +176,18 @@ export function ReportsPage() {
         </div>
       )}
 
+      {/* التبويبات: أرقام عامة / رسوم / أداء الفريق / الاستخدام (للمدير) */}
+      <Tabs value={tab} onValueChange={setTab} dir="rtl">
+        <div className="overflow-x-auto">
+          <TabsList className="inline-flex w-max justify-start">
+            <TabsTrigger value="overview">نظرة عامة</TabsTrigger>
+            <TabsTrigger value="charts">الرسوم البيانية</TabsTrigger>
+            <TabsTrigger value="team">أداء الفريق</TabsTrigger>
+            {isDirector && <TabsTrigger value="usage">الاستخدام</TabsTrigger>}
+          </TabsList>
+        </div>
+
+        <TabsContent value="overview" className="mt-4">
       {/* بطاقات KPI */}
       {isError ? null : isLoading || !data ? (
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-4">
@@ -192,7 +208,9 @@ export function ReportsPage() {
           <StatCard label="طلبات قيد الدراسة" value={data.pending_requests} icon={Inbox} tone="amber" />
         </div>
       )}
+        </TabsContent>
 
+        <TabsContent value="charts" className="mt-4">
       {/* الرسوم */}
       {!isError && (
       <div className="grid gap-4 lg:grid-cols-2">
@@ -246,7 +264,9 @@ export function ReportsPage() {
         </ChartCard>
       </div>
       )}
+        </TabsContent>
 
+        <TabsContent value="team" className="mt-4">
       {/* جدول أداء المسؤولين */}
       <Card>
         <CardHeader>
@@ -295,9 +315,15 @@ export function ReportsPage() {
           )}
         </CardContent>
       </Card>
+        </TabsContent>
 
-      {/* استخدام التطبيق (للمدير) */}
-      <UsageSection />
+        {isDirector && (
+          <TabsContent value="usage" className="mt-4">
+            {/* استخدام التطبيق (للمدير) */}
+            <UsageSection />
+          </TabsContent>
+        )}
+      </Tabs>
     </div>
   )
 }
@@ -394,8 +420,8 @@ function UsageSection() {
                       name === 'webMinutes' ? 'الويب' : 'التطبيق',
                     ]}
                   />
-                  <Bar dataKey="webMinutes" stackId="p" fill="#C9A84C" />
-                  <Bar dataKey="iosMinutes" stackId="p" fill="#111D3A" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="webMinutes" stackId="p" fill="#C9A84C" isAnimationActive={false} />
+                  <Bar dataKey="iosMinutes" stackId="p" fill="#111D3A" radius={[6, 6, 0, 0]} isAnimationActive={false} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -730,6 +756,8 @@ function DonutChart({
             innerRadius={50}
             outerRadius={85}
             paddingAngle={2}
+            // داخل تبويب، انقطاع انيميشن recharts يترك القطاع متجمداً ناقصاً
+            isAnimationActive={false}
           >
             {filtered.map((_, i) => (
               <Cell key={i} fill={colors[i % colors.length]} />
@@ -771,7 +799,7 @@ function MonthBarChart({
           <Tooltip            contentStyle={{ direction: 'rtl', fontSize: 12, borderRadius: 8 }}
             labelStyle={{ direction: 'ltr' }}
           />
-          <Bar dataKey="value" fill="#C9A84C" radius={[4, 4, 0, 0]} name="قضايا" />
+          <Bar dataKey="value" fill="#C9A84C" radius={[4, 4, 0, 0]} name="قضايا" isAnimationActive={false} />
         </BarChart>
       </ResponsiveContainer>
     </div>
