@@ -1,4 +1,4 @@
-// الرسائل الواردة — المسجّلة تلقائياً من اختصار الآيفون (ناجز وغيرها)
+// صفحة «الرسائل» بتبويبين: الوارد (اختصار الآيفون) والصادر (رسائل النظام).
 // الربط بالقضية: يدوي دائم (case_id) أو تلقائي بمطابقة أرقام المحكمة في النص
 import { useMemo, useState } from 'react'
 import { useLocation } from 'wouter'
@@ -9,6 +9,7 @@ import {
   MessageSquare,
   Scale,
   Search,
+  Send,
   X,
 } from 'lucide-react'
 
@@ -33,6 +34,7 @@ import {
 import { CasePicker } from '@/components/CasePicker'
 import { QueryErrorState } from '@/components/QueryErrorState'
 import { Ltr } from '@/components/Ltr'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { fmtNumber, fmtDateTime } from '@/lib/format'
 import {
   useIncomingSms,
@@ -44,6 +46,15 @@ import {
   type IncomingSms,
   type SmsCategory,
 } from '@/hooks/useIncomingSms'
+import {
+  useOutgoingSms,
+  outgoingTypeOf,
+  outgoingTypeLabel,
+  maskOtp,
+  OUTGOING_TYPES,
+  type OutgoingSms,
+  type OutgoingType,
+} from '@/hooks/useOutgoingSms'
 import { useCases } from '@/hooks/useCases'
 import { usePageState } from '@/hooks/usePageState'
 import type { Case } from '@/types/db'
@@ -52,6 +63,32 @@ import type { Case } from '@/types/db'
 type Tab = 'important' | SmsCategory | 'all'
 
 export function IncomingMessagesPage() {
+  // الوارد افتراضياً — إشعارات الجرس توصل هنا لرسالة واردة مهمة
+  const [tab, setTab] = usePageState('inbox:main-tab', 'incoming')
+
+  return (
+    // استثناء مقصود عن max-w-6xl: قوائم الرسائل نصية طويلة تُقرأ أفضل بعرض أضيق
+    <div className="mx-auto max-w-4xl space-y-4">
+      <h2 className="text-2xl font-bold tracking-tight text-foreground">
+        الرسائل
+      </h2>
+      <Tabs value={tab} onValueChange={setTab} dir="rtl">
+        <TabsList>
+          <TabsTrigger value="incoming">الوارد</TabsTrigger>
+          <TabsTrigger value="outgoing">الصادر</TabsTrigger>
+        </TabsList>
+        <TabsContent value="incoming" className="mt-4">
+          <IncomingTab />
+        </TabsContent>
+        <TabsContent value="outgoing" className="mt-4">
+          <OutgoingTab />
+        </TabsContent>
+      </Tabs>
+    </div>
+  )
+}
+
+function IncomingTab() {
   const { data, isLoading, isError, error, refetch } = useIncomingSms()
   const { data: cases } = useCases()
   const markReadM = useMarkSmsRead()
@@ -97,16 +134,12 @@ export function IncomingMessagesPage() {
   }, [data, search, tab])
 
   return (
-    // استثناء مقصود عن max-w-6xl: قوائم الرسائل نصية طويلة تُقرأ أفضل بعرض أضيق
-    <div className="mx-auto max-w-4xl space-y-6">
+    <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight text-foreground">
-            الرسائل الواردة{' '}
-            <span className="text-base font-normal text-muted-foreground">
-              ({fmtNumber(data?.length ?? 0)})
-            </span>
-          </h2>
+          <p className="text-sm text-muted-foreground">
+            {fmtNumber(data?.length ?? 0)} رسالة واردة من اختصار الآيفون
+          </p>
           {unread > 0 && (
             <p className="mt-0.5 text-sm font-medium text-gold">
               {fmtNumber(unread)} غير مقروءة تستحق نظرك
@@ -388,6 +421,186 @@ function EmptyState() {
         الرسائل التي يلتقطها اختصار الآيفون (مثل إشعارات ناجز) ستظهر هنا
         تلقائياً.
       </p>
+    </div>
+  )
+}
+
+// ===== الصادر: رسائل النظام (تذكيرات/رموز/يدوي) من sms_log =====
+
+function OutgoingTab() {
+  const { data, isLoading, isError, error, refetch } = useOutgoingSms()
+  const [, navigate] = useLocation()
+  const [search, setSearch] = usePageState('outbox:q', '')
+  const [typeFilter, setTypeFilter] = usePageState('outbox:type', 'all')
+  const [statusFilter, setStatusFilter] = usePageState('outbox:status', 'all')
+
+  const rows = useMemo(
+    () => (data ?? []).map((m) => ({ ...m, type: outgoingTypeOf(m.sent_by) })),
+    [data]
+  )
+  const failedCount = rows.filter((m) => m.status === 'failed').length
+  // لا نعرض في الفلتر إلا الأنواع الموجودة فعلاً
+  const presentTypes = useMemo(() => {
+    const s = new Set(rows.map((m) => m.type))
+    return OUTGOING_TYPES.filter((t) => s.has(t.value))
+  }, [rows])
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    let out = rows
+    if (statusFilter !== 'all') out = out.filter((m) => m.status === statusFilter)
+    if (typeFilter !== 'all') out = out.filter((m) => m.type === typeFilter)
+    if (!q) return out
+    return out.filter((m) =>
+      [m.recipient_name, m.phone, m.message, m.sent_by]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+        .includes(q)
+    )
+  }, [rows, search, typeFilter, statusFilter])
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-muted-foreground">
+          {fmtNumber(rows.length)} رسالة أرسلها النظام (آخر ٥٠٠)
+        </p>
+        {failedCount > 0 && (
+          <button
+            onClick={() => setStatusFilter('failed')}
+            className="text-sm font-medium text-destructive hover:underline"
+          >
+            {fmtNumber(failedCount)} فاشلة — اعرضها
+          </button>
+        )}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative min-w-52 flex-1">
+          <Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="بحث بالاسم أو الرقم أو النص…"
+            className="pr-9"
+          />
+        </div>
+        <Select value={typeFilter} onValueChange={setTypeFilter}>
+          <SelectTrigger className="w-36">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">كل الأنواع</SelectItem>
+            {presentTypes.map((t) => (
+              <SelectItem key={t.value} value={t.value}>
+                {t.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-28">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">الكل</SelectItem>
+            <SelectItem value="sent">نجحت</SelectItem>
+            <SelectItem value="failed">فشلت</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {isLoading ? (
+        <div className="space-y-2">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-24 w-full rounded-xl" />
+          ))}
+        </div>
+      ) : isError ? (
+        <QueryErrorState
+          title="تعذّر تحميل الرسائل الصادرة"
+          error={error}
+          onRetry={() => refetch()}
+        />
+      ) : filtered.length === 0 ? (
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-16 text-center">
+          <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+            <Send className="h-6 w-6 text-muted-foreground" />
+          </div>
+          <p className="font-medium text-foreground">لا رسائل صادرة</p>
+          <p className="mx-auto max-w-sm text-sm text-muted-foreground">
+            كل رسالة يرسلها النظام (تذكير، رمز دخول، إرسال يدوي…) ستظهر هنا.
+          </p>
+        </div>
+      ) : (
+        <div className="divide-y divide-border/60 overflow-hidden rounded-xl border bg-card">
+          {filtered.map((m) => (
+            <OutgoingRow
+              key={m.id}
+              m={m}
+              type={m.type}
+              onOpenCase={(id) => navigate(`/cases/${id}`)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function OutgoingRow({
+  m,
+  type,
+  onOpenCase,
+}: {
+  m: OutgoingSms
+  type: OutgoingType
+  onOpenCase: (caseId: string) => void
+}) {
+  const failed = m.status === 'failed'
+  // رموز التحقق تُطمس أرقامها — السجل للمتابعة لا لقراءة الرموز
+  const body = m.message ? (type === 'otp' ? maskOtp(m.message) : m.message) : null
+
+  return (
+    <div className={'space-y-1.5 px-4 py-3' + (failed ? ' bg-destructive/5' : '')}>
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge variant={failed ? 'destructive' : 'success'} className="shrink-0">
+          {failed ? 'فشلت' : 'نجحت'}
+        </Badge>
+        <Badge variant="outline" className="shrink-0 font-normal">
+          {outgoingTypeLabel(type)}
+        </Badge>
+        <span className="text-sm font-medium text-foreground">
+          {m.recipient_name || 'بدون اسم'}
+        </span>
+        {m.phone && (
+          <span dir="ltr" className="text-xs text-muted-foreground">
+            {m.phone}
+          </span>
+        )}
+        <span className="mr-auto text-xs text-muted-foreground">
+          {fmtDateTime(m.created_at)}
+        </span>
+      </div>
+      {body && <MessageBody text={body} />}
+      <div className="flex flex-wrap items-center gap-2">
+        {/* الإرسال اليدوي يُنسب لصاحبه */}
+        {type === 'manual' && m.sent_by && (
+          <span className="text-xs text-muted-foreground">
+            أرسلها: {m.sent_by}
+          </span>
+        )}
+        {m.case && (
+          <button
+            onClick={() => onOpenCase(m.case!.id)}
+            className="flex items-center gap-1.5 rounded-lg border border-gold/40 bg-gold/10 px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-gold/20"
+          >
+            <Scale className="h-3.5 w-3.5 text-gold" />
+            القضية: {m.case.title || '—'}
+          </button>
+        )}
+      </div>
     </div>
   )
 }

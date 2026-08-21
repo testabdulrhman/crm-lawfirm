@@ -86,7 +86,7 @@ const navSections: { title?: string; items: NavItem[] }[] = [
     title: 'التواصل',
     items: [
       { label: 'جهات الاتصال', href: '/contacts', icon: BookUser },
-      { label: 'الرسائل الواردة', href: '/inbox', icon: MessageSquare },
+      { label: 'الرسائل', href: '/inbox', icon: MessageSquare },
       { label: 'البريد', href: '/mail', icon: Mail },
       {
         label: 'الطلبات الواردة',
