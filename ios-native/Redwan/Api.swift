@@ -379,3 +379,23 @@ extension SB {
         }
     }
 }
+
+// ===== قائمة الملفات — لبدء نقاش ملفٍ لم يبدأ نقاشه =====
+
+struct MatterLite: Codable, Identifiable, Hashable {
+    let id: String
+    let title: String?
+    let office_num: String?
+    let kind: String?
+}
+
+extension SB {
+    func matters() async throws -> [MatterLite] {
+        try await get("cases", query: [
+            ("select", "id,title,office_num,kind"),
+            ("deleted_at", "is.null"),
+            ("order", "created_at.desc"),
+            ("limit", "300"),
+        ])
+    }
+}

@@ -56,6 +56,8 @@ struct DiscussionsView: View {
     @State private var loaded = false
     @State private var error: String?
     @State private var search = ""
+    @State private var showNewDiscussion = false
+    @State private var pickedMatter: MatterLite?
 
     /// العامة مثبّتة أولاً دائماً — ثم البقية بالأحدث (ترتيب الدالة)
     private var filtered: [DiscussionRow] {
@@ -107,6 +109,15 @@ struct DiscussionsView: View {
             .navigationTitle("النقاشات")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                // نقاش جديد لملفٍ لم يبدأ نقاشه بعد (طلب المستخدم 2026-08-22)
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showNewDiscussion = true
+                    } label: {
+                        Image(systemName: "square.and.pencil")
+                            .foregroundStyle(Theme.goldDark)
+                    }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     NavigationLink {
                         BookmarksView()
@@ -115,6 +126,15 @@ struct DiscussionsView: View {
                             .foregroundStyle(Theme.goldDark)
                     }
                 }
+            }
+            .sheet(isPresented: $showNewDiscussion) {
+                MatterPicker { m in
+                    showNewDiscussion = false
+                    pickedMatter = m
+                }
+            }
+            .navigationDestination(item: $pickedMatter) { m in
+                CaseStreamView(caseId: m.id, title: m.title ?? m.office_num ?? "ملف")
             }
         }
         .task { await load() }
@@ -184,5 +204,90 @@ private struct DiscussionRowView: View {
         let who = row.last_author.map { "\($0): " } ?? ""
         let body = row.last_body ?? (row.has_file == true ? "مرفق" : "")
         return who + body
+    }
+}
+
+
+// MARK: - اختيار ملف لبدء نقاشه
+
+private struct MatterPicker: View {
+    let onPick: (MatterLite) -> Void
+
+    @EnvironmentObject private var sb: SB
+    @State private var matters: [MatterLite] = []
+    @State private var loaded = false
+    @State private var error: String?
+    @State private var search = ""
+
+    private var filtered: [MatterLite] {
+        let q = search.trimmingCharacters(in: .whitespaces)
+        guard !q.isEmpty else { return matters }
+        return matters.filter {
+            ($0.title ?? "").contains(q) || ($0.office_num ?? "").contains(q)
+        }
+    }
+
+    private func kindLabel(_ k: String?) -> String {
+        switch k {
+        case "legal_service": return "استشارة / لائحة"
+        case "property": return "توثيق عقاري"
+        default: return "قضية"
+        }
+    }
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if let error {
+                    ErrorBox(message: error) { Task { await load() } }
+                        .padding(16)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                } else if !loaded {
+                    ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    List(filtered) { m in
+                        Button {
+                            onPick(m)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(m.title ?? "بلا عنوان")
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundStyle(Theme.navy)
+                                    .lineLimit(1)
+                                HStack(spacing: 6) {
+                                    Text(kindLabel(m.kind))
+                                        .font(.system(size: 11))
+                                        .foregroundStyle(Theme.goldDark)
+                                    if let num = m.office_num {
+                                        Text(num)
+                                            .font(.system(size: 11))
+                                            .foregroundStyle(Theme.muted)
+                                    }
+                                }
+                            }
+                            .padding(.vertical, 2)
+                        }
+                        .listRowBackground(Theme.card)
+                    }
+                    .listStyle(.plain)
+                    .searchable(text: $search, prompt: "ابحث باسم الملف أو رقمه")
+                }
+            }
+            .background(Theme.ivory.ignoresSafeArea())
+            .navigationTitle("نقاش جديد")
+            .navigationBarTitleDisplayMode(.inline)
+            .task { await load() }
+        }
+        .environment(\.layoutDirection, .rightToLeft)
+    }
+
+    private func load() async {
+        error = nil
+        do {
+            matters = try await sb.matters()
+            loaded = true
+        } catch {
+            self.error = error.localizedDescription
+        }
     }
 }
