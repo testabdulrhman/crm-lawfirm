@@ -25,6 +25,7 @@ import { useCaseTasks } from '@/hooks/useCaseTasks'
 import { useCase, useUpdateCaseStatus } from '@/hooks/useCases'
 import { useCaseStudy } from '@/hooks/useCaseStudy'
 import { useCaseRulings } from '@/hooks/useCaseRulings'
+import { useCaseMemos } from '@/hooks/useCaseMemos'
 import { CaseJourney } from './CaseJourney'
 import { CaseFactsPanel } from './CaseFactsPanel'
 import { usePageState } from '@/hooks/usePageState'
@@ -73,11 +74,14 @@ export function CaseDetail({ id }: { id: string }) {
   const { data: caseTasks } = useCaseTasks(id)
   const { data: study } = useCaseStudy(id)
   const { data: caseRulings } = useCaseRulings(id)
+  const { data: caseMemos } = useCaseMemos(id)
   // عدّادات التبويبات — تُظهر المحتوى دون فتحه (وتُسرّع فتح التبويب لاحقاً)
   const counts: Record<string, number> = {
     documents: caseDocs?.length ?? 0,
     sessions: caseSessions?.length ?? 0,
     tasks: (caseTasks ?? []).filter((t) => t.status !== 'done').length,
+    judgments: caseRulings?.length ?? 0,
+    memos: caseMemos?.length ?? 0,
   }
   // علامة تبويب الدراسة: هل توجد دراسة؟ وهل اعتُمدت؟
   const hasStudy = !!study && !!(study.facts || study.legal_opinion || study.basics)
