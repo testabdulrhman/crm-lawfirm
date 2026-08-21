@@ -106,31 +106,6 @@ struct MentionSuggestBar: View {
     }
 }
 
-/// زر @ في حقل الكتابة: قائمة الموظفين، والاختيار يُدرج @الاسم في النص
-struct MentionMenu: View {
-    let staff: [TeamMember]
-    @Binding var draft: String
-
-    var body: some View {
-        Menu {
-            ForEach(staff) { p in
-                let l = Mention.label(p)
-                if !l.isEmpty {
-                    Button(l) {
-                        let sep = draft.isEmpty || draft.hasSuffix(" ") ? "" : " "
-                        draft += sep + "@" + l + " "
-                    }
-                }
-            }
-        } label: {
-            Image(systemName: "at")
-                .font(.system(size: 15))
-                .foregroundStyle(Theme.muted)
-        }
-        .disabled(staff.isEmpty)
-    }
-}
-
 struct CaseStreamView: View {
     let caseId: String?
     let title: String
@@ -296,19 +271,6 @@ struct CaseStreamView: View {
                         showFilePicker = true
                     } label: {
                         Label("ملف", systemImage: "doc")
-                    }
-                    Menu {
-                        ForEach(staff) { p in
-                            let l = Mention.label(p)
-                            if !l.isEmpty {
-                                Button(l) {
-                                    let sep = draft.isEmpty || draft.hasSuffix(" ") ? "" : " "
-                                    draft += sep + "@" + l + " "
-                                }
-                            }
-                        }
-                    } label: {
-                        Label("منشن زميل", systemImage: "at")
                     }
                     Button {
                         if !draft.contains("@الذكاء") { draft = "@الذكاء " + draft }
@@ -933,16 +895,6 @@ private struct ThreadView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 18))
 
                 Menu {
-                    ForEach(staff) { p in
-                        let l = Mention.label(p)
-                        if !l.isEmpty {
-                            Button(l) {
-                                let sep = draft.isEmpty || draft.hasSuffix(" ") ? "" : " "
-                                draft += sep + "@" + l + " "
-                            }
-                        }
-                    }
-                    Divider()
                     Button {
                         if !draft.contains("@الذكاء") { draft = "@الذكاء " + draft }
                     } label: {
