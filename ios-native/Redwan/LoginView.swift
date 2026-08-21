@@ -3,6 +3,49 @@ import SwiftUI
 // شاشة الدخول — نفس هوية شاشة الويب: كحلي عميق وميزان ذهبي واسم الشركة كاملاً.
 // ⚠️ قاعدة ثابتة من المستخدم: اسم الشركة لا يُختصر في أي موضع.
 
+
+/// الهندية → اللاتينية عند الإرسال — الخادم يطابق باللاتينية.
+/// (التطبيع أثناء الكتابة يصادم تحرير الحقل فيُفقد الإدخال — جُرّب)
+private func latinDigits(_ s: String) -> String {
+    String(s.map { c -> Character in
+        if let v = c.wholeNumberValue, (0...9).contains(v), !c.isASCII {
+            return Character(String(v))
+        }
+        return c
+    })
+}
+
+/// حقل أرقام يعمل في RTL: لوحات الأرقام في iOS لا ترسم المكتوب أثناء
+/// الكتابة داخل تطبيق عربي الاتجاه (علّة نظام — جُرّبت كل الأنواع في
+/// المحاكي 2026-08-22)، فنجعل نص الحقل شفافاً ونرسم القيمة بأنفسنا.
+private struct NumericField: View {
+    let placeholder: String
+    @Binding var text: String
+    var keyboard: UIKeyboardType = .phonePad
+
+    var body: some View {
+        ZStack(alignment: .leading) {
+            if text.isEmpty {
+                Text(placeholder)
+                    .font(.system(size: 15))
+                    .foregroundStyle(Theme.muted.opacity(0.55))
+            }
+            Text(text)
+                .font(.system(size: 15))
+                .foregroundStyle(Theme.navy)
+            TextField("", text: $text)
+                .keyboardType(keyboard)
+                .autocorrectionDisabled()
+                .foregroundStyle(.clear)
+                .tint(.clear)
+        }
+        .environment(\.layoutDirection, .leftToRight)
+        .padding(12)
+        .background(Theme.ivory)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+    }
+}
+
 struct LoginView: View {
     @EnvironmentObject private var sb: SB
     @State private var mode: Mode = .otp
@@ -117,29 +160,14 @@ struct LoginView: View {
                 Text("رقم الجوال")
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.muted)
-                TextField("05xxxxxxxx", text: $phone)
-                    .keyboardType(.phonePad)
-                    .textContentType(.telephoneNumber)
-                    .environment(\.layoutDirection, .leftToRight)
-                    .focused($focused, equals: .phone)
-                    .disabled(codeSent)
-                    .padding(12)
-                    .background(Theme.ivory)
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                NumericField(placeholder: "05xxxxxxxx", text: $phone)
             }
             if codeSent {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("رمز التحقّق")
                         .font(.system(size: 13))
                         .foregroundStyle(Theme.muted)
-                    TextField("______", text: $code)
-                        .keyboardType(.numberPad)
-                        .textContentType(.oneTimeCode)
-                        .environment(\.layoutDirection, .leftToRight)
-                        .focused($focused, equals: .code)
-                        .padding(12)
-                        .background(Theme.ivory)
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                    NumericField(placeholder: "· · · · · ·", text: $code, keyboard: .numberPad)
                 }
                 Button("تغيير الرقم أو إعادة الإرسال") {
                     codeSent = false
@@ -237,14 +265,14 @@ struct LoginView: View {
                         password: password
                     )
                 case (.otp, false):
-                    try await sb.otpSend(phone: phone.trimmingCharacters(in: .whitespaces))
+                    try await sb.otpSend(
+                        phone: latinDigits(phone.trimmingCharacters(in: .whitespaces)))
                     codeSent = true
-                    info = "إن كان الرقم مسجّلاً لموظف، فسيصلك رمز عبر رسالة نصية."
-                    focused = .code
+                    info = "إن كان الرقم مسجّلاً لموظف، فسيصلك رمز عبر رسالة نصية." 
                 case (.otp, true):
                     try await sb.otpVerify(
-                        phone: phone.trimmingCharacters(in: .whitespaces),
-                        code: code.trimmingCharacters(in: .whitespaces)
+                        phone: latinDigits(phone.trimmingCharacters(in: .whitespaces)),
+                        code: latinDigits(code.trimmingCharacters(in: .whitespaces))
                     )
                 }
             } catch {

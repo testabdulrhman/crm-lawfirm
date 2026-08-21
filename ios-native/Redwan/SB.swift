@@ -1,5 +1,7 @@
 import Foundation
 import Security
+import UIKit
+import UserNotifications
 
 // عميل Supabase خفيف بلا اعتماديات خارجية — REST مباشرة عبر URLSession.
 //
@@ -83,6 +85,35 @@ final class SB: ObservableObject {
         session = nil
         member = nil
         Keychain.clear()
+    }
+
+    // MARK: - إشعارات الدفع
+
+    /// طلب إذن الإشعارات والتسجيل في APNs — تُستدعى بعد الدخول
+    func enablePush() async {
+        guard session != nil else { return }
+        let granted = (try? await UNUserNotificationCenter.current()
+            .requestAuthorization(options: [.alert, .sound, .badge])) ?? false
+        guard granted else { return }
+        UIApplication.shared.registerForRemoteNotifications()
+    }
+
+    /// حفظ device token — upsert على token فالجهاز الواحد صف واحد
+    func registerPushDevice(token: String) async {
+        // العضو قد لا يكون حُمّل بعد لحظة وصول التوكن
+        if member == nil { await loadMember() }
+        guard let me = member?.id else { return }
+        try? await upsert(
+            table: "push_devices",
+            values: [
+                "member_id": me,
+                "token": token,
+                "platform": "ios",
+                "device_name": UIDevice.current.name,
+                "last_seen_at": ISO8601DateFormatter().string(from: Date()),
+            ],
+            onConflict: "token"
+        )
     }
 
     // MARK: - الدخول برمز التحقق (نفس دالة الويب staff-login-otp)

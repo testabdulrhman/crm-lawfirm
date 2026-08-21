@@ -16,14 +16,19 @@ const admin = createClient(
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
 );
 
-const KEY_ID = Deno.env.get("APNS_KEY_ID") ?? "";
-const TEAM_ID = Deno.env.get("APNS_TEAM_ID") ?? "";
-const BUNDLE_ID = Deno.env.get("APNS_BUNDLE_ID") ?? "sa.redwan.crm";
-const PRIVATE_KEY = Deno.env.get("APNS_PRIVATE_KEY") ?? "";
-const APNS_HOST =
-  (Deno.env.get("APNS_ENV") ?? "sandbox") === "production"
-    ? "https://api.push.apple.com"
-    : "https://api.sandbox.push.apple.com";
+// الإعداد: env أولاً ثم app_secrets (جدول مغلق service-only) — نمط
+// «config editable بلا إعادة نشر» المعتمد في المشروع، لكن في جدولٍ لا
+// يقرؤه الموظفون لأن هذا مفتاح توقيع.
+let CFG: Record<string, string> | null = null;
+async function cfg(key: string, fallback = ""): Promise<string> {
+  const env = Deno.env.get(key);
+  if (env) return env;
+  if (!CFG) {
+    const { data } = await admin.from("app_secrets").select("key, value");
+    CFG = Object.fromEntries((data ?? []).map((r) => [r.key, r.value]));
+  }
+  return CFG[key] ?? fallback;
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -40,6 +45,9 @@ const json = (o: unknown, status = 200) =>
 
 /** رمز مصادقة APNs (JWT بمفتاح ES256) — صالح ساعة، ونعيد توليده كل مرة. */
 async function apnsToken(): Promise<string> {
+  const PRIVATE_KEY = await cfg("APNS_PRIVATE_KEY");
+  const KEY_ID = await cfg("APNS_KEY_ID");
+  const TEAM_ID = await cfg("APNS_TEAM_ID");
   // مفتاح .p8 نصّاً → CryptoKey
   const pem = PRIVATE_KEY.replace(/-----BEGIN PRIVATE KEY-----/, "")
     .replace(/-----END PRIVATE KEY-----/, "")
@@ -68,17 +76,19 @@ interface SendResult {
 
 async function sendOne(
   jwt: string,
+  host: string,
+  topic: string,
   token: string,
   title: string,
   body: string,
   data: Record<string, unknown>
 ): Promise<SendResult> {
   try {
-    const res = await fetch(`${APNS_HOST}/3/device/${token}`, {
+    const res = await fetch(`${host}/3/device/${token}`, {
       method: "POST",
       headers: {
         authorization: `bearer ${jwt}`,
-        "apns-topic": BUNDLE_ID,
+        "apns-topic": topic,
         "apns-push-type": "alert",
         "apns-priority": "10",
       },
@@ -107,7 +117,18 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "POST only" }, 405);
 
-  if (!KEY_ID || !TEAM_ID || !PRIVATE_KEY) {
+  // بوابة السر الداخلي — مفتاح anon عام؛ بدونها يستطيع أي أحد إزعاج
+  // الموظفين بإشعارات مزيفة (نفس درس discussion-ai)
+  const { data: secretRow } = await admin
+    .from("lookup_values").select("value")
+    .eq("type", "discussion_ai_config").eq("label", "inbound_secret")
+    .limit(1).maybeSingle();
+  if (!secretRow?.value || req.headers.get("x-ai-secret") !== secretRow.value) {
+    return json({ error: "forbidden" }, 403);
+  }
+
+  if (!(await cfg("APNS_KEY_ID")) || !(await cfg("APNS_TEAM_ID")) ||
+      !(await cfg("APNS_PRIVATE_KEY"))) {
     // إعداد ناقص — نُبلغ صراحةً بدل الصمت، والإشعار داخل النظام قائم أصلاً
     return json(
       { error: "إعدادات APNs غير مكتملة على الخادم (APNS_KEY_ID/TEAM_ID/PRIVATE_KEY)." },
@@ -147,9 +168,14 @@ Deno.serve(async (req) => {
   }
 
   const jwt = await apnsToken();
+  const host =
+    (await cfg("APNS_ENV", "sandbox")) === "production"
+      ? "https://api.push.apple.com"
+      : "https://api.sandbox.push.apple.com";
+  const topic = await cfg("APNS_BUNDLE_ID", "sa.redwan.app");
   const results = await Promise.all(
     devices.map((d) =>
-      sendOne(jwt, d.token as string, title, message, route ? { route } : {})
+      sendOne(jwt, host, topic, d.token as string, title, message, route ? { route } : {})
     )
   );
 

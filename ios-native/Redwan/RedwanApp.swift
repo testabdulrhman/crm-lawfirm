@@ -1,5 +1,6 @@
 import SwiftUI
 import CoreSpotlight
+import UserNotifications
 
 // تطبيق «Redwan» الأصيل — SwiftUI على نفس قاعدة Supabase التي يقرأها الويب.
 // التبويبات: الرئيسية · المهام · التقويم · النقاشات.
@@ -7,6 +8,7 @@ import CoreSpotlight
 
 @main
 struct RedwanApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var sb = SB.shared
 
     var body: some Scene {
@@ -16,6 +18,9 @@ struct RedwanApp: App {
                 // النظام عربي RTL بالكامل — لا اعتماد على لغة الجهاز
                 .environment(\.layoutDirection, .rightToLeft)
                 .environment(\.locale, Locale(identifier: "ar"))
+                // الألوان ثابتة فاتحة (عاجي/كحلي) — الوضع الداكن كان يجعل
+                // نص الحقول أبيض على عاجي = غير مرئي (بلاغ المستخدم 2026-08-22)
+                .preferredColorScheme(.light)
                 .tint(Theme.gold)
                 .task { donateSpotlight() }
         }
@@ -42,6 +47,33 @@ struct RedwanApp: App {
     }
 }
 
+/// إشعارات الدفع: استقبال device token وإظهار التنبيه والتطبيق مفتوح
+final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
+    func application(
+        _ application: UIApplication,
+        didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
+    ) -> Bool {
+        UNUserNotificationCenter.current().delegate = self
+        return true
+    }
+
+    func application(
+        _ application: UIApplication,
+        didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
+    ) {
+        let token = deviceToken.map { String(format: "%02x", $0) }.joined()
+        Task { await SB.shared.registerPushDevice(token: token) }
+    }
+
+    // التنبيه يظهر حتى والتطبيق في المقدمة
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification
+    ) async -> UNNotificationPresentationOptions {
+        [.banner, .sound, .badge]
+    }
+}
+
 struct RootView: View {
     @EnvironmentObject private var sb: SB
 
@@ -50,6 +82,7 @@ struct RootView: View {
             LoginView()
         } else {
             MainTabs()
+                .task { await sb.enablePush() }
         }
     }
 }
