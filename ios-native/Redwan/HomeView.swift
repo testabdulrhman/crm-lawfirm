@@ -8,6 +8,7 @@ struct HomeView: View {
     @State private var scope = "mine"
     @State private var overview: DashboardOverview?
     @State private var errorMessage: String?
+    @State private var unreadCount = 0
 
     var body: some View {
         NavigationStack {
@@ -30,6 +31,28 @@ struct HomeView: View {
             .navigationTitle("الرئيسية")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                // جرس الإشعارات — يشوف الموظف كل ما يخصه (طلب 2026-08-22)
+                ToolbarItem(placement: .topBarLeading) {
+                    NavigationLink {
+                        NotificationsView()
+                    } label: {
+                        ZStack(alignment: .topLeading) {
+                            Image(systemName: "bell")
+                                .font(.system(size: 16))
+                                .foregroundStyle(Theme.navy)
+                            if unreadCount > 0 {
+                                Text("\(min(unreadCount, 99))")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 4)
+                                    .padding(.vertical, 1)
+                                    .background(Theme.danger)
+                                    .clipShape(Capsule())
+                                    .offset(x: -8, y: -6)
+                            }
+                        }
+                    }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
                         if let name = sb.member?.name {
@@ -281,6 +304,10 @@ struct HomeView: View {
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
+        }
+        // عدّاد الجرس — ثانوي، لا يفشل الشاشة
+        if let list = try? await sb.notifications(limit: 50) {
+            unreadCount = list.filter { $0.is_read == false }.count
         }
     }
 }

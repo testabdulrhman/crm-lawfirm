@@ -324,3 +324,41 @@ extension SB {
         ])
     }
 }
+
+// ===== مركز الإشعارات =====
+
+extension SB {
+    /// إشعاراتي — الأحدث أولاً
+    func notifications(limit: Int = 50) async throws -> [AppNotification] {
+        guard let me = member?.id else { return [] }
+        return try await get("notifications", query: [
+            ("select", "id,type,title,message,case_id,task_id,is_read,created_at"),
+            ("recipient_id", "eq.\(me)"),
+            ("order", "created_at.desc"),
+            ("limit", "\(limit)"),
+        ])
+    }
+
+    func markNotificationRead(id: String) async throws {
+        try await patch("notifications", query: [("id", "eq.\(id)")],
+                        values: ["is_read": true])
+    }
+
+    func markAllNotificationsRead() async throws {
+        guard let me = member?.id else { return }
+        try await patch("notifications", query: [
+            ("recipient_id", "eq.\(me)"),
+            ("is_read", "eq.false"),
+        ], values: ["is_read": true])
+    }
+
+    /// مهمة واحدة — لفتحها من إشعارها
+    func task(id: String) async throws -> TaskRow? {
+        let rows: [TaskRow] = try await get("tasks", query: [
+            ("select", "id,title,status,due_date,priority,is_urgent,notes,description,case_id,assignee_id,cases(title)"),
+            ("id", "eq.\(id)"),
+            ("limit", "1"),
+        ])
+        return rows.first
+    }
+}

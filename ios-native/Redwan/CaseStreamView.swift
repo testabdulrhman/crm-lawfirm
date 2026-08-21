@@ -91,6 +91,7 @@ struct CaseStreamView: View {
 
     // المرفقات
     @State private var photoItem: PhotosPickerItem?
+    @State private var showPhotoPicker = false
     @State private var showFilePicker = false
     @State private var uploading = false
 
@@ -159,6 +160,7 @@ struct CaseStreamView: View {
                 }
             }
         }
+        .photosPicker(isPresented: $showPhotoPicker, selection: $photoItem, matching: .images)
         .fileImporter(
             isPresented: $showFilePicker,
             allowedContentTypes: [.pdf, .image, .data]
@@ -199,41 +201,10 @@ struct CaseStreamView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 14)
             }
+            // ترتيب الواتساب حرفياً (طلب المستخدم 2026-08-22): الإرسال يمين
+            // و«+» يسار يجمع كل الإضافات — حتى لا يحس الموظف بفرق.
+            // في RTL أول عنصر بالكود يقع يميناً.
             HStack(spacing: 8) {
-                Button {
-                    if !draft.contains("@الذكاء") { draft = "@الذكاء " + draft }
-                } label: {
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 15))
-                        .foregroundStyle(draft.contains("@الذكاء") ? Theme.gold : Theme.muted)
-                }
-                .buttonStyle(.plain)
-
-                MentionMenu(staff: staff, draft: $draft)
-
-                PhotosPicker(selection: $photoItem, matching: .images) {
-                    Image(systemName: "photo")
-                        .font(.system(size: 15))
-                        .foregroundStyle(Theme.muted)
-                }
-                .disabled(uploading)
-
-                Button { showFilePicker = true } label: {
-                    Image(systemName: "paperclip")
-                        .font(.system(size: 15))
-                        .foregroundStyle(Theme.muted)
-                }
-                .buttonStyle(.plain)
-                .disabled(uploading)
-
-                TextField("اكتب رسالة…", text: $draft, axis: .vertical)
-                    .font(.system(size: 14))
-                    .lineLimit(1...4)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 9)
-                    .background(Theme.ivory)
-                    .clipShape(RoundedRectangle(cornerRadius: 18))
-
                 Button(action: send) {
                     Group {
                         if sending {
@@ -250,6 +221,51 @@ struct CaseStreamView: View {
                 }
                 .disabled(sending || draft.trimmingCharacters(in: .whitespaces).isEmpty)
                 .opacity(sending || draft.trimmingCharacters(in: .whitespaces).isEmpty ? 0.5 : 1)
+
+                TextField("اكتب رسالة…", text: $draft, axis: .vertical)
+                    .font(.system(size: 14))
+                    .lineLimit(1...4)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 9)
+                    .background(Theme.ivory)
+                    .clipShape(RoundedRectangle(cornerRadius: 18))
+
+                Menu {
+                    Button {
+                        showPhotoPicker = true
+                    } label: {
+                        Label("صورة", systemImage: "photo")
+                    }
+                    Button {
+                        showFilePicker = true
+                    } label: {
+                        Label("ملف", systemImage: "doc")
+                    }
+                    Menu {
+                        ForEach(staff) { p in
+                            let l = Mention.label(p)
+                            if !l.isEmpty {
+                                Button(l) {
+                                    let sep = draft.isEmpty || draft.hasSuffix(" ") ? "" : " "
+                                    draft += sep + "@" + l + " "
+                                }
+                            }
+                        }
+                    } label: {
+                        Label("منشن زميل", systemImage: "at")
+                    }
+                    Button {
+                        if !draft.contains("@الذكاء") { draft = "@الذكاء " + draft }
+                    } label: {
+                        Label("سؤال الذكاء", systemImage: "sparkles")
+                    }
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundStyle(Theme.navy)
+                        .frame(width: 36, height: 36)
+                }
+                .disabled(uploading)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
@@ -831,17 +847,8 @@ private struct ThreadView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 12)
             }
+            // نفس ترتيب الواتساب: الإرسال يمين و«+» يسار (أول الكود = يمين في RTL)
             HStack(spacing: 8) {
-                MentionMenu(staff: staff, draft: $draft)
-
-                TextField("ردّ في الخيط…", text: $draft, axis: .vertical)
-                    .font(.system(size: 14))
-                    .lineLimit(1...4)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 9)
-                    .background(Theme.ivory)
-                    .clipShape(RoundedRectangle(cornerRadius: 18))
-
                 Button(action: send) {
                     Group {
                         if sending {
@@ -858,6 +865,37 @@ private struct ThreadView: View {
                 }
                 .disabled(sending || draft.trimmingCharacters(in: .whitespaces).isEmpty)
                 .opacity(sending || draft.trimmingCharacters(in: .whitespaces).isEmpty ? 0.5 : 1)
+
+                TextField("ردّ في الخيط…", text: $draft, axis: .vertical)
+                    .font(.system(size: 14))
+                    .lineLimit(1...4)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 9)
+                    .background(Theme.ivory)
+                    .clipShape(RoundedRectangle(cornerRadius: 18))
+
+                Menu {
+                    ForEach(staff) { p in
+                        let l = Mention.label(p)
+                        if !l.isEmpty {
+                            Button(l) {
+                                let sep = draft.isEmpty || draft.hasSuffix(" ") ? "" : " "
+                                draft += sep + "@" + l + " "
+                            }
+                        }
+                    }
+                    Divider()
+                    Button {
+                        if !draft.contains("@الذكاء") { draft = "@الذكاء " + draft }
+                    } label: {
+                        Label("سؤال الذكاء", systemImage: "sparkles")
+                    }
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundStyle(Theme.navy)
+                        .frame(width: 36, height: 36)
+                }
             }
             .padding(.horizontal, 12)
 

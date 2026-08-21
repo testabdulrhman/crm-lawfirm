@@ -12,7 +12,7 @@ struct TeamMember: Codable, Identifiable, Equatable {
     let avatar_color: String?
 }
 
-struct CaseRef: Codable, Equatable { let title: String? }
+struct CaseRef: Codable, Equatable, Hashable { let title: String? }
 
 // ===== لوحة التحكم (dashboard_overview RPC — نفس دالة الويب) =====
 
@@ -73,7 +73,7 @@ struct DashboardOverview: Codable {
 
 // ===== المهام =====
 
-struct TaskRow: Codable, Identifiable {
+struct TaskRow: Codable, Identifiable, Hashable {
     let id: String
     let title: String?
     let status: String?
@@ -216,4 +216,17 @@ struct ReplyRow: Codable, Identifiable {
     let document_id: String?
     let created_at: String?
     let author: TeamMember?
+}
+
+// ===== مركز الإشعارات (جدول notifications — نفس جرس الويب) =====
+
+struct AppNotification: Codable, Identifiable {
+    let id: String
+    let type: String?
+    let title: String?
+    let message: String?
+    let case_id: String?
+    let task_id: String?
+    let is_read: Bool?
+    let created_at: String?
 }
