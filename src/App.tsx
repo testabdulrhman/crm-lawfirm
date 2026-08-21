@@ -7,6 +7,7 @@ import { useAuth } from '@/stores/auth'
 import { AppLayout } from '@/components/layout/AppLayout'
 import Login from '@/pages/Login'
 import Booking from '@/pages/Booking'
+import Privacy from '@/pages/Privacy'
 import Dashboard from '@/pages/Dashboard'
 import { SettingsPage } from '@/features/settings/SettingsPage'
 import { TeamPage } from '@/features/team/TeamPage'
@@ -132,6 +133,9 @@ function AppRoutes() {
 
   // صفحة حجز المواعيد عامة تماماً (للعملاء بلا حساب)
   if (location === '/book') return <Booking />
+
+  // سياسة الخصوصية عامة — يتطلبها نشر تطبيق iOS
+  if (location === '/privacy') return <Privacy />
 
   // مسار الدخول عام: المسجّل يُحوّل إلى الرئيسية
   if (location === '/login') {
