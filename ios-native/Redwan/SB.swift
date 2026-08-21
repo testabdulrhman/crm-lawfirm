@@ -85,6 +85,59 @@ final class SB: ObservableObject {
         Keychain.clear()
     }
 
+    // MARK: - الدخول برمز التحقق (نفس دالة الويب staff-login-otp)
+
+    /// إرسال رمز SMS لرقم موظف — الدالة تصمت عن الأرقام غير المسجّلة عمداً
+    func otpSend(phone: String) async throws {
+        _ = try await callFunction("staff-login-otp", body: ["action": "send", "phone": phone])
+    }
+
+    /// التحقق من الرمز وتفعيل الجلسة
+    func otpVerify(phone: String, code: String) async throws {
+        let data = try await callFunction(
+            "staff-login-otp",
+            body: ["action": "verify", "phone": phone, "code": code]
+        )
+        struct R: Codable {
+            let ok: Bool?
+            let access_token: String?
+            let refresh_token: String?
+            let error: String?
+        }
+        let r = try? JSONDecoder().decode(R.self, from: data)
+        guard let at = r?.access_token, let rt = r?.refresh_token else {
+            throw SBError(message: r?.error ?? "الرمز غير صحيح أو منتهي الصلاحية")
+        }
+        // هوية المستخدم من حمولة JWT (الحقل sub)
+        let parts = at.split(separator: ".")
+        guard parts.count == 3,
+              let payload = Data(base64URL: String(parts[1])),
+              let obj = try? JSONSerialization.jsonObject(with: payload) as? [String: Any],
+              let uid = obj["sub"] as? String
+        else { throw SBError(message: "استجابة دخول غير مفهومة") }
+
+        let s = Session(accessToken: at, refreshToken: rt, userId: uid)
+        session = s
+        Keychain.save(s)
+        await loadMember()
+    }
+
+    /// نداء Edge Function بلا جلسة (مفتاح anon فقط) — للدخول قبل وجود جلسة
+    private func callFunction(_ name: String, body: [String: Any]) async throws -> Data {
+        var req = URLRequest(url: baseURL.appendingPathComponent("functions/v1/\(name)"))
+        req.httpMethod = "POST"
+        req.setValue(anonKey, forHTTPHeaderField: "apikey")
+        req.setValue("Bearer \(anonKey)", forHTTPHeaderField: "Authorization")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let (data, resp) = try await URLSession.shared.data(for: req)
+        let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+        guard code == 200 else {
+            throw SBError(message: "تعذّر الاتصال بالخادم (\(code))")
+        }
+        return data
+    }
+
     private func refresh() async -> Bool {
         guard let s = session else { return false }
         var comps = URLComponents(
@@ -250,6 +303,16 @@ final class SB: ObservableObject {
 }
 
 // MARK: - Keychain — تخزين الجلسة الآمن (لا UserDefaults)
+
+extension Data {
+    /// فك base64url (حمولة JWT) — إكمال الحشو وإبدال المحارف
+    init?(base64URL s: String) {
+        var b = s.replacingOccurrences(of: "-", with: "+")
+            .replacingOccurrences(of: "_", with: "/")
+        while b.count % 4 != 0 { b += "=" }
+        self.init(base64Encoded: b)
+    }
+}
 
 enum Keychain {
     private static let service = "sa.redwan.mobile"

@@ -1,6 +1,7 @@
 import SwiftUI
+import CoreSpotlight
 
-// تطبيق «رضوان» الأصيل — SwiftUI على نفس قاعدة Supabase التي يقرأها الويب.
+// تطبيق «Redwan» الأصيل — SwiftUI على نفس قاعدة Supabase التي يقرأها الويب.
 // التبويبات: الرئيسية · المهام · التقويم · النقاشات.
 // «النقاشات» أُضيف 2026-08-21 لحلّ تشتّت العمل بين خاص الواتساب وقروبه.
 
@@ -16,7 +17,28 @@ struct RedwanApp: App {
                 .environment(\.layoutDirection, .rightToLeft)
                 .environment(\.locale, Locale(identifier: "ar"))
                 .tint(Theme.gold)
+                .task { donateSpotlight() }
         }
+    }
+
+    /// فهرسة التطبيق في بحث iOS بالعربي والإنجليزي (طلب المستخدم 2026-08-22:
+    /// «ابي اقدر ابحث باسم التطبيق عربي وانجليزي») — اسم الأيقونة Redwan
+    /// وSpotlight يجده أيضاً بـ«رضوان» وبقية الكلمات.
+    private func donateSpotlight() {
+        let attrs = CSSearchableItemAttributeSet(contentType: .item)
+        attrs.title = "Redwan — رضوان"
+        attrs.contentDescription =
+            "شركة عبدالرحمن بن رضوان المشيقح للمحاماة وإدارة إجراءات الإفلاس"
+        attrs.keywords = [
+            "رضوان", "ردوان", "المشيقح", "محاماة", "قضايا",
+            "redwan", "Redwan", "redwans", "almoshiqeh", "law",
+        ]
+        let item = CSSearchableItem(
+            uniqueIdentifier: "sa.redwan.app.main",
+            domainIdentifier: "sa.redwan.app",
+            attributeSet: attrs
+        )
+        CSSearchableIndex.default().indexSearchableItems([item])
     }
 }
 
