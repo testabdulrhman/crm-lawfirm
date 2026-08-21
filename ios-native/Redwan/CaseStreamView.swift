@@ -52,6 +52,60 @@ enum Mention {
     }
 }
 
+/// شريط اقتراح المنشن: كتابة @ في آخر النص تُظهر الأسماء فوق الحقل
+/// (طلب المستخدم 2026-08-22: «اذا ضغطت @ مباشرة تطلع لي قائمة الاسماء»)
+struct MentionSuggestBar: View {
+    let staff: [TeamMember]
+    @Binding var draft: String
+
+    /// آخر @كلمة في نهاية النص — نمط الكتابة الطبيعي في الجوال
+    private var query: String? {
+        guard let r = draft.range(of: "@[\\p{L}\\p{N}_]{0,20}$", options: .regularExpression)
+        else { return nil }
+        return String(draft[r].dropFirst())
+    }
+
+    private var matches: [String] {
+        guard let q = query else { return [] }
+        var labels = staff.map(Mention.label).filter { !$0.isEmpty }
+        labels.append("الذكاء")
+        return labels.filter { q.isEmpty || $0.contains(q) }
+    }
+
+    var body: some View {
+        if query != nil && !matches.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(matches, id: \.self) { l in
+                        Button {
+                            if let r = draft.range(
+                                of: "@[\\p{L}\\p{N}_]{0,20}$", options: .regularExpression
+                            ) {
+                                draft = draft.replacingCharacters(in: r, with: "@" + l + " ")
+                            }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: l == "الذكاء" ? "sparkles" : "at")
+                                    .font(.system(size: 11))
+                                Text(l)
+                                    .font(.system(size: 13, weight: .medium))
+                            }
+                            .foregroundStyle(Theme.goldDark)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(Theme.goldPale)
+                            .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 12)
+            }
+            .padding(.vertical, 2)
+        }
+    }
+}
+
 /// زر @ في حقل الكتابة: قائمة الموظفين، والاختيار يُدرج @الاسم في النص
 struct MentionMenu: View {
     let staff: [TeamMember]
@@ -201,6 +255,8 @@ struct CaseStreamView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 14)
             }
+            MentionSuggestBar(staff: staff, draft: $draft)
+
             // ترتيب الواتساب حرفياً (طلب المستخدم 2026-08-22): الإرسال يمين
             // و«+» يسار يجمع كل الإضافات — حتى لا يحس الموظف بفرق.
             // في RTL أول عنصر بالكود يقع يميناً.
@@ -847,6 +903,8 @@ private struct ThreadView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 12)
             }
+            MentionSuggestBar(staff: staff, draft: $draft)
+
             // نفس ترتيب الواتساب: الإرسال يمين و«+» يسار (أول الكود = يمين في RTL)
             HStack(spacing: 8) {
                 Button(action: send) {

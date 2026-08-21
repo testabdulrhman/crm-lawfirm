@@ -1,4 +1,5 @@
 import SwiftUI
+import UserNotifications
 
 // مركز الإشعارات (طلب المستخدم 2026-08-22: «ودي يكون يشوف وش الإشعارات
 // اللي تخصه») — نفس جرس الويب: قائمة إشعاراتي، غير المقروء مميز،
@@ -50,6 +51,7 @@ struct NotificationsView: View {
                         Task {
                             try? await sb.markAllNotificationsRead()
                             await load()
+                            try? await UNUserNotificationCenter.current().setBadgeCount(0)
                         }
                     }
                     .font(.system(size: 13))
@@ -125,9 +127,16 @@ struct NotificationsView: View {
         do {
             rows = try await sb.notifications()
             loaded = true
+            await syncBadge()
         } catch {
             self.error = error.localizedDescription
         }
+    }
+
+    /// شارة الأيقونة = غير المقروء الحالي
+    private func syncBadge() async {
+        let n = rows.filter { $0.is_read == false }.count
+        try? await UNUserNotificationCenter.current().setBadgeCount(n)
     }
 
     /// فتح الإشعار: قراءة + انتقال لمهمته إن كانت له مهمة
@@ -148,6 +157,7 @@ struct NotificationsView: View {
                 openedTask = try? await sb.task(id: taskId)
                 openingId = nil
             }
+            await syncBadge()
         }
     }
 }

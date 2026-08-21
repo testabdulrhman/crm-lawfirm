@@ -1,4 +1,5 @@
 import SwiftUI
+import UserNotifications
 
 // تبويب «الرئيسية»: نظرة سريعة على اليوم — إحصاءات، جدول اليوم، ووكالات قاربت على الانتهاء
 struct HomeView: View {
@@ -305,9 +306,11 @@ struct HomeView: View {
         } catch {
             errorMessage = error.localizedDescription
         }
-        // عدّاد الجرس — ثانوي، لا يفشل الشاشة
+        // عدّاد الجرس — ثانوي، لا يفشل الشاشة. شارة الأيقونة تتبعه
+        // حتى لا يعلق رقم على الأيقونة بعد قراءة كل شيء
         if let list = try? await sb.notifications(limit: 50) {
             unreadCount = list.filter { $0.is_read == false }.count
+            try? await UNUserNotificationCenter.current().setBadgeCount(unreadCount)
         }
     }
 }

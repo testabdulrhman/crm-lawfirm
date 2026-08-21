@@ -81,6 +81,7 @@ async function sendOne(
   token: string,
   title: string,
   body: string,
+  badge: number,
   data: Record<string, unknown>
 ): Promise<SendResult> {
   try {
@@ -96,7 +97,7 @@ async function sendOne(
         aps: {
           alert: { title, body },
           sound: "default",
-          badge: 1,
+          badge,
         },
         ...data, // route/taskId — يفتحها التطبيق عند الضغط
       }),
@@ -167,6 +168,20 @@ Deno.serve(async (req) => {
     return json({ success: true, sent: 0, note: "لا أجهزة مسجَّلة لهؤلاء" });
   }
 
+  // شارة الأيقونة = عدد غير المقروء الحقيقي لكل مستلم (كانت 1 ثابتة
+  // فتبقى عالقة على الأيقونة بعد قراءة كل شيء)
+  const unreadByMember = new Map<string, number>();
+  await Promise.all(
+    memberIds.map(async (m) => {
+      const { count } = await admin
+        .from("notifications")
+        .select("id", { count: "exact", head: true })
+        .eq("recipient_id", m)
+        .eq("is_read", false);
+      unreadByMember.set(m, count ?? 1);
+    })
+  );
+
   const jwt = await apnsToken();
   const host =
     (await cfg("APNS_ENV", "sandbox")) === "production"
@@ -175,7 +190,11 @@ Deno.serve(async (req) => {
   const topic = await cfg("APNS_BUNDLE_ID", "sa.redwan.app");
   const results = await Promise.all(
     devices.map((d) =>
-      sendOne(jwt, host, topic, d.token as string, title, message, route ? { route } : {})
+      sendOne(
+        jwt, host, topic, d.token as string, title, message,
+        unreadByMember.get(d.member_id as string) ?? 1,
+        route ? { route } : {}
+      )
     )
   );
 
