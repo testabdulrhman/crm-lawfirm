@@ -36,6 +36,7 @@ struct TasksView: View {
             }
             .background(Theme.ivory)
             .navigationTitle("المهام")
+            .onAppear { Usage.shared.screen("المهام") }
             // تغيير النطاق يعيد تشغيل المهمة تلقائياً لأن التصفية تتم من الخادم
             .task(id: mineOnly) {
                 await load(showSpinner: true)
@@ -338,6 +339,7 @@ struct TaskDetailView: View {
     }
 
     private func postpone(days: Int = 0, label: String? = nil, date: Date? = nil) async {
+        Usage.shared.action("تأجيل مهمة")
         let target = date ?? Calendar.current.date(byAdding: .day, value: days, to: Date())!
         let df = DateFormatter()
         df.dateFormat = "yyyy-MM-dd"
@@ -354,6 +356,7 @@ struct TaskDetailView: View {
     }
 
     private func complete() async {
+        Usage.shared.action("إنجاز مهمة")
         completing = true
         completeError = nil
         do {

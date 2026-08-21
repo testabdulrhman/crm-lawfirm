@@ -297,6 +297,7 @@ struct CaseStreamView: View {
     private func send() {
         let body = draft.trimmingCharacters(in: .whitespaces)
         guard !body.isEmpty, !sending else { return }
+        Usage.shared.action("رسالة نقاش")
         sending = true
         sendError = nil
         Task {

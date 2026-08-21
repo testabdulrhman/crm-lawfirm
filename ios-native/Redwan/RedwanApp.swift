@@ -10,6 +10,7 @@ import UserNotifications
 struct RedwanApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var sb = SB.shared
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {
@@ -23,6 +24,14 @@ struct RedwanApp: App {
                 .preferredColorScheme(.light)
                 .tint(Theme.gold)
                 .task { donateSpotlight() }
+                .onChange(of: scenePhase) {
+                    // تتبع الاستخدام: جلسة ودقائق نشطة (نفس تحليلات الويب)
+                    switch scenePhase {
+                    case .active: Usage.shared.appBecameActive()
+                    case .background: Usage.shared.appWentBackground()
+                    default: break
+                    }
+                }
         }
     }
 
@@ -82,7 +91,10 @@ struct RootView: View {
             LoginView()
         } else {
             MainTabs()
-                .task { await sb.enablePush() }
+                .task {
+                    await sb.enablePush()
+                    Usage.shared.start()
+                }
         }
     }
 }

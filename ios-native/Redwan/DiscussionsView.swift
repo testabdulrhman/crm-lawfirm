@@ -107,6 +107,7 @@ struct DiscussionsView: View {
             }
             .background(Theme.ivory.ignoresSafeArea())
             .navigationTitle("النقاشات")
+            .onAppear { Usage.shared.screen("النقاشات") }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 // نقاش جديد لملفٍ لم يبدأ نقاشه بعد (طلب المستخدم 2026-08-22)

@@ -136,3 +136,8 @@ create policy reviewer_write_comments on public.case_comments
               or case_id in (select id from cases where office_num like 'DEMO%'));
 
 commit;
+
+-- (لاحقاً بنفس اليوم — تحليلات المنصتين) عمود platform + حجب المراجع عن الاستخدام
+-- طُبّق مباشرة كـ usage_platform migration:
+-- alter usage_sessions/usage_daily add platform default 'web'
+-- + سياستا reviewer_usage_* التقييديتان

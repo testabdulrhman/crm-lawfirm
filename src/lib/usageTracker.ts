@@ -87,6 +87,7 @@ async function flushDetails() {
         } else {
           await supabase.from('usage_daily').insert({
             day,
+            platform: 'web',
             user_name: userName,
             event_type: e.type,
             page: e.page,
@@ -140,6 +141,7 @@ export async function startUsageTracking(name: string, userRole: string | null) 
         user_role: userRole,
         login_at: new Date().toISOString(),
         minutes: 0,
+        platform: 'web',
       })
       .select('id')
       .single()

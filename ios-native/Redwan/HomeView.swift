@@ -30,6 +30,7 @@ struct HomeView: View {
             }
             .background(Theme.ivory.ignoresSafeArea())
             .navigationTitle("الرئيسية")
+            .onAppear { Usage.shared.screen("الرئيسية") }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 // جرس الإشعارات — يشوف الموظف كل ما يخصه (طلب 2026-08-22)

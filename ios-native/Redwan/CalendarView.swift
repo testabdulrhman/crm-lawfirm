@@ -102,6 +102,7 @@ struct CalendarView: View {
             }
             .background(Theme.ivory.ignoresSafeArea())
             .navigationTitle("التقويم")
+            .onAppear { Usage.shared.screen("التقويم") }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {

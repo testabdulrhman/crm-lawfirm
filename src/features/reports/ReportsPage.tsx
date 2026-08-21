@@ -340,8 +340,18 @@ function UsageSection() {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
             <StatCard label="نشطون اليوم" value={usage.activeToday} icon={Users} tone="green" />
+            <Card>
+              <CardContent className="p-4">
+                <p className="text-2xl font-bold text-foreground">
+                  {fmtNumber(usage.webShare)}٪ <span className="text-sm font-normal">ويب</span>
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {fmtNumber(100 - usage.webShare)}٪ تطبيق الجوال
+                </p>
+              </CardContent>
+            </Card>
             {/* «مرات الدخول» لا «الجلسات» — كلمة «جلسة» محجوزة لجلسات المحكمة */}
             <StatCard label="مرات الدخول هذا الأسبوع" value={usage.weekSessions} icon={LogIn} tone="gold" />
             <Card>
@@ -379,13 +389,78 @@ function UsageSection() {
                   />
                   <Tooltip
                     contentStyle={{ direction: 'rtl', fontSize: 12, borderRadius: 8 }}
-                    formatter={(v) => [`${fmtNumber(Number(v))} دقيقة`, 'الاستخدام']}
+                    formatter={(v, name) => [
+                      `${fmtNumber(Number(v))} دقيقة`,
+                      name === 'webMinutes' ? 'الويب' : 'التطبيق',
+                    ]}
                   />
-                  <Bar dataKey="minutes" fill="#C9A84C" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="webMinutes" stackId="p" fill="#C9A84C" />
+                  <Bar dataKey="iosMinutes" stackId="p" fill="#111D3A" radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
           </ChartCard>
+
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">أكثر الشاشات استخداماً (١٤ يوماً)</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {usage.topScreens.length === 0 ? (
+                  <MiniEmpty icon={Timer}>لا بيانات بعد</MiniEmpty>
+                ) : (
+                  usage.topScreens.map((t) => (
+                    <div key={t.name} className="flex items-center gap-2">
+                      <span className="min-w-0 flex-1 truncate text-sm text-foreground" dir="ltr">
+                        {t.name}
+                      </span>
+                      <div className="h-2 w-32 overflow-hidden rounded-full bg-muted">
+                        <div
+                          className="h-full rounded-full bg-gold"
+                          style={{
+                            width: `${Math.min(100, (t.value / (usage.topScreens[0]?.value || 1)) * 100)}%`,
+                          }}
+                        />
+                      </div>
+                      <span className="w-16 text-left text-xs text-muted-foreground">
+                        {fmtMins(t.value)}
+                      </span>
+                    </div>
+                  ))
+                )}
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">أكثر الأفعال (١٤ يوماً)</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {usage.topActions.length === 0 ? (
+                  <MiniEmpty icon={LogIn}>لا بيانات بعد</MiniEmpty>
+                ) : (
+                  usage.topActions.map((t) => (
+                    <div key={t.name} className="flex items-center gap-2">
+                      <span className="min-w-0 flex-1 truncate text-sm text-foreground">
+                        {t.name}
+                      </span>
+                      <div className="h-2 w-32 overflow-hidden rounded-full bg-muted">
+                        <div
+                          className="h-full rounded-full bg-navy dark:bg-navy-100"
+                          style={{
+                            width: `${Math.min(100, (t.value / (usage.topActions[0]?.value || 1)) * 100)}%`,
+                          }}
+                        />
+                      </div>
+                      <span className="w-16 text-left text-xs text-muted-foreground">
+                        {fmtNumber(t.value)}
+                      </span>
+                    </div>
+                  ))
+                )}
+              </CardContent>
+            </Card>
+          </div>
 
           <Card>
             <CardHeader>

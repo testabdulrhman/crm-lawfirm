@@ -43,6 +43,7 @@ struct NotificationsView: View {
         }
         .background(Theme.ivory.ignoresSafeArea())
         .navigationTitle("الإشعارات")
+        .onAppear { Usage.shared.screen("الإشعارات") }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if rows.contains(where: { $0.is_read == false }) {
