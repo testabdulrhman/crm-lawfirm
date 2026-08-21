@@ -1,6 +1,7 @@
 import {
   Building2,
   Tags,
+  Trash2,
   Palette,
   Moon,
   Sun,
@@ -28,6 +29,8 @@ import { TemplatesTab } from './TemplatesTab'
 import { AccountTab } from './AccountTab'
 import { BookingTab } from './BookingTab'
 import { ContractTemplatesTab } from './ContractTemplatesTab'
+import { TrashTab } from './TrashTab'
+import { useIsDirector } from '@/hooks/useIsDirector'
 
 // المستوى الأول: مجموعتان — والثاني: تبويبات كل مجموعة
 interface TabDef {
@@ -67,8 +70,15 @@ const GROUPS = [
 export function SettingsPage() {
   // التبويب المفتوح يدوم للرجوع/التحديث — والمجموعة تُشتق منه (مصدر واحد للحقيقة)
   const [tab, setTab] = usePageState('settings:tab', 'account')
+  const isDirector = useIsDirector()
+  // سلة الاسترجاع للمدير وحده — الدوال الخادمية تفرض ذلك أيضاً
+  const officeTabs = isDirector
+    ? [...OFFICE_TABS, { value: 'trash', label: 'سلة الاسترجاع', icon: Trash2 }]
+    : OFFICE_TABS
   const group =
-    OFFICE_TABS.some((t) => t.value === tab) ? GROUPS[1] : GROUPS[0]
+    officeTabs.some((t) => t.value === tab)
+      ? { ...GROUPS[1], tabs: officeTabs }
+      : GROUPS[0]
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -144,6 +154,10 @@ export function SettingsPage() {
 
         <TabsContent value="booking">
           <BookingTab />
+        </TabsContent>
+
+        <TabsContent value="trash">
+          <TrashTab />
         </TabsContent>
 
         <TabsContent value="integrations">
