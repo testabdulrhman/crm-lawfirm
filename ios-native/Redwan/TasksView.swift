@@ -151,6 +151,12 @@ struct TaskDetailView: View {
     @State private var confirmComplete = false
     @State private var completeError: String?
 
+    // التأجيل (طلب المستخدم 2026-08-22: «ما اقدر أأجلها»)
+    @State private var showPostpone = false
+    @State private var showDatePicker = false
+    @State private var pickedDate = Date()
+    @State private var postponing = false
+
     @State private var comments: [CommentRow] = []
     @State private var commentsLoading = true
     @State private var commentsError: String?
@@ -259,6 +265,56 @@ struct TaskDetailView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 16))
             }
             .disabled(completing)
+
+            Button {
+                showPostpone = true
+            } label: {
+                HStack(spacing: 8) {
+                    if postponing {
+                        ProgressView().tint(Theme.goldDark)
+                    } else {
+                        Image(systemName: "clock.arrow.circlepath")
+                            .font(.system(size: 15, weight: .semibold))
+                    }
+                    Text("تأجيل المهمة")
+                        .font(.system(size: 15, weight: .semibold))
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(Theme.goldPale)
+                .foregroundStyle(Theme.goldDark)
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+            }
+            .disabled(postponing)
+            .confirmationDialog("تأجيل إلى", isPresented: $showPostpone, titleVisibility: .visible) {
+                Button("غداً") { Task { await postpone(days: 1, label: "غد") } }
+                Button("بعد ٣ أيام") { Task { await postpone(days: 3, label: "بعد ٣ أيام") } }
+                Button("الأسبوع القادم") { Task { await postpone(days: 7, label: "الأسبوع القادم") } }
+                Button("اختيار تاريخ…") { showDatePicker = true }
+                Button("إلغاء", role: .cancel) {}
+            }
+            .sheet(isPresented: $showDatePicker) {
+                VStack(spacing: 12) {
+                    DatePicker("التاريخ الجديد", selection: $pickedDate,
+                               in: Date()..., displayedComponents: .date)
+                        .datePickerStyle(.graphical)
+                        .environment(\.locale, Locale(identifier: "ar_SA@numbers=latn"))
+                    Button {
+                        showDatePicker = false
+                        Task { await postpone(date: pickedDate) }
+                    } label: {
+                        Text("تأجيل")
+                            .font(.system(size: 16, weight: .bold))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 13)
+                            .background(Theme.gold)
+                            .foregroundStyle(Theme.navy)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                    }
+                }
+                .padding(16)
+                .presentationDetents([.medium, .large])
+            }
             .confirmationDialog(
                 "إنجاز المهمة",
                 isPresented: $confirmComplete,
@@ -279,6 +335,22 @@ struct TaskDetailView: View {
                     .multilineTextAlignment(.center)
             }
         }
+    }
+
+    private func postpone(days: Int = 0, label: String? = nil, date: Date? = nil) async {
+        let target = date ?? Calendar.current.date(byAdding: .day, value: days, to: Date())!
+        let df = DateFormatter()
+        df.dateFormat = "yyyy-MM-dd"
+        let iso = df.string(from: target)
+        postponing = true
+        completeError = nil
+        do {
+            try await sb.postponeTask(id: task.id, toISO: iso, label: label ?? iso)
+            dismiss()
+        } catch {
+            completeError = error.localizedDescription
+        }
+        postponing = false
     }
 
     private func complete() async {

@@ -362,3 +362,20 @@ extension SB {
         return rows.first
     }
 }
+
+// ===== تأجيل مهمة =====
+
+extension SB {
+    /// تأجيل مهمة لتاريخ جديد + توثيق التأجيل في نقاشها ليعرف الفريق
+    func postponeTask(id: String, toISO: String, label: String) async throws {
+        try await patch("tasks", query: [("id", "eq.\(id)")],
+                        values: ["due_date": toISO])
+        if let me = member?.id {
+            try? await insertVoid("task_comments", values: [
+                "task_id": id,
+                "author_id": me,
+                "body": "⏳ أُجّلت المهمة إلى \(label)",
+            ])
+        }
+    }
+}
