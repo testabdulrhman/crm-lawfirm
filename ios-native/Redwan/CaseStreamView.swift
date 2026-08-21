@@ -162,6 +162,8 @@ struct CaseStreamView: View {
                         }
                         .padding(12)
                     }
+                    // المحادثة تفتح على آخر الرسائل مثل الواتساب (طلب 2026-08-22)
+                    .defaultScrollAnchor(.bottom)
                     .onChange(of: msgs.count) {
                         if let last = msgs.last?.id {
                             withAnimation { proxy.scrollTo(last, anchor: .bottom) }
