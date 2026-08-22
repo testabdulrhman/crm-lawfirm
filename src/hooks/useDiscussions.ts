@@ -331,3 +331,59 @@ export function useDeleteMessage() {
       toast({ variant: 'destructive', title: 'تعذّر الحذف', description: errMessage(e) }),
   })
 }
+
+/* ===== عضوية القنوات الخاصة (kind='channel') ===== */
+
+export interface ChannelMember {
+  member_id: string
+  member: { id: string; name: string | null; short_name: string | null } | null
+}
+
+export function useChannelMembers(channelId: string | null) {
+  return useQuery({
+    queryKey: ['channel-members', channelId],
+    enabled: !!channelId,
+    queryFn: async (): Promise<ChannelMember[]> => {
+      const { data, error } = await supabase
+        .from('channel_members')
+        .select('member_id, member:team_members(id, name, short_name)')
+        .eq('channel_id', channelId!)
+      if (error) throw error
+      return (data ?? []) as unknown as ChannelMember[]
+    },
+  })
+}
+
+/** إضافة/إزالة عضو — للمدير فقط (السياسات تفرض ذلك في القاعدة أيضاً) */
+export function useToggleChannelMember(channelId: string | null) {
+  const qc = useQueryClient()
+  const { teamMember } = useAuth()
+  return useMutation({
+    mutationFn: async (input: { memberId: string; add: boolean }) => {
+      if (!channelId) return
+      if (input.add) {
+        const { error } = await supabase.from('channel_members').insert({
+          channel_id: channelId,
+          member_id: input.memberId,
+          added_by: teamMember?.id ?? null,
+        })
+        if (error) throw error
+      } else {
+        const { error } = await supabase
+          .from('channel_members')
+          .delete()
+          .eq('channel_id', channelId)
+          .eq('member_id', input.memberId)
+        if (error) throw error
+      }
+    },
+    onSuccess: () =>
+      qc.invalidateQueries({ queryKey: ['channel-members', channelId] }),
+    onError: (e) =>
+      toast({
+        variant: 'destructive',
+        title: 'تعذّر تعديل أعضاء القناة',
+        description: errMessage(e),
+      }),
+  })
+}

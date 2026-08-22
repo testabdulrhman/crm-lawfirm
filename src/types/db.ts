@@ -10,6 +10,7 @@ export interface TeamMember {
   phone: string | null
   is_director: boolean | null
   is_active: boolean | null
+  is_reviewer: boolean | null // حساب مراجعة أبل المعزول — يُستثنى من القوائم
   avatar_color: string | null
   avatar_initial: string | null
   avatar_url: string | null

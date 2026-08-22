@@ -4,6 +4,7 @@ import {
   Bookmark,
   BookmarkX,
   FolderOpen,
+  Landmark,
   Loader2,
   Megaphone,
   MessagesSquare,
@@ -13,6 +14,7 @@ import {
   Send,
   Sparkles,
   Trash2,
+  Users,
   X,
 } from 'lucide-react'
 
@@ -42,6 +44,7 @@ import { fmtDatePref, fmtNumber, fmtTime } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import {
   useBookmarks,
+  useChannelMembers,
   useDeleteMessage,
   useDiscussions,
   useEditMessage,
@@ -51,12 +54,15 @@ import {
   useStream,
   useThread,
   useToggleBookmark,
+  useToggleChannelMember,
   useToggleReaction,
   type DiscussionRow,
   type Reaction,
   type StreamMsg,
   type ThreadMsg,
 } from '@/hooks/useDiscussions'
+import { useIsDirector } from '@/hooks/useIsDirector'
+import { Switch } from '@/components/ui/switch'
 
 // «النقاشات» في الويب — نفس بنية التطبيق (مجرى بخيوط + ذكاء + قناة عامة)
 // بأسلوب سلاك المكتبي: ثلاث لوحات — القنوات، المجرى، والخيط المفتوح.
@@ -357,7 +363,12 @@ export function DiscussionsPage() {
             title={current?.case_title ?? (selected === null ? 'عام — المكتب' : 'ملف')}
             officeNum={current?.office_num ?? null}
             openThread={setOpenThreadRoot}
-            caseHref={selected ? matterHref(current?.kind ?? 'case', selected) : null}
+            kind={current?.kind ?? null}
+            caseHref={
+              selected && current?.kind !== 'channel'
+                ? matterHref(current?.kind ?? 'case', selected)
+                : null
+            }
           />
         )}
 
@@ -456,6 +467,7 @@ function ChannelList({
         ) : (
           filtered.map((c) => {
             const isGeneral = c.case_id === null
+            const isChannel = c.kind === 'channel'
             const active = selected !== undefined && (selected ?? null) === c.case_id
             return (
               <button
@@ -469,11 +481,15 @@ function ChannelList({
                 <span
                   className={cn(
                     'mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl',
-                    isGeneral ? 'bg-navy text-gold' : 'bg-gold/15 text-gold-600 dark:text-gold-300'
+                    isGeneral || isChannel
+                      ? 'bg-navy text-gold'
+                      : 'bg-gold/15 text-gold-600 dark:text-gold-300'
                   )}
                 >
                   {isGeneral ? (
                     <Megaphone className="h-4 w-4" />
+                  ) : isChannel ? (
+                    <Landmark className="h-4 w-4" />
                   ) : (
                     <MessagesSquare className="h-4 w-4" />
                   )}
@@ -519,6 +535,7 @@ function StreamPane({
   officeNum,
   openThread,
   caseHref = null,
+  kind = null,
 }: {
   caseId: string | null
   title: string
@@ -526,8 +543,12 @@ function StreamPane({
   openThread: (m: StreamMsg) => void
   /** وجهة زر «فتح الملف» — يظهر في صفحة النقاشات لا داخل الملف نفسه */
   caseHref?: string | null
+  /** نوع الملف — 'channel' = قناة خاصة بعضوية (لها زر أعضاء بدل فتح الملف) */
+  kind?: string | null
 }) {
   const { teamMember } = useAuth()
+  const isDirector = useIsDirector()
+  const [membersOpen, setMembersOpen] = useState(false)
   const [, navigate] = useLocation()
   const people = useMentionables()
   const { data: msgs, isLoading, error, refetch } = useStream(caseId, true)
@@ -575,15 +596,38 @@ function StreamPane({
         <span
           className={cn(
             'flex h-8 w-8 items-center justify-center rounded-lg',
-            caseId === null ? 'bg-navy text-gold' : 'bg-gold/15 text-gold-600 dark:text-gold-300'
+            caseId === null || kind === 'channel'
+              ? 'bg-navy text-gold'
+              : 'bg-gold/15 text-gold-600 dark:text-gold-300'
           )}
         >
-          {caseId === null ? <Megaphone className="h-4 w-4" /> : <MessagesSquare className="h-4 w-4" />}
+          {caseId === null ? (
+            <Megaphone className="h-4 w-4" />
+          ) : kind === 'channel' ? (
+            <Landmark className="h-4 w-4" />
+          ) : (
+            <MessagesSquare className="h-4 w-4" />
+          )}
         </span>
         <div className="min-w-0 flex-1">
           <p className="truncate text-[15px] font-semibold text-foreground">{title}</p>
-          {officeNum && <p className="text-xs text-muted-foreground">{officeNum}</p>}
+          {kind === 'channel' ? (
+            <p className="text-xs text-muted-foreground">قناة خاصة — يراها أعضاؤها فقط</p>
+          ) : (
+            officeNum && <p className="text-xs text-muted-foreground">{officeNum}</p>
+          )}
         </div>
+        {kind === 'channel' && isDirector && caseId && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5 text-xs"
+            onClick={() => setMembersOpen(true)}
+          >
+            <Users className="h-3.5 w-3.5" />
+            الأعضاء
+          </Button>
+        )}
         {caseHref && (
           <Button
             variant="outline"
@@ -596,6 +640,14 @@ function StreamPane({
           </Button>
         )}
       </div>
+
+      {kind === 'channel' && caseId && (
+        <ChannelMembersDialog
+          channelId={caseId}
+          open={membersOpen}
+          onOpenChange={setMembersOpen}
+        />
+      )}
 
       <div className="flex-1 space-y-3 overflow-y-auto p-4">
         {error ? (
@@ -1134,6 +1186,73 @@ function Composer({
 }
 
 /* ===================== المحفوظات ===================== */
+
+/** إدارة أعضاء قناة خاصة — للمدير: مفاتيح تشغيل لكل موظف */
+function ChannelMembersDialog({
+  channelId,
+  open,
+  onOpenChange,
+}: {
+  channelId: string
+  open: boolean
+  onOpenChange: (v: boolean) => void
+}) {
+  const { data: team } = useTeamMembers()
+  const { data: members, isLoading } = useChannelMembers(channelId)
+  const toggle = useToggleChannelMember(channelId)
+  const memberIds = new Set((members ?? []).map((m) => m.member_id))
+
+  // حسابات المراجعة والموقوفون لا يُعرضون
+  const eligible = (team ?? []).filter(
+    (t) => !t.is_reviewer && t.is_active !== false
+  )
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>أعضاء القناة</DialogTitle>
+        </DialogHeader>
+        {isLoading ? (
+          <div className="space-y-2">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Skeleton key={i} className="h-10 w-full" />
+            ))}
+          </div>
+        ) : (
+          <div className="max-h-80 space-y-1 overflow-y-auto">
+            {eligible.map((t) => {
+              const inChannel = memberIds.has(t.id)
+              return (
+                <label
+                  key={t.id}
+                  className="flex cursor-pointer items-center justify-between gap-3 rounded-lg px-2 py-2 hover:bg-muted/60"
+                >
+                  <span className="text-sm text-foreground">
+                    {t.name}
+                    {t.is_director && (
+                      <span className="mr-1.5 text-xs text-gold">مدير</span>
+                    )}
+                  </span>
+                  <Switch
+                    checked={inChannel}
+                    disabled={toggle.isPending}
+                    onCheckedChange={(v) =>
+                      toggle.mutate({ memberId: t.id, add: v })
+                    }
+                  />
+                </label>
+              )
+            })}
+          </div>
+        )}
+        <p className="text-xs text-muted-foreground">
+          العضو يرى القناة ورسائلها وملفاتها — ومن يُزال تختفي عنه فوراً.
+        </p>
+      </DialogContent>
+    </Dialog>
+  )
+}
 
 function BookmarksDialog({
   open,
