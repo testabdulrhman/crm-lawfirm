@@ -36,6 +36,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { QueryErrorState } from '@/components/QueryErrorState'
 import { EmptyState } from '@/components/EmptyState'
+import { FilePreviewDialog } from '@/components/FilePreviewDialog'
 import { useConfirm } from '@/components/ConfirmDialog'
 import { useAuth } from '@/stores/auth'
 import { useTeamMembers } from '@/hooks/useTeam'
@@ -739,22 +740,7 @@ function MessageBubble({
           <Body text={msg.body} className="whitespace-pre-wrap text-sm text-foreground" />
         )}
         {msg.document_name && (
-          <a
-            href={msg.document_url ?? '#'}
-            target="_blank"
-            rel="noreferrer"
-            className="mt-1.5 flex items-center gap-2 rounded-xl border border-border/60 bg-card px-3 py-2 transition-colors hover:border-gold/50"
-          >
-            <Paperclip className="h-4 w-4 shrink-0 text-gold" />
-            <span className="min-w-0">
-              <span className="block truncate text-[13px] font-medium text-foreground">
-                {msg.document_name}
-              </span>
-              <span className="block text-[10px] text-emerald-600 dark:text-emerald-400">
-                محفوظ في المستندات — اضغط للفتح
-              </span>
-            </span>
-          </a>
+          <AttachmentChip name={msg.document_name} url={msg.document_url} />
         )}
 
         <button
@@ -1104,19 +1090,62 @@ function ThreadReply({
       >
         {r.body && <Body text={r.body} className="whitespace-pre-wrap text-sm text-foreground" />}
         {r.document_name && (
-          <a
-            href={r.document_url ?? '#'}
-            target="_blank"
-            rel="noreferrer"
-            className="mt-1 flex items-center gap-1.5 text-xs text-gold hover:underline"
-          >
-            <Paperclip className="h-3 w-3" />
-            {r.document_name}
-          </a>
+          <AttachmentChip name={r.document_name} url={r.document_url} compact />
         )}
       </div>
       <ReactionChips msg={r} caseId={caseId} />
     </div>
+  )
+}
+
+/* ===================== مرفق الرسالة ===================== */
+
+// شريحة المرفق: تفتح المعاينة داخل النظام (PDF/صور) بدل تبويب خارجي —
+// طلب المستخدم 2026-08-22: «ابي استعرض داخل التطبيق وداخل المستعرض»
+function AttachmentChip({
+  name,
+  url,
+  compact = false,
+}: {
+  name: string
+  url: string | null
+  compact?: boolean
+}) {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <>
+      {compact ? (
+        <button
+          onClick={() => setOpen(true)}
+          className="mt-1 flex items-center gap-1.5 text-right text-xs text-gold hover:underline"
+        >
+          <Paperclip className="h-3 w-3" />
+          {name}
+        </button>
+      ) : (
+        <button
+          onClick={() => setOpen(true)}
+          className="mt-1.5 flex w-full items-center gap-2 rounded-xl border border-border/60 bg-card px-3 py-2 text-right transition-colors hover:border-gold/50"
+        >
+          <Paperclip className="h-4 w-4 shrink-0 text-gold" />
+          <span className="min-w-0">
+            <span className="block truncate text-[13px] font-medium text-foreground">
+              {name}
+            </span>
+            <span className="block text-[10px] text-emerald-600 dark:text-emerald-400">
+              محفوظ في المستندات — اضغط للمعاينة
+            </span>
+          </span>
+        </button>
+      )}
+      <FilePreviewDialog
+        open={open}
+        onOpenChange={setOpen}
+        fileUrl={url}
+        fileName={name}
+      />
+    </>
   )
 }
 

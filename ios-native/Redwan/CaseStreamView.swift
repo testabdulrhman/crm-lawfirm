@@ -617,11 +617,12 @@ struct AttachmentChip: View {
     let name: String
     let url: String?
 
+    // المعاينة داخل التطبيق (QuickLook) — لا قفز إلى سفاري
+    @State private var showPreview = false
+
     var body: some View {
         Button {
-            if let url, let u = URL(string: url) {
-                UIApplication.shared.open(u)
-            }
+            showPreview = true
         } label: {
             HStack(spacing: 8) {
                 Image(systemName: "doc.text.fill")
@@ -640,6 +641,9 @@ struct AttachmentChip: View {
             }
         }
         .buttonStyle(.plain)
+        .sheet(isPresented: $showPreview) {
+            FilePreviewSheet(name: name, url: url)
+        }
     }
 }
 
