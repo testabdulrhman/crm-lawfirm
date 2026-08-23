@@ -10,8 +10,17 @@
 		<dict>
 			<key>NSExtensionActivationRule</key>
 			<dict>
+				<!-- مفتاح Attachments وحده لا يعلن الأنواع — بدون مفاتيح
+				     File/Image/Movie الصريحة لا يظهر التطبيق عند المشاركة
+				     من «الملفات» (سبب بلاغ 2026-08-23) -->
 				<key>NSExtensionActivationSupportsAttachmentsWithMaxCount</key>
 				<integer>10</integer>
+				<key>NSExtensionActivationSupportsFileWithMaxCount</key>
+				<integer>10</integer>
+				<key>NSExtensionActivationSupportsImageWithMaxCount</key>
+				<integer>10</integer>
+				<key>NSExtensionActivationSupportsMovieWithMaxCount</key>
+				<integer>5</integer>
 				<key>NSExtensionActivationSupportsWebURLWithMaxCount</key>
 				<integer>1</integer>
 				<key>NSExtensionActivationSupportsText</key>
