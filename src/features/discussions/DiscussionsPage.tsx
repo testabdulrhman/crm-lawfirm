@@ -41,6 +41,7 @@ import { useConfirm } from '@/components/ConfirmDialog'
 import { useAuth } from '@/stores/auth'
 import { useTeamMembers } from '@/hooks/useTeam'
 import { pickFile } from '@/lib/files'
+import { arNorm } from '@/lib/arabic'
 import { fmtDatePref, fmtNumber, fmtTime } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import {
@@ -205,7 +206,7 @@ function MentionInput({
       { id: null, label: 'الذكاء', initial: null, color: null },
       ...people,
     ]
-    const items = pool.filter((p) => p.label.includes(q)).slice(0, 7)
+    const items = pool.filter((p) => arNorm(p.label).includes(arNorm(q))).slice(0, 7)
     if (!items.length) return setSug(null)
     setSug({ items, start: caret - q.length - 1 })
     setHi(0)
@@ -416,12 +417,12 @@ function ChannelList({
   const [q, setQ] = useState('')
 
   const filtered = useMemo(() => {
-    const needle = q.trim().toLowerCase()
+    const needle = arNorm(q.trim())
     const base = needle
       ? channels.filter(
           (c) =>
-            (c.case_title ?? '').toLowerCase().includes(needle) ||
-            (c.last_body ?? '').toLowerCase().includes(needle)
+            arNorm(c.case_title ?? '').includes(needle) ||
+            arNorm(c.last_body ?? '').includes(needle)
         )
       : channels
     // العامة مثبّتة أولاً دائماً

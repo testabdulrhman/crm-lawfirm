@@ -10,6 +10,7 @@ import { EmptyState, FilteredEmptyState } from '@/components/EmptyState'
 import { QueryErrorState } from '@/components/QueryErrorState'
 import { fmtNumber, fmtDatePref, fmtTime, daysLabel } from '@/lib/format'
 import { cn } from '@/lib/utils'
+import { arNorm } from '@/lib/arabic'
 import { useAllSessions } from '@/hooks/useCaseSessions'
 import { usePageState } from '@/hooks/usePageState'
 import type { SessionWithCase } from '@/hooks/useCaseSessions'
@@ -82,14 +83,13 @@ export function SessionsPage() {
   }, [withStatus])
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
+    const q = arNorm(search.trim())
     return withStatus.filter(({ s, st }) => {
       if (filter !== 'all' && st !== filter) return false
       if (q) {
-        const hay = [s.case?.title, s.title, s.court]
-          .filter(Boolean)
-          .join(' ')
-          .toLowerCase()
+        const hay = arNorm(
+          [s.case?.title, s.title, s.court].filter(Boolean).join(' ')
+        )
         if (!hay.includes(q)) return false
       }
       return true

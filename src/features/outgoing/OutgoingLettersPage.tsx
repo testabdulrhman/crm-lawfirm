@@ -10,6 +10,7 @@ import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { EmptyState, FilteredEmptyState } from '@/components/EmptyState'
 import { QueryErrorState } from '@/components/QueryErrorState'
 import { fmtNumber, fmtDatePref } from '@/lib/format'
+import { arNorm } from '@/lib/arabic'
 import { useOutgoingLetters } from '@/hooks/useOutgoingLetters'
 import { usePageState } from '@/hooks/usePageState'
 import { OutgoingLetterForm } from './OutgoingLetterForm'
@@ -22,14 +23,12 @@ export function OutgoingLettersPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
+    const q = arNorm(search.trim())
     if (!q) return data ?? []
     return (data ?? []).filter((l) =>
-      [l.letter_number, l.subject, l.recipient]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase()
-        .includes(q)
+      arNorm(
+        [l.letter_number, l.subject, l.recipient].filter(Boolean).join(' ')
+      ).includes(q)
     )
   }, [data, search])
 

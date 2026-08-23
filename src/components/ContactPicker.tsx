@@ -3,6 +3,7 @@ import { UserPlus, X } from 'lucide-react'
 
 import { Input } from '@/components/ui/input'
 import { QuickContactDialog } from '@/components/QuickContactDialog'
+import { arNorm } from '@/lib/arabic'
 import type { Contact } from '@/types/db'
 
 // منتقي جهة اتصال بحثي خفيف (يصلح لـ 777 جهة). يُرجع الجهة كاملة عند الاختيار.
@@ -55,15 +56,13 @@ export function ContactPicker({
   )
 
   const matches = useMemo(() => {
-    const q = query.trim().toLowerCase()
+    const q = arNorm(query.trim())
     if (!q) return contacts.slice(0, 20)
     return contacts
       .filter((c) =>
-        [c.name, c.phone, c.phone2, c.email]
-          .filter(Boolean)
-          .join(' ')
-          .toLowerCase()
-          .includes(q)
+        arNorm(
+          [c.name, c.phone, c.phone2, c.email].filter(Boolean).join(' ')
+        ).includes(q)
       )
       .slice(0, 20)
   }, [contacts, query])

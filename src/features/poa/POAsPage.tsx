@@ -17,6 +17,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
+import { arNorm } from '@/lib/arabic'
 import { fmtNumber, fmtDatePref } from '@/lib/format'
 import { usePOAs } from '@/hooks/usePOAs'
 import { usePageState } from '@/hooks/usePageState'
@@ -58,13 +59,12 @@ export function POAsPage() {
   }, [data])
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
+    const q = arNorm(search.trim())
     const list = (data ?? []).filter((p) => {
       if (q) {
-        const hay = [p.poa_number, p.client_name, p.agent_name]
-          .filter(Boolean)
-          .join(' ')
-          .toLowerCase()
+        const hay = arNorm(
+          [p.poa_number, p.client_name, p.agent_name].filter(Boolean).join(' ')
+        )
         if (!hay.includes(q)) return false
       }
       if (status !== 'all' && (p.status ?? 'active') !== status) return false

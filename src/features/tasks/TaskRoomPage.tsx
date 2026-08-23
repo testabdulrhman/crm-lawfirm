@@ -60,6 +60,7 @@ import {
 } from '@/components/ui/alert-dialog'
 
 import { cn } from '@/lib/utils'
+import { arNorm } from '@/lib/arabic'
 import { fmtDatePref, fmtDateTime, fmtNumber } from '@/lib/format'
 import { pickFile, captureDocument } from '@/lib/files'
 import { isNative, tapFeedback } from '@/lib/push'
@@ -1212,7 +1213,7 @@ function Composer({
     mentionQuery !== null
       ? members
           .filter((m) =>
-            (m.short_name || m.name).toLowerCase().includes(mentionQuery.toLowerCase())
+            arNorm(m.short_name || m.name).includes(arNorm(mentionQuery))
           )
           .slice(0, 6)
       : []

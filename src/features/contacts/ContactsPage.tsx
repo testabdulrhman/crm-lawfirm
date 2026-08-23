@@ -28,6 +28,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { fmtNumber } from '@/lib/format'
+import { arNorm } from '@/lib/arabic'
 import { openExternal } from '@/lib/external'
 import { useContacts, useContactWorkLinks } from '@/hooks/useContacts'
 import { usePageState } from '@/hooks/usePageState'
@@ -93,13 +94,12 @@ export function ContactsPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
+    const q = arNorm(search.trim())
     return (data ?? []).filter((c) => {
       if (q) {
-        const hay = [c.name, c.phone, c.phone2, c.id_number]
-          .filter(Boolean)
-          .join(' ')
-          .toLowerCase()
+        const hay = arNorm(
+          [c.name, c.phone, c.phone2, c.id_number].filter(Boolean).join(' ')
+        )
         if (!hay.includes(q)) return false
       }
       if (category !== 'all' && (c.category ?? '') !== category) return false

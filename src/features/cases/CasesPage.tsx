@@ -36,6 +36,7 @@ import {
   caseTypeLabel,
 } from '@/lib/caseLabels'
 import { cn } from '@/lib/utils'
+import { arNorm } from '@/lib/arabic'
 import type { Case } from '@/types/db'
 
 const PAGE = 50
@@ -98,13 +99,14 @@ export function CasesPage() {
   }, [data])
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
+    const q = arNorm(search.trim())
     const list = (data ?? []).filter((c) => {
       if (q) {
-        const hay = [c.title, c.office_num, c.court_num, c.contact?.name]
-          .filter(Boolean)
-          .join(' ')
-          .toLowerCase()
+        const hay = arNorm(
+          [c.title, c.office_num, c.court_num, c.contact?.name]
+            .filter(Boolean)
+            .join(' ')
+        )
         if (!hay.includes(q)) return false
       }
       if (status !== 'all' && (c.status ?? 'jarri') !== status) return false

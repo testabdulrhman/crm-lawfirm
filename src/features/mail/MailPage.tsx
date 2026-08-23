@@ -32,6 +32,7 @@ import { CasePicker } from '@/components/CasePicker'
 import { Ltr } from '@/components/Ltr'
 import { fmtNumber, fmtDateTime } from '@/lib/format'
 import { cn } from '@/lib/utils'
+import { arNorm } from '@/lib/arabic'
 import { useAuth } from '@/stores/auth'
 import { useContacts } from '@/hooks/useContacts'
 import { useCases } from '@/hooks/useCases'
@@ -50,14 +51,14 @@ export function MailPage() {
   const [composeOpen, setComposeOpen] = useState(false)
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
+    const q = arNorm(search.trim())
     if (!q) return data ?? []
     return (data ?? []).filter((m) =>
-      [m.from_name, m.from_email, m.to_email, m.subject, m.snippet, m.body_text]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase()
-        .includes(q)
+      arNorm(
+        [m.from_name, m.from_email, m.to_email, m.subject, m.snippet, m.body_text]
+          .filter(Boolean)
+          .join(' ')
+      ).includes(q)
     )
   }, [data, search])
 

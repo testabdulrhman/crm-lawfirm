@@ -19,6 +19,7 @@ import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { QueryErrorState } from '@/components/QueryErrorState'
 import { EmptyState, FilteredEmptyState } from '@/components/EmptyState'
 import { cn } from '@/lib/utils'
+import { arNorm } from '@/lib/arabic'
 import { fmtNumber, fmtDatePref } from '@/lib/format'
 import { useEngagements } from '@/hooks/useEngagements'
 import { usePageState } from '@/hooks/usePageState'
@@ -47,14 +48,15 @@ export function EngagementsPage() {
   }, [data])
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
+    const q = arNorm(search.trim())
     return (data ?? []).filter((e) => {
       if (status !== 'all' && e.status !== status) return false
       if (q) {
-        const hay = [e.title, e.engagement_number, e.client?.name]
-          .filter(Boolean)
-          .join(' ')
-          .toLowerCase()
+        const hay = arNorm(
+          [e.title, e.engagement_number, e.client?.name]
+            .filter(Boolean)
+            .join(' ')
+        )
         if (!hay.includes(q)) return false
       }
       return true

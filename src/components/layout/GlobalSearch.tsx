@@ -20,6 +20,7 @@ import {
 } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
+import { arNorm } from '@/lib/arabic'
 import { fmtNumber } from '@/lib/format'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -96,9 +97,9 @@ export function GlobalSearch() {
 
   // صفحات مطابقة لما كُتب (أو كلها عند حقل فارغ)
   const navMatches = useMemo(() => {
-    const q = query.trim()
+    const q = arNorm(query.trim())
     if (!q) return NAV_ACTIONS
-    return NAV_ACTIONS.filter((a) => a.label.includes(q))
+    return NAV_ACTIONS.filter((a) => arNorm(a.label).includes(q))
   }, [query])
 
   // القائمة المسطّحة بترتيب العرض: الصفحات ثم النتائج بترتيب المجموعات

@@ -23,6 +23,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
+import { arNorm } from '@/lib/arabic'
 import { fmtNumber, fmtCurrency, fmtDatePref } from '@/lib/format'
 import { usePropertyTransfers } from '@/hooks/usePropertyTransfers'
 import { usePageState } from '@/hooks/usePageState'
@@ -75,13 +76,14 @@ export function PropertyTransfersPage() {
   }, [data])
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
+    const q = arNorm(search.trim())
     return (data ?? []).filter((p) => {
       if (q) {
-        const hay = [p.deed_number, p.seller_name, p.buyer_name, p.location]
-          .filter(Boolean)
-          .join(' ')
-          .toLowerCase()
+        const hay = arNorm(
+          [p.deed_number, p.seller_name, p.buyer_name, p.location]
+            .filter(Boolean)
+            .join(' ')
+        )
         if (!hay.includes(q)) return false
       }
       if (status !== 'all' && (p.status ?? '') !== status) return false

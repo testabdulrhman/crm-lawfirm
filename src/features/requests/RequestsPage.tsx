@@ -11,6 +11,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { EmptyState, FilteredEmptyState } from '@/components/EmptyState'
 import { QueryErrorState } from '@/components/QueryErrorState'
 import { fmtDatePref, fmtNumber } from '@/lib/format'
+import { arNorm } from '@/lib/arabic'
 import { useRequests } from '@/hooks/useRequests'
 import { usePageState } from '@/hooks/usePageState'
 import { RequestForm } from './RequestForm'
@@ -41,13 +42,12 @@ export function RequestsPage() {
   }, [data])
 
   const list = useMemo(() => {
-    const q = search.trim().toLowerCase()
+    const q = arNorm(search.trim())
     return (data ?? []).filter((r) => {
       if (q) {
-        const hay = [r.client_name, r.client_phone]
-          .filter(Boolean)
-          .join(' ')
-          .toLowerCase()
+        const hay = arNorm(
+          [r.client_name, r.client_phone].filter(Boolean).join(' ')
+        )
         if (!hay.includes(q)) return false
       }
       if (filter !== 'all' && (r.status ?? 'under_review') !== filter) return false

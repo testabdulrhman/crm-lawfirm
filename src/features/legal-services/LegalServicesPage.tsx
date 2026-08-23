@@ -25,6 +25,7 @@ import {
 import { QueryErrorState } from '@/components/QueryErrorState'
 import { EmptyState, FilteredEmptyState } from '@/components/EmptyState'
 import { cn } from '@/lib/utils'
+import { arNorm } from '@/lib/arabic'
 import { fmtNumber, fmtDatePref } from '@/lib/format'
 import { useLegalServices } from '@/hooks/useLegalServices'
 import { usePageState } from '@/hooks/usePageState'
@@ -65,10 +66,10 @@ export function LegalServicesPage() {
   }, [data])
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
+    const q = arNorm(search.trim())
     return (data ?? []).filter((s) => {
       if (q) {
-        const hay = [s.title, s.client_name].filter(Boolean).join(' ').toLowerCase()
+        const hay = arNorm([s.title, s.client_name].filter(Boolean).join(' '))
         if (!hay.includes(q)) return false
       }
       if (type !== 'all' && (s.type ?? '') !== type) return false

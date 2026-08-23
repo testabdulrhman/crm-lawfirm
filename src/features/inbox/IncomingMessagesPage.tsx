@@ -36,6 +36,7 @@ import { QueryErrorState } from '@/components/QueryErrorState'
 import { Ltr } from '@/components/Ltr'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { fmtNumber, fmtDateTime } from '@/lib/format'
+import { arNorm } from '@/lib/arabic'
 import {
   useIncomingSms,
   useLinkSmsToCase,
@@ -119,17 +120,15 @@ function IncomingTab() {
   const unread = (data ?? []).filter((m) => m.is_important && !m.read_at).length
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
+    const q = arNorm(search.trim())
     let rows = data ?? []
     if (tab === 'important') rows = rows.filter((m) => m.is_important)
     else if (tab !== 'all') rows = rows.filter((m) => (m.category ?? 'other') === tab)
     if (!q) return rows
     return rows.filter((m) =>
-      [m.recipient_name, m.phone, m.message]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase()
-        .includes(q)
+      arNorm(
+        [m.recipient_name, m.phone, m.message].filter(Boolean).join(' ')
+      ).includes(q)
     )
   }, [data, search, tab])
 
@@ -446,17 +445,17 @@ function OutgoingTab() {
   }, [rows])
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
+    const q = arNorm(search.trim())
     let out = rows
     if (statusFilter !== 'all') out = out.filter((m) => m.status === statusFilter)
     if (typeFilter !== 'all') out = out.filter((m) => m.type === typeFilter)
     if (!q) return out
     return out.filter((m) =>
-      [m.recipient_name, m.phone, m.message, m.sent_by]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase()
-        .includes(q)
+      arNorm(
+        [m.recipient_name, m.phone, m.message, m.sent_by]
+          .filter(Boolean)
+          .join(' ')
+      ).includes(q)
     )
   }, [rows, search, typeFilter, statusFilter])
 

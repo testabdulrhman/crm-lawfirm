@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { X } from 'lucide-react'
 
 import { Input } from '@/components/ui/input'
+import { arNorm } from '@/lib/arabic'
 import type { Case } from '@/types/db'
 
 // منتقي قضية بحثي خفيف (بحث بالعنوان/رقم المكتب/رقم المحكمة).
@@ -44,15 +45,13 @@ export function CasePicker({
   )
 
   const matches = useMemo(() => {
-    const q = query.trim().toLowerCase()
+    const q = arNorm(query.trim())
     if (!q) return cases.slice(0, 20)
     return cases
       .filter((c) =>
-        [c.title, c.office_num, c.court_num]
-          .filter(Boolean)
-          .join(' ')
-          .toLowerCase()
-          .includes(q)
+        arNorm(
+          [c.title, c.office_num, c.court_num].filter(Boolean).join(' ')
+        ).includes(q)
       )
       .slice(0, 20)
   }, [cases, query])

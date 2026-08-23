@@ -69,7 +69,8 @@ struct MentionSuggestBar: View {
         guard let q = query else { return [] }
         var labels = staff.map(Mention.label).filter { !$0.isEmpty }
         labels.append("الذكاء")
-        return labels.filter { q.isEmpty || $0.contains(q) }
+        // arContains: كتابة «@احمد» تجد «أحمد»
+        return labels.filter { q.isEmpty || $0.arContains(q) }
     }
 
     var body: some View {

@@ -38,6 +38,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { cn } from '@/lib/utils'
+import { arNorm } from '@/lib/arabic'
 import { fmtNumber, fmtDatePref } from '@/lib/format'
 import { useAuth } from '@/stores/auth'
 import { useIsDirector } from '@/hooks/useIsDirector'
@@ -86,14 +87,14 @@ export function TasksPage() {
 
   // تصفية بالبحث ثم تجميع زمني
   const { groups, doneList, openCount, overdueCount } = useMemo(() => {
-    const q = search.trim().toLowerCase()
+    const q = arNorm(search.trim())
     const rows = (data ?? []).filter((t) => {
       if (!q) return true
-      return [t.title, t.description, t.case?.title, t.assignee?.name]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase()
-        .includes(q)
+      return arNorm(
+        [t.title, t.description, t.case?.title, t.assignee?.name]
+          .filter(Boolean)
+          .join(' ')
+      ).includes(q)
     })
 
     const g = new Map<BucketKey, TaskRow[]>()

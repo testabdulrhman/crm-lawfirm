@@ -62,9 +62,10 @@ struct DiscussionsView: View {
     /// العامة مثبّتة أولاً دائماً — ثم البقية بالأحدث (ترتيب الدالة)
     private var filtered: [DiscussionRow] {
         let q = search.trimmingCharacters(in: .whitespaces)
+        // arContains: غير حساس للهمزات والتاء المربوطة (محكمه = المحكمة)
         let base = q.isEmpty ? rows : rows.filter {
-            ($0.case_title ?? "").localizedCaseInsensitiveContains(q)
-                || ($0.last_body ?? "").localizedCaseInsensitiveContains(q)
+            ($0.case_title ?? "").arContains(q)
+                || ($0.last_body ?? "").arContains(q)
         }
         return base.sorted { a, b in
             if a.isGeneral != b.isGeneral { return a.isGeneral }
@@ -224,7 +225,7 @@ private struct MatterPicker: View {
         let q = search.trimmingCharacters(in: .whitespaces)
         guard !q.isEmpty else { return matters }
         return matters.filter {
-            ($0.title ?? "").contains(q) || ($0.office_num ?? "").contains(q)
+            ($0.title ?? "").arContains(q) || ($0.office_num ?? "").arContains(q)
         }
     }
 

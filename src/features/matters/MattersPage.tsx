@@ -30,6 +30,7 @@ import { lsStatusLabel, lsStatusBadge } from '@/lib/legalServiceLabels'
 import { propertyStatusLabel } from '@/lib/propertyLabels'
 import { fmtDatePref, fmtNumber } from '@/lib/format'
 import { cn } from '@/lib/utils'
+import { arNorm } from '@/lib/arabic'
 import { Ltr } from '@/components/Ltr'
 
 // تبويب «الملفات» — نموذج Matter الموحّد (قرار المستخدم 2026-08-21).
@@ -66,15 +67,13 @@ export function MattersPage() {
 
   const rows = data ?? []
   const filtered = useMemo(() => {
-    const needle = q.trim().toLowerCase()
+    const needle = arNorm(q.trim())
     return rows.filter((m) => {
       if (kind !== 'all' && m.kind !== kind) return false
       if (!needle) return true
-      return [m.title, m.client, m.ref]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase()
-        .includes(needle)
+      return arNorm(
+        [m.title, m.client, m.ref].filter(Boolean).join(' ')
+      ).includes(needle)
     })
   }, [rows, kind, q])
 

@@ -25,6 +25,7 @@ import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { EmptyState, FilteredEmptyState } from '@/components/EmptyState'
 import { QueryErrorState } from '@/components/QueryErrorState'
 import { cn } from '@/lib/utils'
+import { arNorm } from '@/lib/arabic'
 import { fmtNumber, fmtHijri, fmtGregorian, fmtTime, todayISO, daysLabel } from '@/lib/format'
 import { useAppointments } from '@/hooks/useAppointments'
 import { usePageState } from '@/hooks/usePageState'
@@ -61,10 +62,10 @@ export function AppointmentsPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
+    const q = arNorm(search.trim())
     return (data ?? []).filter((a) => {
       if (q) {
-        const name = (a.client_name || a.client?.name || '').toLowerCase()
+        const name = arNorm(a.client_name || a.client?.name || '')
         if (!name.includes(q)) return false
       }
       if (status !== 'all' && (a.status ?? '') !== status) return false
