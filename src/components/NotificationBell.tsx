@@ -1,4 +1,5 @@
 // جرس الإشعارات في الشريط العلوي — عدّاد غير المقروء + قائمة بضغطة تنقلك للمكان
+import { useEffect, useState } from 'react'
 import { useLocation } from 'wouter'
 import {
   Bell,
@@ -18,8 +19,16 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
 import { fmtNumber, fmtDateTime } from '@/lib/format'
+import { toast } from '@/hooks/use-toast'
+import {
+  browserNotifSupported,
+  browserNotifEnabled,
+  setBrowserNotifEnabled,
+  showNewBrowserNotifications,
+} from '@/lib/browserNotify'
 import {
   useNotifications,
   useUnreadCount,
@@ -73,9 +82,28 @@ export function NotificationBell() {
   const { data: items } = useNotifications()
   const { data: unread } = useUnreadCount()
   const markM = useMarkRead()
+  const [browserNotifs, setBrowserNotifs] = useState(browserNotifEnabled)
 
   const count = unread ?? 0
   const list = items ?? []
+
+  // إشعار نظام من المتصفح لكل جديد — يظهر والتبويب في الخلفية فقط
+  useEffect(() => {
+    if (items?.length) showNewBrowserNotifications(items, destination)
+  }, [items])
+
+  const toggleBrowserNotifs = async (on: boolean) => {
+    const granted = await setBrowserNotifEnabled(on)
+    setBrowserNotifs(granted)
+    if (on && !granted) {
+      toast({
+        variant: 'destructive',
+        title: 'المتصفح يمنع الإشعارات',
+        description:
+          'فعّلها من إعدادات الموقع في المتصفح (رمز القفل بجانب العنوان) ثم أعد المحاولة.',
+      })
+    }
+  }
 
   return (
     <DropdownMenu dir="rtl">
@@ -113,6 +141,16 @@ export function NotificationBell() {
             </Button>
           )}
         </div>
+
+        {/* إشعارات المتصفح — تظهر من النظام والتبويب في الخلفية */}
+        {browserNotifSupported() && (
+          <label className="flex cursor-pointer items-center justify-between border-b px-3 py-2">
+            <span className="text-xs text-muted-foreground">
+              إشعارات المتصفح (والتبويب في الخلفية)
+            </span>
+            <Switch checked={browserNotifs} onCheckedChange={toggleBrowserNotifs} />
+          </label>
+        )}
 
         <div className="max-h-96 overflow-y-auto">
           {list.length === 0 ? (
