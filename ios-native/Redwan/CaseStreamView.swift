@@ -296,17 +296,34 @@ struct CaseStreamView: View {
 
     private func send() {
         let body = draft.trimmingCharacters(in: .whitespaces)
-        guard !body.isEmpty, !sending else { return }
+        guard !body.isEmpty else { return }
         Usage.shared.action("رسالة نقاش")
-        sending = true
         sendError = nil
+
+        // عرض متفائل (نمط الواتساب): الرسالة تظهر فوراً والحقل يفرغ فوراً،
+        // والخادم يلحق بالخلفية — كان الإحساس بالبطء من انتظار رحلتين للشبكة
+        let tempId = "temp-\(UUID().uuidString)"
+        let optimistic = StreamMsg(
+            id: tempId,
+            author_id: sb.member?.id,
+            author_name: sb.member?.short_name ?? sb.member?.name,
+            body: body,
+            kind: "user",
+            document_id: nil, document_name: nil, document_url: nil,
+            mentions: nil,
+            created_at: ISO8601DateFormatter().string(from: Date()),
+            edited_at: nil, reply_count: 0, last_reply_at: nil,
+            reactions: [], bookmarked: false
+        )
+        msgs.append(optimistic)
+        draft = ""
+
         Task {
             do {
                 try await sb.postMessage(
                     caseId: caseId, body: body,
                     mentions: Mention.extract(from: body, people: staff)
                 )
-                draft = ""
                 await load()
                 Task {
                     try? await Task.sleep(for: .seconds(5))
@@ -315,9 +332,11 @@ struct CaseStreamView: View {
                     await load()
                 }
             } catch {
+                // تراجع: أزل الرسالة المتفائلة وأعد النص للحقل كي لا يضيع
+                msgs.removeAll { $0.id == tempId }
+                draft = body
                 sendError = error.localizedDescription
             }
-            sending = false
         }
     }
 
@@ -939,20 +958,36 @@ private struct ThreadView: View {
 
     private func send() {
         let body = draft.trimmingCharacters(in: .whitespaces)
-        guard !body.isEmpty, !sending else { return }
-        sending = true
+        guard !body.isEmpty else { return }
         sendError = nil
+
+        // عرض متفائل — نفس نمط المجرى
+        let tempId = "temp-\(UUID().uuidString)"
+        let wasAlsoToStream = alsoToStream
+        replies.append(ThreadMsg(
+            id: tempId,
+            author_id: sb.member?.id,
+            author_name: sb.member?.short_name ?? sb.member?.name,
+            avatar_initial: sb.member?.avatar_initial,
+            avatar_color: sb.member?.avatar_color,
+            body: body,
+            kind: "user",
+            document_id: nil, document_name: nil, document_url: nil,
+            created_at: ISO8601DateFormatter().string(from: Date()),
+            edited_at: nil, reactions: [], bookmarked: false
+        ))
+        draft = ""
+        alsoToStream = false
+
         Task {
             do {
                 try await sb.postMessage(
                     caseId: caseId,
                     body: body,
                     parentId: root.id,
-                    alsoToStream: alsoToStream,
+                    alsoToStream: wasAlsoToStream,
                     mentions: Mention.extract(from: body, people: staff)
                 )
-                draft = ""
-                alsoToStream = false
                 await load()
                 onChange()
                 Task {
@@ -960,9 +995,10 @@ private struct ThreadView: View {
                     await load()
                 }
             } catch {
+                replies.removeAll { $0.id == tempId }
+                draft = body
                 sendError = error.localizedDescription
             }
-            sending = false
         }
     }
 

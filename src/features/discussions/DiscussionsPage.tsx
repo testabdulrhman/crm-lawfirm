@@ -564,12 +564,15 @@ function StreamPane({
 
   const send = () => {
     const body = draft.trim()
-    if (!body || post.isPending) return
+    if (!body) return
+    // تفريغ فوري + عرض متفائل في usePostMessage = إحساس الواتساب؛
+    // الفشل يرجع النص للحقل كي لا يضيع
+    setDraft('')
     post.mutate(
       { caseId, body, mentions: extractMentions(body, people) },
       {
+        onError: () => setDraft(body),
         onSuccess: () => {
-          setDraft('')
           // ردّ الذكاء يصل بعد ثوانٍ عبر الخادم
           setTimeout(() => refetch(), 6000)
           setTimeout(() => refetch(), 14000)
@@ -970,13 +973,15 @@ function ThreadPane({
 
   const send = () => {
     const body = draft.trim()
-    if (!body || post.isPending) return
+    if (!body) return
+    // تفريغ فوري + عرض متفائل — نفس نمط المجرى
+    setDraft('')
+    setAlsoToStream(false)
     post.mutate(
       { caseId, body, parentId: root.id, alsoToStream, mentions: extractMentions(body, people) },
       {
+        onError: () => setDraft(body),
         onSuccess: () => {
-          setDraft('')
-          setAlsoToStream(false)
           setTimeout(() => refetch(), 6000)
         },
       }

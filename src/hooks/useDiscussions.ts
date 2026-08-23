@@ -179,9 +179,66 @@ export function usePostMessage() {
       const { error } = await supabase.from('case_comments').insert(values)
       if (error) throw error
     },
-    onSuccess: (_d, vars) => invalidate(qc, vars.caseId),
-    onError: (e) =>
-      toast({ variant: 'destructive', title: 'تعذّر الإرسال', description: errMessage(e) }),
+    // عرض متفائل: الرسالة تظهر فوراً (نمط الواتساب) والخادم يلحق بالخلفية —
+    // كان الإحساس بالبطء لأنها لا تظهر إلا بعد الإدراج + إعادة الجلب كاملة
+    onMutate: async (input) => {
+      const now = new Date().toISOString()
+      const temp = 'temp-' + Math.random().toString(36).slice(2)
+      if (input.parentId) {
+        // ردّ في خيط
+        await qc.cancelQueries({ queryKey: ['disc_thread', input.parentId] })
+        const prev = qc.getQueryData<ThreadMsg[]>(['disc_thread', input.parentId])
+        const optimistic: ThreadMsg = {
+          id: temp,
+          author_id: teamMember?.id ?? null,
+          author_name: teamMember?.short_name ?? teamMember?.name ?? null,
+          avatar_initial: teamMember?.avatar_initial ?? null,
+          avatar_color: teamMember?.avatar_color ?? null,
+          body: input.body ?? null,
+          kind: 'user',
+          document_id: null,
+          document_name: null,
+          document_url: null,
+          created_at: now,
+        }
+        qc.setQueryData<ThreadMsg[]>(['disc_thread', input.parentId], (old) => [
+          ...(old ?? []),
+          optimistic,
+        ])
+        return { prev, key: ['disc_thread', input.parentId] as const }
+      }
+      await qc.cancelQueries({ queryKey: ['disc_stream', input.caseId] })
+      const prev = qc.getQueryData<StreamMsg[]>(['disc_stream', input.caseId])
+      const optimistic: StreamMsg = {
+        id: temp,
+        author_id: teamMember?.id ?? null,
+        author_name: teamMember?.short_name ?? teamMember?.name ?? null,
+        body: input.body ?? null,
+        kind: 'user',
+        document_id: null,
+        document_name: null,
+        document_url: null,
+        mentions: input.mentions ?? null,
+        created_at: now,
+        edited_at: null,
+        reply_count: 0,
+        last_reply_at: null,
+        reactions: [],
+        bookmarked: false,
+      }
+      qc.setQueryData<StreamMsg[]>(['disc_stream', input.caseId], (old) => [
+        ...(old ?? []),
+        optimistic,
+      ])
+      return { prev, key: ['disc_stream', input.caseId] as const }
+    },
+    onError: (e, _vars, ctx) => {
+      // تراجع: أعد المجرى كما كان قبل الرسالة المتفائلة
+      if (ctx) qc.setQueryData(ctx.key as unknown as readonly unknown[], ctx.prev)
+      toast({ variant: 'destructive', title: 'تعذّر الإرسال', description: errMessage(e) })
+    },
+    // التسوية بعد النجاح أو الفشل: الجلب الحقيقي يستبدل المؤقت بمعرّفه الفعلي
+    onSettled: (_d, _e, vars) => invalidate(qc, vars.caseId),
   })
 }
 
