@@ -23,7 +23,7 @@ import { useTrashItems, useRestoreItem, type TrashItem } from '@/hooks/useTrash'
 // مكان واحد، والاسترجاع بنقرة — بدل التدخل اليدوي في القاعدة.
 
 const KIND_META: Record<string, { label: string; icon: LucideIcon }> = {
-  case: { label: 'الملفات', icon: FolderOpen },
+  case: { label: 'المشاريع', icon: FolderOpen },
   task: { label: 'المهام', icon: ListChecks },
   document: { label: 'المستندات', icon: FileText },
   comment: { label: 'رسائل النقاش', icon: MessagesSquare },

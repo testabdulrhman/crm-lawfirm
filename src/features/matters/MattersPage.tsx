@@ -25,16 +25,27 @@ import { EmptyState, FilteredEmptyState } from '@/components/EmptyState'
 import { useMatters, type MatterKind, type MatterRow } from '@/hooks/useMatters'
 import { LegalServiceForm } from '@/features/legal-services/LegalServiceForm'
 import { PropertyTransferForm } from '@/features/property/PropertyTransferForm'
-import { caseStatusLabel, caseStatusBadge } from '@/lib/caseLabels'
-import { lsStatusLabel, lsStatusBadge } from '@/lib/legalServiceLabels'
-import { propertyStatusLabel } from '@/lib/propertyLabels'
+import {
+  caseStatusLabel,
+  caseStatusBadge,
+  CASE_STATUS_OPTIONS,
+} from '@/lib/caseLabels'
+import {
+  lsStatusLabel,
+  lsStatusBadge,
+  LS_STATUS_OPTIONS,
+} from '@/lib/legalServiceLabels'
+import {
+  propertyStatusLabel,
+  PROPERTY_STATUS_OPTIONS,
+} from '@/lib/propertyLabels'
 import { fmtDatePref, fmtNumber } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { arNorm } from '@/lib/arabic'
 import { Ltr } from '@/components/Ltr'
 
-// تبويب «الملفات» — نموذج Matter الموحّد (قرار المستخدم 2026-08-21).
-// ثلاثة أنواع في قائمة واحدة، وسؤال «وين ملف فلان؟» صار له جواب واحد.
+// تبويب «المشاريع» — نموذج Matter الموحّد (قرار المستخدم 2026-08-21).
+// ثلاثة أنواع في قائمة واحدة، وسؤال «وين مشروع فلان؟» صار له جواب واحد.
 
 const KINDS: Record<
   MatterKind,
@@ -43,6 +54,14 @@ const KINDS: Record<
   case: { label: 'قضية', icon: Scale, chip: 'bg-navy/10 text-navy dark:bg-navy-100/10 dark:text-navy-100' },
   legal_service: { label: 'استشارة / لائحة', icon: BookOpen, chip: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' },
   property: { label: 'توثيق عقاري', icon: Landmark, chip: 'bg-amber-500/10 text-amber-700 dark:text-amber-300' },
+}
+
+// حالات كل نوع — صف الفرز الثاني يظهر عند اختيار تصنيف بعينه
+const STATUSES: Record<MatterKind, { value: string; label: string }[]> = {
+  case: CASE_STATUS_OPTIONS,
+  legal_service: LS_STATUS_OPTIONS,
+  // التوثيق العقاري يخزّن الحالة بالعربية مباشرةً (القيمة = التسمية)
+  property: PROPERTY_STATUS_OPTIONS.map((v) => ({ value: v, label: v })),
 }
 
 function statusOf(m: MatterRow): { label: string; badge: any } {
@@ -61,6 +80,8 @@ export function MattersPage() {
   const { data, isLoading, error, refetch } = useMatters()
 
   const [kind, setKind] = useState<MatterKind | 'all'>('all')
+  // الحالة ضمن التصنيف (منتهية/جارية…) — تُصفَّر عند تبديل التصنيف
+  const [status, setStatus] = useState<string>('all')
   const [q, setQ] = useState('')
   const [picking, setPicking] = useState(false)
   const [creating, setCreating] = useState<'legal_service' | 'property' | null>(null)
@@ -70,28 +91,37 @@ export function MattersPage() {
     const needle = arNorm(q.trim())
     return rows.filter((m) => {
       if (kind !== 'all' && m.kind !== kind) return false
+      if (status !== 'all' && (m.status ?? '') !== status) return false
       if (!needle) return true
       return arNorm(
         [m.title, m.client, m.ref].filter(Boolean).join(' ')
       ).includes(needle)
     })
-  }, [rows, kind, q])
+  }, [rows, kind, status, q])
 
   const countOf = (k: MatterKind) => rows.filter((m) => m.kind === k).length
+  // عدّاد كل حالة ضمن التصنيف المختار (لا ضمن المعروض — كي لا يتغيّر بالبحث)
+  const statusCount = (v: string) =>
+    rows.filter((m) => m.kind === kind && (m.status ?? '') === v).length
+
+  const pickKind = (v: MatterKind | 'all') => {
+    setKind(v)
+    setStatus('all') // حالات النوع السابق لا معنى لها في الجديد
+  }
 
   return (
     <div className="mx-auto max-w-6xl space-y-5">
       {/* الترويسة */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="text-2xl font-bold tracking-tight text-foreground">الملفات</h2>
+          <h2 className="text-2xl font-bold tracking-tight text-foreground">المشاريع</h2>
           <p className="mt-1 text-sm text-muted-foreground">
             القضايا والاستشارات واللوائح والتوثيق العقاري — في مكان واحد
           </p>
         </div>
         <Button variant="gold" onClick={() => setPicking(true)}>
           <Plus className="h-4 w-4" />
-          ملف جديد
+          مشروع جديد
         </Button>
       </div>
 
@@ -109,7 +139,7 @@ export function MattersPage() {
             <button
               key={value}
               type="button"
-              onClick={() => setKind(value as MatterKind | 'all')}
+              onClick={() => pickKind(value as MatterKind | 'all')}
               className={cn(
                 'rounded-full px-4 py-1.5 transition-colors',
                 kind === value
@@ -133,6 +163,29 @@ export function MattersPage() {
         </div>
       </div>
 
+      {/* صف الفرز الثاني: حالات التصنيف المختار (منتهية/جارية…) */}
+      {kind !== 'all' && (
+        <div className="-mx-1 flex flex-wrap gap-1.5 px-1">
+          <StatusChip
+            label={`الكل ${fmtNumber(countOf(kind))}`}
+            active={status === 'all'}
+            onClick={() => setStatus('all')}
+          />
+          {STATUSES[kind].map((s) => {
+            const n = statusCount(s.value)
+            return (
+              <StatusChip
+                key={s.value}
+                label={`${s.label} ${fmtNumber(n)}`}
+                active={status === s.value}
+                dim={n === 0}
+                onClick={() => setStatus(s.value)}
+              />
+            )
+          })}
+        </div>
+      )}
+
       {/* القائمة */}
       {error ? (
         <QueryErrorState error={error} onRetry={() => refetch()} />
@@ -145,13 +198,13 @@ export function MattersPage() {
       ) : rows.length === 0 ? (
         <EmptyState
           icon={FolderOpen}
-          title="لا ملفات بعد"
-          description="ابدأ بإنشاء أول ملف — قضية أو استشارة أو توثيق عقاري"
-          actionLabel="ملف جديد"
+          title="لا مشاريع بعد"
+          description="ابدأ بإنشاء أول مشروع — قضية أو استشارة أو توثيق عقاري"
+          actionLabel="مشروع جديد"
           onAction={() => setPicking(true)}
         />
       ) : filtered.length === 0 ? (
-        <FilteredEmptyState onClear={() => { setKind('all'); setQ('') }} />
+        <FilteredEmptyState onClear={() => { setKind('all'); setStatus('all'); setQ('') }} />
       ) : (
         <div className="space-y-2">
           {filtered.map((m) => {
@@ -202,11 +255,11 @@ export function MattersPage() {
         </div>
       )}
 
-      {/* منتقي النوع — «ملف جديد» يسأل النوع أولاً ثم يفتح النموذج الصحيح */}
+      {/* منتقي النوع — «مشروع جديد» يسأل النوع أولاً ثم يفتح النموذج الصحيح */}
       <Dialog open={picking} onOpenChange={setPicking}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>ما نوع الملف؟</DialogTitle>
+            <DialogTitle>ما نوع المشروع؟</DialogTitle>
           </DialogHeader>
           <div className="grid gap-2 py-2">
             {(
@@ -254,5 +307,35 @@ export function MattersPage() {
         </DialogContent>
       </Dialog>
     </div>
+  )
+}
+
+// شريحة حالة في صف الفرز الثاني
+function StatusChip({
+  label,
+  active,
+  dim = false,
+  onClick,
+}: {
+  label: string
+  active: boolean
+  dim?: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+        active
+          ? 'border-gold bg-gold text-navy'
+          : 'border-border bg-card text-muted-foreground hover:bg-muted',
+        // الحالات الفارغة باهتة لكنها تبقى قابلة للضغط (تُظهر الفراغ صراحةً)
+        !active && dim && 'opacity-50'
+      )}
+    >
+      {label}
+    </button>
   )
 }

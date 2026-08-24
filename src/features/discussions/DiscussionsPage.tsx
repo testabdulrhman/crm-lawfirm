@@ -355,14 +355,14 @@ export function DiscussionsPage() {
             <EmptyState
               icon={MessagesSquare}
               title="اختر نقاشاً"
-              description="كل ملف له نقاشه — وقناة «عام — المكتب» لما سواه"
+              description="كل مشروع له نقاشه — وقناة «عام — المكتب» لما سواه"
             />
           </div>
         ) : (
           <StreamPane
             key={selected ?? 'general'}
             caseId={selected}
-            title={current?.case_title ?? (selected === null ? 'عام — المكتب' : 'ملف')}
+            title={current?.case_title ?? (selected === null ? 'عام — المكتب' : 'مشروع')}
             officeNum={current?.office_num ?? null}
             openThread={setOpenThreadRoot}
             kind={current?.kind ?? null}
@@ -499,7 +499,7 @@ function ChannelList({
                 <span className="min-w-0 flex-1">
                   <span className="flex items-baseline justify-between gap-2">
                     <span className="truncate text-[13px] font-medium text-foreground">
-                      {c.case_title ?? 'ملف'}
+                      {c.case_title ?? 'مشروع'}
                     </span>
                     <span className="shrink-0 text-[10px] text-muted-foreground">
                       {stamp(c.last_at)}
@@ -543,9 +543,9 @@ function StreamPane({
   title: string
   officeNum: string | null
   openThread: (m: StreamMsg) => void
-  /** وجهة زر «فتح الملف» — يظهر في صفحة النقاشات لا داخل الملف نفسه */
+  /** وجهة زر «فتح المشروع» — يظهر في صفحة النقاشات لا داخل المشروع نفسه */
   caseHref?: string | null
-  /** نوع الملف — 'channel' = قناة خاصة بعضوية (لها زر أعضاء بدل فتح الملف) */
+  /** نوع المشروع — 'channel' = قناة خاصة بعضوية (لها زر أعضاء بدل فتح المشروع) */
   kind?: string | null
 }) {
   const { teamMember } = useAuth()
@@ -641,7 +641,7 @@ function StreamPane({
             onClick={() => navigate(caseHref)}
           >
             <FolderOpen className="h-3.5 w-3.5" />
-            فتح الملف
+            فتح المشروع
           </Button>
         )}
       </div>
@@ -664,7 +664,7 @@ function StreamPane({
         ) : !msgs?.length ? (
           <EmptyState
             icon={MessagesSquare}
-            title={caseId === null ? 'القناة العامة هادئة' : 'لا كلام في هذا الملف بعد'}
+            title={caseId === null ? 'القناة العامة هادئة' : 'لا كلام في هذا المشروع بعد'}
             description="اكتب أول رسالة — تبقى هنا مربوطة بمكانها إلى الأبد"
           />
         ) : (

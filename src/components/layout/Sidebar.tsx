@@ -62,9 +62,9 @@ const navSections: { title?: string; items: NavItem[] }[] = [
     title: 'الأعمال',
     items: [
       { label: 'العقود', href: '/engagements', icon: Handshake },
-      // «الملفات» يوحّد القضايا والاستشارات واللوائح والتوثيق العقاري
+      // «المشاريع» يوحّد القضايا والاستشارات واللوائح والتوثيق العقاري
       // (نموذج Matter — قرار 2026-08-21). المسارات القديمة تعمل للتفاصيل.
-      { label: 'الملفات', href: '/matters', icon: FolderOpen },
+      { label: 'المشاريع', href: '/matters', icon: FolderOpen },
       { label: 'المهام', href: '/tasks', icon: ListTodo, badge: 'my_open_tasks' },
       { label: 'الجلسات', href: '/sessions', icon: CalendarDays },
       { label: 'الوكالات', href: '/poa', icon: FileSignature, badge: 'expiring_poas' },
