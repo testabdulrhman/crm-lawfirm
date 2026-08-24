@@ -2,9 +2,9 @@ import { useQuery } from '@tanstack/react-query'
 
 import { supabase } from '@/lib/supabase'
 
-// تبويب «الملفات» الموحّد (نموذج Matter — قرار المستخدم 2026-08-21):
-// «ليه ما يكون تبويب واحد وكل مشروع له نموذج على حسب نوعه؟» — واعتمد
-// التسمية «الملفات» (لغة المهنة: «افتح ملف»، «وين الملف؟»).
+// تبويب «المشاريع» الموحّد (نموذج Matter — قرار المستخدم 2026-08-21):
+// «ليه ما يكون تبويب واحد وكل مشروع له نموذج على حسب نوعه؟»
+// (سُمّي «الملفات» أولاً ثم اعتُمدت «المشاريع» — 2026-08-24).
 //
 // المرحلة ١: توحيد **الواجهة** فقط — ثلاث جداول كما هي، تُدمج قراءةً في
 // قائمة واحدة. توحيد القاعدة نفسها (جدول ملفات واحد يرث النقاش والذكاء
@@ -25,6 +25,9 @@ export interface MatterRow {
   date: string | null
   /** رقم مكتبي إن وُجد (القضايا) */
   ref: string | null
+  /** المسند إليه — للفرز والعرض (التوثيق العقاري بلا إسناد بعد) */
+  assigneeId: string | null
+  assigneeName: string | null
   href: string
 }
 
@@ -36,13 +39,18 @@ export function useMatters() {
       const [cases, services, transfers] = await Promise.all([
         supabase
           .from('cases')
-          .select('id, title, status, open_date, office_num, contact:contacts(name)')
+          .select(
+            'id, title, status, open_date, office_num, assignee_id, ' +
+              'contact:contacts(name), assignee:team_members!cases_assignee_id_fkey(name, short_name)'
+          )
           .eq('kind', 'case')
           .is('deleted_at', null)
           .order('created_at', { ascending: false }),
         supabase
           .from('legal_services')
-          .select('id, title, type, status, client_name, received_at, created_at')
+          .select(
+            'id, title, type, status, client_name, received_at, created_at, assignee_id, assignee_name'
+          )
           .is('deleted_at', null)
           .order('created_at', { ascending: false }),
         supabase
@@ -65,6 +73,8 @@ export function useMatters() {
           status: c.status,
           date: c.open_date,
           ref: c.office_num,
+          assigneeId: c.assignee_id ?? null,
+          assigneeName: c.assignee?.short_name ?? c.assignee?.name ?? null,
           href: `/cases/${c.id}`,
         })),
         ...(services.data ?? []).map((s: any) => ({
@@ -76,6 +86,8 @@ export function useMatters() {
           status: s.status,
           date: s.received_at || s.created_at?.slice(0, 10) || null,
           ref: null,
+          assigneeId: s.assignee_id ?? null,
+          assigneeName: s.assignee_name ?? null,
           href: `/legal-services/${s.id}`,
         })),
         ...(transfers.data ?? []).map((p: any) => ({
@@ -89,6 +101,9 @@ export function useMatters() {
           status: p.status,
           date: p.transfer_date || p.created_at?.slice(0, 10) || null,
           ref: null,
+          // عرض property_transfers لا يكشف الإسناد بعد
+          assigneeId: null,
+          assigneeName: null,
           href: `/property/${p.id}`,
         })),
       ]

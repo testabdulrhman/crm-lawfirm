@@ -7,6 +7,7 @@ import {
   Plus,
   Scale,
   Search,
+  UserRound,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -19,10 +20,18 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { QueryErrorState } from '@/components/QueryErrorState'
 import { EmptyState, FilteredEmptyState } from '@/components/EmptyState'
 import { useMatters, type MatterKind, type MatterRow } from '@/hooks/useMatters'
+import { useTeamMembers } from '@/hooks/useTeam'
 import { LegalServiceForm } from '@/features/legal-services/LegalServiceForm'
 import { PropertyTransferForm } from '@/features/property/PropertyTransferForm'
 import {
@@ -78,10 +87,12 @@ function statusOf(m: MatterRow): { label: string; badge: any } {
 export function MattersPage() {
   const [, navigate] = useLocation()
   const { data, isLoading, error, refetch } = useMatters()
+  const { data: members } = useTeamMembers()
 
   const [kind, setKind] = useState<MatterKind | 'all'>('all')
   // الحالة ضمن التصنيف (منتهية/جارية…) — تُصفَّر عند تبديل التصنيف
   const [status, setStatus] = useState<string>('all')
+  const [assignee, setAssignee] = useState<string>('all')
   const [q, setQ] = useState('')
   const [picking, setPicking] = useState(false)
   const [creating, setCreating] = useState<'legal_service' | 'property' | null>(null)
@@ -92,17 +103,40 @@ export function MattersPage() {
     return rows.filter((m) => {
       if (kind !== 'all' && m.kind !== kind) return false
       if (status !== 'all' && (m.status ?? '') !== status) return false
+      if (assignee !== 'all') {
+        // 'none' = بلا إسناد — سؤال متكرر: «وش اللي ما أحد ماسكه؟»
+        if (assignee === 'none' ? m.assigneeId !== null : m.assigneeId !== assignee)
+          return false
+      }
       if (!needle) return true
       return arNorm(
-        [m.title, m.client, m.ref].filter(Boolean).join(' ')
+        [m.title, m.client, m.ref, m.assigneeName].filter(Boolean).join(' ')
       ).includes(needle)
     })
-  }, [rows, kind, status, q])
+  }, [rows, kind, status, assignee, q])
 
   const countOf = (k: MatterKind) => rows.filter((m) => m.kind === k).length
   // عدّاد كل حالة ضمن التصنيف المختار (لا ضمن المعروض — كي لا يتغيّر بالبحث)
   const statusCount = (v: string) =>
     rows.filter((m) => m.kind === kind && (m.status ?? '') === v).length
+
+  // من له مشاريع فعلاً فقط — قائمة قصيرة مفيدة بدل كل الموظفين
+  const assignees = useMemo(() => {
+    const seen = new Map<string, string>()
+    for (const m of rows) {
+      if (m.assigneeId && !seen.has(m.assigneeId)) {
+        seen.set(m.assigneeId, m.assigneeName ?? '—')
+      }
+    }
+    // الاسم المختصر من قائمة الفريق أدقّ عند غيابه في الصف
+    for (const [id] of seen) {
+      const tm = (members ?? []).find((x) => x.id === id)
+      if (tm) seen.set(id, tm.short_name ?? tm.name)
+    }
+    return [...seen].map(([id, name]) => ({ id, name }))
+  }, [rows, members])
+
+  const unassignedCount = rows.filter((m) => !m.assigneeId).length
 
   const pickKind = (v: MatterKind | 'all') => {
     setKind(v)
@@ -151,6 +185,25 @@ export function MattersPage() {
             </button>
           ))}
         </div>
+
+        <Select value={assignee} onValueChange={setAssignee}>
+          <SelectTrigger className="w-44">
+            <SelectValue placeholder="المسند إليه" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">كل المسؤولين</SelectItem>
+            {unassignedCount > 0 && (
+              <SelectItem value="none">
+                بلا إسناد ({fmtNumber(unassignedCount)})
+              </SelectItem>
+            )}
+            {assignees.map((a) => (
+              <SelectItem key={a.id} value={a.id}>
+                {a.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
 
         <div className="relative min-w-[220px] flex-1 sm:max-w-xs">
           <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -204,7 +257,7 @@ export function MattersPage() {
           onAction={() => setPicking(true)}
         />
       ) : filtered.length === 0 ? (
-        <FilteredEmptyState onClear={() => { setKind('all'); setStatus('all'); setQ('') }} />
+        <FilteredEmptyState onClear={() => { setKind('all'); setStatus('all'); setAssignee('all'); setQ('') }} />
       ) : (
         <div className="space-y-2">
           {filtered.map((m) => {
@@ -242,6 +295,12 @@ export function MattersPage() {
                       {meta.label}
                     </span>
                     {m.client && <span className="truncate">{m.client}</span>}
+                    {m.assigneeName && (
+                      <span className="truncate">
+                        <UserRound className="ms-0.5 inline h-3 w-3 align-[-2px]" />{' '}
+                        {m.assigneeName}
+                      </span>
+                    )}
                     {m.date && <span>{fmtDatePref(m.date)}</span>}
                   </span>
                 </span>
