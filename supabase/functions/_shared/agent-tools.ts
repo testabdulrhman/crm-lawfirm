@@ -76,6 +76,19 @@ export const EXTRA_TOOLS = [
     },
   },
   {
+    name: "search_discussions",
+    description:
+      "البحث في كلام النقاشات عبر كل الملفات — كثير من وقائع العمل موثّقة هنا وحدها (لا في الحقول ولا المستندات). استخدمها حين لا تجد الجواب في بيانات الملف.",
+    input_schema: {
+      type: "object",
+      properties: {
+        query: { type: "string" },
+        case_office_num: { type: "string", description: "حصر البحث في ملف (اختياري)" },
+      },
+      required: ["query"],
+    },
+  },
+  {
     name: "office_overview",
     description:
       "لمحة سريعة عن المكتب: عدد الملفات الجارية، المهام المفتوحة والمتأخرة، جلسات اليوم والأسبوع، الوكالات المنتهية قريباً.",
@@ -263,12 +276,18 @@ export async function runExtraTool(
   if (name === "get_case_details") {
     const c = await caseByOfficeNum(input.office_num);
     if (!c) return JSON.stringify({ error: "لم أجد ملفاً بهذا الرقم" });
-    const [sessions, tasks, docs, rulings, parties] = await Promise.all([
+    const [sessions, tasks, docs, rulings, parties, disc] = await Promise.all([
       admin.from("sessions").select("session_date, session_time, title, court, status").eq("case_id", c.id).order("session_date"),
       admin.from("tasks").select("id, title, due_date, status, priority").eq("case_id", c.id).is("deleted_at", null).neq("status", "done"),
       admin.from("documents").select("id, name, category, created_at").eq("case_id", c.id).is("deleted_at", null).limit(20),
       admin.from("rulings").select("title, ruling_date, result, ruling_number").eq("case_id", c.id),
       admin.from("case_parties").select("name, role, party_side").eq("case_id", c.id),
+      // النقاش مصدر أصيل لا زينة: كثير من وقائع الملف تعيش هنا وحدها
+      // (طلب المستخدم 2026-08-25: يُعتبر عند البحث والربط والدراسة)
+      admin.from("case_comments")
+        .select("body, kind, created_at, author:team_members(short_name, name)")
+        .eq("case_id", c.id).is("deleted_at", null).neq("kind", "system")
+        .order("created_at", { ascending: false }).limit(40),
     ]);
     return JSON.stringify({
       case: c,
@@ -277,6 +296,11 @@ export async function runExtraTool(
       documents: docs.data ?? [],
       rulings: rulings.data ?? [],
       parties: parties.data ?? [],
+      discussion: ((disc.data ?? []) as any[]).map((m) => ({
+        at: (m.created_at ?? "").slice(0, 10),
+        by: m.kind === "ai" ? "الذكاء" : (m.author?.short_name ?? m.author?.name ?? "موظف"),
+        text: (m.body ?? "").slice(0, 400),
+      })),
     });
   }
 
@@ -294,6 +318,31 @@ export async function runExtraTool(
     }
     const { data, error } = await qb;
     return JSON.stringify(error ? { error: error.message } : data ?? []);
+  }
+
+  if (name === "search_discussions") {
+    const q = String(input.query ?? "").trim();
+    let qb = admin
+      .from("case_comments")
+      .select("body, kind, created_at, case_id, case:cases(office_num, title), author:team_members(short_name, name)")
+      .is("deleted_at", null)
+      .neq("kind", "system")
+      .ilike("body", `%${q}%`)
+      .order("created_at", { ascending: false })
+      .limit(15);
+    if (input.case_office_num) {
+      const c = await caseByOfficeNum(input.case_office_num);
+      if (c) qb = qb.eq("case_id", c.id);
+    }
+    const { data, error } = await qb;
+    if (error) return JSON.stringify({ error: error.message });
+    return JSON.stringify(((data ?? []) as any[]).map((m) => ({
+      at: (m.created_at ?? "").slice(0, 10),
+      by: m.kind === "ai" ? "الذكاء" : (m.author?.short_name ?? m.author?.name ?? "موظف"),
+      matter: m.case?.title ?? "عام — المكتب",
+      office_num: m.case?.office_num ?? null,
+      text: (m.body ?? "").slice(0, 400),
+    })));
   }
 
   if (name === "list_appointments") {
@@ -568,4 +617,5 @@ export const EXTRA_SYSTEM_RULES = `
 - **استأذن قبل الحسّاس**: إرسال رسالة لموكّل (send_sms) وتغيير بيانات ملف (update_case). اعرض ما ستفعله بجملة واحدة، وانتظر موافقة الموظف، ثم نفّذ بـ confirmed=true. أما الإضافات العادية (موكّل، موعد، مهمة، خطاب) فنفّذها مباشرة واذكر ما فعلت.
 - تحقّق قبل الإنشاء: ابحث بـ search_contacts أو search_cases أولاً كي لا تكرّر سجلاً موجوداً.
 - بعد أي إضافة أو تعديل اذكر بسطر واحد ما تم بالضبط (الاسم والرقم المولَّد).
-- إن نقصك معطى جوهري (رقم، تاريخ، اسم موظف) فاسأل عنه بدل التخمين.`;
+- إن نقصك معطى جوهري (رقم، تاريخ، اسم موظف) فاسأل عنه بدل التخمين.
+- **النقاش مصدر أصيل**: get_case_details يُرجع آخر ٤٠ رسالة من نقاش الملف — اقرأها فكثير من الوقائع موثّق فيها وحدها. وإن لم تجد الجواب في بيانات الملف فابحث بـsearch_discussions قبل أن تقول «لا أجده».`;

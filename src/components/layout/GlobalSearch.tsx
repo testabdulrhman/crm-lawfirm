@@ -6,6 +6,7 @@ import {
   Scale,
   User,
   FileSignature,
+  MessagesSquare,
   Loader2,
   Handshake,
   CalendarDays,
@@ -35,6 +36,7 @@ const GROUPS: { kind: SearchKind; label: string; icon: typeof Scale }[] = [
   { kind: 'case', label: 'القضايا', icon: Scale },
   { kind: 'contact', label: 'جهات الاتصال', icon: User },
   { kind: 'poa', label: 'الوكالات', icon: FileSignature },
+  { kind: 'discussion', label: 'النقاشات', icon: MessagesSquare },
 ]
 
 // انتقال سريع للصفحات (نمط لوحة الأوامر)
@@ -55,6 +57,8 @@ const NAV_ACTIONS: { label: string; href: string; icon: LucideIcon }[] = [
 function hrefFor(r: GlobalSearchResult): string {
   if (r.kind === 'case') return `/cases/${r.id}`
   if (r.kind === 'contact') return `/contacts/${r.id}`
+  // نتيجة نقاش: id هو معرّف الملف (أو الرسالة للقناة العامة) — تفتح النقاشات
+  if (r.kind === 'discussion') return '/discussions'
   return `/poa/${r.id}`
 }
 
@@ -88,6 +92,7 @@ export function GlobalSearch() {
       case: [],
       contact: [],
       poa: [],
+      discussion: [],
     }
     for (const r of data ?? []) {
       if (r.kind in map) map[r.kind].push(r)

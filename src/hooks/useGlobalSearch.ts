@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 
 import { supabase } from '@/lib/supabase'
 
-export type SearchKind = 'case' | 'contact' | 'poa'
+export type SearchKind = 'case' | 'contact' | 'poa' | 'discussion'
 
 export interface GlobalSearchResult {
   kind: SearchKind

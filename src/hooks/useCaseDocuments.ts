@@ -25,10 +25,16 @@ export function useCaseDocuments(caseId: string) {
         .select('*')
         .eq('case_id', caseId)
         .is('deleted_at', null) // حذف ناعم
-        .order('document_date', { ascending: false, nullsFirst: false })
-        .order('created_at', { ascending: false })
       if (error) throw error
-      return (data ?? []) as CaseDocument[]
+      // الترتيب بالتاريخ هو الأساس (طلب المستخدم 2026-08-25): ما لا تاريخ له
+      // يأخذ تاريخ رفعه بدل أن يهبط آخر القائمة مهما كان حديثاً — فتبقى
+      // القائمة زمنية متصلة بلا مستندات شاردة في الذيل.
+      const dateOf = (d: CaseDocument) =>
+        (d.document_date ?? d.created_at ?? '').slice(0, 10)
+      return ((data ?? []) as CaseDocument[]).sort((a, b) => {
+        const c = dateOf(b).localeCompare(dateOf(a))
+        return c !== 0 ? c : (b.created_at ?? '').localeCompare(a.created_at ?? '')
+      })
     },
   })
 }
