@@ -8,6 +8,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 //      فكان السقف 1500/2000 يقطع الجواب في منتصفه فيفشل تحليله بصمت.
 // =============================================================
 
+import { EXTRA_TOOLS, runExtraTool, EXTRA_SYSTEM_RULES } from "../_shared/agent-tools.ts";
+
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const FALLBACK_MODEL = "claude-sonnet-5";
@@ -269,6 +271,8 @@ const AGENT_TOOLS = [
       required: ["title"],
     },
   },
+  // الأدوات الموسّعة (إضافة وتعديل) — مشتركة مع ذكاء النقاش
+  ...EXTRA_TOOLS,
 ];
 
 /** اسم الموظف → معرّفه في team_members (أو null). يُحفظ لتفادي استعلام متكرر. */
@@ -300,6 +304,10 @@ function isoPlusDays(days: number): string {
 
 async function runAgentTool(name: string, input: any, userName: string, actions: string[], attachment: any = null): Promise<string> {
   try {
+    // الأدوات الموسّعة أولاً — تُرجع null إن لم تكن منها
+    const extra = await runExtraTool(name, input, userName, actions);
+    if (extra !== null) return extra;
+
     if (name === "search_poas") {
       const q = String(input.query ?? "").trim();
       // لا يوجد FK مباشر بين الوكالات وجهات الاتصال — نجلب الجوال بخطوة ثانية
@@ -630,6 +638,7 @@ const AGENT_SYSTEM = `أنت المساعد الذكي لنظام ${FIRM_NAME}. 
 - رسائل العملاء: عربية فصحى رسمية موجزة، تُختم بالاسم الرسمي الكامل: «${FIRM_NAME}» (لا تختصره أبداً).
 - الجلسات: إن وصل الموظف إشعار جلسة من ناجز أو المحكمة وطلب تسجيله، استخدم create_session. التواريخ في إشعارات ناجز هجرية غالباً — حوّلها إلى ميلادي واذكر التحويل صراحةً في ردّك ليتحقق منه الموظف.\n- إن تعدّدت النتائج المطابقة فاسأل أيّها المقصود قبل أي إجراء.
 - بعد التنفيذ اذكر بوضوح ما فعلته (لمن أُرسل، وما نص الرسالة).
+${EXTRA_SYSTEM_RULES}
 
 تنسيق الرد (مهم جداً — الواجهة تعرض نصّاً خاماً ولا تفهم Markdown):
 - اكتب نصّاً عربيّاً عادياً فقط. ممنوع منعاً تامّاً: علامات # للعناوين، والنجمتين ** للتعريض، والشرطات --- كفواصل، والجداول بالأنابيب | ، وأي رموز تنسيق أخرى.
