@@ -40,20 +40,16 @@ export const fmtCurrency = (n: number | null | undefined): string =>
         n
       )
 
-// التواريخ: أرقام لاتينية، أسماء أشهر عربية
+// التواريخ: أرقام لاتينية بصيغة يوم/شهر/سنة — بلا أسماء أشهر
+// (طلب المستخدم 2026-08-25: «ما ابي يذكر اسم الشهر ابيه ارقام مثل 23/07/2026»)
+const pad2 = (n: number) => String(n).padStart(2, '0')
+
 export const fmtDate = (d: string | Date | null | undefined): string => {
   if (!d) return '—'
   const date = typeof d === 'string' ? new Date(d) : d
   if (isNaN(date.getTime())) return '—'
-  return safeFormat(
-    () =>
-      new Intl.DateTimeFormat(DATE_LOCALE, {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-      }).format(date),
-    date.toISOString()
-  )
+  // نبنيها من المكوّنات المحلية — أدقّ من Intl هنا وتضمن ترتيب DD/MM/YYYY
+  return `${pad2(date.getDate())}/${pad2(date.getMonth() + 1)}/${date.getFullYear()}`
 }
 
 export const fmtDateTime = (d: string | Date | null | undefined): string => {
@@ -64,11 +60,13 @@ export const fmtDateTime = (d: string | Date | null | undefined): string => {
     () =>
       new Intl.DateTimeFormat(DATE_LOCALE, {
         year: 'numeric',
-        month: 'short',
-        day: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
         hour: '2-digit',
         minute: '2-digit',
-      }).format(date),
+      })
+        .format(date)
+        .replace(/\u200f/g, ''),
     date.toISOString()
   )
 }
@@ -91,7 +89,7 @@ export const localISO = (d: Date): string => {
 
 const HIJRI_LOCALE = 'ar-SA-u-ca-islamic-umalqura-nu-latn'
 
-// هجري بأرقام لاتينية + أسماء أشهر عربية + لاحقة «هـ»
+// هجري بأرقام لاتينية بصيغة يوم/شهر/سنة + لاحقة «هـ»
 export const fmtHijri = (d: string | Date | null | undefined): string => {
   if (!d) return '—'
   const date = typeof d === 'string' ? new Date(d) : d
@@ -102,10 +100,12 @@ export const fmtHijri = (d: string | Date | null | undefined): string => {
       // (تفادياً لـ«1448 هـ هـ»، ولضمان وجودها لو لم يضفها المتصفح)
       new Intl.DateTimeFormat(HIJRI_LOCALE, {
         year: 'numeric',
-        month: 'long',
-        day: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
       })
         .format(date)
+        // Intl يحشر علامات اتجاه (U+200F) بين الأرقام — تُربك العرض
+        .replace(/\u200f/g, '')
         .replace(/\s*هـ\s*$/, '') + ' هـ',
     date.toISOString()
   )
