@@ -72,6 +72,19 @@ export default function Login() {
   )
 }
 
+
+/** الوجهة المقصودة قبل تحويله للدخول (رابط قضية مثلاً) — أو الرئيسية */
+function afterLoginPath(): string {
+  try {
+    const to = sessionStorage.getItem('redirect-after-login')
+    sessionStorage.removeItem('redirect-after-login')
+    if (to && to.startsWith('/') && !to.startsWith('//')) return to
+  } catch {
+    /* تجاهل */
+  }
+  return '/'
+}
+
 function TabButton({
   active,
   onClick,
@@ -119,7 +132,7 @@ function PasswordForm() {
   const onSubmit = async (values: LoginValues) => {
     setServerError(null)
     const res = await login(values.email, values.password)
-    if (res.ok) navigate('/')
+    if (res.ok) navigate(afterLoginPath())
     else if (res.error === 'account_disabled')
       setServerError('هذا الحساب موقوف. تواصل مع إدارة المكتب.')
     else setServerError('تعذّر تسجيل الدخول. تحقّق من البريد وكلمة المرور.')
@@ -232,7 +245,7 @@ function OtpForm() {
         return
       }
       const res = await loginWithSession(data.access_token, data.refresh_token)
-      if (res.ok) navigate('/')
+      if (res.ok) navigate(afterLoginPath())
       else if (res.error === 'account_disabled')
         setError('هذا الحساب موقوف. تواصل مع إدارة المكتب.')
       else setError('تعذّر إكمال الدخول. حاول مرة أخرى.')

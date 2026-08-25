@@ -142,8 +142,18 @@ function AppRoutes() {
     return user ? <Redirect to="/" /> : <Login />
   }
 
-  // باقي المسارات محمية
-  if (!user) return <Redirect to="/login" />
+  // باقي المسارات محمية — نحفظ الوجهة المقصودة كي يعود إليها بعد الدخول
+  // (بلا ذلك يضيع رابط القضية المُرسل للموظف ويهبط في اللوحة — بلاغ 2026-08-25)
+  if (!user) {
+    try {
+      if (location !== '/' && location !== '/login') {
+        sessionStorage.setItem('redirect-after-login', location)
+      }
+    } catch {
+      /* تخزين معطّل — يدخل ويهبط في الرئيسية كالسابق */
+    }
+    return <Redirect to="/login" />
+  }
 
   return <ProtectedRoutes />
 }
