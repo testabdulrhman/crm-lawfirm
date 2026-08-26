@@ -12,10 +12,43 @@
 //   reference_no, idempotency_key, جدول booking_blocked_dates، قيد عدم التداخل.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const admin = createClient(
-  Deno.env.get("SUPABASE_URL") ?? "",
-  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
-);
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
+const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+const FIRM_NAME = "شركة عبدالرحمن بن رضوان المشيقح للمحاماة وإدارة إجراءات الإفلاس";
+
+const admin = createClient(SUPABASE_URL, SERVICE_KEY);
+
+/** إرسال SMS عبر Msegat — الأسرار من البيئة أو lookup_values (نمط النظام) */
+async function sendSmsSafe(phone: string, msg: string): Promise<boolean> {
+  try {
+    let userName = Deno.env.get("MSEGAT_USERNAME") ?? "";
+    let apiKey = Deno.env.get("MSEGAT_API_KEY") ?? "";
+    let userSender = Deno.env.get("MSEGAT_SENDER") ?? "";
+    if (!userName || !apiKey || !userSender) {
+      const { data } = await admin
+        .from("lookup_values").select("value").eq("type", "sms_config").maybeSingle();
+      if (data?.value) {
+        const cfg = JSON.parse(data.value as string);
+        userName = userName || cfg.userName;
+        apiKey = apiKey || cfg.apiKey;
+        userSender = userSender || cfg.sender;
+      }
+    }
+    if (!userName || !apiKey || !userSender) return false;
+    const res = await fetch("https://www.msegat.com/gw/sendsms.php", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        userName, apiKey, userSender,
+        numbers: normalizeSaudi(phone), msg, By: "link", msgEncoding: "UTF8",
+      }),
+    });
+    const t = await res.text();
+    return t.includes("M0000") || t.includes('"code":"1"') || t.includes("Success");
+  } catch (_) {
+    return false;
+  }
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -451,6 +484,63 @@ Deno.serve(async (req) => {
         return json({ error: `تعذّر حفظ الموعد: ${error.message}` }, 500);
       }
 
+      // ---- موعد عن بُعد: رابط Google Meet ثم إرساله للعميل ----
+      // (طلب المستخدم 2026-08-26). ثانوي بالكامل: فشله لا يُفشل الحجز،
+      // والموعد يبقى قائماً ويمكن توليد الرابط لاحقاً من صفحة الموعد.
+      let meetLink: string | null = null;
+      if (method === "remote" && appt?.id) {
+        try {
+          const r = await fetch(`${SUPABASE_URL}/functions/v1/calendar-sync`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${SERVICE_KEY}`,
+            },
+            body: JSON.stringify({
+              action: "add-appointment",
+              appointment: {
+                id: appt.id,
+                client_name: name,
+                client_phone: phone,
+                notes: notes || null,
+                appointment_date: date,
+                appointment_time: time,
+                duration_minutes: service.duration,
+                meeting_method: method,
+              },
+            }),
+          });
+          const j = await r.json();
+          meetLink = j?.meetLink ?? null;
+          if (appt?.id && (meetLink || j?.eventId)) {
+            await admin
+              .from("appointments")
+              .update({
+                meeting_link: meetLink,
+                gcal_event_id: j?.eventId ?? null,
+                meeting_link_sent_at: meetLink ? new Date().toISOString() : null,
+              })
+              .eq("id", appt.id);
+          }
+          // إرسال الرابط للعميل برسالة نصية
+          if (meetLink && phone) {
+            const msg =
+              `تم تأكيد موعدكم عن بُعد يوم ${date} الساعة ${time}.\n` +
+              `رابط الاجتماع: ${meetLink}\n` +
+              `الرقم المرجعي: ${appt?.reference_no ?? ""}\n` +
+              FIRM_NAME;
+            const ok = await sendSmsSafe(phone, msg);
+            await admin.from("sms_log").insert({
+              recipient_name: name,
+              phone: normalizeSaudi(phone),
+              message: msg,
+              status: ok ? "sent" : "failed",
+              sent_by: "حجز إلكتروني (رابط الاجتماع)",
+            });
+          }
+        } catch (_) { /* الرابط ثانوي — الموعد محفوظ */ }
+      }
+
       // ---- إشعار داخلي للمدراء (ثانوي — لا يُفشل الحجز) ----
       try {
         const { data: directors } = await admin
@@ -475,6 +565,7 @@ Deno.serve(async (req) => {
         ok: true,
         id: appt?.id,
         reference_no: appt?.reference_no,
+        meeting_link: meetLink,
         date,
         time,
         duration_minutes: service.duration,

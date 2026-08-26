@@ -102,6 +102,18 @@ async function addSessionEvent(accessToken: string, calendarId: string, session:
   return await postEvent(accessToken, calendarId, event);
 }
 
+
+/** رابط Google Meet من رد الحدث (يظهر في hangoutLink أو entryPoints) */
+function meetLinkOf(event: any): string | null {
+  if (event?.hangoutLink) return String(event.hangoutLink);
+  const ep = event?.conferenceData?.entryPoints;
+  if (Array.isArray(ep)) {
+    const v = ep.find((e: any) => e?.entryPointType === "video")?.uri;
+    if (v) return String(v);
+  }
+  return null;
+}
+
 // إضافة حدث موعد عميل
 async function addAppointmentEvent(accessToken: string, calendarId: string, appointment: any) {
   const { startDateTime, endDateTime } = buildTimes(
@@ -109,7 +121,13 @@ async function addAppointmentEvent(accessToken: string, calendarId: string, appo
     appointment.appointment_time,
     appointment.duration_minutes || 60,
   );
-  const event = {
+  // الموعد عن بُعد ← نطلب من Google إنشاء رابط Meet مع الحدث نفسه
+  // (طلب المستخدم 2026-08-26). قيم الطريقة من صفحة الحجز: remote / onsite.
+  const isRemote = ["remote", "online", "عن بعد"].includes(
+    String(appointment.meeting_method ?? "").trim(),
+  );
+
+  const event: any = {
     summary: `📅 موعد: ${appointment.client_name || "عميل"}`,
     description: [
       appointment.client_phone ? `الجوال: ${appointment.client_phone}` : "",
@@ -120,12 +138,30 @@ async function addAppointmentEvent(accessToken: string, calendarId: string, appo
     reminders: REMINDERS,
     colorId: "10", // أخضر للمواعيد
   };
-  return await postEvent(accessToken, calendarId, event);
+
+  if (isRemote) {
+    event.conferenceData = {
+      createRequest: {
+        // معرّف فريد للطلب — Google يرفض تكرار المعرّف بحدث آخر
+        requestId: `redwan-${appointment.id ?? crypto.randomUUID()}`,
+        conferenceSolutionKey: { type: "hangoutsMeet" },
+      },
+    };
+  }
+
+  return await postEvent(accessToken, calendarId, event, isRemote);
 }
 
-async function postEvent(accessToken: string, calendarId: string, event: any) {
+async function postEvent(
+  accessToken: string,
+  calendarId: string,
+  event: any,
+  withMeet = false,
+) {
+  // ⚠️ بلا conferenceDataVersion=1 يتجاهل Google طلب إنشاء الاجتماع بصمت
+  const qs = withMeet ? "?conferenceDataVersion=1" : "";
   const res = await fetch(
-    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`,
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events${qs}`,
     {
       method: "POST",
       headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
@@ -189,7 +225,7 @@ serve(async (req) => {
       if (type === "appointment" || appointment) {
         if (!appointment) return json({ error: "appointment required" }, 400);
         const event = await addAppointmentEvent(accessToken, cfg.calendarId, appointment);
-        return json({ success: true, eventId: event.id, htmlLink: event.htmlLink });
+        return json({ success: true, eventId: event.id, htmlLink: event.htmlLink, meetLink: meetLinkOf(event) });
       }
       if (!session || !caseTitle) return json({ error: "session and caseTitle required" }, 400);
       const event = await addSessionEvent(accessToken, cfg.calendarId, session, caseTitle);
@@ -199,7 +235,7 @@ serve(async (req) => {
     if (action === "add-appointment") {
       if (!appointment) return json({ error: "appointment required" }, 400);
       const event = await addAppointmentEvent(accessToken, cfg.calendarId, appointment);
-      return json({ success: true, eventId: event.id, htmlLink: event.htmlLink });
+      return json({ success: true, eventId: event.id, htmlLink: event.htmlLink, meetLink: meetLinkOf(event) });
     }
 
     if (action === "delete") {
