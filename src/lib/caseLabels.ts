@@ -112,13 +112,18 @@ export const isSessionUpcoming = (raw: string | null | undefined): boolean =>
   normSessionStatus(raw) === 'قادمة'
 
 /* الحالة التلقائية حسب الوقت (عرض فقط، لا تُخزَّن):
-   - فات الموعد بأكثر من ساعة → «منتهية»
-   - خلال ساعة قبل/بعد وقت الجلسة → «منعقدة»
-   - قبل ذلك → «قادمة»
-   مع احترام «مؤجّلة» المخزّنة، واعتبار أي جلسة لها نتيجة مسجّلة «منتهية». */
+   - قبل وقت الجلسة → «قادمة» (ولو بدقائق)
+   - من وقتها حتى ساعتين بعده → «منعقدة»
+   - بعد ذلك → «منتهية»
+   مع احترام «مؤجّلة» المخزّنة، واعتبار أي جلسة لها نتيجة مسجّلة «منتهية».
+
+   ⚠️ كانت النافذة تبدأ **ساعة قبل** الجلسة، فتُعرض جلسة التاسعة والربع
+   «منعقدة الآن» من الثامنة والربع — بلاغ المستخدم 2026-08-26. «منعقدة الآن»
+   يجب أن تعني أنها جارية فعلاً، لا أنها قاربت. */
 export type SessionDisplayStatus = 'قادمة' | 'منعقدة' | 'منتهية' | 'مؤجّلة'
 
-const SESSION_WINDOW_MS = 60 * 60 * 1000 // ساعة
+// مدة الانعقاد التقديرية بعد وقت البدء
+const SESSION_RUNNING_MS = 2 * 60 * 60 * 1000
 
 export function sessionDisplayStatus(s: {
   status: string | null
@@ -136,8 +141,8 @@ export function sessionDisplayStatus(s: {
   if (time) {
     const start = new Date(`${s.session_date}T${time}:00`).getTime()
     if (!isNaN(start)) {
-      if (now < start - SESSION_WINDOW_MS) return 'قادمة'
-      if (now <= start + SESSION_WINDOW_MS) return 'منعقدة'
+      if (now < start) return 'قادمة'
+      if (now <= start + SESSION_RUNNING_MS) return 'منعقدة'
       return 'منتهية'
     }
   }
@@ -227,3 +232,20 @@ export const MEMO_METHOD_OPTIONS = [
   { value: 'manual', label: 'يدوي' },
   { value: 'electronic', label: 'إلكتروني' },
 ] as const
+
+/** الوقت المتبقي لجلسة اليوم بصيغة مقروءة («بعد 33 دقيقة») — أو null */
+export function minutesUntilSession(s: {
+  session_date: string | null
+  session_time: string | null
+}): string | null {
+  if (!s.session_date || !s.session_time) return null
+  const start = new Date(`${s.session_date}T${s.session_time.slice(0, 5)}:00`).getTime()
+  if (isNaN(start)) return null
+  const diff = start - Date.now()
+  if (diff <= 0 || diff > 12 * 60 * 60 * 1000) return null
+  const mins = Math.round(diff / 60000)
+  if (mins < 60) return `بعد ${mins} دقيقة`
+  const h = Math.floor(mins / 60)
+  const m = mins % 60
+  return m === 0 ? `بعد ${h} ساعة` : `بعد ${h} ساعة و${m} دقيقة`
+}

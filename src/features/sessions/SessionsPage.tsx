@@ -17,6 +17,7 @@ import type { SessionWithCase } from '@/hooks/useCaseSessions'
 import {
   sessionDisplayStatus,
   sessionDisplayBadge,
+  minutesUntilSession,
   type SessionDisplayStatus,
 } from '@/lib/caseLabels'
 
@@ -227,8 +228,12 @@ function SessionRow({
   onClick: () => void
 }) {
   const days = st === 'قادمة' ? daysFromToday(s.session_date) : null
+  // جلسة اليوم تستحق دقّة أعلى من «اليوم»: «بعد 33 دقيقة»
   const cd =
-    st === 'منعقدة' ? 'منعقدة الآن' : days != null ? countdownText(days) : ''
+    st === 'منعقدة'
+      ? 'منعقدة الآن'
+      : (st === 'قادمة' ? minutesUntilSession(s) : null) ??
+        (days != null ? countdownText(days) : '')
   const soon = days != null && days <= 3
   // جلسة بلا قضية مرتبطة: لا وجهة للنقر — عطّل الصف بصرياً بدل نقرة ميتة
   const clickable = !!s.case_id
