@@ -69,7 +69,7 @@ const navSections: { title?: string; items: NavItem[] }[] = [
       { label: 'الجلسات', href: '/sessions', icon: CalendarDays },
       { label: 'الوكالات', href: '/poa', icon: FileSignature, badge: 'expiring_poas' },
       {
-        label: 'المواعيد',
+        label: 'مواعيد العملاء',
         href: '/appointments',
         icon: CalendarClock,
         badge: 'upcoming_appointments',

@@ -122,7 +122,8 @@ export function useCalendarRange(
               : r.meeting_method === 'onsite'
                 ? 'حضوري'
                 : null,
-          href: '/appointments',
+          // كان يفتح القائمة لا الموعد — فيضيع السياق (بلاغ 2026-08-26)
+          href: `/appointments/${r.id}`,
         })),
         ...(tk.data ?? []).map((r: any) => ({
           id: `t-${r.id}`,

@@ -106,12 +106,28 @@ export function CalendarPage() {
 
   // مرساة الشهر المعروض — اليوم الأول منه، ونتنقّل بالأشهر
   const [anchorISO, setAnchorISO] = useState(() => {
-    const n = new Date()
-    return localISO(new Date(n.getFullYear(), n.getMonth(), 1))
+    let base = new Date()
+    try {
+      const want = sessionStorage.getItem('calendar:open-on')
+      if (want && /^\d{4}-\d{2}-\d{2}$/.test(want)) base = new Date(`${want}T00:00:00`)
+    } catch {
+      /* اليوم الحالي */
+    }
+    return localISO(new Date(base.getFullYear(), base.getMonth(), 1))
   })
   const anchor = useMemo(() => new Date(`${anchorISO}T00:00:00`), [anchorISO])
 
-  const [selected, setSelected] = useState<string>(todayISO())
+  // فتحٌ على يوم بعينه — يضعه زر «في التقويم» في صفحة الموعد قبل التنقّل
+  const [selected, setSelected] = useState<string>(() => {
+    try {
+      const want = sessionStorage.getItem('calendar:open-on')
+      sessionStorage.removeItem('calendar:open-on')
+      if (want && /^\d{4}-\d{2}-\d{2}$/.test(want)) return want
+    } catch {
+      /* تخزين معطّل — اليوم الحالي */
+    }
+    return todayISO()
+  })
   const [view, setView] = usePageState<'month' | 'week'>('calendar.view', 'month')
 
   // الطبقات: أيّ الأنواع تُعرض. الإخفاء يخصّ العرض لا البيانات — نجلب الكل

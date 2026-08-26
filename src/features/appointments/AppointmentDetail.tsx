@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useLocation, Link } from 'wouter'
 import {
   ArrowRight,
+  CalendarRange,
   Pencil,
   Trash2,
   Phone,
@@ -110,6 +111,23 @@ export function AppointmentDetail({ id }: { id: string }) {
           رجوع للمواعيد
         </Button>
         <div className="flex items-center gap-1">
+          {/* جسر إلى التقويم — يفتحه على يوم الموعد ليرى الموظف بقية يومه */}
+          <Button
+            variant="ghost"
+            size="sm"
+            title="اعرض هذا اليوم في التقويم"
+            onClick={() => {
+              try {
+                sessionStorage.setItem('calendar:open-on', a.appointment_date ?? '')
+              } catch {
+                /* تخزين معطّل — يفتح التقويم على اليوم الحالي */
+              }
+              navigate('/calendar')
+            }}
+          >
+            <CalendarRange className="h-4 w-4" />
+            في التقويم
+          </Button>
           <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
             <Pencil className="h-4 w-4" />
             تعديل

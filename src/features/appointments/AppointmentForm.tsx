@@ -40,6 +40,9 @@ const schema = z.object({
   appointment_time: z.string().optional(),
   duration_minutes: z.string().optional(),
   status: z.string().min(1),
+  // طريقة الاجتماع — غيابها كان يخفي قسم رابط الاجتماع في صفحة الموعد
+  // (بلاغ المستخدم 2026-08-26)
+  meeting_method: z.string().optional(),
   notes: z.string().optional(),
 })
 type FormValues = z.infer<typeof schema>
@@ -84,6 +87,7 @@ export function AppointmentForm({
       appointment_time: appointment?.appointment_time
         ? appointment.appointment_time.slice(0, 5)
         : (defaultTime ?? ''),
+      meeting_method: appointment?.meeting_method ?? 'onsite',
       duration_minutes:
         appointment?.duration_minutes != null
           ? String(appointment.duration_minutes)
@@ -121,6 +125,7 @@ export function AppointmentForm({
       appointment_time: t(values.appointment_time),
       duration_minutes: !isNaN(dur) ? dur : 60,
       status: values.status,
+      meeting_method: t(values.meeting_method),
       notes: t(values.notes),
     }
     if (isEdit && appointment) {
@@ -189,6 +194,24 @@ export function AppointmentForm({
               type="number"
               dir="ltr"
               {...register('duration_minutes')}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>طريقة الاجتماع</Label>
+            <Controller
+              control={control}
+              name="meeting_method"
+              render={({ field }) => (
+                <Select value={field.value ?? 'onsite'} onValueChange={field.onChange}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="onsite">حضوري</SelectItem>
+                    <SelectItem value="remote">عن بُعد</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
             />
           </div>
           <div className="space-y-1.5">

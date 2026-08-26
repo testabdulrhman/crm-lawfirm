@@ -835,6 +835,8 @@ export interface AppointmentInput {
   duration_minutes?: number | null
   notes?: string | null
   status?: string | null
+  /** حضوري onsite أو عن بُعد remote — الأخيرة تُفعّل قسم رابط الاجتماع */
+  meeting_method?: string | null
   created_by?: string | null
 }
 
