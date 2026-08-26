@@ -63,9 +63,9 @@ const DEFAULTS: BookingConfig = {
    تُجلب في كل طلب فتضيف رحلات شبكة على مسار حسّاس للسرعة. */
 const TTL_MS = 60_000;
 const cache = new Map<string, { at: number; v: unknown }>();
-async function cached<T>(key: string, load: () => Promise<T>): Promise<T> {
+async function cached<T>(key: string, load: () => Promise<T>, ttl = TTL_MS): Promise<T> {
   const hit = cache.get(key);
-  if (hit && Date.now() - hit.at < TTL_MS) return hit.v as T;
+  if (hit && Date.now() - hit.at < ttl) return hit.v as T;
   const v = await load();
   cache.set(key, { at: Date.now(), v });
   return v;
@@ -299,19 +299,28 @@ Deno.serve(async (req) => {
         });
       }
 
-      // استعلام واحد لكل المدى + جلب الترويسة بالتوازي
-      const [prefetched, office] = await Promise.all([
-        busyByDate(riyadhDatePlus(0), riyadhDatePlus(cfg.max_days_ahead)),
+      // نظرة الأيام تُحسب مرة كل 30ث لكل مدّة خدمة: تُعرض للتصفّح فقط،
+      // والتحقق الحقيقي من الشغور يقع لحظة الحجز (فرع book يعيد الفحص).
+      const _t0 = Date.now();
+      const [days, office] = await Promise.all([
+        cached(`days:${duration}`, async () => {
+          const prefetched = await busyByDate(
+            riyadhDatePlus(0),
+            riyadhDatePlus(cfg.max_days_ahead),
+          );
+          const acc: { date: string; count: number }[] = [];
+          for (let i = 0; i <= cfg.max_days_ahead; i++) {
+            const ds = riyadhDatePlus(i);
+            const sl = await slotsFor(ds, cfg, duration, blocked, prefetched);
+            if (sl.length > 0) acc.push({ date: ds, count: sl.length });
+          }
+          return acc;
+        }),
         getOfficeBranding(),
       ]);
-      const days: { date: string; count: number }[] = [];
-      for (let i = 0; i <= cfg.max_days_ahead; i++) {
-        const ds = riyadhDatePlus(i);
-        const s = await slotsFor(ds, cfg, duration, blocked, prefetched);
-        if (s.length > 0) days.push({ date: ds, count: s.length });
-      }
       return json({
         ok: true,
+        _ms: { total: Date.now() - _t0 },
         days,
         office,
         config: { duration_minutes: duration, max_days_ahead: cfg.max_days_ahead },
