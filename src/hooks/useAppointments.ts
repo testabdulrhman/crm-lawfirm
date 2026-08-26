@@ -460,6 +460,51 @@ export function useSaveMeetingLink() {
   })
 }
 
+/**
+ * توليد رابط Google Meet للموعد عبر calendar-sync (طلب المستخدم 2026-08-26).
+ * ينشئ حدثاً في تقويم Google ومعه رابط اجتماع، ويحفظ الاثنين في الموعد.
+ */
+export function useGenerateMeetLink() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (a: Appointment): Promise<string> => {
+      const { data, error } = await supabase.functions.invoke('calendar-sync', {
+        body: {
+          action: 'add-appointment',
+          appointment: {
+            id: a.id,
+            client_name: a.client_name,
+            client_phone: a.client_phone ?? a.client?.phone ?? null,
+            notes: a.notes,
+            appointment_date: a.appointment_date,
+            appointment_time: a.appointment_time,
+            duration_minutes: a.duration_minutes ?? 60,
+            meeting_method: 'remote',
+          },
+        },
+      })
+      if (error) throw error
+      if (data?.error) throw new Error(data.error)
+      const link: string | null = data?.meetLink ?? null
+      if (!link)
+        throw new Error(
+          'أُنشئ الحدث في التقويم لكن Google لم يُرجع رابط اجتماع — تحقق من صلاحيات التقويم'
+        )
+      const { error: upErr } = await supabase
+        .from('appointments')
+        .update({ meeting_link: link, gcal_event_id: data?.eventId ?? null })
+        .eq('id', a.id)
+      if (upErr) throw upErr
+      return link
+    },
+    onSuccess: () => {
+      invalidate(qc)
+      toast({ variant: 'success', title: 'أُنشئ رابط الاجتماع وحُفظ' })
+    },
+    onError: errToast('تعذّر إنشاء رابط الاجتماع'),
+  })
+}
+
 /** إرسال رابط الاجتماع للموكّل — عبر دالة appointment-confirm (نفس مسار التأكيد) */
 export function useSendMeetingLink() {
   const qc = useQueryClient()

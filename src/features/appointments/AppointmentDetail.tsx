@@ -50,6 +50,7 @@ import {
   useUpdateAppointmentStatus,
   useDeleteAppointment,
   useSendConfirmation,
+  useGenerateMeetLink,
   useSaveMeetingLink,
   useSendMeetingLink,
   useSendThankYou,
@@ -65,6 +66,7 @@ export function AppointmentDetail({ id }: { id: string }) {
   const statusM = useUpdateAppointmentStatus()
   const deleteM = useDeleteAppointment()
   const confirmM = useSendConfirmation()
+  const genLinkM = useGenerateMeetLink()
   const saveLinkM = useSaveMeetingLink()
   const sendLinkM = useSendMeetingLink()
   const [linkDraft, setLinkDraft] = useState(a?.meeting_link ?? '')
@@ -260,6 +262,23 @@ export function AppointmentDetail({ id }: { id: string }) {
                 >
                   {saveLinkM.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
                   حفظ
+                </Button>
+                {/* توليد تلقائي من Google — يغني عن نسخ الرابط يدوياً */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={genLinkM.isPending}
+                  title="ينشئ حدثاً في تقويم Google ورابط اجتماع تلقائياً"
+                  onClick={() =>
+                    genLinkM.mutate(a, { onSuccess: (link) => setLinkDraft(link) })
+                  }
+                >
+                  {genLinkM.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Video className="h-4 w-4 text-gold" />
+                  )}
+                  {a.meeting_link ? 'إنشاء رابط جديد' : 'إنشاء رابط اجتماع'}
                 </Button>
                 <Button
                   variant="gold"
