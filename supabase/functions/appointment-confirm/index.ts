@@ -118,7 +118,13 @@ Deno.serve(async (req) => {
         : "مرحباً {name}\nتم تأكيد موعدكم بتاريخ {date} الساعة {time}.\n{location}\nالرقم المرجعي: {reference}";
   }
 
-  const msg = tpl
+  // سطر الرقم المرجعي يُحذف كاملاً إن لم يوجد رقم — كان يُرسل «الرقم المرجعي:»
+  // فارغاً للمواعيد المُنشأة داخل النظام (بلاغ المستخدم 2026-08-26)
+  const tplClean = a.reference_no
+    ? tpl
+    : tpl.replace(/\n?[^\n]*\{reference\}[^\n]*/g, "");
+
+  const msg = tplClean
     .replaceAll("{name}", name)
     .replaceAll("{date}", dualDate(String(a.appointment_date)))
     .replaceAll("{time}", arabicTime(String(a.appointment_time ?? "09:00")))

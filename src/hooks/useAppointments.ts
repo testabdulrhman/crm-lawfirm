@@ -156,9 +156,23 @@ export function useCreateAppointment() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (input: AppointmentInput): Promise<{ calOk: boolean }> => {
+      // رقم مرجعي لكل موعد لا لحجوزات الموقع وحدها — بلا رقم كانت رسالة
+      // العميل تصل بـ«الرقم المرجعي:» فارغاً (بلاغ 2026-08-26)
+      let reference: string | null = null
+      try {
+        const { data: ref } = await supabase.rpc('next_booking_reference')
+        reference = ref ? String(ref) : null
+      } catch {
+        /* الرقم تحسين لا شرط — الموعد يُحفظ بدونه */
+      }
       const { data, error } = await supabase
         .from('appointments')
-        .insert({ status: 'confirmed', duration_minutes: 60, ...input })
+        .insert({
+          status: 'confirmed',
+          duration_minutes: 60,
+          reference_no: reference,
+          ...input,
+        })
         .select(SELECT)
         .single()
       if (error) throw error

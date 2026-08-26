@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useLocation, Link } from 'wouter'
 import {
   ArrowRight,
@@ -71,6 +71,11 @@ export function AppointmentDetail({ id }: { id: string }) {
   const saveLinkM = useSaveMeetingLink()
   const sendLinkM = useSendMeetingLink()
   const [linkDraft, setLinkDraft] = useState(a?.meeting_link ?? '')
+  // ⚠️ useState يأخذ القيمة الأولى فقط، والموعد يصل بعد أول رسم —
+  //    فكان الحقل يبقى فارغاً رغم وجود الرابط محفوظاً (بلاغ 2026-08-26).
+  useEffect(() => {
+    setLinkDraft(a?.meeting_link ?? '')
+  }, [a?.id, a?.meeting_link])
   const thankM = useSendThankYou()
 
   const [editOpen, setEditOpen] = useState(false)
