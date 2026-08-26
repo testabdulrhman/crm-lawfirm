@@ -59,7 +59,23 @@ const DEFAULTS: BookingConfig = {
   ],
 };
 
+/* كاش قصير على مستوى الوحدة (60ث): هذه القيم تتغيّر نادراً جداً، وكانت
+   تُجلب في كل طلب فتضيف رحلات شبكة على مسار حسّاس للسرعة. */
+const TTL_MS = 60_000;
+const cache = new Map<string, { at: number; v: unknown }>();
+async function cached<T>(key: string, load: () => Promise<T>): Promise<T> {
+  const hit = cache.get(key);
+  if (hit && Date.now() - hit.at < TTL_MS) return hit.v as T;
+  const v = await load();
+  cache.set(key, { at: Date.now(), v });
+  return v;
+}
+
 async function getConfig(): Promise<BookingConfig> {
+  return cached("cfg", loadConfig);
+}
+
+async function loadConfig(): Promise<BookingConfig> {
   try {
     const { data } = await admin
       .from("lookup_values")
@@ -80,7 +96,7 @@ async function getConfig(): Promise<BookingConfig> {
 
 // ترويسة المكتب: office_info محجوب عن الزوار بـ RLS (يحوي الآيبان والرقم
 // الضريبي والختم) — نمرّر أربعة حقول آمنة فقط.
-async function getOfficeBranding() {
+async function loadOfficeBranding() {
   try {
     const { data } = await admin
       .from("office_info")
@@ -93,7 +109,7 @@ async function getOfficeBranding() {
   }
 }
 
-async function getBlockedDates(): Promise<Set<string>> {
+async function loadBlockedDates(): Promise<Set<string>> {
   try {
     const { data } = await admin
       .from("booking_blocked_dates")
@@ -156,12 +172,36 @@ async function nextReference(): Promise<string> {
   return String(data);
 }
 
+/** المواعيد المحجوزة في مدى تواريخ — استعلام واحد بدل واحد لكل يوم */
+async function busyByDate(
+  fromDate: string,
+  toDate: string
+): Promise<Map<string, { start: number; end: number }[]>> {
+  const map = new Map<string, { start: number; end: number }[]>();
+  const { data } = await admin
+    .from("appointments")
+    .select("appointment_date, appointment_time, duration_minutes")
+    .gte("appointment_date", fromDate)
+    .lte("appointment_date", toDate)
+    .neq("status", "cancelled");
+  for (const r of (data ?? []) as any[]) {
+    const d = String(r.appointment_date);
+    const st = toMin(String(r.appointment_time ?? "00:00").slice(0, 5));
+    const arr = map.get(d) ?? [];
+    arr.push({ start: st, end: st + (r.duration_minutes ?? 60) });
+    map.set(d, arr);
+  }
+  return map;
+}
+
 /** الفترات الشاغرة ليوم محدد، بمدّة الخدمة المطلوبة */
 async function slotsFor(
   dateStr: string,
   cfg: BookingConfig,
   durationMinutes: number,
-  blocked: Set<string>
+  blocked: Set<string>,
+  /** خريطة المشغول لكل التواريخ — تُجلب مرة واحدة لكل الأيام */
+  prefetched?: Map<string, { start: number; end: number }[]>
 ): Promise<string[]> {
   const d = new Date(`${dateStr}T00:00:00Z`);
   if (isNaN(d.getTime())) return [];
@@ -171,17 +211,23 @@ async function slotsFor(
   const now = riyadhNow();
   if (dateStr < now.date || dateStr > riyadhDatePlus(cfg.max_days_ahead)) return [];
 
-  // المشغول فعلاً — الأوقات والمدد فقط، بلا أي بيانات عملاء
-  const { data: taken } = await admin
-    .from("appointments")
-    .select("appointment_time, duration_minutes")
-    .eq("appointment_date", dateStr)
-    .neq("status", "cancelled");
-
-  const busy = (taken ?? []).map((r: any) => {
-    const s = toMin(String(r.appointment_time ?? "00:00").slice(0, 5));
-    return { start: s, end: s + (r.duration_minutes ?? 60) };
-  });
+  // المشغول فعلاً — من خريطة مجلوبة مسبقاً إن وُجدت، وإلا استعلام لليوم وحده.
+  // ⚠️ كان يستعلم لكل يوم داخل حلقة متسلسلة (٢٢ رحلة للقاعدة) فاستغرق
+  //    عرض المواعيد ٣–٩ ثوانٍ — بلاغ المستخدم 2026-08-26.
+  let busy: { start: number; end: number }[];
+  if (prefetched) {
+    busy = prefetched.get(dateStr) ?? [];
+  } else {
+    const { data: taken } = await admin
+      .from("appointments")
+      .select("appointment_time, duration_minutes")
+      .eq("appointment_date", dateStr)
+      .neq("status", "cancelled");
+    busy = (taken ?? []).map((r: any) => {
+      const s = toMin(String(r.appointment_time ?? "00:00").slice(0, 5));
+      return { start: s, end: s + (r.duration_minutes ?? 60) };
+    });
+  }
 
   const out: string[] = [];
   const startM = toMin(cfg.start);
@@ -195,6 +241,9 @@ async function slotsFor(
   }
   return out;
 }
+
+const getOfficeBranding = () => cached("office", loadOfficeBranding);
+const getBlockedDates = () => cached("blocked", loadBlockedDates);
 
 function resolveService(cfg: BookingConfig, key: string | null): Service | null {
   if (!key) return null;
@@ -250,16 +299,21 @@ Deno.serve(async (req) => {
         });
       }
 
+      // استعلام واحد لكل المدى + جلب الترويسة بالتوازي
+      const [prefetched, office] = await Promise.all([
+        busyByDate(riyadhDatePlus(0), riyadhDatePlus(cfg.max_days_ahead)),
+        getOfficeBranding(),
+      ]);
       const days: { date: string; count: number }[] = [];
       for (let i = 0; i <= cfg.max_days_ahead; i++) {
         const ds = riyadhDatePlus(i);
-        const s = await slotsFor(ds, cfg, duration, blocked);
+        const s = await slotsFor(ds, cfg, duration, blocked, prefetched);
         if (s.length > 0) days.push({ date: ds, count: s.length });
       }
       return json({
         ok: true,
         days,
-        office: await getOfficeBranding(),
+        office,
         config: { duration_minutes: duration, max_days_ahead: cfg.max_days_ahead },
       });
     }
