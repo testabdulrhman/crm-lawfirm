@@ -20,6 +20,7 @@ import {
   Gavel,
   Stamp,
   Sun,
+  Clock,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -28,7 +29,6 @@ import { useIsDirector } from '@/hooks/useIsDirector'
 import { usePageState } from '@/hooks/usePageState'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { fmtNumber, fmtDatePref, fmtTime, daysLabel, arPlural, todayISO } from '@/lib/format'
@@ -148,22 +148,25 @@ export default function Dashboard() {
         <>
       {/* ===== شريط المؤشّرات — الأرقام أولاً ===== */}
       {isLoading || !s ? (
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-[86px] w-full rounded-2xl" />
-          ))}
-        </div>
+        <Skeleton className="h-[196px] w-full rounded-3xl lg:h-[98px]" />
       ) : (
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatStrip>
           <Stat
+            icon={Gavel}
             label={isAll ? 'جلسات قادمة' : 'جلساتي القادمة'}
             value={s.upcoming_sessions}
             onClick={() => navigate('/sessions')}
           />
           <Stat
+            icon={Flame}
             label="مهام متأخرة"
             value={s.overdue_tasks}
             tone={s.overdue_tasks > 0 ? 'danger' : 'plain'}
+            pill={
+              s.overdue_tasks > 0
+                ? { text: 'متأخّرة', tone: 'danger' }
+                : { text: 'منتظمة', tone: 'ok' }
+            }
             note={
               s.open_tasks > 0
                 ? `من ${fmtNumber(s.open_tasks)} مفتوحة`
@@ -172,9 +175,15 @@ export default function Dashboard() {
             onClick={() => navigate('/tasks')}
           />
           <Stat
+            icon={Stamp}
             label={isAll ? 'بانتظار الاعتماد' : 'بانتظار اعتمادي'}
             value={approvals?.total ?? 0}
             tone={(approvals?.total ?? 0) > 0 ? 'warn' : 'plain'}
+            pill={
+              (approvals?.total ?? 0) > 0
+                ? { text: 'يحتاجك', tone: 'warn' }
+                : undefined
+            }
             note={
               approvals && approvals.letters > 0
                 ? `منها ${fmtNumber(approvals.letters)} خطاب صادر`
@@ -189,11 +198,17 @@ export default function Dashboard() {
             }
           />
           <Stat
+            icon={Scale}
             label="قضايا جارية"
             value={s.cases_active}
+            note={
+              s.cases_total > 0
+                ? `من ${fmtNumber(s.cases_total)} قضية`
+                : undefined
+            }
             onClick={() => navigate('/cases')}
           />
-        </div>
+        </StatStrip>
       )}
 
       {/* ===== جدول اليوم + ما يحتاج انتباهك ===== */}
@@ -352,7 +367,7 @@ function ScopeBtn({
       className={cn(
         'rounded-full px-5 py-1.5 transition-colors',
         active
-          ? 'bg-card font-semibold text-foreground shadow-sm'
+          ? 'bg-navy font-semibold text-white shadow-sm dark:bg-navy-50 dark:text-navy'
           : 'text-muted-foreground hover:text-foreground'
       )}
     >
@@ -363,48 +378,88 @@ function ScopeBtn({
 
 /* ===================== المؤشّرات ===================== */
 
-// بطاقة مؤشّر: عنوان صغير هادئ فوق رقم كبير. لا أيقونة — الرقم هو البطل.
+// شريط واحد يضم المؤشّرات الأربعة بدل أربع بطاقات منفصلة — يقرأ كسطر واحد.
+// الفواصل مرسومة بفجوات 1px فوق خلفية الحدود (gap-px): تعمل في الاتجاهين
+// أفقياً ورأسياً، ولا تحتاج divide-x-reverse مع RTL.
+function StatStrip({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="grid grid-cols-2 gap-px overflow-hidden rounded-3xl border border-border/60 bg-border/60 shadow-sm lg:grid-cols-4">
+      {children}
+    </div>
+  )
+}
+
+type PillTone = 'ok' | 'warn' | 'danger'
+
+// شارة حالة صغيرة بجانب الرقم — تقول معناه لا قيمته
+function Pill({ text, tone }: { text: string; tone: PillTone }) {
+  return (
+    <span
+      className={cn(
+        'shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-semibold leading-none',
+        tone === 'danger'
+          ? 'bg-destructive/10 text-destructive'
+          : tone === 'warn'
+            ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
+            : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+      )}
+    >
+      {text}
+    </span>
+  )
+}
+
+// خلية مؤشّر: أيقونة داكنة، عنوان هادئ، رقم كبير، وشارة تفسّره
 function Stat({
+  icon: Icon,
   label,
   value,
   note,
   tone = 'plain',
+  pill,
   onClick,
 }: {
+  icon: LucideIcon
   label: string
   value: number
   note?: string
   tone?: 'plain' | 'danger' | 'warn'
+  pill?: { text: string; tone: PillTone }
   onClick: () => void
 }) {
   return (
     <button
       onClick={onClick}
-      className={cn(
-        'rounded-2xl border bg-card p-4 text-right transition-all hover:border-gold/50 hover:shadow-sm',
-        tone === 'danger' && value > 0
-          ? 'border-destructive/30'
-          : tone === 'warn' && value > 0
-            ? 'border-amber-400/40'
-            : 'border-border/70'
-      )}
+      className="flex items-start gap-3.5 bg-card p-5 text-right transition-colors hover:bg-muted/30"
     >
-      <p className="truncate text-[13px] text-muted-foreground">{label}</p>
-      <p
-        className={cn(
-          'mt-1.5 text-[30px] font-bold leading-none',
-          tone === 'danger' && value > 0
-            ? 'text-destructive'
-            : tone === 'warn' && value > 0
-              ? 'text-amber-600 dark:text-amber-400'
-              : 'text-foreground'
+      <span className="mt-0.5 grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-navy text-gold dark:bg-navy-600">
+        <Icon className="h-5 w-5" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[13px] font-medium text-muted-foreground">
+          {label}
+        </span>
+        <span className="mt-2 flex items-center gap-2">
+          <span
+            className={cn(
+              'text-[32px] font-bold leading-none tracking-tight tabular-nums',
+              tone === 'danger' && value > 0
+                ? 'text-destructive'
+                : tone === 'warn' && value > 0
+                  ? 'text-amber-600 dark:text-amber-400'
+                  : 'text-foreground'
+            )}
+          >
+            {fmtNumber(value)}
+          </span>
+          {pill && <Pill text={pill.text} tone={pill.tone} />}
+        </span>
+        {note && (
+          <span className="mt-2 block truncate text-xs text-muted-foreground">
+            {note}
+          </span>
         )}
-      >
-        {fmtNumber(value)}
-      </p>
-      {note && (
-        <p className="mt-1.5 truncate text-xs text-muted-foreground">{note}</p>
-      )}
+      </span>
     </button>
   )
 }
@@ -427,13 +482,22 @@ function MiniStat({
     <button
       onClick={onClick}
       className={cn(
-        'inline-flex items-center gap-2 rounded-full border bg-card px-3.5 py-2 text-sm transition-colors hover:border-gold/50',
-        alert ? 'border-amber-400/40' : 'border-border/70'
+        'inline-flex items-center gap-2 rounded-full border bg-card py-1.5 pe-1.5 ps-3.5 text-sm transition-all hover:border-gold/50 hover:shadow-sm',
+        alert ? 'border-amber-400/50' : 'border-border/60'
       )}
     >
       <Icon className={cn('h-4 w-4', alert ? 'text-amber-500' : 'text-muted-foreground')} />
       <span className="text-muted-foreground">{label}</span>
-      <span className="font-semibold text-foreground">{fmtNumber(value)}</span>
+      <span
+        className={cn(
+          'rounded-full px-2 py-0.5 text-xs font-bold tabular-nums',
+          alert
+            ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
+            : 'bg-muted text-foreground'
+        )}
+      >
+        {fmtNumber(value)}
+      </span>
     </button>
   )
 }
@@ -459,45 +523,28 @@ function TodayAgendaCard({
   onOpen: (href: string) => void
 }) {
   return (
-    <Card>
-      <CardHeader className="flex-row items-center gap-2.5 space-y-0 px-5 pb-3 pt-5">
-        <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gold/10">
-          <Sun className="h-[18px] w-[18px] text-gold" />
-        </span>
-        <CardTitle className="text-[15px] font-semibold">
-          جدول اليوم
-          {items.length > 0 && (
-            <span className="mr-1.5 text-sm font-normal text-muted-foreground">
-              {fmtNumber(items.length)}
-            </span>
-          )}
-        </CardTitle>
-      </CardHeader>
-
-      <CardContent className="px-2.5 pb-3">
-        {loading ? (
-          <div className="space-y-2 px-1.5">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <Skeleton key={i} className="h-12 w-full rounded-xl" />
-            ))}
-          </div>
-        ) : items.length === 0 ? (
-          <div className="flex flex-col items-center gap-1.5 py-8 text-center">
-            <p className="text-sm text-foreground">لا شيء مجدول اليوم</p>
-            <p className="text-xs text-muted-foreground">
-              لا جلسات ولا مواعيد ولا مهام مستحقة
-            </p>
-          </div>
-        ) : (
-          <div className="divide-y divide-border/60">
-            {items.map((it) => {
+    <Panel icon={Sun} title="جدول اليوم" count={items.length}>
+      {loading ? (
+        Array.from({ length: 3 }).map((_, i) => (
+          <Skeleton key={i} className="h-[58px] w-full rounded-2xl" />
+        ))
+      ) : items.length === 0 ? (
+        <div className="flex flex-col items-center gap-1.5 rounded-2xl border border-dashed border-border/60 py-9 text-center">
+          <p className="text-sm text-foreground">لا شيء مجدول اليوم</p>
+          <p className="text-xs text-muted-foreground">
+            لا جلسات ولا مواعيد ولا مهام مستحقة
+          </p>
+        </div>
+      ) : (
+        <>
+          {items.map((it) => {
               const m = AGENDA_META[it.kind]
               const Icon = m.icon
               return (
                 <button
                   key={it.id}
                   onClick={() => onOpen(it.href)}
-                  className="group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-right transition-colors hover:bg-muted/60"
+                  className="group flex w-full items-center gap-3.5 rounded-2xl bg-card px-4 py-3.5 text-right shadow-[0_1px_3px_rgba(17,29,58,0.06)] transition-all hover:-translate-y-px hover:shadow-[0_6px_16px_rgba(17,29,58,0.10)]"
                 >
                   <span className="w-12 shrink-0 text-center">
                     {it.time ? (
@@ -526,10 +573,9 @@ function TodayAgendaCard({
                 </button>
               )
             })}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+        </>
+      )}
+    </Panel>
   )
 }
 
@@ -550,17 +596,13 @@ function ApprovalsCard({
   if (!approvals || approvals.total === 0) return null
 
   return (
-    <Card className="border-amber-300/70 bg-amber-50/50 dark:border-amber-900/40 dark:bg-amber-950/20">
-      <CardHeader className="flex-row items-center gap-2.5 space-y-0 px-5 pb-3 pt-5">
-        <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-amber-400/20">
-          <Stamp className="h-[18px] w-[18px] text-amber-500" />
-        </span>
-        <CardTitle className="text-[15px] font-semibold">
-          {isAll ? 'بانتظار الاعتماد' : 'بانتظار اعتمادك'}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="px-2.5 pb-2.5">
-        <div className="divide-y divide-amber-300/30">
+    <Panel
+      icon={Stamp}
+      title={isAll ? 'بانتظار الاعتماد' : 'بانتظار اعتمادك'}
+      count={approvals.total}
+      tone="warn"
+    >
+      <>
           {approvals.tasks > 0 && (
             <RowShell onClick={onTasks}>
               <p className="text-sm font-medium text-foreground">
@@ -589,14 +631,71 @@ function ApprovalsCard({
               </p>
             </RowShell>
           )}
-        </div>
-      </CardContent>
-    </Card>
+      </>
+    </Panel>
+  )
+}
+
+// «صينية» القسم: خلفية رمادية ناعمة تحتضن بطاقات بيضاء — تفصل الأقسام
+// بالطبقة لا بالخط، فتهدأ الصفحة ويبرز محتوى كل قسم.
+function Panel({
+  icon: Icon,
+  title,
+  count,
+  hint,
+  tone = 'plain',
+  children,
+}: {
+  icon: LucideIcon
+  title: string
+  count?: number
+  /** تلميح صغير في أقصى الترويسة — سياق لا إجراء */
+  hint?: string
+  tone?: 'plain' | 'warn'
+  children: React.ReactNode
+}) {
+  return (
+    <section
+      className={cn(
+        'rounded-[26px] p-3',
+        tone === 'warn'
+          ? 'bg-amber-100/70 dark:bg-amber-950/25'
+          : 'bg-muted dark:bg-muted/50'
+      )}
+    >
+      <header className="flex items-center gap-2.5 px-3 pb-3 pt-1.5">
+        <span
+          className={cn(
+            'flex h-7 w-7 shrink-0 items-center justify-center rounded-xl',
+            tone === 'warn' ? 'bg-amber-400/25' : 'bg-card'
+          )}
+        >
+          <Icon
+            className={cn(
+              'h-4 w-4',
+              tone === 'warn' ? 'text-amber-600 dark:text-amber-400' : 'text-gold'
+            )}
+          />
+        </span>
+        <h3 className="text-[15px] font-semibold text-foreground">{title}</h3>
+        {count != null && count > 0 && (
+          <span className="rounded-md bg-card px-1.5 py-0.5 text-xs font-semibold tabular-nums text-muted-foreground">
+            {fmtNumber(count)}
+          </span>
+        )}
+        {hint && (
+          <span className="ms-auto truncate text-xs text-muted-foreground">
+            {hint}
+          </span>
+        )}
+      </header>
+      <div className="space-y-2.5">{children}</div>
+    </section>
   )
 }
 
 function SectionCard({
-  icon: Icon,
+  icon,
   title,
   count,
   loading,
@@ -609,32 +708,72 @@ function SectionCard({
   children: React.ReactNode
 }) {
   return (
-    <Card>
-      <CardHeader className="flex-row items-center gap-2.5 space-y-0 px-5 pb-3 pt-5">
-        <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gold/10">
-          <Icon className="h-[18px] w-[18px] text-gold" />
-        </span>
-        <CardTitle className="text-[15px] font-semibold">
-          {title}
-          {count != null && count > 0 && (
-            <span className="mr-1.5 text-sm font-normal text-muted-foreground">
-              {fmtNumber(count)}
-            </span>
-          )}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="px-2.5 pb-2.5">
-        {loading ? (
-          <div className="space-y-2 px-1.5">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <Skeleton key={i} className="h-12 w-full rounded-xl" />
-            ))}
-          </div>
-        ) : (
-          <div className="divide-y divide-border/60">{children}</div>
-        )}
-      </CardContent>
-    </Card>
+    <Panel icon={icon} title={title} count={count}>
+      {loading
+        ? Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} className="h-[58px] w-full rounded-2xl" />
+          ))
+        : children}
+    </Panel>
+  )
+}
+
+// لوحة ألوان هادئة للدوائر — تعطي الصفوف حياة بدل رتابة لون واحد.
+// اللون مشتق من النص نفسه فيثبت للاسم الواحد عبر الصفحات.
+const AVATAR_TONES = [
+  'bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300',
+  'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300',
+  'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300',
+  'bg-sky-100 text-sky-700 dark:bg-sky-500/20 dark:text-sky-300',
+  'bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300',
+  'bg-teal-100 text-teal-700 dark:bg-teal-500/20 dark:text-teal-300',
+]
+
+function toneOf(seed: string): string {
+  let h = 0
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0
+  return AVATAR_TONES[h % AVATAR_TONES.length]
+}
+
+// دائرة الحرف الأول — بديل الأيقونة الرمادية المكرّرة
+function RowAvatar({ name, className }: { name: string; className?: string }) {
+  return (
+    <span
+      className={cn(
+        'grid h-9 w-9 shrink-0 place-items-center rounded-full text-[13px] font-bold',
+        toneOf(name),
+        className
+      )}
+    >
+      {name.trim().charAt(0) || '؟'}
+    </span>
+  )
+}
+
+// شارة معلومة صغيرة في ذيل الصف (وقت، محكمة، رقم مرجعي)
+function MetaChip({
+  icon: Icon,
+  children,
+  tone = 'plain',
+}: {
+  icon?: LucideIcon
+  children: React.ReactNode
+  tone?: 'plain' | 'warn' | 'danger'
+}) {
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-medium',
+        tone === 'danger'
+          ? 'bg-destructive/10 text-destructive'
+          : tone === 'warn'
+            ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
+            : 'bg-muted text-muted-foreground'
+      )}
+    >
+      {Icon && <Icon className="h-3 w-3 shrink-0" />}
+      {children}
+    </span>
   )
 }
 
@@ -648,7 +787,7 @@ function RowShell({
   return (
     <button
       onClick={onClick}
-      className="group flex w-full items-center justify-between gap-2 rounded-xl px-3 py-3 text-right transition-colors hover:bg-muted/60"
+      className="group flex w-full items-center justify-between gap-3 rounded-2xl bg-card px-4 py-3.5 text-right shadow-[0_1px_3px_rgba(17,29,58,0.06)] transition-all hover:-translate-y-px hover:shadow-[0_6px_16px_rgba(17,29,58,0.10)]"
     >
       <div className="min-w-0 flex-1">{children}</div>
       <ChevronLeft className="h-4 w-4 shrink-0 text-muted-foreground/40 transition-transform group-hover:-translate-x-0.5 group-hover:text-gold" />
@@ -658,7 +797,7 @@ function RowShell({
 
 function Empty({ text, icon: Icon }: { text: string; icon?: LucideIcon }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-2 py-6 text-center">
+    <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-border/60 py-7 text-center">
       {Icon && <Icon className="h-6 w-6 text-muted-foreground/50" />}
       <p className="text-sm text-muted-foreground">{text}</p>
     </div>
@@ -674,34 +813,24 @@ function SessionsNeedClosureSection({ scope }: { scope: DashboardScope }) {
   if (list.length === 0) return null // تنبيه يظهر فقط عند وجود جلسات
 
   return (
-    <Card className="border-amber-300/70 bg-amber-50/50 dark:border-amber-900/40 dark:bg-amber-950/20">
-      <CardHeader className="flex-row items-center gap-2.5 space-y-0 px-5 pb-3 pt-5">
-        <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-amber-400/20">
-          <AlertTriangle className="h-[18px] w-[18px] text-amber-500" />
-        </span>
-        <CardTitle className="text-[15px] font-semibold">
-          جلسات تحتاج إغلاق{' '}
-          <span className="mr-1 text-sm font-normal text-muted-foreground">
-            {fmtNumber(list.length)}
-          </span>
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="px-2.5 pb-2.5">
-        <div className="divide-y divide-amber-300/30">
-          {list.map((x) => (
-            <RowShell key={x.id} onClick={() => navigate(`/cases/${x.case_id}`)}>
-              <p className="truncate text-sm font-medium text-foreground">
-                {x.case_title || x.title || 'جلسة'}
-              </p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                {fmtDatePref(x.session_date)} · فات موعدها منذ{' '}
-                {daysLabel(x.days_ago)}
-              </p>
-            </RowShell>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
+    <Panel
+      icon={AlertTriangle}
+      title="جلسات تحتاج إغلاق"
+      count={list.length}
+      tone="warn"
+    >
+      {list.map((x) => (
+        <RowShell key={x.id} onClick={() => navigate(`/cases/${x.case_id}`)}>
+          <p className="truncate text-sm font-medium text-foreground">
+            {x.case_title || x.title || 'جلسة'}
+          </p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {fmtDatePref(x.session_date)} · فات موعدها منذ{' '}
+            {daysLabel(x.days_ago)}
+          </p>
+        </RowShell>
+      ))}
+    </Panel>
   )
 }
 
@@ -712,15 +841,23 @@ function SessionRow({ s, onClick }: { s: DashSession; onClick: () => void }) {
   const soon = days != null && days <= 2
   return (
     <RowShell onClick={onClick}>
-      <p className="truncate text-sm font-medium text-foreground">
-        {s.case_title || s.title || 'جلسة'}
-      </p>
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
-        <span>{fmtDatePref(s.session_date)}</span>
-        {s.session_time && <span>{fmtTime(s.session_time)}</span>}
-        <span className={cn('font-medium', soon ? 'text-destructive' : 'text-amber-600 dark:text-amber-400')}>
-          {countdownText(days)}
-        </span>
+      <div className="flex items-center gap-3.5">
+        <RowAvatar name={s.case_title || s.title || 'جلسة'} />
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold text-foreground">
+            {s.case_title || s.title || 'جلسة'}
+          </p>
+          {s.case_title && s.title && (
+            <p className="mt-0.5 truncate text-xs text-muted-foreground">{s.title}</p>
+          )}
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            <MetaChip icon={CalendarDays}>{fmtDatePref(s.session_date)}</MetaChip>
+            {s.session_time && (
+              <MetaChip icon={Clock}>{fmtTime(s.session_time)}</MetaChip>
+            )}
+            <MetaChip tone={soon ? 'danger' : 'warn'}>{countdownText(days)}</MetaChip>
+          </div>
+        </div>
       </div>
     </RowShell>
   )
@@ -740,7 +877,7 @@ function CompletableTaskRow({
 }) {
   const days = daysFromToday(t.due_date)
   return (
-    <div className="flex items-center gap-2.5 rounded-xl px-3 py-3 transition-colors hover:bg-muted/60">
+    <div className="flex items-center gap-2.5 rounded-2xl bg-card px-3.5 py-3.5 shadow-[0_1px_3px_rgba(17,29,58,0.06)] transition-all hover:-translate-y-px hover:shadow-[0_6px_16px_rgba(17,29,58,0.10)]">
       {/* مربّع الإكمال */}
       <button
         type="button"
@@ -761,7 +898,7 @@ function CompletableTaskRow({
 
       {/* محتوى المهمة */}
       <button onClick={onOpen} className="min-w-0 flex-1 text-right">
-        <p className="truncate text-sm font-medium text-foreground">
+        <p className="truncate text-sm font-semibold text-foreground">
           {t.title || 'مهمة'}
         </p>
         {t.case_title && (
@@ -778,15 +915,10 @@ function CompletableTaskRow({
             {taskPriorityLabel(t.priority)}
           </Badge>
           {t.due_date && (
-            <span
-              className={cn(
-                'text-xs',
-                t.overdue ? 'font-medium text-destructive' : 'text-muted-foreground'
-              )}
-            >
+            <MetaChip icon={Clock} tone={t.overdue ? 'danger' : 'plain'}>
               {fmtDatePref(t.due_date)}
               {t.overdue ? ` · متأخّرة ${daysLabel(Math.abs(days ?? 0))}` : ''}
-            </span>
+            </MetaChip>
           )}
         </div>
       </button>
@@ -799,16 +931,23 @@ function PoaRow({ p, onClick }: { p: DashPOA; onClick: () => void }) {
   const urgent = d != null && d <= 7
   return (
     <RowShell onClick={onClick}>
-      <p className="truncate text-sm font-medium text-foreground">{p.client_name || 'موكّل'}</p>
-      <div className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
-        {p.poa_number && (
-          <span>
-            وكالة <Ltr>{p.poa_number}</Ltr>
-          </span>
-        )}
-        <span className={cn('font-medium', urgent ? 'text-destructive' : 'text-amber-600 dark:text-amber-400')}>
-          {d === 0 ? 'تنتهي اليوم' : d === 1 ? 'تنتهي غداً' : `تنتهي بعد ${daysLabel(d ?? 0)}`}
-        </span>
+      <div className="flex items-center gap-3.5">
+        <RowAvatar name={p.client_name || 'موكّل'} />
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold text-foreground">
+            {p.client_name || 'موكّل'}
+          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            {p.poa_number && (
+              <MetaChip icon={FileSignature}>
+                وكالة <Ltr>{p.poa_number}</Ltr>
+              </MetaChip>
+            )}
+            <MetaChip icon={Clock} tone={urgent ? 'danger' : 'warn'}>
+              {d === 0 ? 'تنتهي اليوم' : d === 1 ? 'تنتهي غداً' : `تنتهي بعد ${daysLabel(d ?? 0)}`}
+            </MetaChip>
+          </div>
+        </div>
       </div>
     </RowShell>
   )
@@ -853,10 +992,19 @@ function RequestRow({ r, onClick }: { r: DashRequest; onClick: () => void }) {
 function AppointmentRow({ ap, onClick }: { ap: DashAppointment; onClick: () => void }) {
   return (
     <RowShell onClick={onClick}>
-      <p className="truncate text-sm font-medium text-foreground">{ap.client_name || 'موعد'}</p>
-      <div className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
-        <span>{fmtDatePref(ap.appointment_date)}</span>
-        {ap.appointment_time && <span>{fmtTime(ap.appointment_time)}</span>}
+      <div className="flex items-center gap-3.5">
+        <RowAvatar name={ap.client_name || 'موعد'} />
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold text-foreground">
+            {ap.client_name || 'موعد'}
+          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            <MetaChip icon={CalendarClock}>{fmtDatePref(ap.appointment_date)}</MetaChip>
+            {ap.appointment_time && (
+              <MetaChip icon={Clock}>{fmtTime(ap.appointment_time)}</MetaChip>
+            )}
+          </div>
+        </div>
       </div>
     </RowShell>
   )

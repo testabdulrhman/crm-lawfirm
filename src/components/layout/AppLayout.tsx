@@ -48,7 +48,9 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const dateDisplay = usePrefs((s) => s.dateDisplay)
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-background">
+    <div className="flex h-screen w-full overflow-hidden bg-[#EFEDE7] p-0 dark:bg-navy-900 md:p-3">
+      {/* الإطار العائم: التطبيق كله داخل بطاقة واحدة على خلفية دافئة */}
+      <div className="flex h-full w-full min-w-0 overflow-hidden bg-background md:rounded-[28px] md:shadow-[0_8px_40px_rgba(17,29,58,0.10)]">
       {/* Sidebar ثابت على الحاسب (يمين بسبب RTL) */}
       <div className="hidden md:block">
         <Sidebar />
@@ -108,6 +110,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
         {/* الشريط السفلي — داخل التطبيق فقط، والويب يبقى كما هو */}
         {native && <MobileTabBar onOpenMore={() => setMobileOpen(true)} />}
+      </div>
+
       </div>
 
       {/* المساعد الذكي — زر عائم متاح في كل الصفحات */}

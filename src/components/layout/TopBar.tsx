@@ -75,7 +75,7 @@ export function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
     'لوحة التحكم'
 
   return (
-    <header className="pt-safe pl-safe pr-safe sticky top-0 z-30 flex min-h-16 items-center justify-between gap-4 border-b bg-background/95 px-4 backdrop-blur md:px-6">
+    <header className="pt-safe pl-safe pr-safe sticky top-0 z-30 flex min-h-16 items-center justify-between gap-4 bg-background/90 px-4 backdrop-blur md:px-6">
       {/* يمين: قائمة الجوال + العنوان */}
       <div className="flex items-center gap-3">
         <Button
@@ -88,7 +88,7 @@ export function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
           <Menu className="h-5 w-5" />
         </Button>
         {/* العنوان يُخفى على الجوال لإفساح مكان للبحث */}
-        <h1 className="hidden text-lg font-bold text-foreground sm:block">
+        <h1 className="hidden text-xl font-bold tracking-tight text-foreground sm:block">
           {title}
         </h1>
       </div>

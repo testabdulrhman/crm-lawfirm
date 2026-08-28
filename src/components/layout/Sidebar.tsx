@@ -127,34 +127,39 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const { data: myReviews } = useMyReviewCount()
 
   return (
-    <aside className="pt-safe pb-safe flex h-full w-64 flex-col bg-navy text-navy-50">
-      {/* الترويسة: شعار المكتب بكامل العرض (يُرفع من الإعدادات ← بيانات المكتب) */}
-      <div className="border-b border-white/10 px-4 py-4">
+    <aside className="pt-safe pb-safe flex h-full w-64 flex-col bg-card text-foreground">
+      {/* الترويسة: الشعار على لوحة كحلية — يضمن وضوحه أياً كان تصميمه */}
+      <div className="px-3 pb-4 pt-4">
         {office?.logo_url ? (
-          <img
-            src={office.logo_url}
-            alt="شعار المكتب"
-            className="max-h-28 w-full object-contain"
-          />
+          <div className="rounded-2xl bg-navy px-3 py-3">
+            <img
+              src={office.logo_url}
+              alt="شعار المكتب"
+              className="max-h-20 w-full object-contain"
+            />
+          </div>
         ) : (
-          <div className="flex justify-center py-1">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gold/15 ring-1 ring-gold/30">
-              <Scale className="h-6 w-6 text-gold" />
-            </div>
+          <div className="flex items-center gap-2.5 px-1">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-navy">
+              <Scale className="h-5 w-5 text-gold" />
+            </span>
+            <span className="truncate text-[15px] font-bold tracking-tight">
+              رضوان
+            </span>
           </div>
         )}
       </div>
 
       {/* التنقل */}
-      <nav className="flex-1 overflow-y-auto px-3 py-4">
+      <nav className="flex-1 space-y-4 overflow-y-auto px-3 pb-4">
         {navSections.map((section, si) => (
-          <div key={si} className={cn(si > 0 && 'mt-4')}>
+          <div key={si}>
             {section.title && (
-              <p className="px-3 pb-1.5 text-xs font-semibold text-navy-300">
+              <p className="px-3 pb-1.5 text-[11px] font-semibold tracking-wide text-muted-foreground/70">
                 {section.title}
               </p>
             )}
-            <div className="space-y-1">
+            <div className="space-y-0.5">
               {section.items.map((item) => {
                 const active =
                   item.href === '/'
@@ -185,19 +190,21 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                     href={item.href}
                     onClick={onNavigate}
                     className={cn(
-                      'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors',
+                      'flex items-center gap-3 rounded-xl px-3 py-2 text-[13.5px] transition-colors',
                       active
-                        ? 'bg-gold text-navy shadow-sm'
-                        : 'text-navy-100 hover:bg-white/10 hover:text-white'
+                        ? 'bg-gold font-semibold text-navy'
+                        : 'text-foreground/75 hover:bg-muted hover:text-foreground'
                     )}
                   >
-                    <Icon className="h-5 w-5 shrink-0" />
-                    <span className="flex-1">{item.label}</span>
+                    <Icon className="h-[17px] w-[17px] shrink-0" />
+                    <span className="flex-1 truncate">{item.label}</span>
                     {showBadge && (
                       <span
                         className={cn(
-                          'min-w-5 rounded-full px-1.5 py-0.5 text-center text-xs font-bold',
-                          active ? 'bg-navy text-gold' : 'bg-gold text-navy'
+                          'min-w-5 rounded-md px-1.5 text-center text-[11px] font-bold tabular-nums',
+                          active
+                            ? 'bg-navy/15 text-navy'
+                            : 'bg-muted text-muted-foreground'
                         )}
                       >
                         {fmtNumber(badgeCount)}
@@ -212,14 +219,14 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       </nav>
 
       {/* المستخدم الحالي + خروج */}
-      <div className="border-t border-white/10 p-3">
-        <div className="flex items-center gap-3 rounded-lg px-2 py-2">
-          <UserAvatar member={teamMember} className="h-9 w-9 shrink-0" />
+      <div className="border-t border-border/60 p-3">
+        <div className="flex items-center gap-2.5 rounded-xl px-2 py-1.5">
+          <UserAvatar member={teamMember} className="h-8 w-8 shrink-0" />
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium text-white">
+            <p className="truncate text-[13px] font-medium text-foreground">
               {teamMember?.name ?? 'مستخدم'}
             </p>
-            <p className="truncate text-xs text-navy-200">
+            <p className="truncate text-[11px] text-muted-foreground">
               {teamMember?.role ?? '—'}
             </p>
           </div>
@@ -227,9 +234,9 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
             onClick={() => logout()}
             title="تسجيل الخروج"
             aria-label="تسجيل الخروج"
-            className="rounded-md p-2 text-navy-200 transition-colors hover:bg-white/10 hover:text-white"
+            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >
-            <LogOut className="h-5 w-5" />
+            <LogOut className="h-[18px] w-[18px]" />
           </button>
         </div>
       </div>

@@ -200,6 +200,10 @@ export function usePostMessage() {
           document_name: null,
           document_url: null,
           created_at: now,
+          // حقول الرسالة الكاملة — الرسالة المتفائلة لم تُعدَّل ولا تفاعل عليها بعد
+          edited_at: null,
+          reactions: null,
+          bookmarked: false,
         }
         qc.setQueryData<ThreadMsg[]>(['disc_thread', input.parentId], (old) => [
           ...(old ?? []),
