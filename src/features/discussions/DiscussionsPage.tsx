@@ -42,6 +42,7 @@ import { useAuth } from '@/stores/auth'
 import { useTeamMembers } from '@/hooks/useTeam'
 import { pickFile } from '@/lib/files'
 import { arNorm } from '@/lib/arabic'
+import { matterHref } from '@/lib/matterHref'
 import { fmtDatePref, fmtNumber, fmtTime } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import {
@@ -114,17 +115,7 @@ function useMentionables(): Mentionable[] {
 
 const escRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
-/** وجهة «فتح الملف» حسب نوعه — بعد توحيد الملفات لكل نوع صفحته */
-function matterHref(kind: string, id: string): string {
-  switch (kind) {
-    case 'legal_service':
-      return `/legal-services/${id}`
-    case 'property':
-      return `/property/${id}`
-    default:
-      return `/cases/${id}`
-  }
-}
+
 
 /**
  * من ذُكر فعلاً في النص عند الإرسال — فحص النص النهائي لا لقطات الاختيار،

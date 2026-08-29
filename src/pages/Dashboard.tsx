@@ -23,6 +23,7 @@ import {
   Clock,
   Timer,
   ShieldCheck,
+  Sparkles,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -47,6 +48,9 @@ import {
   type AgendaItem,
 } from '@/hooks/useDashboard'
 import { useSessionsNeedClosure } from '@/hooks/useCaseSessions'
+import { useRecentNarrations } from '@/hooks/useMatterEvents'
+import { matterHref } from '@/lib/matterHref'
+import { errMessage } from '@/lib/errors'
 import {
   useDeadlines,
   useDeadlinesOverview,
@@ -229,6 +233,7 @@ export default function Dashboard() {
 
         <div className="space-y-4">
           <DeadlinesPanel />
+          <WhileYouWereBusy />
           <SessionsNeedClosureSection scope={effectiveScope} />
           <ApprovalsCard
             approvals={approvals}
@@ -810,6 +815,41 @@ function Empty({ text, icon: Icon }: { text: string; icon?: LucideIcon }) {
       {Icon && <Icon className="h-6 w-6 text-muted-foreground/50" />}
       <p className="text-sm text-muted-foreground">{text}</p>
     </div>
+  )
+}
+
+/* ===================== بينما كنت مشغولاً ===================== */
+
+// النظام يحكي ما فعله نيابةً عنك — بصيغة المتكلم، من matter_events مباشرة.
+// السرد مُقنَّن (narrate=true فقط وبسقف صغير): سردٌ كثير = سجلّ لا يُقرأ.
+function WhileYouWereBusy() {
+  const [, navigate] = useLocation()
+  const { data: rows = [], isError, error } = useRecentNarrations(5)
+  if (isError)
+    return (
+      <Panel icon={Sparkles} title="بينما كنت مشغولاً">
+        <p className="rounded-2xl border border-dashed border-border/60 px-3 py-4 text-xs text-muted-foreground">
+          تعذّر تحميل السرد: {errMessage(error)}
+        </p>
+      </Panel>
+    )
+  if (!rows.length) return null
+
+  return (
+    <Panel icon={Sparkles} title="بينما كنت مشغولاً" hint="آخر 48 ساعة">
+      {rows.map((r) => (
+        <RowShell key={r.id} onClick={() => navigate(matterHref(r.matter_kind, r.matter_id))}>
+          <p className="text-[13px] leading-relaxed text-foreground">
+            {r.sentence}
+          </p>
+          {r.matter_title && (
+            <p className="mt-1 truncate text-[11px] text-muted-foreground">
+              {r.matter_title}
+            </p>
+          )}
+        </RowShell>
+      ))}
+    </Panel>
   )
 }
 
