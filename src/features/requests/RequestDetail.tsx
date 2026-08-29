@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { IntakeGatesCard } from './IntakeGates'
 import {
   Dialog,
   DialogContent,
@@ -132,6 +133,11 @@ export function RequestDetail({ id }: { id: string }) {
               </div>
             </div>
             <div className="flex flex-col items-end gap-2">
+              {(r as any).ref_no && (
+                <span className="rounded-md bg-muted px-2 py-0.5 text-xs font-semibold tabular-nums text-muted-foreground">
+                  {(r as any).ref_no}
+                </span>
+              )}
               <Badge variant={statusBadgeVariant(r.status)}>
                 {statusLabel(r.status)}
               </Badge>
@@ -145,6 +151,13 @@ export function RequestDetail({ id }: { id: string }) {
           )}
         </CardContent>
       </Card>
+
+      {/* بوابات الاستقطاب — تسبق القرار في ترتيب الوثيقة */}
+      <IntakeGatesCard
+        requestId={r.id}
+        clientName={r.client_name}
+        opponentName={(r as any).opponent_name ?? null}
+      />
 
       {/* الإسناد + القرار */}
       <div className="grid gap-4 md:grid-cols-2">

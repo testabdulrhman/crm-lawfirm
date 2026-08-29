@@ -3,6 +3,7 @@ import { useLocation, Link } from 'wouter'
 import {
   ArrowRight,
   CalendarRange,
+  FilePlus2,
   Pencil,
   Trash2,
   Phone,
@@ -56,11 +57,13 @@ import {
   useSendMeetingLink,
   useSendThankYou,
 } from '@/hooks/useAppointments'
+import { useCreateRequestFromAppointment } from '@/hooks/useIntakeGates'
 import { AppointmentForm } from './AppointmentForm'
 import { APPT_STATUS_OPTIONS, apptStatusLabel } from '@/lib/appointmentLabels'
 
 export function AppointmentDetail({ id }: { id: string }) {
   const [, navigate] = useLocation()
+  const toRequest = useCreateRequestFromAppointment()
   const { teamMember } = useAuth()
   const isDirector = useIsDirector()
   const { data: a, isLoading, isError, error, refetch } = useAppointment(id)
@@ -133,6 +136,44 @@ export function AppointmentDetail({ id }: { id: string }) {
             <CalendarRange className="h-4 w-4" />
             في التقويم
           </Button>
+
+          {/* الجلسة التمهيدية بندٌ في «الاستقطاب» — تنتقل إلى سجل استفسار
+              بدل أن يبقى ما دار فيها في الرأس أو في واتساب */}
+          {!a.request_id && (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={toRequest.isPending}
+              title="ينشئ سجل استفسار بنفس بيانات الموعد ويربطه به"
+              onClick={() =>
+                toRequest.mutate(
+                  {
+                    id: a.id,
+                    client_id: a.client_id,
+                    client_name: a.client_name,
+                    client_phone: a.client_phone,
+                    notes: a.notes,
+                    appointment_date: a.appointment_date,
+                  },
+                  { onSuccess: (rid) => navigate(`/requests/${rid}`) }
+                )
+              }
+            >
+              <FilePlus2 className="h-4 w-4" />
+              إنشاء طلب من هذا الموعد
+            </Button>
+          )}
+
+          {a.request_id && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate(`/requests/${a.request_id}`)}
+            >
+              <FilePlus2 className="h-4 w-4" />
+              سجل الاستفسار
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
             <Pencil className="h-4 w-4" />
             تعديل

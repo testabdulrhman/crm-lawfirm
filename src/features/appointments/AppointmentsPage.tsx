@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useLocation } from 'wouter'
 import {
   Plus,
@@ -60,6 +60,16 @@ export function AppointmentsPage() {
   const [search, setSearch] = usePageState('appts:q', '')
   const [status, setStatus] = usePageState<string>('appts:status', 'all')
   const [dialogOpen, setDialogOpen] = useState(false)
+
+  // قادم من «حجز موعد» في سجل الاستفسار — يفتح النموذج فوراً بدل أن يبحث
+  // المستخدم عن الزر (والنموذج هو من يستهلك المفتاح ويربط الموعد بالطلب)
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem('appointment:from-request')) setDialogOpen(true)
+    } catch {
+      /* تخزين معطّل — يفتح النموذج يدوياً */
+    }
+  }, [])
 
   const filtered = useMemo(() => {
     const q = arNorm(search.trim())

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -61,6 +61,22 @@ export function AppointmentForm({
   defaultTime?: string | null
 }) {
   const isEdit = Boolean(appointment)
+
+  // قادم من زر «حجز موعد» في سجل الاستفسار — يربط الموعد بالطلب ويملأ الاسم
+  const fromRequest = useMemo<{ requestId: string; clientName: string | null } | null>(
+    () => {
+      if (appointment) return null
+      try {
+        const raw = sessionStorage.getItem('appointment:from-request')
+        if (!raw) return null
+        sessionStorage.removeItem('appointment:from-request')
+        return JSON.parse(raw)
+      } catch {
+        return null
+      }
+    },
+    [appointment]
+  )
   const { teamMember } = useAuth()
   const { data: contacts } = useContacts()
   const createM = useCreateAppointment()
@@ -81,7 +97,7 @@ export function AppointmentForm({
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
-      client_name: appointment?.client_name ?? '',
+      client_name: appointment?.client_name ?? fromRequest?.clientName ?? '',
       client_phone: appointment?.client_phone ?? '',
       appointment_date: appointment?.appointment_date ?? defaultDate ?? '',
       appointment_time: appointment?.appointment_time
@@ -131,7 +147,11 @@ export function AppointmentForm({
     if (isEdit && appointment) {
       await updateM.mutateAsync({ id: appointment.id, input })
     } else {
-      await createM.mutateAsync({ ...input, created_by: teamMember?.name ?? null })
+      await createM.mutateAsync({
+        ...input,
+        created_by: teamMember?.name ?? null,
+        request_id: fromRequest?.requestId ?? null,
+      })
     }
     onDone()
   }

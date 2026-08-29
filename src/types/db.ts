@@ -823,6 +823,8 @@ export interface Appointment {
   source: string | null
   reference_no: string | null
   idempotency_key: string | null
+  /** الجلسة التمهيدية تتبع سجل الاستفسار — المرحلة الأولى من دورة العمل */
+  request_id: string | null
   client?: { id: string; name: string | null; phone: string | null } | null
 }
 
@@ -838,6 +840,7 @@ export interface AppointmentInput {
   /** حضوري onsite أو عن بُعد remote — الأخيرة تُفعّل قسم رابط الاجتماع */
   meeting_method?: string | null
   created_by?: string | null
+  request_id?: string | null
 }
 
 /* ===================== العقود (engagements) ===================== */

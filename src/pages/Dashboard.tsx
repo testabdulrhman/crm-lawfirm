@@ -21,6 +21,8 @@ import {
   Stamp,
   Sun,
   Clock,
+  Timer,
+  ShieldCheck,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -45,6 +47,12 @@ import {
   type AgendaItem,
 } from '@/hooks/useDashboard'
 import { useSessionsNeedClosure } from '@/hooks/useCaseSessions'
+import {
+  useDeadlines,
+  useDeadlinesOverview,
+  useConfirmDeadline,
+  DEADLINE_SOURCE_LABEL,
+} from '@/hooks/useDeadlineLoop'
 import type {
   DashApplication,
   DashPOA,
@@ -220,6 +228,7 @@ export default function Dashboard() {
         />
 
         <div className="space-y-4">
+          <DeadlinesPanel />
           <SessionsNeedClosureSection scope={effectiveScope} />
           <ApprovalsCard
             approvals={approvals}
@@ -801,6 +810,76 @@ function Empty({ text, icon: Icon }: { text: string; icon?: LucideIcon }) {
       {Icon && <Icon className="h-6 w-6 text-muted-foreground/50" />}
       <p className="text-sm text-muted-foreground">{text}</p>
     </div>
+  )
+}
+
+/* ===================== المهل النظامية ===================== */
+
+// المهل المشتقّة (اعتراض/جلسة/وكالة) تُعرض وحدها لا مع بقية المهام:
+// فوات مهلة الاعتراض **سقوط حق لا تأخير**، والوثيقة المرجعية تجعل
+// المفوَّت منها مؤشراً بلا هامش تسامح.
+function DeadlinesPanel() {
+  const [, navigate] = useLocation()
+  const { data: o } = useDeadlinesOverview()
+  const { data: rows = [] } = useDeadlines(5)
+  const confirm = useConfirmDeadline()
+
+  // لا نعرض القسم إن لم تكن هناك مهلة مفتوحة أصلاً
+  if (!o || rows.length === 0) return null
+  const alarming = o.overdue > 0
+
+  return (
+    <Panel
+      icon={Timer}
+      title="المهل النظامية"
+      count={rows.length}
+      tone={alarming ? 'warn' : 'plain'}
+      hint={alarming ? `${fmtNumber(o.overdue)} فائتة` : 'لا فائت'}
+    >
+      {rows.map((d) => {
+        const days = daysFromToday(d.due_date)
+        const late = days != null && days < 0
+        const needsConfirm = d.source === 'ruling' && !d.confirmed
+        return (
+          <RowShell
+            key={d.id}
+            onClick={() => navigate(`/tasks/${d.id}`)}
+          >
+            <div className="flex items-center gap-3.5">
+              <RowAvatar name={d.case_title || d.title || 'مهلة'} />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-foreground">
+                  {d.case_title || d.title || 'مهلة'}
+                </p>
+                <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                  {DEADLINE_SOURCE_LABEL[d.source]}
+                  {d.assignee_name ? ` · ${d.assignee_name}` : ''}
+                </p>
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  <MetaChip icon={Clock} tone={late ? 'danger' : 'plain'}>
+                    {countdownText(days)}
+                  </MetaChip>
+                  {needsConfirm && (
+                    <button
+                      type="button"
+                      disabled={confirm.isPending}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        confirm.mutate(d.id)
+                      }}
+                      className="inline-flex items-center gap-1 rounded-lg bg-amber-500/15 px-2 py-1 text-[11px] font-medium text-amber-700 transition-colors hover:bg-amber-500/25 disabled:opacity-60 dark:text-amber-300"
+                    >
+                      <ShieldCheck className="h-3 w-3" />
+                      تحتاج اعتماداً ثانياً
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </RowShell>
+        )
+      })}
+    </Panel>
   )
 }
 
