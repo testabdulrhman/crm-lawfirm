@@ -164,9 +164,15 @@ export interface IncomingRequest {
   created_by: string | null
   created_at: string | null
   updated_at: string | null
+  // سجل الاستفسارات (المرحلة ١ من دورة العمل)
+  ref_no: string | null
+  opponent_name: string | null
+  source: string | null
 }
 
 export type IncomingRequestInput = {
+  source?: string | null
+  opponent_name?: string | null
   client_name: string
   client_phone?: string | null
   client_id?: string | null

@@ -12,11 +12,12 @@ import { EmptyState, FilteredEmptyState } from '@/components/EmptyState'
 import { QueryErrorState } from '@/components/QueryErrorState'
 import { fmtDatePref, fmtNumber } from '@/lib/format'
 import { arNorm } from '@/lib/arabic'
-import { useRequests } from '@/hooks/useRequests'
+import { useRequests , useRequestGateFlags, type RequestGateFlags } from '@/hooks/useRequests'
 import { usePageState } from '@/hooks/usePageState'
 import { RequestForm } from './RequestForm'
 import {
   STATUS_OPTIONS,
+  sourceLabel,
   statusBadgeVariant,
   statusLabel,
   typeLabel,
@@ -27,6 +28,7 @@ type Filter = RequestStatus | 'all'
 
 export function RequestsPage() {
   const { data, isLoading, isError, error, refetch } = useRequests('all')
+  const { data: gates } = useRequestGateFlags()
   const [, navigate] = useLocation()
   const [filter, setFilter] = usePageState<Filter>('req:filter', 'all')
   const [search, setSearch] = usePageState('req:q', '')
@@ -131,6 +133,7 @@ export function RequestsPage() {
             <RequestCard
               key={r.id}
               request={r}
+              gates={gates}
               onOpen={() => navigate(`/requests/${r.id}`)}
             />
           ))}
@@ -175,10 +178,32 @@ function FilterButton({
 function RequestCard({
   request: r,
   onOpen,
+  gates,
 }: {
   request: IncomingRequest
   onOpen: () => void
+  gates?: RequestGateFlags
 }) {
+  const gate = (
+    ok: boolean,
+    warn: boolean,
+    label: string
+  ): { v: 'success' | 'warning' | 'outline'; t: string } => ({
+    v: ok ? 'success' : warn ? 'warning' : 'outline',
+    t: label,
+  })
+  const g = gates
+  const chips = g
+    ? [
+        gate(g.conflict.has(r.id), false, 'تعارض'),
+        gate(g.kyc.has(r.id), false, 'KYC'),
+        gate(
+          g.memoApproved.has(r.id),
+          g.memoWritten.has(r.id) && !g.memoApproved.has(r.id),
+          'مذكرة'
+        ),
+      ]
+    : null
   return (
     <Card
       className="flex cursor-pointer flex-col transition-colors hover:bg-muted/40"
@@ -193,6 +218,17 @@ function RequestCard({
       }}
     >
       <CardContent className="flex flex-1 flex-col gap-3 p-4">
+        {/* سجل الاستفسارات: الرقم المرجعي الفوري + قناة الوصول (بند ١) */}
+        <div className="flex items-center justify-between gap-2">
+          <span
+            dir="ltr"
+            className="rounded-md bg-muted px-2 py-0.5 text-[11px] font-bold tabular-nums text-muted-foreground"
+          >
+            {r.ref_no ?? '—'}
+          </span>
+          <Badge variant="secondary">{sourceLabel(r.source)}</Badge>
+        </div>
+
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <p className="truncate font-semibold text-foreground">
@@ -224,6 +260,16 @@ function RequestCard({
           <p className="line-clamp-2 text-sm text-muted-foreground">
             {r.description}
           </p>
+        )}
+
+        {chips && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {chips.map((c) => (
+              <Badge key={c.t} variant={c.v} className="gap-1 text-[11px]">
+                {c.v === 'success' ? '✓' : c.v === 'warning' ? '⏳' : '○'} {c.t}
+              </Badge>
+            ))}
+          </div>
         )}
 
         <div className="mt-auto flex items-center justify-between gap-2 pt-2">

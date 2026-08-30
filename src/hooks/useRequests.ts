@@ -53,6 +53,50 @@ export function useRequests(filter: RequestStatus | 'all' = 'all') {
   })
 }
 
+/**
+ * حال البوابات الثلاث لكل طلب — لعرضها في سجل الاستفسارات بنظرة.
+ * ثلاث مجموعات صغيرة (الجداول بعشرات الصفوف) أرخص من join ثلاثي.
+ */
+export interface RequestGateFlags {
+  conflict: Set<string>
+  kyc: Set<string>
+  memoWritten: Set<string>
+  memoApproved: Set<string>
+}
+
+export function useRequestGateFlags() {
+  return useQuery({
+    queryKey: ['request_gate_flags'],
+    staleTime: 30_000,
+    queryFn: async (): Promise<RequestGateFlags> => {
+      const [c, k, m] = await Promise.all([
+        supabase.from('conflict_checks').select('request_id'),
+        supabase.from('kyc_checks').select('request_id, id_verified'),
+        supabase.from('request_evaluations').select('request_id, approved_at'),
+      ])
+      if (c.error) throw c.error
+      if (k.error) throw k.error
+      if (m.error) throw m.error
+      const flags: RequestGateFlags = {
+        conflict: new Set(),
+        kyc: new Set(),
+        memoWritten: new Set(),
+        memoApproved: new Set(),
+      }
+      for (const r of c.data ?? [])
+        if (r.request_id) flags.conflict.add(r.request_id)
+      for (const r of k.data ?? [])
+        if (r.request_id && r.id_verified) flags.kyc.add(r.request_id)
+      for (const r of m.data ?? [])
+        if (r.request_id) {
+          flags.memoWritten.add(r.request_id)
+          if (r.approved_at) flags.memoApproved.add(r.request_id)
+        }
+      return flags
+    },
+  })
+}
+
 // عدّاد «قيد الدراسة» للـ Sidebar
 export function usePendingRequestsCount() {
   return useQuery({

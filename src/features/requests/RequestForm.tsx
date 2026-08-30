@@ -25,7 +25,7 @@ import { useContacts } from '@/hooks/useContacts'
 import { useCreateRequest, useUpdateRequest } from '@/hooks/useRequests'
 import { ContactPicker } from '@/components/ContactPicker'
 import { DualDatePicker } from '@/components/DualDatePicker'
-import { TYPE_OPTIONS } from './labels'
+import { SOURCE_OPTIONS, TYPE_OPTIONS } from './labels'
 import type { Contact, IncomingRequest, IncomingRequestInput } from '@/types/db'
 
 const NONE = '__none__'
@@ -34,6 +34,7 @@ const schema = z.object({
   client_name: z.string().min(1, 'اسم العميل مطلوب'),
   client_phone: z.string().optional(),
   request_type: z.string().min(1, 'نوع الطلب مطلوب'),
+  source: z.string().optional(),
   received_at: z.string().min(1, 'تاريخ الاستلام مطلوب'),
   description: z.string().optional(),
   client_id: z.string().optional(),
@@ -46,6 +47,7 @@ function toDefaults(r?: IncomingRequest | null): FormValues {
     client_name: r?.client_name ?? '',
     client_phone: r?.client_phone ?? '',
     request_type: r?.request_type ?? 'case',
+    source: r?.source ?? 'هاتف',
     received_at: r?.received_at ?? todayISO(),
     description: r?.description ?? '',
     client_id: r?.client_id ?? NONE,
@@ -82,6 +84,7 @@ export function RequestForm({
       client_name: values.client_name.trim(),
       client_phone: values.client_phone?.trim() || null,
       request_type: values.request_type,
+      source: values.source ?? 'هاتف',
       received_at: values.received_at,
       description: values.description?.trim() || null,
       client_id: values.client_id && values.client_id !== NONE ? values.client_id : null,
@@ -146,6 +149,34 @@ export function RequestForm({
                 {errors.request_type.message}
               </p>
             )}
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>قناة الوصول</Label>
+            <Controller
+              control={control}
+              name="source"
+              render={({ field }) => (
+                <Select
+                  value={field.value ?? 'هاتف'}
+                  onValueChange={field.onChange}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SOURCE_OPTIONS.map((o) => (
+                      <SelectItem key={o} value={o}>
+                        {o}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
+            <p className="text-xs text-muted-foreground">
+              توحيد القناة — حتى لا يضيع استفسار على جوال شخصي بلا سجل.
+            </p>
           </div>
           <div className="space-y-1.5">
             <Controller

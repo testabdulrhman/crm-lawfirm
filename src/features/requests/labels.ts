@@ -43,3 +43,9 @@ export const statusBadgeVariant = (
   s: string | null | undefined
 ): BadgeProps['variant'] =>
   s && s in STATUS_BADGE ? STATUS_BADGE[s as RequestStatus] : 'secondary'
+
+/* ===== قناة الوصول — «توحيد قناة الدخول» (بند ١ من المرحلة الأولى) ===== */
+
+export const SOURCE_OPTIONS = ['هاتف', 'حضور', 'الموقع', 'رسالة', 'إحالة'] as const
+
+export const sourceLabel = (s: string | null | undefined): string => s || 'هاتف'
