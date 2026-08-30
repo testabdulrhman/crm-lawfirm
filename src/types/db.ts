@@ -186,6 +186,15 @@ export interface RequestEvaluation {
   strengths: string | null
   weaknesses: string | null
   recommendation: string | null
+  // المحاور الأربعة (المرحلة ٢ من دورة العمل) + اعتماد الشريك
+  axis_procedural: string | null
+  axis_merits: string | null
+  axis_evidence: string | null
+  axis_financial: string | null
+  risk_level: 'low' | 'medium' | 'high' | null
+  approved_by: string | null
+  approved_by_name: string | null
+  approved_at: string | null
   notes: string | null
   created_at: string | null
   updated_at: string | null
@@ -199,6 +208,11 @@ export type RequestEvaluationInput = {
   strengths?: string | null
   weaknesses?: string | null
   recommendation?: string | null
+  axis_procedural?: string | null
+  axis_merits?: string | null
+  axis_evidence?: string | null
+  axis_financial?: string | null
+  risk_level?: 'low' | 'medium' | 'high' | null
   notes?: string | null
 }
 

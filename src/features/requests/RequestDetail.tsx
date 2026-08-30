@@ -16,6 +16,7 @@ import {
   X,
   Clock,
   Loader2,
+  CheckCircle2,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -23,6 +24,8 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { IntakeGatesCard } from './IntakeGates'
+import { useApproveEvaluation } from '@/hooks/useRequests'
+import { RISK_LEVELS } from './EvaluationForm'
 import {
   Dialog,
   DialogContent,
@@ -157,12 +160,13 @@ export function RequestDetail({ id }: { id: string }) {
         requestId={r.id}
         clientName={r.client_name}
         opponentName={(r as any).opponent_name ?? null}
+        evaluations={evaluations}
       />
 
       {/* الإسناد + القرار */}
       <div className="grid gap-4 md:grid-cols-2">
         <AssignmentCard requestId={r.id} currentName={r.assigned_to_name} />
-        <DecisionCard request={r} />
+        <DecisionCard request={r} evaluations={evaluations} />
       </div>
 
       {/* الوصف */}
@@ -180,7 +184,9 @@ export function RequestDetail({ id }: { id: string }) {
       )}
 
       {/* التقييمات */}
-      <EvaluationsSection requestId={r.id} evaluations={evaluations} />
+      <div id="evaluations-section">
+        <EvaluationsSection requestId={r.id} evaluations={evaluations} />
+      </div>
 
       {/* المرفقات */}
       <DocumentsSection requestId={r.id} documents={documents} />
@@ -253,7 +259,14 @@ function AssignmentCard({
 
 /* ===================== القرار ===================== */
 
-function DecisionCard({ request: r }: { request: IncomingRequest }) {
+function DecisionCard({
+  request: r,
+  evaluations = [],
+}: {
+  request: IncomingRequest
+  evaluations?: RequestEvaluation[]
+}) {
+  const memoApproved = evaluations.some((e) => e.approved_at)
   const requestId = r.id
   const { status, decision_at: decisionAt, decision_by: decisionBy } = r
   const rejectionReason = r.rejection_reason
@@ -337,9 +350,13 @@ function DecisionCard({ request: r }: { request: IncomingRequest }) {
             disabled={decideM.isPending}
             onClick={() =>
               confirm({
-                title: 'قبول الطلب',
-                description: `سيُسجَّل قبول طلب «${r.client_name}» رسمياً باسمك.`,
-                confirmLabel: 'قبول',
+                title: memoApproved
+                  ? 'قبول الطلب'
+                  : 'قبول قبل اعتماد المذكرة',
+                description: memoApproved
+                  ? `سيُسجَّل قبول طلب «${r.client_name}» رسمياً باسمك.`
+                  : `الوثيقة: لا يُوقَّع عقد قبل مذكرة تقييم معتمدة — ولا مذكرة معتمدة لهذا الطلب بعد. القبول سيُسجَّل باسمك على مسؤوليتك.`,
+                confirmLabel: memoApproved ? 'قبول' : 'أكمل على مسؤوليتي',
                 destructive: false,
                 onConfirm: () => decide('accepted'),
               })
@@ -443,9 +460,17 @@ function recommendationBadgeVariant(
 ): 'success' | 'destructive' | 'warning' | 'gold' {
   if (rec === 'قبول') return 'success'
   if (rec === 'رفض') return 'destructive'
+  if (rec === 'قبول مشروط') return 'warning'
   if (rec === 'بحاجة لمعلومات') return 'warning'
   return 'gold'
 }
+
+const AXIS_LABELS: [keyof RequestEvaluation, string][] = [
+  ['axis_procedural', 'إجرائي'],
+  ['axis_merits', 'موضوعي'],
+  ['axis_evidence', 'إثباتي'],
+  ['axis_financial', 'مالي وتنفيذي'],
+]
 
 function EvaluationsSection({
   requestId,
@@ -455,6 +480,8 @@ function EvaluationsSection({
   evaluations: RequestEvaluation[]
 }) {
   const deleteM = useDeleteEvaluation()
+  const approveM = useApproveEvaluation()
+  const isDirector = useIsDirector()
   const { confirm, dialog } = useConfirm()
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<RequestEvaluation | null>(null)
@@ -479,13 +506,13 @@ function EvaluationsSection({
         </CardTitle>
         <Button size="sm" variant="gold" onClick={openNew}>
           <Plus className="h-4 w-4" />
-          تقييم
+          مذكرة تقييم
         </Button>
       </CardHeader>
       <CardContent className="space-y-3">
         {evaluations.length === 0 ? (
           <p className="py-4 text-center text-sm text-muted-foreground">
-            لا توجد تقييمات بعد.
+            لا مذكرة بعد — والوثيقة: لا يُوقَّع عقد قبلها.
           </p>
         ) : (
           evaluations.map((e) => (
@@ -546,6 +573,59 @@ function EvaluationsSection({
                     <span className="font-medium">ضعف: </span>
                     {e.weaknesses}
                   </p>
+                )}
+              </div>
+              {/* المحاور الأربعة — نصّ الوثيقة */}
+              <div className="mt-2 space-y-1.5 text-sm">
+                {AXIS_LABELS.map(([k, label]) =>
+                  e[k] ? (
+                    <p key={k} className="leading-relaxed">
+                      <span className="font-semibold text-foreground">
+                        {label}:{' '}
+                      </span>
+                      <span className="text-muted-foreground">
+                        {String(e[k])}
+                      </span>
+                    </p>
+                  ) : null
+                )}
+                {e.risk_level && (
+                  <Badge
+                    variant={
+                      e.risk_level === 'high'
+                        ? 'destructive'
+                        : e.risk_level === 'medium'
+                          ? 'warning'
+                          : 'success'
+                    }
+                  >
+                    مخاطر{' '}
+                    {RISK_LEVELS.find((r) => r.value === e.risk_level)?.label}
+                  </Badge>
+                )}
+              </div>
+              {/* اعتماد الشريك — بوابة «لا عرض أتعاب من محامٍ منفرداً» */}
+              <div className="mt-3 flex items-center justify-between gap-2 rounded-lg bg-muted/50 px-3 py-2">
+                {e.approved_at ? (
+                  <span className="flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-300">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    اعتمدها {e.approved_by_name ?? 'المدير'} ·{' '}
+                    {fmtDatePref(e.approved_at)}
+                  </span>
+                ) : (
+                  <span className="text-xs text-muted-foreground">
+                    بانتظار اعتماد المدير
+                  </span>
+                )}
+                {!e.approved_at && isDirector && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={approveM.isPending}
+                    onClick={() => approveM.mutate(e.id)}
+                  >
+                    اعتمد باسمي
+                  </Button>
                 )}
               </div>
               {e.notes && (

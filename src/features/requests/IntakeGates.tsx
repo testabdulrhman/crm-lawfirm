@@ -8,6 +8,7 @@ import {
   Info,
   CalendarClock,
   ArrowLeft,
+  FileCheck2,
 } from 'lucide-react'
 import { useLocation } from 'wouter'
 
@@ -50,6 +51,7 @@ import {
   type KycInput,
   type RiskLevel,
 } from '@/hooks/useIntakeGates'
+import type { RequestEvaluation } from '@/types/db'
 
 // بوابتا المرحلة الأولى («الاستقطاب والتحليل الأولي») كما تصفهما الوثيقة.
 // تُعرضان تنبيهاً لا منعاً — البوابة التي تمنع بلا مخرج يلتفّ عليها الفريق
@@ -59,11 +61,15 @@ export function IntakeGatesCard({
   requestId,
   clientName,
   opponentName,
+  evaluations = [],
 }: {
   requestId: string
   clientName: string | null
   opponentName: string | null
+  evaluations?: RequestEvaluation[]
 }) {
+  const memo = evaluations[0] ?? null
+  const memoApproved = !!memo?.approved_at
   const gates = useIntakeGates(requestId)
   const [conflictOpen, setConflictOpen] = useState(false)
   const [kycOpen, setKycOpen] = useState(false)
@@ -71,15 +77,15 @@ export function IntakeGatesCard({
   return (
     <Card>
       <CardHeader className="flex-row items-center gap-2 space-y-0">
-        {gates.canOpenMatter ? (
+        {gates.canOpenMatter && memoApproved ? (
           <ShieldCheck className="h-5 w-5 text-emerald-600" />
         ) : (
           <ShieldAlert className="h-5 w-5 text-amber-500" />
         )}
         <CardTitle className="text-base">بوابات الاستقطاب</CardTitle>
-        {!gates.canOpenMatter && (
+        {(!gates.canOpenMatter || !memoApproved) && (
           <Badge variant="warning" className="ms-auto">
-            ينقص {fmtNumber(gates.missing.length)}
+            ينقص {fmtNumber(gates.missing.length + (memoApproved ? 0 : 1))}
           </Badge>
         )}
       </CardHeader>
@@ -110,6 +116,25 @@ export function IntakeGatesCard({
           }
           onClick={() => setKycOpen(true)}
           label={gates.kyc ? 'تعديل' : 'استيفاء'}
+        />
+
+        <GateRow
+          icon={FileCheck2}
+          title="مذكرة التقييم — المحاور الأربعة"
+          done={memoApproved}
+          status={
+            !memo
+              ? 'لم تُكتب — الوثيقة: لا يُوقَّع عقد قبلها'
+              : memoApproved
+                ? `اعتمدها ${memo.approved_by_name ?? 'المدير'} · التوصية: ${memo.recommendation ?? '—'}`
+                : `كتبها ${memo.evaluator_name ?? '—'} — بانتظار اعتماد المدير`
+          }
+          onClick={() =>
+            document
+              .getElementById('evaluations-section')
+              ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+          }
+          label={memo ? 'اعرضها' : 'اكتبها'}
         />
       </CardContent>
 

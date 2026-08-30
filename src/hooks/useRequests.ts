@@ -240,6 +240,24 @@ export function useDecideRequest() {
 
 /* ===================== التقييمات ===================== */
 
+/** اعتماد الشريك للمذكرة — المدير وحده (بوابة الوثيقة: لا عقد قبلها) */
+export function useApproveEvaluation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (evalId: string): Promise<void> => {
+      const { error } = await supabase.rpc('approve_request_evaluation', {
+        p_eval: evalId,
+      })
+      if (error) throw error
+    },
+    onSuccess: () => {
+      invalidateAll(qc)
+      toast({ variant: 'success', title: 'اعتُمدت المذكرة باسمك' })
+    },
+    onError: errToast('تعذّر اعتماد المذكرة'),
+  })
+}
+
 export function useAddEvaluation() {
   const qc = useQueryClient()
   return useMutation({
