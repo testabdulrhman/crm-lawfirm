@@ -3,6 +3,9 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 // =============================================================
 // whatsapp-send — إرسال واتساب عبر Hatif.io (WhatsApp Business API الرسمي)
 // v6 (2026-08-30): استبدال بوابة Evolution المحظورة بواجهة هاتف.
+// v8 (2026-08-30): دعم القوالب المعتمدة { template: {name, lang?, params?} }
+//   ورسالة عربية واضحة عند انغلاق نافذة الـ٢٤ ساعة (قاعدة واتساب الرسمي:
+//   النص الحر مسموح فقط خلال ٢٤ ساعة من آخر رسالة واردة من العميل).
 // الواجهة كما هي منذ v5: { phone, message?, recipient_name?, media_url?, file_name? }
 // فكل نقاط النداء (تذكيرات الجلسات، الشكر، تقرير الجلسة، الخطابات) تعمل بلا تعديل.
 //
@@ -104,14 +107,18 @@ async function getChannelId(cfg: HatifConfig, token: string): Promise<string> {
   throw new Error("لا توجد قناة واتساب في حساب هاتف — تأكد من تفعيل القناة عندهم");
 }
 
-async function hatifPost(path: string, token: string, body: unknown): Promise<{ ok: boolean; detail: string }> {
+async function hatifPost(path: string, token: string, body: unknown): Promise<{ ok: boolean; detail: string; code: string }> {
   const res = await fetch(`${HATIF_BASE}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     body: JSON.stringify(body),
   });
   const data = await res.json().catch(() => ({}));
-  return { ok: res.ok, detail: res.ok ? "" : `(${res.status}) ${JSON.stringify(data).slice(0, 400)}` };
+  const code = String(data?.error?.code ?? "");
+  let detail = res.ok ? "" : `(${res.status}) ${JSON.stringify(data).slice(0, 400)}`;
+  if (code === "Voxa:WhatsApp:ServiceWindowExpired")
+    detail = "نافذة الـ٢٤ ساعة مغلقة مع هذا الرقم — واتساب الرسمي لا يقبل نصاً حراً إلا بعد رد العميل. استخدم قالباً معتمداً أو أرسل SMS.";
+  return { ok: res.ok, detail, code };
 }
 
 Deno.serve(async (req) => {
@@ -122,10 +129,11 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { phone, message, recipient_name, media_url, file_name } = body ?? {};
+    const { phone, message, recipient_name, media_url, file_name, template } = body ?? {};
 
     if (!phone) return json({ error: "phone مطلوب" }, 400);
-    if (!message && !media_url) return json({ error: "message أو media_url مطلوب" }, 400);
+    if (!message && !media_url && !template?.name)
+      return json({ error: "message أو media_url أو template مطلوب" }, 400);
 
     const num = normalizePhone(phone);
     if (num.length < 11) return json({ error: "رقم الجوال غير صحيح" }, 400);
@@ -141,7 +149,21 @@ Deno.serve(async (req) => {
       const token = await getToken(cfg);
       const channelId = await getChannelId(cfg, token);
 
-      if (media_url) {
+      if (template?.name) {
+        // قالب معتمد مسبقاً — يفتح المحادثة حتى خارج نافذة الـ٢٤ ساعة
+        const params: string[] = Array.isArray(template.params) ? template.params.map(String) : [];
+        const r = await hatifPost("/v1/whatsapp/service-account/sendTemplate", token, {
+          ChannelId: channelId,
+          TemplateName: String(template.name),
+          Language: String(template.lang || "ar"),
+          ToNumber: num,
+          Parameters: params.length
+            ? [{ Type: "Body", Values: params.map((p) => ({ Type: "text", Text: p })) }]
+            : [],
+        });
+        status = r.ok ? "sent" : "failed";
+        detail = r.detail;
+      } else if (media_url) {
         // ملف (مستند/PDF) مع تعليق اختياري — مفاتيح camelCase كما في وثائقهم
         const r = await hatifPost("/v1/whatsapp/service-account/sendFile", token, {
           channelId,
@@ -171,7 +193,9 @@ Deno.serve(async (req) => {
       await supabase.from("sms_log").insert({
         recipient_name: recipient_name || "واتساب",
         phone: num,
-        message: media_url ? `[ملف: ${file_name || "مستند"}] ${message || ""}`.trim() : message,
+        message: template?.name
+          ? `[قالب: ${template.name}] ${(Array.isArray(template.params) ? template.params : []).join(" | ")}`.trim()
+          : media_url ? `[ملف: ${file_name || "مستند"}] ${message || ""}`.trim() : message,
         status,
         sent_by: "whatsapp",
       });
