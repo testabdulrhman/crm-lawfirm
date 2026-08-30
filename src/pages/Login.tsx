@@ -376,7 +376,7 @@ function OtpForm() {
           type="button"
           className="text-muted-foreground hover:text-gold disabled:opacity-50"
           disabled={busy}
-          onClick={sendCode}
+          onClick={() => sendCode()}
         >
           إعادة إرسال الرمز
         </button>
