@@ -39,6 +39,7 @@ import { Ltr } from '@/components/Ltr'
 import { taskPriorityBadge, taskPriorityLabel } from '@/lib/caseLabels'
 import { typeLabel as requestTypeLabel } from '@/features/requests/labels'
 import { FeedContent } from '@/features/feed/FeedPage'
+import { BirthdayCard } from '@/components/BirthdayCard'
 import {
   useDashboardOverview,
   useCompleteTask,
@@ -222,6 +223,8 @@ export default function Dashboard() {
           />
         </StatStrip>
       )}
+
+      <BirthdayCard />
 
       {/* ===== جدول اليوم + ما يحتاج انتباهك ===== */}
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
