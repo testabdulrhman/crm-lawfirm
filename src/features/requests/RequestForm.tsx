@@ -25,7 +25,7 @@ import { useContacts } from '@/hooks/useContacts'
 import { useCreateRequest, useUpdateRequest } from '@/hooks/useRequests'
 import { ContactPicker } from '@/components/ContactPicker'
 import { DualDatePicker } from '@/components/DualDatePicker'
-import { SOURCE_OPTIONS, TYPE_OPTIONS } from './labels'
+import { CAPACITY_LABELS, CRITICAL_KIND_LABELS, SOURCE_OPTIONS, TYPE_OPTIONS } from './labels'
 import type { Contact, IncomingRequest, IncomingRequestInput } from '@/types/db'
 
 const NONE = '__none__'
@@ -38,6 +38,14 @@ const schema = z.object({
   received_at: z.string().min(1, 'تاريخ الاستلام مطلوب'),
   description: z.string().optional(),
   client_id: z.string().optional(),
+  // الجلسة التمهيدية — بند ٢ من الوثيقة: جمع بيانات لا إبداء رأي
+  capacity: z.enum(['principal', 'agent']).optional(),
+  opponent_name: z.string().optional(),
+  court_name: z.string().optional(),
+  claim_number: z.string().optional(),
+  critical_date: z.string().optional(),
+  critical_date_kind: z.enum(['notice', 'objection', 'prescription']).optional(),
+  prior_lawyer: z.string().optional(),
 })
 
 type FormValues = z.infer<typeof schema>
@@ -51,6 +59,13 @@ function toDefaults(r?: IncomingRequest | null): FormValues {
     received_at: r?.received_at ?? todayISO(),
     description: r?.description ?? '',
     client_id: r?.client_id ?? NONE,
+    capacity: r?.capacity ?? 'principal',
+    opponent_name: r?.opponent_name ?? '',
+    court_name: r?.court_name ?? '',
+    claim_number: r?.claim_number ?? '',
+    critical_date: r?.critical_date ?? '',
+    critical_date_kind: r?.critical_date_kind ?? undefined,
+    prior_lawyer: r?.prior_lawyer ?? '',
   }
 }
 
@@ -88,6 +103,13 @@ export function RequestForm({
       received_at: values.received_at,
       description: values.description?.trim() || null,
       client_id: values.client_id && values.client_id !== NONE ? values.client_id : null,
+      capacity: values.capacity ?? null,
+      opponent_name: values.opponent_name?.trim() || null,
+      court_name: values.court_name?.trim() || null,
+      claim_number: values.claim_number?.trim() || null,
+      critical_date: values.critical_date || null,
+      critical_date_kind: values.critical_date ? (values.critical_date_kind ?? 'objection') : null,
+      prior_lawyer: values.prior_lawyer?.trim() || null,
     }
     if (isEdit && request) {
       await updateM.mutateAsync({ id: request.id, input })
@@ -177,6 +199,110 @@ export function RequestForm({
             <p className="text-xs text-muted-foreground">
               توحيد القناة — حتى لا يضيع استفسار على جوال شخصي بلا سجل.
             </p>
+          </div>
+
+          {/* ===== الجلسة التمهيدية — بند ٢: جمع بيانات لا إبداء رأي ===== */}
+          <div className="space-y-1.5">
+            <Label>الصفة</Label>
+            <Controller
+              control={control}
+              name="capacity"
+              render={({ field }) => (
+                <Select
+                  value={field.value ?? 'principal'}
+                  onValueChange={field.onChange}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(
+                      Object.keys(CAPACITY_LABELS) as Array<
+                        keyof typeof CAPACITY_LABELS
+                      >
+                    ).map((k) => (
+                      <SelectItem key={k} value={k}>
+                        {CAPACITY_LABELS[k]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
+          </div>
+
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label htmlFor="opponent_name">
+              الأطراف المقابلة (بأسمائها الرسمية)
+            </Label>
+            <Input
+              id="opponent_name"
+              placeholder="يتعبأ تلقائياً في فحص التعارض"
+              {...register('opponent_name')}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="court_name">الجهة القضائية (إن وُجدت)</Label>
+            <Input id="court_name" {...register('court_name')} />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="claim_number">رقم الدعوى (إن وُجد)</Label>
+            <Input id="claim_number" dir="ltr" {...register('claim_number')} />
+          </div>
+
+          <div className="space-y-1.5">
+            <Controller
+              control={control}
+              name="critical_date"
+              render={({ field }) => (
+                <DualDatePicker
+                  label="⚠ أقرب تاريخ حرج"
+                  value={field.value || null}
+                  onChange={(v) => field.onChange(v ?? '')}
+                />
+              )}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>نوع التاريخ الحرج</Label>
+            <Controller
+              control={control}
+              name="critical_date_kind"
+              render={({ field }) => (
+                <Select
+                  value={field.value ?? undefined}
+                  onValueChange={field.onChange}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="تبليغ / اعتراض / تقادم" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(
+                      Object.keys(CRITICAL_KIND_LABELS) as Array<
+                        keyof typeof CRITICAL_KIND_LABELS
+                      >
+                    ).map((k) => (
+                      <SelectItem key={k} value={k}>
+                        {CRITICAL_KIND_LABELS[k]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
+            <p className="text-xs text-muted-foreground">
+              وجود تاريخ حرج يرفع الطلب عاجلاً لرأس السجل — نص الوثيقة.
+            </p>
+          </div>
+
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label htmlFor="prior_lawyer">محامٍ سابق ووضع العلاقة</Label>
+            <Input
+              id="prior_lawyer"
+              placeholder="اتركه فارغاً إن لم يوجد"
+              {...register('prior_lawyer')}
+            />
           </div>
           <div className="space-y-1.5">
             <Controller

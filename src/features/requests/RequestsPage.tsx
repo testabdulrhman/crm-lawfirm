@@ -21,6 +21,7 @@ import {
   statusBadgeVariant,
   statusLabel,
   typeLabel,
+  criticalKindLabel,
 } from './labels'
 import type { IncomingRequest, RequestStatus } from '@/types/db'
 
@@ -45,16 +46,25 @@ export function RequestsPage() {
 
   const list = useMemo(() => {
     const q = arNorm(search.trim())
-    return (data ?? []).filter((r) => {
+    const rows = (data ?? []).filter((r) => {
       if (q) {
         const hay = arNorm(
-          [r.client_name, r.client_phone].filter(Boolean).join(' ')
+          [r.client_name, r.client_phone, r.opponent_name]
+            .filter(Boolean)
+            .join(' ')
         )
         if (!hay.includes(q)) return false
       }
       if (filter !== 'all' && (r.status ?? 'under_review') !== filter) return false
       return true
     })
+    // الوثيقة: «التواريخ الحرجة تُفرز فوراً كحالة عاجلة» — العاجل يصعد
+    // للرأس بالأقرب تاريخاً، والباقي يحفظ ترتيبه الزمني (sort مستقر)
+    const urgency = (r: IncomingRequest): number =>
+      r.critical_date && r.status !== 'rejected'
+        ? new Date(r.critical_date).getTime()
+        : Infinity
+    return [...rows].sort((a, b) => urgency(a) - urgency(b))
   }, [data, filter, search])
 
   return (
@@ -226,7 +236,15 @@ function RequestCard({
           >
             {r.ref_no ?? '—'}
           </span>
-          <Badge variant="secondary">{sourceLabel(r.source)}</Badge>
+          <span className="flex items-center gap-1.5">
+            {r.critical_date && r.status !== 'rejected' && (
+              <Badge variant="destructive" className="gap-1">
+                ⚠ {criticalKindLabel(r.critical_date_kind)}{' '}
+                {fmtDatePref(r.critical_date)}
+              </Badge>
+            )}
+            <Badge variant="secondary">{sourceLabel(r.source)}</Badge>
+          </span>
         </div>
 
         <div className="flex items-start justify-between gap-2">

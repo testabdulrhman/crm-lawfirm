@@ -49,3 +49,21 @@ export const statusBadgeVariant = (
 export const SOURCE_OPTIONS = ['هاتف', 'حضور', 'الموقع', 'رسالة', 'إحالة'] as const
 
 export const sourceLabel = (s: string | null | undefined): string => s || 'هاتف'
+
+/* ===== الجلسة التمهيدية (بند ٢): الصفة والتواريخ الحرجة ===== */
+
+export const CAPACITY_LABELS = {
+  principal: 'أصيل',
+  agent: 'نائب',
+} as const
+
+export const CRITICAL_KIND_LABELS = {
+  notice: 'تبليغ',
+  objection: 'مهلة اعتراض',
+  prescription: 'تقادم',
+} as const
+
+export const criticalKindLabel = (k: string | null | undefined): string =>
+  k && k in CRITICAL_KIND_LABELS
+    ? CRITICAL_KIND_LABELS[k as keyof typeof CRITICAL_KIND_LABELS]
+    : 'تاريخ حرج'

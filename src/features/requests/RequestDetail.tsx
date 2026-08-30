@@ -17,6 +17,7 @@ import {
   Clock,
   Loader2,
   CheckCircle2,
+  AlertTriangle,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -25,6 +26,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { IntakeGatesCard } from './IntakeGates'
 import { RequestRail } from './RequestRail'
+import { Ltr } from '@/components/Ltr'
+import { cn } from '@/lib/utils'
 import { useIntakeGates } from '@/hooks/useIntakeGates'
 import { useApproveEvaluation } from '@/hooks/useRequests'
 import { RISK_LEVELS } from './EvaluationForm'
@@ -58,7 +61,7 @@ import { FilePreviewDialog } from '@/components/FilePreviewDialog'
 import { QueryErrorState } from '@/components/QueryErrorState'
 import { useConfirm } from '@/components/ConfirmDialog'
 
-import { fmtDatePref, fmtNumber, todayISO } from '@/lib/format'
+import { fmtDatePref, fmtNumber, todayISO, daysLabel } from '@/lib/format'
 import { pickFile } from '@/lib/files'
 import { openExternal } from '@/lib/external'
 import { useAuth } from '@/stores/auth'
@@ -74,7 +77,7 @@ import {
   useDeleteEvaluation,
 } from '@/hooks/useRequests'
 import { EvaluationForm } from './EvaluationForm'
-import { statusBadgeVariant, statusLabel, typeLabel } from './labels'
+import { statusBadgeVariant, statusLabel, typeLabel, CAPACITY_LABELS, criticalKindLabel } from './labels'
 import type {
   IncomingRequest,
   RequestDocument,
@@ -137,11 +140,33 @@ export function RequestDetail({ id }: { id: string }) {
                   {fmtDatePref(r.received_at)}
                 </span>
               </div>
+              {/* بيانات الجلسة التمهيدية — بند ٢ */}
+              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                {r.capacity && (
+                  <Badge variant="secondary">
+                    {CAPACITY_LABELS[r.capacity]}
+                  </Badge>
+                )}
+                {r.opponent_name && (
+                  <Badge variant="outline">ضد: {r.opponent_name}</Badge>
+                )}
+                {r.court_name && (
+                  <Badge variant="outline">{r.court_name}</Badge>
+                )}
+                {r.claim_number && (
+                  <Badge variant="outline">
+                    دعوى <Ltr>{r.claim_number}</Ltr>
+                  </Badge>
+                )}
+                {r.prior_lawyer && (
+                  <Badge variant="warning">محامٍ سابق: {r.prior_lawyer}</Badge>
+                )}
+              </div>
             </div>
             <div className="flex flex-col items-end gap-2">
-              {(r as any).ref_no && (
+              {r.ref_no && (
                 <span className="rounded-md bg-muted px-2 py-0.5 text-xs font-semibold tabular-nums text-muted-foreground">
-                  {(r as any).ref_no}
+                  {r.ref_no}
                 </span>
               )}
               <Badge variant={statusBadgeVariant(r.status)}>
@@ -161,12 +186,14 @@ export function RequestDetail({ id }: { id: string }) {
       {/* شريط المسار الموجّه — بوصلة الدورة، لا قفل (اختيار المستخدم 2026-08-30) */}
       <RequestRail request={r} gates={railGates} evaluations={evaluations} />
 
+      <CriticalDateStrip request={r} />
+
       {/* بوابات الاستقطاب — تسبق القرار في ترتيب الوثيقة */}
       <div id="intake-gates">
       <IntakeGatesCard
         requestId={r.id}
         clientName={r.client_name}
-        opponentName={(r as any).opponent_name ?? null}
+        opponentName={r.opponent_name ?? null}
         evaluations={evaluations}
       />
       </div>
@@ -198,6 +225,53 @@ export function RequestDetail({ id }: { id: string }) {
 
       {/* المرفقات */}
       <DocumentsSection requestId={r.id} documents={documents} />
+    </div>
+  )
+}
+
+/* ===================== التاريخ الحرج ===================== */
+
+// الوثيقة: «التواريخ الحرجة تُفرز فوراً كحالة عاجلة» — فلا تُدفن في التفاصيل.
+// أحمر إذا بقي ≤ 7 أيام أو فات، كهرماني قبل ذلك.
+function CriticalDateStrip({ request: r }: { request: IncomingRequest }) {
+  if (!r.critical_date || r.status === 'rejected') return null
+  const days = (() => {
+    const d = new Date(r.critical_date)
+    if (isNaN(d.getTime())) return null
+    d.setHours(0, 0, 0, 0)
+    const now = new Date()
+    now.setHours(0, 0, 0, 0)
+    return Math.round((d.getTime() - now.getTime()) / 86400000)
+  })()
+  const late = days != null && days < 0
+  const soon = days != null && days <= 7
+  return (
+    <div
+      className={cn(
+        'flex flex-wrap items-center gap-2 rounded-2xl border px-4 py-3 text-sm font-medium',
+        late || soon
+          ? 'border-destructive/40 bg-destructive/10 text-destructive'
+          : 'border-amber-400/50 bg-amber-50/70 text-amber-800 dark:bg-amber-950/25 dark:text-amber-300'
+      )}
+    >
+      <AlertTriangle className="h-4 w-4 shrink-0" />
+      <span>
+        {criticalKindLabel(r.critical_date_kind)} — {fmtDatePref(r.critical_date)}
+        {days != null && (
+          <b className="me-1">
+            {' '}
+            ·{' '}
+            {late
+              ? `فات منذ ${daysLabel(-days)}`
+              : days === 0
+                ? 'اليوم'
+                : `بعد ${daysLabel(days)}`}
+          </b>
+        )}
+      </span>
+      <span className="ms-auto text-xs font-normal opacity-80">
+        فوات هذا التاريخ سقوط حق لا تأخير
+      </span>
     </div>
   )
 }

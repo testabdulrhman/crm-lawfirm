@@ -168,11 +168,24 @@ export interface IncomingRequest {
   ref_no: string | null
   opponent_name: string | null
   source: string | null
+  // حقول الجلسة التمهيدية (بند ٢ من المرحلة الأولى)
+  capacity: 'principal' | 'agent' | null
+  court_name: string | null
+  claim_number: string | null
+  critical_date: string | null
+  critical_date_kind: 'notice' | 'objection' | 'prescription' | null
+  prior_lawyer: string | null
 }
 
 export type IncomingRequestInput = {
   source?: string | null
   opponent_name?: string | null
+  capacity?: 'principal' | 'agent' | null
+  court_name?: string | null
+  claim_number?: string | null
+  critical_date?: string | null
+  critical_date_kind?: 'notice' | 'objection' | 'prescription' | null
+  prior_lawyer?: string | null
   client_name: string
   client_phone?: string | null
   client_id?: string | null
