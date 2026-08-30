@@ -175,6 +175,12 @@ export interface IncomingRequest {
   critical_date: string | null
   critical_date_kind: 'notice' | 'objection' | 'prescription' | null
   prior_lawyer: string | null
+  // ستة فتح الملف (المرحلة ٣): العقد والوكالة والدفعة + سبب التجاوز
+  contract_signed_at: string | null
+  poa_ref: string | null
+  advance_amount: number | null
+  advance_received_at: string | null
+  conversion_bypass_reason: string | null
 }
 
 export type IncomingRequestInput = {
@@ -186,6 +192,14 @@ export type IncomingRequestInput = {
   critical_date?: string | null
   critical_date_kind?: 'notice' | 'objection' | 'prescription' | null
   prior_lawyer?: string | null
+  contract_signed_at?: string | null
+  poa_ref?: string | null
+  advance_amount?: number | null
+  advance_received_at?: string | null
+  conversion_bypass_reason?: string | null
+  converted_to_type?: string | null
+  converted_to_id?: string | null
+  converted_at?: string | null
   client_name: string
   client_phone?: string | null
   client_id?: string | null

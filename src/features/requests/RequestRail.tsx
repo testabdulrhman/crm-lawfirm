@@ -69,6 +69,13 @@ function stagesOf(
       nextLabel: 'تسجيل القرار',
     },
     {
+      key: 'onboarding',
+      label: 'العقد والوكالة',
+      done: !!(r.contract_signed_at && r.poa_ref && r.advance_received_at),
+      target: 'onboarding-card',
+      nextLabel: 'استكمال العقد والوكالة والدفعة',
+    },
+    {
       key: 'open',
       label: 'فتح الملف',
       done: !!r.converted_to_id,
@@ -112,7 +119,7 @@ export function RequestRail({
             <button
               key={s.key}
               onClick={() => goTo(s)}
-              className="group relative flex min-w-[72px] flex-1 flex-col items-center gap-1.5"
+              className="group relative flex min-w-[64px] flex-1 flex-col items-center gap-1.5"
               title={s.label}
             >
               {/* الوصلة */}

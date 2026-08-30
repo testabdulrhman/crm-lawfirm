@@ -18,9 +18,11 @@ import {
   Loader2,
   CheckCircle2,
   AlertTriangle,
+  Handshake,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -61,7 +63,7 @@ import { FilePreviewDialog } from '@/components/FilePreviewDialog'
 import { QueryErrorState } from '@/components/QueryErrorState'
 import { useConfirm } from '@/components/ConfirmDialog'
 
-import { fmtDatePref, fmtNumber, todayISO, daysLabel } from '@/lib/format'
+import { fmtDatePref, fmtNumber, todayISO, daysLabel, fmtCurrency } from '@/lib/format'
 import { pickFile } from '@/lib/files'
 import { openExternal } from '@/lib/external'
 import { useAuth } from '@/stores/auth'
@@ -198,10 +200,15 @@ export function RequestDetail({ id }: { id: string }) {
       />
       </div>
 
+      {/* ستة فتح الملف — المرحلة الثالثة: العقد والوكالة والدفعة */}
+      <div id="onboarding-card">
+        <OnboardingGateCard request={r} />
+      </div>
+
       {/* الإسناد + القرار */}
       <div className="grid gap-4 md:grid-cols-2">
         <AssignmentCard requestId={r.id} currentName={r.assigned_to_name} />
-        <div id="decision-card"><DecisionCard request={r} evaluations={evaluations} /></div>
+        <div id="decision-card"><DecisionCard request={r} evaluations={evaluations} gates={railGates} /></div>
       </div>
 
       {/* الوصف */}
@@ -226,6 +233,169 @@ export function RequestDetail({ id }: { id: string }) {
       {/* المرفقات */}
       <DocumentsSection requestId={r.id} documents={documents} />
     </div>
+  )
+}
+
+/* ===================== ستة فتح الملف ===================== */
+
+// الوثيقة: «لا يُعد الملف مفتوحاً إلا باستكمال: اعتماد التعارض + KYC +
+// قرار القبول + توقيع العقد + إصدار الوكالة + تحصيل الدفعة المقدمة».
+// الثلاثة الأولى في بوابات الاستقطاب أعلاه — وهذه الثلاثة الباقية.
+function OnboardingGateCard({ request: r }: { request: IncomingRequest }) {
+  const updateM = useUpdateRequest()
+  const [poaRef, setPoaRef] = useState(r.poa_ref ?? '')
+  const [amount, setAmount] = useState(
+    r.advance_amount != null ? String(r.advance_amount) : ''
+  )
+  const set = (input: Partial<IncomingRequestInput>) =>
+    updateM.mutate({ id: r.id, input })
+
+  const doneCount =
+    (r.contract_signed_at ? 1 : 0) +
+    (r.poa_ref ? 1 : 0) +
+    (r.advance_received_at ? 1 : 0)
+
+  return (
+    <Card>
+      <CardHeader className="flex-row items-center gap-2 space-y-0">
+        <Handshake className="h-5 w-5 text-gold" />
+        <CardTitle className="text-base">العقد والوكالة والدفعة</CardTitle>
+        <Badge
+          variant={doneCount === 3 ? 'success' : 'warning'}
+          className="ms-auto"
+        >
+          {fmtNumber(doneCount)} من 3
+        </Badge>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {/* عقد الأتعاب */}
+        <div className="flex items-center gap-3 rounded-xl border border-border/60 p-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium">عقد الأتعاب</p>
+            <p className="text-xs text-muted-foreground">
+              {r.contract_signed_at
+                ? `وُقّع ${fmtDatePref(r.contract_signed_at)}`
+                : 'لم يُوقَّع — نطاق العمل بالدرجة القضائية أهم بنوده'}
+            </p>
+          </div>
+          {r.contract_signed_at ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => set({ contract_signed_at: null })}
+            >
+              تراجع
+            </Button>
+          ) : (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={updateM.isPending}
+              onClick={() => set({ contract_signed_at: todayISO() })}
+            >
+              وُقّع اليوم
+            </Button>
+          )}
+        </div>
+
+        {/* الوكالة */}
+        <div className="flex items-center gap-3 rounded-xl border border-border/60 p-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium">الوكالة الشرعية</p>
+            <p className="text-xs text-muted-foreground">
+              {r.poa_ref ? (
+                <>
+                  رقمها <Ltr>{r.poa_ref}</Ltr> — العقد لا يغني عنها والعكس صحيح
+                </>
+              ) : (
+                'تصدر عبر ناجز — لا تنسَ بند الإنابة وتاريخ الانتهاء'
+              )}
+            </p>
+          </div>
+          {r.poa_ref ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => set({ poa_ref: null })}
+            >
+              تراجع
+            </Button>
+          ) : (
+            <span className="flex shrink-0 items-center gap-1.5">
+              <Input
+                value={poaRef}
+                onChange={(e) => setPoaRef(e.target.value)}
+                placeholder="رقم الوكالة"
+                dir="ltr"
+                className="h-9 w-32 text-left text-sm"
+              />
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={!poaRef.trim() || updateM.isPending}
+                onClick={() => set({ poa_ref: poaRef.trim() })}
+              >
+                حفظ
+              </Button>
+            </span>
+          )}
+        </div>
+
+        {/* الدفعة المقدمة */}
+        <div className="flex items-center gap-3 rounded-xl border border-border/60 p-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium">الدفعة المقدمة</p>
+            <p className="text-xs text-muted-foreground">
+              {r.advance_received_at ? (
+                <>
+                  حُصّلت {fmtDatePref(r.advance_received_at)}
+                  {r.advance_amount != null && (
+                    <> — {fmtCurrency(r.advance_amount)}</>
+                  )}
+                </>
+              ) : (
+                'لا عمل جوهرياً قبل تحصيلها — نص الوثيقة'
+              )}
+            </p>
+          </div>
+          {r.advance_received_at ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() =>
+                set({ advance_received_at: null, advance_amount: null })
+              }
+            >
+              تراجع
+            </Button>
+          ) : (
+            <span className="flex shrink-0 items-center gap-1.5">
+              <Input
+                value={amount}
+                onChange={(e) => setAmount(e.target.value.replace(/[^\d.]/g, ''))}
+                placeholder="المبلغ"
+                dir="ltr"
+                inputMode="decimal"
+                className="h-9 w-24 text-left text-sm"
+              />
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={updateM.isPending}
+                onClick={() =>
+                  set({
+                    advance_received_at: todayISO(),
+                    advance_amount: amount ? Number(amount) : null,
+                  })
+                }
+              >
+                حُصّلت
+              </Button>
+            </span>
+          )}
+        </div>
+      </CardContent>
+    </Card>
   )
 }
 
@@ -344,11 +514,27 @@ function AssignmentCard({
 function DecisionCard({
   request: r,
   evaluations = [],
+  gates,
 }: {
   request: IncomingRequest
   evaluations?: RequestEvaluation[]
+  gates?: GateState
 }) {
   const memoApproved = evaluations.some((e) => e.approved_at)
+  const updateReqM = useUpdateRequest()
+  const [bypassOpen, setBypassOpen] = useState(false)
+  const [bypassWhy, setBypassWhy] = useState('')
+
+  // ستة فتح الملف — نص الوثيقة حرفياً
+  const six: [string, boolean][] = [
+    ['فحص التعارض', !!gates?.conflict && gates.conflict.outcome !== 'reject'],
+    ['العناية الواجبة', !!gates?.kyc?.id_verified],
+    ['قرار القبول', r.status === 'accepted'],
+    ['عقد الأتعاب', !!r.contract_signed_at],
+    ['الوكالة', !!r.poa_ref],
+    ['الدفعة المقدمة', !!r.advance_received_at],
+  ]
+  const missingSix = six.filter(([, ok]) => !ok).map(([n]) => n)
   const requestId = r.id
   const { status, decision_at: decisionAt, decision_by: decisionBy } = r
   const rejectionReason = r.rejection_reason
@@ -374,25 +560,47 @@ function DecisionCard({
 
   const pendingStatus = decideM.isPending ? decideM.variables?.status : null
 
+  const reallyConvert = (bypassReason?: string) => {
+    createCaseM
+      .mutateAsync({
+        title: r.client_name,
+        contact_id: r.client_id ?? null,
+        subject: r.description ?? null,
+        open_date: todayISO(),
+      })
+      .then(async (c) => {
+        // التحويل يسجّل نفسه — كان ينشئ القضية ويترك الطلب بلا أثر
+        await updateReqM.mutateAsync({
+          id: r.id,
+          input: {
+            converted_to_type: 'case',
+            converted_to_id: c.id,
+            converted_at: new Date().toISOString(),
+            ...(bypassReason
+              ? { conversion_bypass_reason: bypassReason }
+              : {}),
+          },
+        })
+        navigate(`/cases/${c.id}`)
+      })
+      .catch(() => {
+        /* الفشل يعرضه onError عبر toast */
+      })
+  }
+
   const convertToCase = () => {
+    if (missingSix.length > 0) {
+      // الوثيقة: لا يُعد الملف مفتوحاً إلا باكتمال الستة — تجاوزٌ يشهد
+      setBypassWhy('')
+      setBypassOpen(true)
+      return
+    }
     confirm({
-      title: 'تحويل الطلب لقضية',
-      description: `ستُنشأ قضية جديدة باسم «${r.client_name}» ببيانات الطلب، وتُنقل لصفحتها لإكمال بياناتها.`,
-      confirmLabel: 'تحويل',
+      title: 'فتح الملف',
+      description: `الستة مكتملة — ستُنشأ قضية باسم «${r.client_name}» وتُنقل لصفحتها.`,
+      confirmLabel: 'افتح الملف',
       destructive: false,
-      onConfirm: () => {
-        createCaseM
-          .mutateAsync({
-            title: r.client_name,
-            contact_id: r.client_id ?? null,
-            subject: r.description ?? null,
-            open_date: todayISO(),
-          })
-          .then((c) => navigate(`/cases/${c.id}`))
-          .catch(() => {
-            /* الفشل يعرضه onError في useCreateCase عبر toast */
-          })
-      },
+      onConfirm: () => reallyConvert(),
     })
   }
 
@@ -493,6 +701,46 @@ function DecisionCard({
       </CardContent>
 
       {dialog}
+
+      {/* بوابة الستة: التجاوز يشهد */}
+      <Dialog open={bypassOpen} onOpenChange={setBypassOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>فتح الملف قبل اكتمال الستة</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            الوثيقة: «لا يُعد الملف مفتوحاً إلا باستكمال الستة». الناقص:
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {missingSix.map((n) => (
+              <Badge key={n} variant="warning">
+                ○ {n}
+              </Badge>
+            ))}
+          </div>
+          <Textarea
+            value={bypassWhy}
+            onChange={(e) => setBypassWhy(e.target.value)}
+            rows={2}
+            placeholder="ليش تفتحه الآن؟ — يُسجَّل بنصّك على الطلب"
+          />
+          <div className="flex justify-start gap-2">
+            <Button
+              variant="gold"
+              disabled={!bypassWhy.trim() || createCaseM.isPending}
+              onClick={() => {
+                setBypassOpen(false)
+                reallyConvert(bypassWhy.trim())
+              }}
+            >
+              أكمل على مسؤوليتي
+            </Button>
+            <Button variant="ghost" onClick={() => setBypassOpen(false)}>
+              إلغاء
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* نافذة سبب الرفض */}
       <Dialog open={rejectOpen} onOpenChange={setRejectOpen}>
