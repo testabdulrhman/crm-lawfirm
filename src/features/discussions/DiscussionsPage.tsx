@@ -303,11 +303,32 @@ export function DiscussionsPage() {
   const { data: channels, isLoading, error, refetch } = useDiscussions()
   const markRead = useMarkRead()
 
-  // أول فتح: العامة إن لا رسائل، وإلا الأحدث نشاطاً
+  // أول فتح: وجهة الإشعار إن وُجدت (منشن ← نقاشه هو)، وإلا الأحدث نشاطاً
   useEffect(() => {
     if (selected !== undefined || !channels?.length) return
+    let fromNotif: string | null = null
+    try {
+      fromNotif = sessionStorage.getItem('discussions:open-case')
+      if (fromNotif) sessionStorage.removeItem('discussions:open-case')
+    } catch {
+      /* تخزين معطّل */
+    }
+    if (fromNotif && channels.some((c) => c.case_id === fromNotif)) {
+      setSelected(fromNotif)
+      return
+    }
     setSelected(channels[0].case_id)
   }, [channels, selected])
+
+  // الصفحة مفتوحة والجرس ضُغط؟ الحدث الحي ينقلنا بلا إعادة تركيب
+  useEffect(() => {
+    const onOpen = (e: Event) => {
+      const id = (e as CustomEvent<string>).detail
+      if (id) setSelected(id)
+    }
+    window.addEventListener('discussions:open-case', onOpen)
+    return () => window.removeEventListener('discussions:open-case', onOpen)
+  }, [])
 
   useEffect(() => {
     if (selected === undefined) return

@@ -12,6 +12,8 @@ struct TasksView: View {
     @State private var loading = true
     @State private var loadedOnce = false
     @State private var errorMessage: String?
+    @ObservedObject private var router = PushRouter.shared
+    @State private var pushedTask: TaskRow?
 
     var body: some View {
         NavigationStack {
@@ -37,9 +39,17 @@ struct TasksView: View {
             .background(Theme.ivory)
             .navigationTitle("المهام")
             .onAppear { Usage.shared.screen("المهام") }
+            // إشعار مهمة؟ اجلبها وافتح غرفتها (بلاغ المستخدم 2026-08-30)
+            .navigationDestination(item: $pushedTask) { t in
+                TaskDetailView(task: t)
+            }
+            .onChange(of: router.route) { _, _ in
+                Task { await openFromPush() }
+            }
             // تغيير النطاق يعيد تشغيل المهمة تلقائياً لأن التصفية تتم من الخادم
             .task(id: mineOnly) {
                 await load(showSpinner: true)
+                await openFromPush()
             }
             .onAppear {
                 // عند الرجوع من التفاصيل قد تكون مهمة أُنجزت — نحدّث بصمت
@@ -74,6 +84,12 @@ struct TasksView: View {
                 }
             }
         }
+    }
+
+    private func openFromPush() async {
+        guard let tid = router.taskId else { return }
+        router.clear()
+        pushedTask = try? await sb.task(id: tid)
     }
 
     private func load(showSpinner: Bool) async {

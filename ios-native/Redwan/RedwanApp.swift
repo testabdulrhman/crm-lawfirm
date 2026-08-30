@@ -81,6 +81,18 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     ) async -> UNNotificationPresentationOptions {
         [.banner, .sound, .badge]
     }
+
+    // نقرة الإشعار: الحمولة تحمل route — نسلّمه للجسر فتفتح الشاشة الصحيحة
+    // (كان النقر يفتح التطبيق فقط — بلاغ المستخدم 2026-08-30)
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse
+    ) async {
+        let info = response.notification.request.content.userInfo
+        if let route = info["route"] as? String, route.hasPrefix("/") {
+            await MainActor.run { PushRouter.shared.route = route }
+        }
+    }
 }
 
 struct RootView: View {
@@ -100,16 +112,32 @@ struct RootView: View {
 }
 
 struct MainTabs: View {
+    @ObservedObject private var router = PushRouter.shared
+    @State private var tab = 0
+
     var body: some View {
-        TabView {
+        TabView(selection: $tab) {
             HomeView()
                 .tabItem { Label("الرئيسية", systemImage: "house.fill") }
+                .tag(0)
             TasksView()
                 .tabItem { Label("المهام", systemImage: "checklist") }
+                .tag(1)
             CalendarView()
                 .tabItem { Label("التقويم", systemImage: "calendar") }
+                .tag(2)
             DiscussionsView()
                 .tabItem { Label("النقاشات", systemImage: "bubble.left.and.bubble.right.fill") }
+                .tag(3)
         }
+        // مسار الإشعار يقلب التبويب — والشاشة نفسها تفتح وجهتها ثم تصفّر الجسر
+        .onChange(of: router.route) { _, r in switchTab(for: r) }
+        .task { switchTab(for: router.route) }
+    }
+
+    private func switchTab(for route: String?) {
+        guard let r = route else { return }
+        if r.hasPrefix("/tasks/") { tab = 1 }
+        else if r.hasPrefix("/discussions") || r.hasPrefix("/cases/") { tab = 3 }
     }
 }

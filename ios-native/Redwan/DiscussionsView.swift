@@ -58,6 +58,7 @@ struct DiscussionsView: View {
     @State private var search = ""
     @State private var showNewDiscussion = false
     @State private var pickedMatter: MatterLite?
+    @ObservedObject private var router = PushRouter.shared
 
     /// العامة مثبّتة أولاً دائماً — ثم البقية بالأحدث (ترتيب الدالة)
     private var filtered: [DiscussionRow] {
@@ -139,7 +140,19 @@ struct DiscussionsView: View {
                 CaseStreamView(caseId: m.id, title: m.title ?? m.office_num ?? "ملف")
             }
         }
-        .task { await load() }
+        .task {
+            await load()
+            openFromPush()
+        }
+        .onChange(of: router.route) { _, _ in openFromPush() }
+    }
+
+    /// منشن وصل إشعاره؟ افتح نقاش قضيته مباشرة (بلاغ المستخدم 2026-08-30)
+    private func openFromPush() {
+        guard let cid = router.discussionCaseId else { return }
+        router.clear()
+        let title = rows.first { $0.case_id == cid }?.case_title
+        pickedMatter = MatterLite(id: cid, title: title ?? "ملف", office_num: nil, kind: nil)
     }
 
     private func load() async {

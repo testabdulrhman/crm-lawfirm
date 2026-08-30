@@ -155,6 +155,18 @@ struct LoginView: View {
     // MARK: - حقول رمز التحقق
 
     private var otpFields: some View {
+        otpFieldsBody
+            // اكتمل الجوال (10 أرقام)؟ أرسل الرمز وانتقل — بلا زر
+            .onChange(of: phone) { _, v in
+                if !codeSent, !busy, v.filter(\.isNumber).count >= 10 { submit() }
+            }
+            // اكتمل الرمز (6 أرقام)؟ تحقّق فوراً
+            .onChange(of: code) { _, v in
+                if codeSent, !busy, v.filter(\.isNumber).count >= 6 { submit() }
+            }
+    }
+
+    private var otpFieldsBody: some View {
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 6) {
                 Text("رقم الجوال")

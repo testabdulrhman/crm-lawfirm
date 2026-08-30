@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -204,10 +204,14 @@ function OtpForm() {
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
 
-  const sendCode = async () => {
+  // آخر رقم أُرسل له تلقائياً — يمنع التكرار أثناء الكتابة/اللصق
+  const autoSentFor = useRef('')
+  const autoVerifiedFor = useRef('')
+
+  const sendCode = async (raw?: string) => {
     setError(null)
     setInfo(null)
-    const p = phone.trim()
+    const p = (raw ?? phone).trim()
     if (p.replace(/\D/g, '').length < 9) {
       setError('أدخل رقم جوال صحيح.')
       return
@@ -217,6 +221,7 @@ function OtpForm() {
       const { error: err } = await supabase.functions.invoke('staff-login-otp', {
         body: { action: 'send', phone: p },
       })
+      setPhone(p)
       if (err) throw err
       setStep('code')
       setInfo('إن كان الرقم مسجّلاً لموظف، فسيصلك رمز عبر رسالة نصية.')
@@ -227,9 +232,9 @@ function OtpForm() {
     }
   }
 
-  const verifyCode = async () => {
+  const verifyCode = async (raw?: string) => {
     setError(null)
-    const c = code.trim()
+    const c = (raw ?? code).trim()
     if (c.length < 4) {
       setError('أدخل الرمز المرسَل.')
       return
@@ -270,7 +275,16 @@ function OtpForm() {
             placeholder="05XXXXXXXX"
             autoComplete="tel"
             value={phone}
-            onChange={(e) => setPhone(e.target.value)}
+            onChange={(e) => {
+              const v = e.target.value
+              setPhone(v)
+              // اكتمل الرقم؟ أرسل وانتقل — بلا زر (طلب المستخدم 2026-08-30)
+              const digits = v.replace(/\D/g, '')
+              if (digits.length >= 10 && !busy && autoSentFor.current !== digits) {
+                autoSentFor.current = digits
+                void sendCode(v)
+              }
+            }}
             onKeyDown={(e) => e.key === 'Enter' && sendCode()}
           />
           <p className="text-xs text-muted-foreground">
@@ -289,7 +303,7 @@ function OtpForm() {
           variant="gold"
           className="w-full"
           disabled={busy}
-          onClick={sendCode}
+          onClick={() => sendCode()}
         >
           {busy && <Loader2 className="h-4 w-4 animate-spin" />}
           إرسال الرمز
@@ -311,8 +325,17 @@ function OtpForm() {
           className="text-center text-lg tracking-[0.4em]"
           placeholder="••••••"
           maxLength={8}
+          autoFocus
           value={code}
-          onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+          onChange={(e) => {
+            const v = e.target.value.replace(/\D/g, '')
+            setCode(v)
+            // 6 أرقام = الرمز كامل — تحقّق فوري بلا زر
+            if (v.length >= 6 && !busy && autoVerifiedFor.current !== v) {
+              autoVerifiedFor.current = v
+              void verifyCode(v)
+            }
+          }}
           onKeyDown={(e) => e.key === 'Enter' && verifyCode()}
         />
         {info && <p className="text-xs text-muted-foreground">{info}</p>}
@@ -329,7 +352,7 @@ function OtpForm() {
         variant="gold"
         className="w-full"
         disabled={busy}
-        onClick={verifyCode}
+        onClick={() => verifyCode()}
       >
         {busy && <Loader2 className="h-4 w-4 animate-spin" />}
         دخول

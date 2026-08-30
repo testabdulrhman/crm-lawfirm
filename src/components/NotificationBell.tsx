@@ -55,7 +55,21 @@ function destination(n: AppNotification): string {
   // إشعار مرتبط بمهمة يفتح غرفتها مباشرة — أدق من صفحة القضية
   if (n.task_id) return `/tasks/${n.task_id}`
   // منشن في نقاش: إلى النقاشات نفسها (العامة إن بلا ملف)
-  if (n.type === 'mention') return '/discussions'
+  if (n.type === 'mention') {
+    // منشن في قضية؟ افتح نقاشها هي لا القائمة (جسر التخزين + حدث حي
+    // إن كانت الصفحة مفتوحة أصلاً فلا يعاد تركيبها)
+    if (n.case_id) {
+      try {
+        sessionStorage.setItem('discussions:open-case', n.case_id)
+        window.dispatchEvent(
+          new CustomEvent('discussions:open-case', { detail: n.case_id })
+        )
+      } catch {
+        /* تخزين معطّل */
+      }
+    }
+    return '/discussions'
+  }
   if (n.case_id) return `/cases/${n.case_id}`
   switch (n.type) {
     case 'task_assigned':

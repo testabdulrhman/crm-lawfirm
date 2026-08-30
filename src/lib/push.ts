@@ -53,7 +53,8 @@ export async function registerPush(
       'pushNotificationActionPerformed',
       (action) => {
         const route = (action.notification.data as Record<string, unknown>)?.route
-        if (typeof route === 'string' && route.startsWith('/')) onOpenRoute(route)
+        if (typeof route === 'string' && route.startsWith('/'))
+          onOpenRoute(resolvePushRoute(route))
       }
     )
 
@@ -93,4 +94,21 @@ export async function tapFeedback(
   } catch {
     /* الاهتزاز تحسين لا شرط */
   }
+}
+
+/**
+ * مسار الدفع قد يحمل وجهة داخل صفحة (نقاش قضية بعينها). التوجيه الهاشي
+ * لا يمرر query عبر المسارات، فنحوّلها إلى جسر sessionStorage تقرؤه الصفحة.
+ */
+export function resolvePushRoute(route: string): string {
+  const m = route.match(/^\/discussions\?case=([0-9a-f-]+)$/)
+  if (m) {
+    try {
+      sessionStorage.setItem('discussions:open-case', m[1])
+    } catch {
+      /* تخزين معطّل — تفتح القائمة على الأحدث */
+    }
+    return '/discussions'
+  }
+  return route
 }
