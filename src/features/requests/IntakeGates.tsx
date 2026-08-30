@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   ShieldAlert,
   ShieldCheck,
@@ -73,6 +73,17 @@ export function IntakeGatesCard({
   const gates = useIntakeGates(requestId)
   const [conflictOpen, setConflictOpen] = useState(false)
   const [kycOpen, setKycOpen] = useState(false)
+
+  // زر «الخطوة التالية» في شريط المسار يفتح النافذة المطلوبة مباشرة
+  useEffect(() => {
+    const onOpen = (e: Event) => {
+      const which = (e as CustomEvent<string>).detail
+      if (which === 'conflict') setConflictOpen(true)
+      if (which === 'kyc') setKycOpen(true)
+    }
+    window.addEventListener('gates:open', onOpen)
+    return () => window.removeEventListener('gates:open', onOpen)
+  }, [])
 
   return (
     <Card>

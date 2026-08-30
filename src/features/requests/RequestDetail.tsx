@@ -24,6 +24,8 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { IntakeGatesCard } from './IntakeGates'
+import { RequestRail } from './RequestRail'
+import { useIntakeGates } from '@/hooks/useIntakeGates'
 import { useApproveEvaluation } from '@/hooks/useRequests'
 import { RISK_LEVELS } from './EvaluationForm'
 import {
@@ -82,6 +84,7 @@ import type {
 export function RequestDetail({ id }: { id: string }) {
   const [, navigate] = useLocation()
   const { data, isLoading, isError, error, refetch } = useRequest(id)
+  const railGates = useIntakeGates(id)
 
   if (isLoading) {
     return (
@@ -115,7 +118,7 @@ export function RequestDetail({ id }: { id: string }) {
       </Button>
 
       {/* الرأس */}
-      <Card>
+      <Card id="request-head">
         <CardContent className="space-y-3 p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
@@ -155,18 +158,23 @@ export function RequestDetail({ id }: { id: string }) {
         </CardContent>
       </Card>
 
+      {/* شريط المسار الموجّه — بوصلة الدورة، لا قفل (اختيار المستخدم 2026-08-30) */}
+      <RequestRail request={r} gates={railGates} evaluations={evaluations} />
+
       {/* بوابات الاستقطاب — تسبق القرار في ترتيب الوثيقة */}
+      <div id="intake-gates">
       <IntakeGatesCard
         requestId={r.id}
         clientName={r.client_name}
         opponentName={(r as any).opponent_name ?? null}
         evaluations={evaluations}
       />
+      </div>
 
       {/* الإسناد + القرار */}
       <div className="grid gap-4 md:grid-cols-2">
         <AssignmentCard requestId={r.id} currentName={r.assigned_to_name} />
-        <DecisionCard request={r} evaluations={evaluations} />
+        <div id="decision-card"><DecisionCard request={r} evaluations={evaluations} /></div>
       </div>
 
       {/* الوصف */}
