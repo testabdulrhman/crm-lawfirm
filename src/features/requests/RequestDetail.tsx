@@ -30,8 +30,8 @@ import { IntakeGatesCard } from './IntakeGates'
 import { RequestRail } from './RequestRail'
 import { Ltr } from '@/components/Ltr'
 import { cn } from '@/lib/utils'
-import { useIntakeGates } from '@/hooks/useIntakeGates'
-import { useApproveEvaluation } from '@/hooks/useRequests'
+import { useIntakeGates, type GateState } from '@/hooks/useIntakeGates'
+import { useApproveEvaluation, useUpdateRequest } from '@/hooks/useRequests'
 import { RISK_LEVELS } from './EvaluationForm'
 import {
   Dialog,
