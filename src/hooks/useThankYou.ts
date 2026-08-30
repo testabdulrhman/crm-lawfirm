@@ -4,7 +4,7 @@ import { useMutation } from '@tanstack/react-query'
 
 import { supabase } from '@/lib/supabase'
 import { normalizeSaudiPhone } from '@/lib/format'
-import { getTemplate, fillTemplate } from '@/lib/templates'
+import { getTemplateVariants, fillTemplate } from '@/lib/templates'
 import { useAuth } from '@/stores/auth'
 
 export interface ThankYouResult {
@@ -35,19 +35,23 @@ export function useSendThankYou() {
       if (intl.length !== 12 || !intl.startsWith('9665'))
         throw new Error('رقم جوال غير صحيح — أدخل رقماً سعوديّاً مثل 0501234567')
 
-      const body = await getTemplate('appt_thankyou')
-      if (!body)
+      const variants = await getTemplateVariants('appt_thankyou')
+      if (!variants?.sms)
         throw new Error('قالب «شكر بعد الموعد» غير موجود — راجع الإعدادات ← القوالب')
 
       const name = await lookupName(intl)
       const display = name ?? 'عميلنا الكريم'
-      const message = fillTemplate(body, { name: display })
+      // لكل قناة نصّها من القالب (والواتساب الفارغ يرث نص النصية)
+      const message = fillTemplate(variants.sms, { name: display })
+      const waMessage = fillTemplate(variants.whatsapp ?? variants.sms, {
+        name: display,
+      })
 
       // القناتان بالتوازي: فشل إحداهما لا يمنع الأخرى
       const [whatsapp, sms] = await Promise.all([
         supabase.functions
           .invoke('whatsapp-send', {
-            body: { phone: intl, message, recipient_name: display },
+            body: { phone: intl, message: waMessage, recipient_name: display },
           })
           .then((r) => !r.error && r.data?.success === true)
           .catch(() => false),

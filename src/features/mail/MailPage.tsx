@@ -36,6 +36,14 @@ import { arNorm } from '@/lib/arabic'
 import { useAuth } from '@/stores/auth'
 import { useContacts } from '@/hooks/useContacts'
 import { useCases } from '@/hooks/useCases'
+import { useMessageTemplates } from '@/hooks/useMessageTemplates'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import {
   useEmailMessages,
   useSendEmail,
@@ -322,6 +330,7 @@ function ComposeForm({
 }) {
   const { teamMember } = useAuth()
   const { data: contacts } = useContacts()
+  const { data: templates } = useMessageTemplates()
   const sendM = useSendEmail()
 
   const [contactId, setContactId] = useState<string | null>(
@@ -331,6 +340,14 @@ function ComposeForm({
   const [subject, setSubject] = useState(initial?.subject ?? '')
   const [text, setText] = useState('')
   const [error, setError] = useState<string | null>(null)
+
+  // اختيار قالب يعبّئ الموضوع والنص بنسخة البريد (والفارغة ترث نص النصية)
+  const applyTemplate = (id: string) => {
+    const t = (templates ?? []).find((x) => x.id === id)
+    if (!t) return
+    setSubject(t.email_subject || t.name || '')
+    setText(t.body_email || t.body || '')
+  }
 
   // جهات الاتصال التي لديها بريد فقط — اختيارها يعبّئ حقل «إلى»
   const withEmail = useMemo(
@@ -397,6 +414,23 @@ function ComposeForm({
             onChange={(e) => setTo(e.target.value)}
           />
         </div>
+        {(templates ?? []).length > 0 && (
+          <div className="space-y-1.5">
+            <Label>قالب جاهز (اختياري — يعبّئ الموضوع والنص)</Label>
+            <Select onValueChange={applyTemplate}>
+              <SelectTrigger>
+                <SelectValue placeholder="بدون قالب — كتابة حرة" />
+              </SelectTrigger>
+              <SelectContent>
+                {(templates ?? []).map((t) => (
+                  <SelectItem key={t.id} value={t.id}>
+                    {t.name || t.key}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
         <div className="space-y-1.5">
           <Label htmlFor="mail_subject">الموضوع</Label>
           <Input
