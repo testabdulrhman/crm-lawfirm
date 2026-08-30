@@ -82,6 +82,7 @@ import { EvaluationForm } from './EvaluationForm'
 import { statusBadgeVariant, statusLabel, typeLabel, CAPACITY_LABELS, criticalKindLabel } from './labels'
 import type {
   IncomingRequest,
+  IncomingRequestInput,
   RequestDocument,
   RequestEvaluation,
 } from '@/types/db'
