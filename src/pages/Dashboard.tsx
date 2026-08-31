@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { useLocation } from 'wouter'
 import {
   Scale,
@@ -107,6 +108,36 @@ export default function Dashboard() {
     teamMember?.id
   )
   const { data: approvals } = usePendingApprovals(teamMember?.id, isDirector)
+
+  // «القادم»: الجلسات والمواعيد بعد اليوم في خيط زمني واحد —
+  // ما يخص اليوم يعيش في «جدول اليوم» فلا يُكرر هنا (قرار دمج 2026-08-31)
+  type UpcomingItem =
+    | { kind: 'session'; date: string; time: string | null; s: DashSession }
+    | { kind: 'appointment'; date: string; time: string | null; ap: DashAppointment }
+  const upcoming = useMemo<UpcomingItem[]>(() => {
+    const today = todayISO()
+    const items: UpcomingItem[] = [
+      ...(data?.upcoming_sessions ?? [])
+        .filter((x) => (x.session_date ?? '') > today)
+        .map((x) => ({
+          kind: 'session' as const,
+          date: x.session_date!,
+          time: x.session_time,
+          s: x,
+        })),
+      ...(data?.appointments ?? [])
+        .filter((x) => (x.appointment_date ?? '') > today)
+        .map((x) => ({
+          kind: 'appointment' as const,
+          date: x.appointment_date!,
+          time: x.appointment_time,
+          ap: x,
+        })),
+    ]
+    return items.sort((a, b) =>
+      `${a.date} ${a.time ?? '99'}`.localeCompare(`${b.date} ${b.time ?? '99'}`)
+    )
+  }, [data])
 
   // تحية بتوقيتها — لمسة البطل
   const hour = new Date().getHours()
@@ -276,27 +307,37 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* القسمان الأبرز: الجلسات + المهام */}
+      {/* القسمان الأبرز: القادم (جلسات+مواعيد مدمجة) + المهام */}
       <div className="grid gap-5 lg:grid-cols-2">
-        {/* 📅 الجلسات القادمة */}
+        {/* 🗓️ القادم — كل التزام بوقت بعد اليوم، محاكم ولقاءات، خيطاً واحداً */}
         <SectionCard
-          icon={CalendarDays}
-          title="الجلسات القادمة"
-          count={data?.upcoming_sessions?.length}
+          icon={CalendarClock}
+          title="القادم"
+          count={upcoming.length}
           loading={isLoading}
         >
-          {(data?.upcoming_sessions ?? []).length === 0 ? (
-            <Empty icon={CalendarDays} text="لا جلسات قادمة" />
+          {upcoming.length === 0 ? (
+            <Empty icon={CalendarClock} text="لا التزامات بعد اليوم — جدول اليوم فوق" />
           ) : (
-            (data?.upcoming_sessions ?? []).map((x) => (
-              <SessionRow
-                key={x.id}
-                s={x}
-                onClick={() =>
-                  navigate(x.case_id ? `/cases/${x.case_id}` : '/sessions')
-                }
-              />
-            ))
+            upcoming.map((it) =>
+              it.kind === 'session' ? (
+                <SessionRow
+                  key={`s-${it.s.id}`}
+                  s={it.s}
+                  tag="جلسة"
+                  onClick={() =>
+                    navigate(it.s.case_id ? `/cases/${it.s.case_id}` : '/sessions')
+                  }
+                />
+              ) : (
+                <AppointmentRow
+                  key={`a-${it.ap.id}`}
+                  ap={it.ap}
+                  tag="موعد"
+                  onClick={() => navigate('/appointments')}
+                />
+              )
+            )
           )}
         </SectionCard>
 
@@ -323,21 +364,8 @@ export default function Dashboard() {
         </SectionCard>
       </div>
 
-      {/* أقسام ثانوية */}
+      {/* أقسام إدارية — «المكتب» فقط */}
       <div className="grid gap-5 lg:grid-cols-2">
-        {/* المواعيد القادمة — تظهر إن وُجدت (في كلا النطاقين) */}
-        {(data?.appointments ?? []).length > 0 && (
-          <SectionCard icon={CalendarClock} title="المواعيد القادمة" loading={false}>
-            {(data?.appointments ?? []).map((ap) => (
-              <AppointmentRow
-                key={ap.id}
-                ap={ap}
-                onClick={() => navigate('/appointments')}
-              />
-            ))}
-          </SectionCard>
-        )}
-
         {/* الإدارية — «المكتب» (المدير) فقط */}
         {isAll && (
           <>
@@ -752,7 +780,7 @@ function MetaChip({
 }: {
   icon?: LucideIcon
   children: React.ReactNode
-  tone?: 'plain' | 'warn' | 'danger'
+  tone?: 'plain' | 'warn' | 'danger' | 'gold'
 }) {
   return (
     <span
@@ -762,7 +790,9 @@ function MetaChip({
           ? 'bg-destructive/10 text-destructive'
           : tone === 'warn'
             ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
-            : 'bg-muted text-muted-foreground'
+            : tone === 'gold'
+              ? 'bg-gold/15 text-gold-700 dark:text-gold'
+              : 'bg-muted text-muted-foreground'
       )}
     >
       {Icon && <Icon className="h-3 w-3 shrink-0" />}
@@ -935,7 +965,7 @@ function SessionsNeedClosureSection({ scope }: { scope: DashboardScope }) {
 
 /* ===================== صفوف ===================== */
 
-function SessionRow({ s, onClick }: { s: DashSession; onClick: () => void }) {
+function SessionRow({ s, onClick, tag }: { s: DashSession; onClick: () => void; tag?: string }) {
   const days = daysFromToday(s.session_date)
   const soon = days != null && days <= 2
   return (
@@ -950,6 +980,7 @@ function SessionRow({ s, onClick }: { s: DashSession; onClick: () => void }) {
             <p className="mt-0.5 truncate text-xs text-muted-foreground">{s.title}</p>
           )}
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            {tag && <MetaChip tone="gold">{tag}</MetaChip>}
             <MetaChip icon={CalendarDays}>{fmtDatePref(s.session_date)}</MetaChip>
             {s.session_time && (
               <MetaChip icon={Clock}>{fmtTime(s.session_time)}</MetaChip>
@@ -1088,7 +1119,7 @@ function RequestRow({ r, onClick }: { r: DashRequest; onClick: () => void }) {
   )
 }
 
-function AppointmentRow({ ap, onClick }: { ap: DashAppointment; onClick: () => void }) {
+function AppointmentRow({ ap, onClick, tag }: { ap: DashAppointment; onClick: () => void; tag?: string }) {
   return (
     <RowShell onClick={onClick}>
       <div className="flex items-center gap-3.5">
@@ -1098,6 +1129,7 @@ function AppointmentRow({ ap, onClick }: { ap: DashAppointment; onClick: () => v
             {ap.client_name || 'موعد'}
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            {tag && <MetaChip>{tag}</MetaChip>}
             <MetaChip icon={CalendarClock}>{fmtDatePref(ap.appointment_date)}</MetaChip>
             {ap.appointment_time && (
               <MetaChip icon={Clock}>{fmtTime(ap.appointment_time)}</MetaChip>
