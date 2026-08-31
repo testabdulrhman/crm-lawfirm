@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useLocation } from 'wouter'
 import {
   Scale,
@@ -319,7 +319,7 @@ export default function Dashboard() {
           {upcoming.length === 0 ? (
             <Empty icon={CalendarClock} text="لا التزامات بعد اليوم — جدول اليوم فوق" />
           ) : (
-            upcoming.map((it) =>
+            upcoming.slice(0, 5).map((it) =>
               it.kind === 'session' ? (
                 <SessionRow
                   key={`s-${it.s.id}`}
@@ -339,6 +339,12 @@ export default function Dashboard() {
               )
             )
           )}
+          {upcoming.length > 5 && (
+            <MoreBtn
+              label={`كل القادم (${fmtNumber(upcoming.length)}) — التقويم`}
+              onClick={() => navigate('/calendar')}
+            />
+          )}
         </SectionCard>
 
         {/* ✅ المهام */}
@@ -351,7 +357,7 @@ export default function Dashboard() {
           {(data?.tasks ?? []).length === 0 ? (
             <Empty icon={ListTodo} text="لا مهام عليك 🎉" />
           ) : (
-            (data?.tasks ?? []).map((t) => (
+            (data?.tasks ?? []).slice(0, 5).map((t) => (
               <CompletableTaskRow
                 key={t.id}
                 t={t}
@@ -360,6 +366,12 @@ export default function Dashboard() {
                 onOpen={() => navigate(`/tasks/${t.id}`)}
               />
             ))
+          )}
+          {(data?.tasks ?? []).length > 5 && (
+            <MoreBtn
+              label={`كل المهام (${fmtNumber((data?.tasks ?? []).length)})`}
+              onClick={() => navigate('/tasks')}
+            />
           )}
         </SectionCard>
       </div>
@@ -834,7 +846,9 @@ function Empty({ text, icon: Icon }: { text: string; icon?: LucideIcon }) {
 // السرد مُقنَّن (narrate=true فقط وبسقف صغير): سردٌ كثير = سجلّ لا يُقرأ.
 function WhileYouWereBusy() {
   const [, navigate] = useLocation()
-  const { data: rows = [], isError, error } = useRecentNarrations(5)
+  const { data: all = [], isError, error } = useRecentNarrations(5)
+  const [showAll, setShowAll] = useState(false)
+  const rows = showAll ? all : all.slice(0, 3)
   if (isError)
     return (
       <Panel icon={Sparkles} title="بينما كنت مشغولاً">
@@ -843,7 +857,7 @@ function WhileYouWereBusy() {
         </p>
       </Panel>
     )
-  if (!rows.length) return null
+  if (!all.length) return null
 
   return (
     <Panel icon={Sparkles} title="بينما كنت مشغولاً" hint="آخر 48 ساعة">
@@ -859,6 +873,12 @@ function WhileYouWereBusy() {
           )}
         </RowShell>
       ))}
+      {!showAll && all.length > 3 && (
+        <MoreBtn
+          label={`عرض الكل (${fmtNumber(all.length)})`}
+          onClick={() => setShowAll(true)}
+        />
+      )}
     </Panel>
   )
 }
@@ -871,11 +891,13 @@ function WhileYouWereBusy() {
 function DeadlinesPanel() {
   const [, navigate] = useLocation()
   const { data: o } = useDeadlinesOverview()
-  const { data: rows = [] } = useDeadlines(5)
+  const { data: all = [] } = useDeadlines(5)
   const confirm = useConfirmDeadline()
+  const [showAll, setShowAll] = useState(false)
 
   // لا نعرض القسم إن لم تكن هناك مهلة مفتوحة أصلاً
-  if (!o || rows.length === 0) return null
+  if (!o || all.length === 0) return null
+  const rows = showAll ? all : all.slice(0, 3)
   const alarming = o.overdue > 0
 
   return (
@@ -929,6 +951,12 @@ function DeadlinesPanel() {
           </RowShell>
         )
       })}
+      {!showAll && all.length > 3 && (
+        <MoreBtn
+          label={`عرض كل المهل (${fmtNumber(all.length)})`}
+          onClick={() => setShowAll(true)}
+        />
+      )}
     </Panel>
   )
 }
@@ -938,8 +966,10 @@ function DeadlinesPanel() {
 function SessionsNeedClosureSection({ scope }: { scope: DashboardScope }) {
   const [, navigate] = useLocation()
   const { data } = useSessionsNeedClosure(scope)
-  const list = data ?? []
-  if (list.length === 0) return null // تنبيه يظهر فقط عند وجود جلسات
+  const all = data ?? []
+  const [showAll, setShowAll] = useState(false)
+  if (all.length === 0) return null // تنبيه يظهر فقط عند وجود جلسات
+  const list = showAll ? all : all.slice(0, 2)
 
   return (
     <Panel
@@ -959,7 +989,27 @@ function SessionsNeedClosureSection({ scope }: { scope: DashboardScope }) {
           </p>
         </RowShell>
       ))}
+      {!showAll && all.length > 2 && (
+        <MoreBtn
+          label={`عرض الكل (${fmtNumber(all.length)})`}
+          onClick={() => setShowAll(true)}
+        />
+      )}
     </Panel>
+  )
+}
+
+// ذيل موحّد للبطاقات الطويلة — أول القائمة يكفي والباقي بضغطة
+function MoreBtn({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="mt-1 flex w-full items-center justify-center gap-1 rounded-xl py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-card hover:text-foreground"
+    >
+      {label}
+      <ChevronLeft className="h-3.5 w-3.5" />
+    </button>
   )
 }
 
