@@ -30,7 +30,6 @@ import {
 import { useAuth } from '@/stores/auth'
 import { useIsDirector } from '@/hooks/useIsDirector'
 import { usePageState } from '@/hooks/usePageState'
-import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
@@ -109,49 +108,132 @@ export default function Dashboard() {
   )
   const { data: approvals } = usePendingApprovals(teamMember?.id, isDirector)
 
+  // تحية بتوقيتها — لمسة البطل
+  const hour = new Date().getHours()
+  const greeting = hour < 12 ? 'صباح الخير' : hour < 17 ? 'مساء الخير' : 'مساء النور'
+
   return (
     <div className="mx-auto max-w-6xl space-y-5">
-      {/* ===== الترحيب + التبويب ===== */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="min-w-0">
-          <h2 className="text-2xl font-bold tracking-tight text-foreground">
-            {teamMember?.name ? `مرحباً، ${teamMember.name}` : 'مرحباً بك'}
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {fmtDatePref(todayISO())}
-          </p>
+      {/* ===== لوحة البطل — الافتتاحية: هوية كحلية، سدو ذهبي، والمؤشرات مدمجة ===== */}
+      <div className="relative overflow-hidden rounded-3xl bg-navy bg-[linear-gradient(130deg,#1a2a55_0%,#111D3A_52%,#0c142d_100%)] p-6 text-white shadow-[0_10px_34px_-12px_rgba(17,29,58,0.55)] sm:p-7">
+        {/* نقش سدو خافت — معيّنات متداخلة من هوية الشعار */}
+        <svg
+          aria-hidden
+          className="pointer-events-none absolute -start-8 top-1/2 h-[210%] w-56 -translate-y-1/2 text-gold opacity-[0.07]"
+          viewBox="0 0 100 300"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.6"
+        >
+          {[0, 60, 120, 180, 240].map((y) => (
+            <g key={y}>
+              <path d={`M50 ${y}l28 30-28 30-28-30z`} />
+              <path d={`M50 ${y + 14}l15 16-15 16-15-16z`} />
+              <circle cx="50" cy={y + 30} r="3.5" fill="currentColor" stroke="none" />
+            </g>
+          ))}
+        </svg>
+
+        <div className="relative flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0">
+            <h2 className="text-[26px] font-bold leading-snug tracking-tight">
+              {greeting}
+              {teamMember?.short_name || teamMember?.name
+                ? `، ${teamMember.short_name || teamMember.name}`
+                : ''}
+            </h2>
+            <p className="mt-1 text-sm text-white/60">{fmtDatePref(todayISO())}</p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <div className="inline-flex rounded-full bg-white/10 p-1 text-sm backdrop-blur-sm">
+              <ScopeBtn
+                active={tab === 'mine'}
+                onClick={() => setTab('mine')}
+                label="لوحتي"
+              />
+              {isDirector && (
+                <ScopeBtn
+                  active={tab === 'all'}
+                  onClick={() => setTab('all')}
+                  label="لوحة المكتب"
+                />
+              )}
+              <ScopeBtn
+                active={tab === 'feed'}
+                onClick={() => setTab('feed')}
+                label="آخر النشاط"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => refetch()}
+              disabled={isFetching}
+              className="grid h-9 w-9 place-items-center rounded-full text-white/50 transition-colors hover:bg-white/10 hover:text-white"
+              title="تحديث"
+            >
+              <RefreshCw className={cn('h-4 w-4', isFetching && 'animate-spin')} />
+            </button>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <div className="inline-flex rounded-full bg-muted p-1 text-sm">
-            <ScopeBtn
-              active={tab === 'mine'}
-              onClick={() => setTab('mine')}
-              label="لوحتي"
-            />
-            {isDirector && (
-              <ScopeBtn
-                active={tab === 'all'}
-                onClick={() => setTab('all')}
-                label="لوحة المكتب"
+        {/* المؤشرات الأربعة — بلورات داخل البطل لا شريط منفصل */}
+        <div className="relative mt-6 grid grid-cols-2 gap-2.5 lg:grid-cols-4">
+          {isLoading || !s ? (
+            Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="h-[86px] animate-pulse rounded-2xl bg-white/[0.06]" />
+            ))
+          ) : (
+            <>
+              <HeroStat
+                icon={Gavel}
+                label={isAll ? 'جلسات قادمة' : 'جلساتي القادمة'}
+                value={s.upcoming_sessions}
+                onClick={() => navigate('/sessions')}
               />
-            )}
-            <ScopeBtn
-              active={tab === 'feed'}
-              onClick={() => setTab('feed')}
-              label="آخر النشاط"
-            />
-          </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => refetch()}
-            disabled={isFetching}
-            className="text-muted-foreground"
-          >
-            <RefreshCw className={cn('h-4 w-4', isFetching && 'animate-spin')} />
-            تحديث
-          </Button>
+              <HeroStat
+                icon={Flame}
+                label="مهام متأخرة"
+                value={s.overdue_tasks}
+                tone={s.overdue_tasks > 0 ? 'danger' : 'plain'}
+                note={
+                  s.open_tasks > 0
+                    ? `من ${fmtNumber(s.open_tasks)} مفتوحة`
+                    : undefined
+                }
+                onClick={() => navigate('/tasks')}
+              />
+              <HeroStat
+                icon={Stamp}
+                label={isAll ? 'بانتظار الاعتماد' : 'بانتظار اعتمادي'}
+                value={approvals?.total ?? 0}
+                tone={(approvals?.total ?? 0) > 0 ? 'warn' : 'plain'}
+                note={
+                  approvals && approvals.letters > 0
+                    ? `منها ${fmtNumber(approvals.letters)} خطاب صادر`
+                    : undefined
+                }
+                onClick={() =>
+                  navigate(
+                    approvals && approvals.letters > 0 && approvals.tasks === 0
+                      ? '/outgoing'
+                      : '/tasks'
+                  )
+                }
+              />
+              <HeroStat
+                icon={Scale}
+                label="قضايا جارية"
+                value={s.cases_active}
+                note={
+                  s.cases_total > 0
+                    ? `من ${fmtNumber(s.cases_total)} قضية`
+                    : undefined
+                }
+                onClick={() => navigate('/cases')}
+              />
+            </>
+          )}
         </div>
       </div>
 
@@ -159,82 +241,17 @@ export default function Dashboard() {
         <FeedContent />
       ) : (
         <>
-      {/* ===== شريط المؤشّرات — الأرقام أولاً ===== */}
-      {isLoading || !s ? (
-        <Skeleton className="h-[196px] w-full rounded-3xl lg:h-[98px]" />
-      ) : (
-        <StatStrip>
-          <Stat
-            icon={Gavel}
-            label={isAll ? 'جلسات قادمة' : 'جلساتي القادمة'}
-            value={s.upcoming_sessions}
-            onClick={() => navigate('/sessions')}
-          />
-          <Stat
-            icon={Flame}
-            label="مهام متأخرة"
-            value={s.overdue_tasks}
-            tone={s.overdue_tasks > 0 ? 'danger' : 'plain'}
-            pill={
-              s.overdue_tasks > 0
-                ? { text: 'متأخّرة', tone: 'danger' }
-                : { text: 'منتظمة', tone: 'ok' }
-            }
-            note={
-              s.open_tasks > 0
-                ? `من ${fmtNumber(s.open_tasks)} مفتوحة`
-                : undefined
-            }
-            onClick={() => navigate('/tasks')}
-          />
-          <Stat
-            icon={Stamp}
-            label={isAll ? 'بانتظار الاعتماد' : 'بانتظار اعتمادي'}
-            value={approvals?.total ?? 0}
-            tone={(approvals?.total ?? 0) > 0 ? 'warn' : 'plain'}
-            pill={
-              (approvals?.total ?? 0) > 0
-                ? { text: 'يحتاجك', tone: 'warn' }
-                : undefined
-            }
-            note={
-              approvals && approvals.letters > 0
-                ? `منها ${fmtNumber(approvals.letters)} خطاب صادر`
-                : undefined
-            }
-            onClick={() =>
-              navigate(
-                approvals && approvals.letters > 0 && approvals.tasks === 0
-                  ? '/outgoing'
-                  : '/tasks'
-              )
-            }
-          />
-          <Stat
-            icon={Scale}
-            label="قضايا جارية"
-            value={s.cases_active}
-            note={
-              s.cases_total > 0
-                ? `من ${fmtNumber(s.cases_total)} قضية`
-                : undefined
-            }
-            onClick={() => navigate('/cases')}
-          />
-        </StatStrip>
-      )}
-
       <BirthdayCard />
 
       {/* ===== جدول اليوم + ما يحتاج انتباهك ===== */}
-      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
         <TodayAgendaCard
           items={agenda}
           loading={agendaLoading}
           onOpen={(href) => navigate(href)}
         />
 
-        <div className="space-y-4">
+        <div className="space-y-5">
           <DeadlinesPanel />
           <WhileYouWereBusy />
           <SessionsNeedClosureSection scope={effectiveScope} />
@@ -384,8 +401,8 @@ function ScopeBtn({
       className={cn(
         'rounded-full px-5 py-1.5 transition-colors',
         active
-          ? 'bg-navy font-semibold text-white shadow-sm dark:bg-navy-50 dark:text-navy'
-          : 'text-muted-foreground hover:text-foreground'
+          ? 'bg-gold font-semibold text-navy shadow-sm'
+          : 'text-white/60 hover:text-white'
       )}
     >
       {label}
@@ -395,45 +412,13 @@ function ScopeBtn({
 
 /* ===================== المؤشّرات ===================== */
 
-// شريط واحد يضم المؤشّرات الأربعة بدل أربع بطاقات منفصلة — يقرأ كسطر واحد.
-// الفواصل مرسومة بفجوات 1px فوق خلفية الحدود (gap-px): تعمل في الاتجاهين
-// أفقياً ورأسياً، ولا تحتاج divide-x-reverse مع RTL.
-function StatStrip({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="grid grid-cols-2 gap-px overflow-hidden rounded-3xl border border-border/60 bg-border/60 shadow-sm lg:grid-cols-4">
-      {children}
-    </div>
-  )
-}
-
-type PillTone = 'ok' | 'warn' | 'danger'
-
-// شارة حالة صغيرة بجانب الرقم — تقول معناه لا قيمته
-function Pill({ text, tone }: { text: string; tone: PillTone }) {
-  return (
-    <span
-      className={cn(
-        'shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-semibold leading-none',
-        tone === 'danger'
-          ? 'bg-destructive/10 text-destructive'
-          : tone === 'warn'
-            ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
-            : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
-      )}
-    >
-      {text}
-    </span>
-  )
-}
-
-// خلية مؤشّر: أيقونة داكنة، عنوان هادئ، رقم كبير، وشارة تفسّره
-function Stat({
+// مؤشر بلوري داخل لوحة البطل — زجاج أبيض خافت وأيقونة ذهبية
+function HeroStat({
   icon: Icon,
   label,
   value,
   note,
   tone = 'plain',
-  pill,
   onClick,
 }: {
   icon: LucideIcon
@@ -441,47 +426,39 @@ function Stat({
   value: number
   note?: string
   tone?: 'plain' | 'danger' | 'warn'
-  pill?: { text: string; tone: PillTone }
-  onClick: () => void
+  onClick?: () => void
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
-      className="flex items-start gap-3.5 bg-card p-5 text-right transition-colors hover:bg-muted/30"
+      className="group flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3.5 text-start transition-colors hover:bg-white/[0.12]"
     >
-      <span className="mt-0.5 grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-navy text-gold dark:bg-navy-600">
+      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-gold/15 text-gold">
         <Icon className="h-5 w-5" />
       </span>
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-[13px] font-medium text-muted-foreground">
-          {label}
+      <span className="min-w-0">
+        <span
+          className={cn(
+            'block text-2xl font-bold leading-tight tabular-nums',
+            tone === 'danger' && value > 0
+              ? 'text-rose-300'
+              : tone === 'warn' && value > 0
+                ? 'text-amber-300'
+                : 'text-white'
+          )}
+        >
+          {fmtNumber(value)}
         </span>
-        <span className="mt-2 flex items-center gap-2">
-          <span
-            className={cn(
-              'text-[32px] font-bold leading-none tracking-tight tabular-nums',
-              tone === 'danger' && value > 0
-                ? 'text-destructive'
-                : tone === 'warn' && value > 0
-                  ? 'text-amber-600 dark:text-amber-400'
-                  : 'text-foreground'
-            )}
-          >
-            {fmtNumber(value)}
-          </span>
-          {pill && <Pill text={pill.text} tone={pill.tone} />}
-        </span>
+        <span className="block truncate text-xs text-white/60">{label}</span>
         {note && (
-          <span className="mt-2 block truncate text-xs text-muted-foreground">
-            {note}
-          </span>
+          <span className="block truncate text-[11px] text-white/40">{note}</span>
         )}
       </span>
     </button>
   )
 }
 
-// مؤشّر إداري مضغوط — معلومة تحت الطلب، لا تزاحم الأربعة الكبار
 function MiniStat({
   label,
   value,
