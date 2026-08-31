@@ -3,6 +3,9 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 // =============================================================
 // whatsapp-webhook — استقبال رسائل واتساب الواردة من Hatif.io + الرد الآلي
 // v5 (2026-09-01): استبدال مستقبل Evolution القديم بويبهوك هاتف الرسمي.
+// v6 (2026-09-01): موزّع — هاتف يقبل رابط ويبهوك واحداً والمستخدم عنده نظامان
+//   (هذا النظام + crm-iflas)، فنحن نقطة الاستقبال ونمرر الحمولة الخام حرفياً
+//   للنظام الآخر (whatsapp_config/forward_webhook_url) قبل معالجتنا.
 //
 // التسجيل في لوحة هاتف: الإعدادات ← API Connect ← رابط Webhook الواتساب:
 //   https://<project>.supabase.co/functions/v1/whatsapp-webhook?secret=<السر>
@@ -82,8 +85,27 @@ Deno.serve(async (req) => {
   const expected = await lookupValue("whatsapp_config", "webhook_secret");
   if (!expected || secret !== expected) return json({ error: "unauthorized" }, 401);
 
+  const raw = await req.text();
   let ev: Record<string, unknown>;
-  try { ev = await req.json(); } catch { return json({ error: "bad json" }, 400); }
+  try { ev = JSON.parse(raw); } catch { return json({ error: "bad json" }, 400); }
+
+  // التمرير لنظام crm-iflas — نفس الحمولة الخام كأن هاتف أرسلها له مباشرة.
+  // لا ننتظر رده ولا يفشلنا فشله (كلٌّ يعالج لنفسه).
+  try {
+    const fwd = await lookupValue("whatsapp_config", "forward_webhook_url");
+    if (fwd && fwd.startsWith("http")) {
+      const sig = req.headers.get("X-Voxa-Signature");
+      fetch(fwd, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(sig ? { "X-Voxa-Signature": sig } : {}),
+        },
+        body: raw,
+        signal: AbortSignal.timeout(8000),
+      }).catch(() => {/* فشل النظام الآخر شأنه — لا يعطل معالجتنا */});
+    }
+  } catch (_) { /* التمرير ثانوي */ }
 
   const direction = String(ev.direction ?? "");
   const messageType = String(ev.messageType ?? "");
