@@ -157,6 +157,13 @@ struct NotificationsView: View {
                 openingId = n.id
                 openedTask = try? await sb.task(id: taskId)
                 openingId = nil
+            } else if let caseId = n.case_id {
+                // منشن/تذكير جلسة/نقاش — نفس جسر الإشعار المنبثق:
+                // يقلب تبويب النقاشات ويفتح خيط الملف نفسه
+                PushRouter.shared.route = "/discussions?case=\(caseId)"
+            } else if n.type == "mention" || n.type == "birthday" {
+                // منشن في القناة العامة (بلا ملف) — تبويب النقاشات يكفي
+                PushRouter.shared.route = "/discussions"
             }
             await syncBadge()
         }
