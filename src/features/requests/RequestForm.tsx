@@ -31,7 +31,7 @@ import type { Contact, IncomingRequest, IncomingRequestInput } from '@/types/db'
 const NONE = '__none__'
 
 const schema = z.object({
-  client_name: z.string().min(1, 'اسم العميل مطلوب'),
+  client_name: z.string().min(1, 'اختر العميل من جهات الاتصال أو أضفه جديداً'),
   client_phone: z.string().optional(),
   request_type: z.string().min(1, 'نوع الطلب مطلوب'),
   source: z.string().optional(),
@@ -88,11 +88,19 @@ export function RequestForm({
     handleSubmit,
     control,
     setValue,
+    watch,
     formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: toDefaults(request),
   })
+
+  // طلب قديم مسجل بالاسم الحر بلا جهة اتصال — نعرضه بدل إخفائه
+  const watchedClientId = watch('client_id')
+  const legacyName =
+    isEdit && (!watchedClientId || watchedClientId === NONE)
+      ? request?.client_name || ''
+      : ''
 
   const onSubmit = async (values: FormValues) => {
     const input: IncomingRequestInput = {
@@ -132,18 +140,37 @@ export function RequestForm({
 
       <div className="my-4 max-h-[60vh] space-y-3 overflow-y-auto pl-1 pr-1">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label htmlFor="client_name">اسم العميل *</Label>
-            <Input id="client_name" {...register('client_name')} />
+          {/* العميل من سجل جهات الاتصال — الأساس لا الاستثناء: الجديد
+              يُنشأ جهة اتصال من داخل المنتقي فيبقى في سجل المكتب الموحد */}
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label>العميل *</Label>
+            <Controller
+              control={control}
+              name="client_id"
+              render={({ field }) => (
+                <ContactPicker
+                  contacts={contacts ?? []}
+                  value={field.value && field.value !== NONE ? field.value : null}
+                  placeholder="ابحث بالاسم أو الجوال — أو أضف جهة جديدة…"
+                  onSelect={(c: Contact | null) => {
+                    field.onChange(c?.id ?? NONE)
+                    setValue('client_name', c?.name ?? '')
+                    setValue('client_phone', c?.phone ?? '')
+                  }}
+                />
+              )}
+            />
+            {legacyName && (
+              <p className="text-xs text-muted-foreground">
+                الطلب مسجل باسم «{legacyName}» بلا جهة اتصال — اختر جهة لربطه
+                (أو اتركه كما هو).
+              </p>
+            )}
             {errors.client_name && (
               <p className="text-xs text-destructive">
                 {errors.client_name.message}
               </p>
             )}
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="client_phone">الجوال</Label>
-            <Input id="client_phone" dir="ltr" {...register('client_phone')} />
           </div>
 
           <div className="space-y-1.5">
@@ -324,27 +351,6 @@ export function RequestForm({
             )}
           </div>
 
-          {/* ربط بجهة اتصال (اختياري) — الاختيار يعبّئ الاسم والجوال تلقائياً */}
-          <div className="space-y-1.5 sm:col-span-2">
-            <Label>ربط بجهة اتصال (اختياري)</Label>
-            <Controller
-              control={control}
-              name="client_id"
-              render={({ field }) => (
-                <ContactPicker
-                  contacts={contacts ?? []}
-                  value={field.value && field.value !== NONE ? field.value : null}
-                  onSelect={(c: Contact | null) => {
-                    field.onChange(c?.id ?? NONE)
-                    if (c) {
-                      setValue('client_name', c.name ?? '')
-                      setValue('client_phone', c.phone ?? '')
-                    }
-                  }}
-                />
-              )}
-            />
-          </div>
         </div>
 
         <div className="space-y-1.5">
