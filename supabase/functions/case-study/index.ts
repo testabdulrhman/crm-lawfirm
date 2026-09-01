@@ -342,10 +342,11 @@ ${blocks.length > 0 ? `المستندات المرفقة أعلاه (${readDocs.
 
   // المقترحات: تُستبدل المعلّقة فقط — ما اعتمده المحامي أو رفضه يبقى شاهداً
   const props: any[] = Array.isArray(parsed.proposals) ? parsed.proposals : [];
+  console.log(`case-study proposals: ${props.length} (case ${caseId}, v${nextVersion})`);
   await admin.from("case_study_proposals").delete().eq("case_id", caseId).eq("status", "proposed");
   if (props.length) {
     const today = new Date();
-    await admin.from("case_study_proposals").insert(props.slice(0, 10).map((p) => {
+    const { error: propErr } = await admin.from("case_study_proposals").insert(props.slice(0, 10).map((p) => {
       const d = Number(p.due_in_days);
       const due = Number.isFinite(d) && d > 0 ? new Date(today.getTime() + d * 86_400_000).toISOString().slice(0, 10) : null;
       return {
@@ -355,6 +356,8 @@ ${blocks.length > 0 ? `المستندات المرفقة أعلاه (${readDocs.
         due_date: due, priority: p.priority ?? null,
       };
     }));
+    // لا نبتلع الخطأ — كان الإدراج يفشل بصمت فيظن المحامي أن الدراسة بلا مقترحات
+    if (propErr) console.error("case-study proposals insert failed:", propErr.message);
   }
 }
 
