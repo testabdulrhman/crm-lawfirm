@@ -40,6 +40,7 @@ const NAVY_DEEP = '#0B1220' // ink-900 — رؤوس الجداول
 const GOLD = '#C9A982'      // gold-500 — الذهب الشامبين (الشعار والفواصل)
 const GOLD_DEEP = '#A8855B' // gold-700 — نص ذهبي على فاتح
 const MUTED = '#6B7589'     // text-muted
+const DISPLAY = "'Tajawal', 'IBM Plex Sans Arabic', sans-serif" // خط العرض الرسمي
 const LINE = '#E7DACD'      // خط شعري دافئ
 const SAND = '#F7EFE8'      // sand-100 — صفوف متناوبة
 
@@ -393,22 +394,6 @@ export function QuotePdfDialog({
               overflow: 'hidden',
             }}
           >
-            {/* علامة مائية — الشعار باهتاً في الوسط */}
-            {office?.logo_url && (
-              <img
-                src={office.logo_url}
-                crossOrigin="anonymous"
-                style={{
-                  position: 'absolute',
-                  top: '50%',
-                  left: '50%',
-                  transform: 'translate(-50%, -50%)',
-                  width: 420,
-                  opacity: 0.04,
-                }}
-              />
-            )}
-
             {/* الترويسة: شعار يميناً + بيانات العرض يساراً */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -431,15 +416,15 @@ export function QuotePdfDialog({
               </div>
               <div style={{ fontSize: 12, lineHeight: 2.1, textAlign: 'left' }}>
                 <div>
-                  <span style={{ color: MUTED }}>رقم العرض&nbsp;&nbsp;</span>
+                  <span style={{ color: GOLD_DEEP }}>رقم العرض&nbsp;&nbsp;</span>
                   <b>{quoteNo}</b>
                 </div>
                 <div>
-                  <span style={{ color: MUTED }}>التاريخ&nbsp;&nbsp;</span>
+                  <span style={{ color: GOLD_DEEP }}>التاريخ&nbsp;&nbsp;</span>
                   <b>{dateStr}</b>
                 </div>
                 <div>
-                  <span style={{ color: MUTED }}>سريان العرض&nbsp;&nbsp;</span>
+                  <span style={{ color: GOLD_DEEP }}>سريان العرض&nbsp;&nbsp;</span>
                   <b>({validity || '10'}) أيام من تاريخه</b>
                 </div>
               </div>
@@ -449,9 +434,11 @@ export function QuotePdfDialog({
 
             {/* العنوان */}
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-              <span style={{ fontSize: 27, fontWeight: 800 }}>عرض سعر</span>
+              <span style={{ fontSize: 28, fontWeight: 900, fontFamily: DISPLAY }}>
+                عرض سعر
+              </span>
               <span style={{ color: GOLD, fontSize: 16 }}>◆</span>
-              <span style={{ fontSize: 16.5, fontWeight: 700 }}>{title}</span>
+              <span style={{ fontSize: 16.5, fontWeight: 700, color: GOLD_DEEP }}>{title}</span>
             </div>
 
             {/* مقدم إلى */}
@@ -464,7 +451,7 @@ export function QuotePdfDialog({
                 fontSize: 14,
               }}
             >
-              <span style={{ color: MUTED }}>مقدم إلى&nbsp;&nbsp;</span>
+              <span style={{ color: GOLD_DEEP }}>مقدم إلى&nbsp;&nbsp;</span>
               <b>السادة / {r.client_name ?? ''}</b> — المحترمين
             </div>
 
@@ -667,7 +654,7 @@ function SectionHead({ children }: { children: React.ReactNode }) {
       }}
     >
       <span style={{ color: GOLD, fontSize: 13 }}>◆</span>
-      <span style={{ fontSize: 14.5, fontWeight: 800 }}>{children}</span>
+      <span style={{ fontSize: 14.5, fontWeight: 800, fontFamily: DISPLAY }}>{children}</span>
       <span style={{ flex: 1, height: 1, background: LINE }} />
     </div>
   )
