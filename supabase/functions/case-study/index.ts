@@ -94,10 +94,12 @@ const STUDY_SYSTEM = `أنت مستشار قانوني خبير في ${FIRM_NAME
 async function generateStudy(caseId: string, userName: string | null, reason?: string): Promise<void> {
   const { data: c, error: caseErr } = await admin
     .from("cases")
-    .select("*, contact:contacts(name, phone), assignee:team_members(name)")
+    // تلميح المفتاح صراحةً: لو تعددت مسارات الضمّ يرفض PostgREST بصمت وكانت
+    // الرسالة تُخفي السبب («القضية غير موجودة» بينما الفحص الأولي وجدها)
+    .select("*, contact:contacts!cases_contact_id_fkey(name, phone), assignee:team_members!cases_assignee_id_fkey(name)")
     .eq("id", caseId)
     .single();
-  if (caseErr || !c) throw new Error("القضية غير موجودة");
+  if (caseErr || !c) throw new Error(`تعذّر قراءة القضية: ${caseErr?.message ?? "غير موجودة"}`);
 
   const [parties, sessions, rulings, memos, notes, docs] = await Promise.all([
     admin.from("case_parties").select("role, party_side, name, id_number, nationality, notes").eq("case_id", caseId),
