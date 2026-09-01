@@ -80,6 +80,7 @@ import {
 } from '@/hooks/useRequests'
 import { EvaluationForm } from './EvaluationForm'
 import { statusBadgeVariant, statusLabel, typeLabel, CAPACITY_LABELS, criticalKindLabel } from './labels'
+import { QuotePdfDialog } from './QuotePdfDialog'
 import type {
   IncomingRequest,
   IncomingRequestInput,
@@ -91,6 +92,7 @@ export function RequestDetail({ id }: { id: string }) {
   const [, navigate] = useLocation()
   const { data, isLoading, isError, error, refetch } = useRequest(id)
   const railGates = useIntakeGates(id)
+  const [quoteOpen, setQuoteOpen] = useState(false)
 
   if (isLoading) {
     return (
@@ -167,6 +169,14 @@ export function RequestDetail({ id }: { id: string }) {
               </div>
             </div>
             <div className="flex flex-col items-end gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setQuoteOpen(true)}
+              >
+                <FileText className="h-4 w-4" />
+                عرض سعر PDF
+              </Button>
               {r.ref_no && (
                 <span className="rounded-md bg-muted px-2 py-0.5 text-xs font-semibold tabular-nums text-muted-foreground">
                   {r.ref_no}
@@ -190,6 +200,8 @@ export function RequestDetail({ id }: { id: string }) {
       <RequestRail request={r} gates={railGates} evaluations={evaluations} />
 
       <CriticalDateStrip request={r} />
+
+      <QuotePdfDialog request={r} open={quoteOpen} onOpenChange={setQuoteOpen} />
 
       {/* بوابات الاستقطاب — تسبق القرار في ترتيب الوثيقة */}
       <div id="intake-gates">
