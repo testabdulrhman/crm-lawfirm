@@ -162,7 +162,7 @@ struct NotificationsView: View {
                 PushRouter.shared.route = "/discussions?case=\(caseId)"
             } else if let caseId = n.case_id {
                 // تذكير جلسة / ملخّص ما قبل الجلسة / أي إشعار مربوط بملف —
-                // يفتح ملف القضية (تبويب الملفات) حيث الجلسات والملخّص
+                // يفتح ملف القضية (تبويب المشاريع) حيث الجلسات والملخّص
                 PushRouter.shared.route = "/cases/\(caseId)"
             } else if n.type == "mention" || n.type == "birthday" {
                 // منشن في القناة العامة (بلا ملف) — تبويب النقاشات يكفي

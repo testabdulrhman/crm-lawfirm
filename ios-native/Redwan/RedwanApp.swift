@@ -3,8 +3,8 @@ import CoreSpotlight
 import UserNotifications
 
 // تطبيق «Redwan» الأصيل — SwiftUI على نفس قاعدة Supabase التي يقرأها الويب.
-// التبويبات: الرئيسية · الملفات · المهام · التقويم · النقاشات.
-// «الملفات» أُضيف 2026-09-02 (ثلاثية المحكمة: ملف القضية، ملخّص الجلسة، إغلاقها من القاعة).
+// التبويبات: الرئيسية · المشاريع · المهام · التقويم · النقاشات.
+// «المشاريع» أُضيف 2026-09-02 (ثلاثية المحكمة: ملف القضية، ملخّص الجلسة، إغلاقها من القاعة).
 // «النقاشات» أُضيف 2026-08-21 لحلّ تشتّت العمل بين خاص الواتساب وقروبه.
 
 @main
@@ -122,7 +122,7 @@ struct MainTabs: View {
                 .tabItem { Label("الرئيسية", systemImage: "house.fill") }
                 .tag(0)
             CasesView()
-                .tabItem { Label("الملفات", systemImage: "folder.fill") }
+                .tabItem { Label("المشاريع", systemImage: "folder.fill") }
                 .tag(1)
             TasksView()
                 .tabItem { Label("المهام", systemImage: "checklist") }

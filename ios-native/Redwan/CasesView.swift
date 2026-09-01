@@ -1,6 +1,6 @@
 import SwiftUI
 
-// تبويب «الملفات» — القضايا كلها بالبحث والحالة، وكل صف يفتح ملف القضية.
+// تبويب «المشاريع» (تسمية المستخدم 2026-09-02) — القضايا كلها بالبحث والحالة، وكل صف يفتح ملف القضية.
 // أُضيف 2026-09-02 (ثلاثية المحكمة): التطبيق كان «متابعة» بلا ملف يُفتح.
 
 struct CaseRoute: Identifiable, Hashable { let id: String }
@@ -50,7 +50,7 @@ struct CasesView: View {
                         .padding(.vertical, 8)
 
                         if filtered.isEmpty {
-                            EmptyBox(icon: "folder", text: "لا ملفات هنا",
+                            EmptyBox(icon: "folder", text: "لا مشاريع هنا",
                                      subtext: search.isEmpty ? "غيّر الحالة" : "جرّب كلمة أخرى")
                                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                         } else {
@@ -70,9 +70,9 @@ struct CasesView: View {
                 }
             }
             .background(Theme.ivory.ignoresSafeArea())
-            .navigationTitle("الملفات")
+            .navigationTitle("المشاريع")
             .navigationBarTitleDisplayMode(.inline)
-            .onAppear { Usage.shared.screen("الملفات") }
+            .onAppear { Usage.shared.screen("المشاريع") }
             .navigationDestination(item: $routed) { r in
                 CaseDetailView(caseId: r.id)
             }

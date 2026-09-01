@@ -20,7 +20,7 @@ final class PushRouter: ObservableObject {
         return String(r[q.upperBound...])
     }
 
-    /// "/cases/<id>[?tab=…]" → معرف القضية لفتح ملفها (تبويب الملفات)
+    /// "/cases/<id>[?tab=…]" → معرف القضية لفتح ملفها (تبويب المشاريع)
     var caseId: String? {
         guard let r = route, r.hasPrefix("/cases/") else { return nil }
         let rest = r.dropFirst("/cases/".count)
