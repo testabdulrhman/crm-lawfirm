@@ -157,17 +157,44 @@ export function QuotePdfDialog({
       if (upErr) throw upErr
       const url = supabase.storage.from('documents').getPublicUrl(path).data.publicUrl
 
+      const fileName = `عرض سعر ${quoteNo.replace(' / ', '-')}.pdf`
+      const recipient = r.client_name ?? 'عميل'
+
+      // ١) ملف حر — يمشي داخل نافذة الـ٢٤ ساعة (العميل راسلنا مؤخراً)
       const { data, error } = await supabase.functions.invoke('whatsapp-send', {
         body: {
           phone: intl,
           media_url: url,
-          file_name: `عرض سعر ${quoteNo.replace(' / ', '-')}.pdf`,
+          file_name: fileName,
           message: `عرض سعر رقم ${quoteNo} — ${COMPANY}`,
-          recipient_name: r.client_name ?? 'عميل',
+          recipient_name: recipient,
         },
       })
-      if (error || data?.error)
+
+      // ٢) النافذة مغلقة؟ نرتد للقالب المعتمد بترويسة المستند — يصل دائماً
+      const windowClosed =
+        data?.code === 'Voxa:WhatsApp:ServiceWindowExpired' ||
+        String(data?.detail ?? '').includes('نافذة الـ٢٤ ساعة')
+      if (windowClosed) {
+        const { data: t, error: tErr } = await supabase.functions.invoke('whatsapp-send', {
+          body: {
+            phone: intl,
+            recipient_name: recipient,
+            template: {
+              name: 'quote_document',
+              lang: 'ar',
+              params: [recipient, quoteNo, String(Number(validity) || 10)],
+              document: { url, name: fileName },
+            },
+          },
+        })
+        if (tErr || t?.error)
+          throw new Error(
+            `${t?.detail || t?.error || errMessage(tErr)} — تأكد من اعتماد قالب quote_document في لوحة هاتف`
+          )
+      } else if (error || data?.error) {
         throw new Error(data?.detail || data?.error || errMessage(error))
+      }
       await bumpCounter()
       toast({ variant: 'success', title: `أُرسل عرض السعر ${quoteNo} واتساباً 📄` })
       onOpenChange(false)

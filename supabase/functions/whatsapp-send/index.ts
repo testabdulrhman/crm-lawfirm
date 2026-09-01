@@ -3,6 +3,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 // =============================================================
 // whatsapp-send — إرسال واتساب عبر Hatif.io (WhatsApp Business API الرسمي)
 // v6 (2026-08-30): استبدال بوابة Evolution المحظورة بواجهة هاتف.
+// v9 (2026-09-01): ترويسة مستند في القالب { template: {..., document: {url, name}} }
+//   — بها يصل عرض السعر PDF لأي عميل حتى خارج نافذة الـ٢٤ ساعة.
 // v8 (2026-08-30): دعم القوالب المعتمدة { template: {name, lang?, params?} }
 //   ورسالة عربية واضحة عند انغلاق نافذة الـ٢٤ ساعة (قاعدة واتساب الرسمي:
 //   النص الحر مسموح فقط خلال ٢٤ ساعة من آخر رسالة واردة من العميل).
@@ -144,6 +146,7 @@ Deno.serve(async (req) => {
 
     let status: "sent" | "failed" = "failed";
     let detail = "";
+    let errCode = "";
 
     try {
       const token = await getToken(cfg);
@@ -152,17 +155,30 @@ Deno.serve(async (req) => {
       if (template?.name) {
         // قالب معتمد مسبقاً — يفتح المحادثة حتى خارج نافذة الـ٢٤ ساعة
         const params: string[] = Array.isArray(template.params) ? template.params.map(String) : [];
+        const parameters: unknown[] = [];
+        // ترويسة مستند (PDF) — تُرسل الملف داخل القالب المعتمد
+        if (template.document?.url) {
+          parameters.push({
+            Type: "Header",
+            Values: [{
+              Type: "document",
+              DocumentUrl: String(template.document.url),
+              DocumentFilename: String(template.document.name || "document.pdf"),
+            }],
+          });
+        }
+        if (params.length)
+          parameters.push({ Type: "Body", Values: params.map((p) => ({ Type: "text", Text: p })) });
         const r = await hatifPost("/v1/whatsapp/service-account/sendTemplate", token, {
           ChannelId: channelId,
           TemplateName: String(template.name),
           Language: String(template.lang || "ar"),
           ToNumber: num,
-          Parameters: params.length
-            ? [{ Type: "Body", Values: params.map((p) => ({ Type: "text", Text: p })) }]
-            : [],
+          Parameters: parameters,
         });
         status = r.ok ? "sent" : "failed";
         detail = r.detail;
+        errCode = r.code;
       } else if (media_url) {
         // ملف (مستند/PDF) مع تعليق اختياري — مفاتيح camelCase كما في وثائقهم
         const r = await hatifPost("/v1/whatsapp/service-account/sendFile", token, {
@@ -174,6 +190,7 @@ Deno.serve(async (req) => {
         });
         status = r.ok ? "sent" : "failed";
         detail = r.detail;
+        errCode = r.code;
       } else {
         // نص فقط — مفاتيح PascalCase كما في وثيقة sendText
         const r = await hatifPost("/v1/whatsapp/service-account/sendText", token, {
@@ -183,6 +200,7 @@ Deno.serve(async (req) => {
         });
         status = r.ok ? "sent" : "failed";
         detail = r.detail;
+        errCode = r.code;
       }
     } catch (e) {
       detail = String((e as Error)?.message || e).slice(0, 300);
@@ -202,7 +220,7 @@ Deno.serve(async (req) => {
     } catch (_) { /* تجاهل */ }
 
     if (status === "sent") return json({ success: true });
-    return json({ error: "تعذّر الإرسال عبر الواتساب", detail }, 502);
+    return json({ error: "تعذّر الإرسال عبر الواتساب", detail, code: errCode }, 502);
   } catch (e) {
     return json({ error: "خطأ غير متوقّع", detail: String((e as Error)?.message || e) }, 500);
   }
