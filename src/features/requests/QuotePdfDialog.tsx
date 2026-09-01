@@ -5,6 +5,7 @@
 // التوليد عميليّاً (html2canvas + jsPDF)، والرفع لمخزن documents العام
 // ليصلح الرابط لواجهة هاتف، والإرسال عبر whatsapp-send.
 import { useEffect, useRef, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import html2canvas from 'html2canvas'
 import { jsPDF } from 'jspdf'
 import { Download, Loader2, Send, Sparkles } from 'lucide-react'
@@ -64,6 +65,24 @@ export function QuotePdfDialog({
 }) {
   const { data: office } = useOfficeInfo()
   const pageRef = useRef<HTMLDivElement>(null)
+  const qc = useQueryClient()
+
+  // العرض يترك أثره على الطلب: رقمه ونطاقه ومبلغه وتاريخه — فتعرفه بطاقة
+  // الستة، وينتقل نطاقه للملف عند الفتح (بدل تبويب «بطاقة المشروع»)
+  async function saveQuoteOnRequest() {
+    await supabase
+      .from('incoming_requests')
+      .update({
+        quote_no: quoteNo,
+        quote_scope: scopeLines.length ? scopeLines.join('\n') : title.trim(),
+        quote_amount: grossN,
+        quote_sent_at: new Date().toISOString(),
+      })
+      .eq('id', r.id)
+    qc.invalidateQueries({
+      predicate: (q) => String(q.queryKey[0] ?? '').includes('request'),
+    })
+  }
 
   const year = new Date().getFullYear()
   const [seq, setSeq] = useState<number | null>(null)
@@ -171,6 +190,7 @@ export function QuotePdfDialog({
     try {
       const blob = await buildPdf()
       await bumpCounter()
+      await saveQuoteOnRequest()
       const a = document.createElement('a')
       a.href = URL.createObjectURL(blob)
       a.download = `عرض سعر ${quoteNo.replace(' / ', '-')} - ${r.client_name ?? ''}.pdf`
@@ -239,6 +259,7 @@ export function QuotePdfDialog({
         throw new Error(data?.detail || data?.error || errMessage(error))
       }
       await bumpCounter()
+      await saveQuoteOnRequest()
       toast({ variant: 'success', title: `أُرسل عرض السعر ${quoteNo} واتساباً 📄` })
       onOpenChange(false)
     } catch (e) {

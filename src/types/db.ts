@@ -181,9 +181,19 @@ export interface IncomingRequest {
   advance_amount: number | null
   advance_received_at: string | null
   conversion_bypass_reason: string | null
+  // عرض السعر يحفظ نفسه على الطلب (2026-09-02) — رقمه ونطاقه ومبلغه وتاريخ إرساله؛
+  // النطاق ينتقل للملف عند فتحه (cases.agreed_scope) بدل «بطاقة المشروع»
+  quote_no: string | null
+  quote_scope: string | null
+  quote_amount: number | null
+  quote_sent_at: string | null
 }
 
 export type IncomingRequestInput = {
+  quote_no?: string | null
+  quote_scope?: string | null
+  quote_amount?: number | null
+  quote_sent_at?: string | null
   source?: string | null
   opponent_name?: string | null
   capacity?: 'principal' | 'agent' | null
@@ -339,6 +349,8 @@ export interface CaseAssigneeRef {
 
 export interface Case {
   id: string
+  /** نطاق العمل المتفق عليه — ينتقل من عرض السعر عند فتح الملف */
+  agreed_scope: string | null
   office_num: string | null
   court_num: string | null
   title: string | null
@@ -370,6 +382,7 @@ export interface Case {
 
 export interface CaseInput {
   title: string
+  agreed_scope?: string | null
   type?: string | null
   status?: string | null
   office_num?: string | null

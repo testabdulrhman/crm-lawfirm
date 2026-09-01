@@ -166,6 +166,11 @@ export function RequestDetail({ id }: { id: string }) {
                 {r.prior_lawyer && (
                   <Badge variant="warning">محامٍ سابق: {r.prior_lawyer}</Badge>
                 )}
+                {r.quote_no && (
+                  <Badge variant="outline">
+                    عرض سعر <Ltr>{r.quote_no}</Ltr>
+                  </Badge>
+                )}
               </div>
             </div>
             <div className="flex flex-col items-end gap-2">
@@ -281,6 +286,23 @@ function OnboardingGateCard({ request: r }: { request: IncomingRequest }) {
         </Badge>
       </CardHeader>
       <CardContent className="space-y-2">
+        {/* عرض السعر — يسبق العقد ويغذّيه؛ ليس من الستة لكنه يشهد عليها */}
+        <div className="flex items-center gap-3 rounded-xl border border-dashed border-border/60 p-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium">عرض السعر</p>
+            <p className="text-xs text-muted-foreground">
+              {r.quote_sent_at ? (
+                <>
+                  رقم <Ltr>{r.quote_no}</Ltr> · {fmtNumber(Number(r.quote_amount ?? 0))} ريال ·{' '}
+                  {fmtDatePref(r.quote_sent_at)} — نطاقه ينتقل للملف عند فتحه
+                </>
+              ) : (
+                'لم يُصدر بعد — زر «عرض سعر PDF» أعلى الصفحة'
+              )}
+            </p>
+          </div>
+        </div>
+
         {/* عقد الأتعاب */}
         <div className="flex items-center gap-3 rounded-xl border border-border/60 p-3">
           <div className="min-w-0 flex-1">
@@ -580,6 +602,8 @@ function DecisionCard({
         contact_id: r.client_id ?? null,
         subject: r.description ?? null,
         open_date: todayISO(),
+        // نطاق عرض السعر يصير نطاق الملف المتفق عليه — لا يُعاد كتابته
+        agreed_scope: r.quote_scope ?? null,
       })
       .then(async (c) => {
         // التحويل يسجّل نفسه — كان ينشئ القضية ويترك الطلب بلا أثر

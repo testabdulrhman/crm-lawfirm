@@ -62,6 +62,25 @@ export function OverviewTab({ caseData: c }: { caseData: Case }) {
         </Card>
       )}
 
+      {/* نطاق العمل المتفق عليه — يأتي من عرض السعر عند فتح الملف
+          (حلّ محل تبويب «بطاقة المشروع» الذي بقي فارغاً لأنه طلب إعادة كتابة
+          ما التزم به المكتب مسبقاً) */}
+      {c.agreed_scope && c.agreed_scope.trim() !== '' && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">نطاق العمل المتفق عليه</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
+              {c.agreed_scope}
+            </p>
+            <p className="mt-2 text-xs text-muted-foreground">
+              من عرض السعر المعتمد عند فتح الملف — ما خرج عنه يحتاج اتفاقاً جديداً.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="grid gap-4 md:grid-cols-2">
         {/* الموكّل */}
         {c.contact && (
