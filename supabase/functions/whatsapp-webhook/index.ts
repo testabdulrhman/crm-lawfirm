@@ -6,6 +6,11 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 // v6 (2026-09-01): موزّع — هاتف يقبل رابط ويبهوك واحداً والمستخدم عنده نظامان
 //   (هذا النظام + crm-iflas)، فنحن نقطة الاستقبال ونمرر الحمولة الخام حرفياً
 //   للنظام الآخر (whatsapp_config/forward_webhook_url) قبل معالجتنا.
+// v7 (2026-09-01): توجيه بالملكية — الرقم المسجل دائناً في crm-iflas رسالته
+//   لذلك النظام (تمرير فقط، لا صندوق ولا رد آلي عندنا)؛ وغير المسجل عميلُ
+//   محاماة يتبنّاه نظامنا. الفحص عبر RPC سرّي هناك (phone_is_creditor)،
+//   وإعداده في whatsapp_config/iflas_check. تعذُّر الفحص = نسجّل بلا رد
+//   (لا نخاطر بتحية محاماة تصل دائن إفلاس).
 //
 // التسجيل في لوحة هاتف: الإعدادات ← API Connect ← رابط Webhook الواتساب:
 //   https://<project>.supabase.co/functions/v1/whatsapp-webhook?secret=<السر>
@@ -130,6 +135,30 @@ Deno.serve(async (req) => {
     if (c.name) name = String(c.name);
   } catch (_) { /* بلا رقم نسجل الوارد ولا نرد */ }
 
+  // توجيه بالملكية: دائن إفلاس؟ رسالته لنظام crm-iflas (مُرّرت له فوق) — نسكت
+  // null = تعذّر الفحص: نسجل الوارد عندنا احتياطاً لكن بلا رد آلي
+  let isCreditor: boolean | null = null;
+  if (phone) {
+    try {
+      const rawCfg = await lookupValue("whatsapp_config", "iflas_check");
+      if (rawCfg) {
+        const ic = JSON.parse(rawCfg);
+        const res = await fetch(`${ic.url}/rest/v1/rpc/phone_is_creditor`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: ic.anon_key,
+            Authorization: `Bearer ${ic.anon_key}`,
+          },
+          body: JSON.stringify({ p_phone: phone, p_secret: ic.secret }),
+          signal: AbortSignal.timeout(6000),
+        });
+        if (res.ok) isCreditor = (await res.json()) === true;
+      }
+    } catch (_) { /* يبقى null */ }
+  }
+  if (isCreditor === true) return json({ ok: true, routed: "crm-iflas" });
+
   const text = describe(messageType, (ev.body as string) ?? null, (ev.mediaUrl as string) ?? null);
 
   // منع التكرار عند إعادة إرسال الويبهوك: نفس الرقم ونفس النص خلال دقيقتين
@@ -151,9 +180,9 @@ Deno.serve(async (req) => {
     sent_by: "whatsapp",
   });
 
-  // ٢) الرد الآلي — مرة كل ٢٤ ساعة لكل رقم
+  // ٢) الرد الآلي — مرة كل ٢٤ ساعة لكل رقم (وفقط حين تأكدنا أنه ليس دائناً)
   let replied = false;
-  if (phone) {
+  if (phone && isCreditor === false) {
     const dayAgo = new Date(Date.now() - 24 * 3_600_000).toISOString();
     const { data: recent } = await supabase
       .from("sms_log").select("id").eq("phone", phone)
