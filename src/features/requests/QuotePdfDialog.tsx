@@ -7,7 +7,7 @@
 import { useEffect, useRef, useState } from 'react'
 import html2canvas from 'html2canvas'
 import { jsPDF } from 'jspdf'
-import { Download, Loader2, Send } from 'lucide-react'
+import { Download, Loader2, Send, Sparkles } from 'lucide-react'
 
 import {
   Dialog,
@@ -70,6 +70,41 @@ export function QuotePdfDialog({
     { desc: '', amount: '' },
   ])
   const [busy, setBusy] = useState<'download' | 'send' | null>(null)
+  const [drafting, setDrafting] = useState(false)
+
+  // صياغة نطاق العمل بالذكاء — يحلل ملاحظات الموظف ويعيدها بنوداً مرتبة
+  // بأسلوب المكتب. النتيجة تحل محل النص ليراجعها الموظف قبل الإصدار.
+  async function draftScope() {
+    if (!title.trim()) {
+      toast({ variant: 'destructive', title: 'اكتب عنوان العرض أولاً' })
+      return
+    }
+    setDrafting(true)
+    try {
+      const { data, error } = await supabase.functions.invoke('quote-scope', {
+        body: {
+          title: title.trim(),
+          notes: scope.trim(),
+          context: {
+            request_type: typeLabel(r.request_type),
+            description: r.description,
+            court_name: r.court_name,
+            opponent_name: r.opponent_name,
+          },
+        },
+      })
+      if (error || data?.error)
+        throw new Error(data?.detail || data?.error || errMessage(error))
+      const items: string[] = data?.items ?? []
+      if (!items.length) throw new Error('لم تُنتج صياغة')
+      setScope(items.join('\n'))
+      toast({ variant: 'success', title: `صيغت ${items.length} بنود — راجعها قبل الإصدار` })
+    } catch (e) {
+      toast({ variant: 'destructive', title: 'تعذّرت الصياغة', description: errMessage(e) })
+    } finally {
+      setDrafting(false)
+    }
+  }
 
   // الرقم المتسلسل السنوي — عداد في lookup_values (type=quote_counter, label=السنة)
   useEffect(() => {
@@ -223,7 +258,22 @@ export function QuotePdfDialog({
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="q-scope">نطاق العمل (سطر لكل بند — اختياري)</Label>
+            <div className="flex items-center justify-between gap-2">
+              <Label htmlFor="q-scope">نطاق العمل (سطر لكل بند — اختياري)</Label>
+              <button
+                type="button"
+                onClick={draftScope}
+                disabled={drafting || !title.trim()}
+                className="inline-flex items-center gap-1 rounded-lg bg-gold/15 px-2.5 py-1 text-[11px] font-semibold text-gold-700 transition-colors hover:bg-gold/25 disabled:opacity-50 dark:text-gold"
+              >
+                {drafting ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Sparkles className="h-3.5 w-3.5" />
+                )}
+                صياغة بالذكاء
+              </button>
+            </div>
             <Textarea
               id="q-scope"
               rows={4}
