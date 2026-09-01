@@ -394,8 +394,25 @@ export function QuotePdfDialog({
               overflow: 'hidden',
             }}
           >
+            {/* علامة مائية — الزخرفة الهندسية (الشعار المجرّد) مائلة وخافتة
+                جداً، تعطي الورقة ملمساً كنموذج الهوية. ليست الشعار الكامل
+                فلا تُقرأ تكراراً للاسم. */}
+            <img
+              src="/brand/emblem-gold.png"
+              aria-hidden
+              style={{
+                position: 'absolute',
+                top: '46%',
+                left: '50%',
+                transform: 'translate(-50%, -50%) rotate(-14deg)',
+                height: 720,
+                opacity: 0.07,
+                pointerEvents: 'none',
+              }}
+            />
+
             {/* الترويسة: شعار يميناً + بيانات العرض يساراً */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', position: 'relative' }}>
               {/* شعار المكتب المرفوع في الإعدادات — يحمل اسم الشركة داخله،
                   فلا يُكتب الاسم نصاً بجانبه (قرار المستخدم 2026-09-01) */}
               {office?.logo_url && (
