@@ -79,6 +79,59 @@ extension SB {
         ])
     }
 
+    // ===== المستندات =====
+
+    func caseDocuments(caseId: String) async throws -> [DocumentRow] {
+        try await get("documents", query: [
+            ("select", "id,name,category,description,file_url,file_type,created_at,case_id,suggested_case_id"),
+            ("case_id", "eq.\(caseId)"),
+            ("deleted_at", "is.null"),
+            ("order", "created_at.desc"),
+        ])
+    }
+
+    func document(id: String) async throws -> DocumentRow? {
+        let rows: [DocumentRow] = try await get("documents", query: [
+            ("select", "id,name,category,description,file_url,file_type,created_at,case_id,suggested_case_id"),
+            ("id", "eq.\(id)"),
+            ("limit", "1"),
+        ])
+        return rows.first
+    }
+
+    func matterLite(id: String) async throws -> MatterLite? {
+        let rows: [MatterLite] = try await get("cases", query: [
+            ("select", "id,title,office_num,kind"),
+            ("id", "eq.\(id)"),
+            ("limit", "1"),
+        ])
+        return rows.first
+    }
+
+    /// رفع مستند ممسوح (PDF) وتسجيله — الوصف يُترك فارغاً عمداً كي يكتب
+    /// classify-doc عنوانه وملخّصه (يحافظ على أي وصف بشري موجود).
+    /// المسار ASCII: مفاتيح التخزين ترفض العربية، والاسم العربي في documents.name.
+    func uploadDocument(data: Data, name: String, mime: String, caseId: String?) async throws -> String {
+        let ext = mime == "application/pdf" ? "pdf" : "jpg"
+        let folder = caseId.map { "case_documents/\($0)" } ?? "scans"
+        let path = "\(folder)/\(Int(Date().timeIntervalSince1970))_scan.\(ext)"
+        let url = try await storageUpload(bucket: "documents", path: path, data: data, mime: mime)
+        struct DocRow: Codable { let id: String }
+        let inserted = try await rawInsertReturning("documents", values: [
+            "case_id": caseId ?? NSNull(),
+            "name": name,
+            "file_url": url,
+            "file_path": path,
+            "file_type": mime,
+            "file_size": data.count,
+            "uploaded_by": member?.id ?? NSNull(),
+            "uploaded_by_name": member?.name ?? NSNull(),
+        ])
+        let rows = try JSONDecoder().decode([DocRow].self, from: inserted)
+        guard let doc = rows.first else { throw SBError(message: "رُفع الملف لكن تعذّر تسجيله مستنداً") }
+        return doc.id
+    }
+
     // ===== إغلاق الجلسة (نفس دالة الويب close_session) =====
 
     func sessionsNeedClosure(scope: String) async throws -> [SessionNeedingClosure] {

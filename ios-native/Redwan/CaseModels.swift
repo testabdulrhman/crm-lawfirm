@@ -170,6 +170,19 @@ struct StudyProposal: Codable, Identifiable {
     let status: String?
 }
 
+/// مستند في الملف (documents) — category/description يكتبهما classify-doc
+struct DocumentRow: Codable, Identifiable {
+    let id: String
+    let name: String?
+    let category: String?
+    let description: String?
+    let file_url: String?
+    let file_type: String?
+    let created_at: String?
+    let case_id: String?
+    let suggested_case_id: String?
+}
+
 /// جلسة تحتاج إغلاقاً (sessions_need_closure RPC — نفس الويب)
 struct SessionNeedingClosure: Codable, Identifiable {
     let id: String

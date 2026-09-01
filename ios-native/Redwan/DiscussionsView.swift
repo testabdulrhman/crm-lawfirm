@@ -225,7 +225,7 @@ private struct DiscussionRowView: View {
 
 // MARK: - اختيار ملف لبدء نقاشه
 
-private struct MatterPicker: View {
+struct MatterPicker: View {
     let onPick: (MatterLite) -> Void
 
     @EnvironmentObject private var sb: SB

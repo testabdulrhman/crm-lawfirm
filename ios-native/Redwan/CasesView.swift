@@ -15,6 +15,7 @@ struct CasesView: View {
     @State private var search = ""
     @State private var status = "jarri"
     @State private var routed: CaseRoute?
+    @State private var showScan = false
 
     private var filtered: [CaseRow] {
         let q = search.trimmingCharacters(in: .whitespaces)
@@ -75,6 +76,17 @@ struct CasesView: View {
             .onAppear { Usage.shared.screen("المشاريع") }
             .navigationDestination(item: $routed) { r in
                 CaseDetailView(caseId: r.id)
+            }
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { showScan = true } label: {
+                        Image(systemName: "camera.fill").foregroundStyle(Theme.goldDark)
+                    }
+                }
+            }
+            .sheet(isPresented: $showScan) {
+                // بلا ملف مثبّت: الذكاء يقرأ المستند ويقترح ملفه
+                ScanSheet(caseId: nil, caseTitle: nil) { Task { await load() } }
             }
         }
         .task {

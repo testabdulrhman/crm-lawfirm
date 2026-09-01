@@ -5,7 +5,7 @@ import SwiftUI
 // وإرسال التقرير للموكّل. النقاش يفتح من الزر في الأعلى (CaseStreamView).
 
 enum CaseTab: String, CaseIterable {
-    case overview = "نظرة", sessions = "الجلسات", story = "القصة", study = "الدراسة"
+    case overview = "نظرة", sessions = "الجلسات", documents = "المستندات", story = "القصة", study = "الدراسة"
 }
 
 struct CaseDetailView: View {
@@ -27,6 +27,9 @@ struct CaseDetailView: View {
     @State private var reporting: CloseTarget?
     @State private var generating: String?
     @State private var toast: String?
+    @State private var documents: [DocumentRow] = []
+    @State private var previewDoc: DocumentRow?
+    @State private var showScan = false
 
     var body: some View {
         Group {
@@ -48,6 +51,7 @@ struct CaseDetailView: View {
                         switch tab {
                         case .overview: overview
                         case .sessions: sessionsTab
+                        case .documents: documentsTab
                         case .story: storyTab
                         case .study: studyTab
                         }
@@ -61,6 +65,11 @@ struct CaseDetailView: View {
         .navigationTitle(c?.office_num ?? "الملف")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { showScan = true } label: {
+                    Image(systemName: "camera.fill").foregroundStyle(Theme.goldDark)
+                }
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 NavigationLink {
                     CaseStreamView(caseId: caseId, title: c?.title ?? "نقاش الملف")
@@ -77,6 +86,15 @@ struct CaseDetailView: View {
         }
         .sheet(item: $reporting) { t in
             SessionCloseSheet(target: t, mode: .report) { Task { await load() } }
+        }
+        .sheet(item: $previewDoc) { d in
+            FilePreviewSheet(name: d.name ?? "مستند", url: d.file_url)
+        }
+        .sheet(isPresented: $showScan) {
+            ScanSheet(caseId: caseId, caseTitle: c?.title) {
+                tab = .documents
+                Task { await load() }
+            }
         }
         .alert("تنبيه", isPresented: Binding(get: { toast != nil }, set: { if !$0 { toast = nil } })) {
             Button("حسناً") { toast = nil }
@@ -218,6 +236,52 @@ struct CaseDetailView: View {
         }
     }
 
+    // MARK: - المستندات
+
+    private var documentsTab: some View {
+        VStack(spacing: 10) {
+            Button { showScan = true } label: {
+                Label("تصوير مستند بالكاميرا", systemImage: "camera.fill")
+                    .font(.system(size: 14, weight: .semibold))
+                    .frame(maxWidth: .infinity).padding(.vertical, 10)
+                    .background(Theme.gold).foregroundStyle(Theme.navyDeep)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+            }
+            if documents.isEmpty {
+                EmptyBox(icon: "doc", text: "لا مستندات في هذا الملف بعد")
+            }
+            ForEach(documents) { d in
+                Button { previewDoc = d } label: {
+                    HStack(alignment: .top, spacing: 10) {
+                        Image(systemName: (d.file_type ?? "").contains("pdf") ? "doc.richtext.fill" : "photo.fill")
+                            .font(.system(size: 18)).foregroundStyle(Theme.goldDark)
+                            .frame(width: 36, height: 36).background(Theme.goldPale).clipShape(RoundedRectangle(cornerRadius: 9))
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(d.name ?? "مستند").font(.system(size: 14, weight: .medium)).foregroundStyle(Theme.navy).lineLimit(2)
+                            HStack(spacing: 6) {
+                                if let cat = d.category, !cat.isEmpty {
+                                    Text(cat).font(.system(size: 11, weight: .medium))
+                                        .padding(.horizontal, 7).padding(.vertical, 2)
+                                        .background(Theme.goldPale).foregroundStyle(Theme.goldDark).clipShape(Capsule())
+                                }
+                                Text(Fmt.stamp(d.created_at)).font(.system(size: 11)).foregroundStyle(Theme.muted)
+                            }
+                            if let desc = d.description, !desc.isEmpty {
+                                Text(desc).font(.system(size: 12)).foregroundStyle(Theme.muted).lineLimit(2)
+                            }
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .padding(12)
+                    .background(Theme.card)
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                    .overlay(RoundedRectangle(cornerRadius: 14).stroke(Theme.line, lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
     // MARK: - القصة
 
     private var storyTab: some View {
@@ -329,9 +393,10 @@ struct CaseDetailView: View {
             async let ev = sb.matterEvents(caseId: caseId)
             async let st = sb.caseStudy(caseId: caseId)
             async let pr = sb.studyProposals(caseId: caseId)
-            let (cf, ps, ss, bs, es, sd, prs) = try await (a, b, s, br, ev, st, pr)
+            async let dc = sb.caseDocuments(caseId: caseId)
+            let (cf, ps, ss, bs, es, sd, prs, docs) = try await (a, b, s, br, ev, st, pr, dc)
             guard let cf else { throw SBError(message: "الملف غير موجود أو لا تملك صلاحية فتحه") }
-            c = cf; parties = ps; sessions = ss; events = es; study = sd; proposals = prs
+            c = cf; parties = ps; sessions = ss; events = es; study = sd; proposals = prs; documents = docs
             briefs = Dictionary(uniqueKeysWithValues: bs.map { ($0.session_id, $0) })
             loaded = true
         } catch {
