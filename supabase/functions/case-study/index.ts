@@ -1,6 +1,14 @@
 // دالة «دراسة القضية» — تجمع ملف القضية وتقرأ مستنداته وتكتب الدراسة وفق منهجية الشركة
 // v6: التوليد في الخلفية (EdgeRuntime.waitUntil) — الرد فوري والواجهة تتابع الصف حتى يكتمل
 // (حد بوابة Supabase 150 ثانية لا يكفي لنماذج opus مع مخرجات طويلة)
+// v8 (2026-09-02) — الدراسة كائن حي لا لقطة (طلب المستخدم «ابي كل هذه المميزات»):
+//   • نسخ: كل توليد يحفظ السابقة في case_study_versions أولاً — لا يضيع تحرير محامٍ
+//   • ما الذي تغيّر: قسم يقارن بالنسخة السابقة وأحداث الملف منذها
+//   • سوابق المكتب: قضايا المكتب المنتهية المشابهة وكيف انتهت — ذاكرة مؤسسية
+//   • الأسانيد النظامية: مرحلة بحث أولى في المصادر الرسمية (web_search محصور
+//     بنطاقات رسمية) ثم تُسند الدراسة للمواد بأرقامها
+//   • مخرجات تنفيذية: مقترحات (مهام/مخاطر/أسئلة للموكّل) يعتمدها المحامي بضغطة
+//   • mode=stale (cron ليلي): يجدّد الدراسات التي علّمتها أحداث الملف قديمة
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
@@ -83,7 +91,7 @@ const STUDY_SYSTEM = `أنت مستشار قانوني خبير في ${FIRM_NAME
 - كن وافياً موجزاً: المجموع الكلي للدراسة لا يتجاوز نحو 3000 كلمة.
 - سلّم الدراسة حصراً عبر استدعاء أداة save_study بأقسامها العشرة كاملة.`;
 
-async function generateStudy(caseId: string, userName: string | null): Promise<void> {
+async function generateStudy(caseId: string, userName: string | null, reason?: string): Promise<void> {
   const { data: c, error: caseErr } = await admin
     .from("cases")
     .select("*, contact:contacts(name, phone), assignee:team_members(name)")
@@ -126,6 +134,48 @@ async function generateStudy(caseId: string, userName: string | null): Promise<v
     }
   }
 
+  // ── النسخة السابقة (لقسم «ما الذي تغيّر» وللحفظ في السجل)
+  const { data: prev } = await admin.from("case_studies").select("*").eq("case_id", caseId).maybeSingle();
+  const prevSince = prev?.generated_at ?? null;
+  const { data: sinceEvents } = prevSince
+    ? await admin.from("matter_events").select("kind, sentence, created_at").eq("matter_id", caseId)
+        .gt("created_at", prevSince).order("created_at", { ascending: true }).limit(40)
+    : { data: [] as any[] };
+
+  // ── سوابق المكتب: قضايا منتهية من النوع نفسه — ٢٢٧ قضية = مكتبة سوابق خاصة
+  const { data: precedentRows } = await admin
+    .from("cases")
+    .select("id, title, subject, type, status, close_date, rulings(result, summary, ruling_date)")
+    .eq("kind", "case").is("deleted_at", null).neq("id", caseId)
+    .eq("type", c.type ?? "").in("status", ["muntahia", "closed", "منتهية"])
+    .order("close_date", { ascending: false }).limit(25);
+  const precedentsCtx = (precedentRows ?? []).map((p: any) => ({
+    العنوان: p.title, الموضوع: (p.subject ?? "").slice(0, 300),
+    الأحكام: (p.rulings ?? []).map((r: any) => `${r.ruling_date ?? ""}: ${r.result ?? ""} — ${(r.summary ?? "").slice(0, 200)}`),
+  }));
+
+  // ── الأسانيد النظامية: بحث في المصادر الرسمية فقط (مرحلة أولى، اختيارية)
+  let statutesResearch = "";
+  try {
+    const rq = await fetch(ANTHROPIC_URL, {
+      method: "POST",
+      headers: { "x-api-key": ANTHROPIC_API_KEY!, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-5",
+        max_tokens: 3000,
+        system: "أنت باحث قانوني سعودي. تبحث في المصادر الرسمية فقط وتقتبس أرقام المواد بدقة. لا تختلق مادة لم تجدها.",
+        tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 5,
+                  allowed_domains: ["laws.boe.gov.sa", "moj.gov.sa", "bankruptcy.gov.sa", "ncar.gov.sa"] }],
+        messages: [{ role: "user", content: `قضية سعودية من نوع «${c.type ?? ""}»، موضوعها: ${(c.subject ?? c.title ?? "").slice(0, 600)}.
+ابحث في المصادر الرسمية عن المواد النظامية الأكثر صلة (مرافعات شرعية، إثبات، إفلاس، تنفيذ، عمل… حسب الموضوع) واكتب قائمة مختصرة:
+- اسم النظام — رقم المادة — نصها أو مضمونها بدقة — علاقتها بالقضية.
+لا تزد على ٨ مواد. إن لم تجد نصاً موثوقاً لمادة فلا تذكرها.` }],
+      }),
+    });
+    const rd = await rq.json();
+    if (rq.ok) statutesResearch = (rd.content ?? []).filter((b: any) => b.type === "text").map((b: any) => b.text).join("\n").trim();
+  } catch (_) { /* البحث اختياري — الدراسة تكمل بدونه */ }
+
   const caseInfo = {
     العنوان: c.title,
     رقم_المكتب: c.office_num,
@@ -153,6 +203,23 @@ async function generateStudy(caseId: string, userName: string | null): Promise<v
 - legal_opinion: تحليل الإشكالات الرئيسة مع نقاط القوة والضعف والاستناد للأنظمة.
 - suitability: للقضية الجديدة مدى ملاءمة القبول، وللجارية/المنتهية الموقف والتوصية.
 - attachments_list: مستندات الملف نقاطاً مع بيان ما قُرئ وما يُوصى بطلبه.
+- what_changed: ${prev ? "قارن بالدراسة السابقة وأحداث الملف منذها (أدناه): ما الجديد وما أثره على الرأي والتوصية. إن لم يتغير شيء جوهري قل ذلك صراحة." : "هذه أول دراسة — اكتب: «أول دراسة للملف»."}
+- precedents: من «سوابق المكتب» أدناه فقط: القضايا المشابهة فعلاً وكيف انتهت وما يُستفاد منها هنا. إن لم يكن بينها مشابه قل: «لا سوابق مشابهة في ملفات المكتب».
+- statutes: الأسانيد النظامية من «نتائج البحث الرسمي» أدناه — اسم النظام ورقم المادة وعلاقتها. لا تذكر مادة لم ترد في البحث أو لست متأكداً منها.
+- proposals: مقترحات تنفيذية يعتمدها المحامي بضغطة — من ٣ إلى ٨: مهام ملموسة (أدلة تُجمع، شهود، خبير، مذكرة تُعد، طلب يُقدَّم)، ومخاطر بمهلها (due_in_days عدد الأيام من اليوم)، وأسئلة تُطرح على الموكّل. كل مقترح عنوان قصير + تفصيل سطرين.
+
+${prev ? `الدراسة السابقة (النسخة ${prev.version ?? 1}، ${String(prev.generated_at ?? "").slice(0,10)}) — الرأي والتوصية فيها:
+${(prev.legal_opinion ?? "").slice(0, 1500)}
+${(prev.suitability ?? "").slice(0, 600)}
+
+أحداث الملف منذ تلك الدراسة:
+${JSON.stringify((sinceEvents ?? []).map((e: any) => ({ التاريخ: String(e.created_at).slice(0,10), النوع: e.kind, الحدث: e.sentence })), null, 1)}
+` : ""}
+سوابق المكتب (قضايا منتهية من النوع نفسه — ${precedentsCtx.length}):
+${JSON.stringify(precedentsCtx, null, 1)}
+
+نتائج البحث الرسمي في الأنظمة:
+${statutesResearch || "(تعذّر البحث أو لا نتائج — اكتب في statutes: «لم تُتَح مصادر رسمية في هذه الدورة؛ يُستكمل يدوياً»)"}
 
 بيانات القضية من النظام:
 ${JSON.stringify(caseInfo, null, 1)}
@@ -193,8 +260,22 @@ ${blocks.length > 0 ? `المستندات المرفقة أعلاه (${readDocs.
         basics: S, timeline: S, facts: S, requests: S,
         plaintiff_grounds: S, defendant_defenses: S, references_list: S,
         legal_opinion: S, suitability: S, attachments_list: S,
+        what_changed: S, precedents: S, statutes: S,
+        proposals: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              kind: { type: "string", enum: ["task", "risk", "question"] },
+              title: S, detail: S,
+              due_in_days: { type: "integer" },
+              priority: { type: "string", enum: ["عالية", "متوسطة", "منخفضة"] },
+            },
+            required: ["kind", "title", "detail"],
+          },
+        },
       },
-      required: ["basics", "timeline", "facts", "requests", "plaintiff_grounds", "defendant_defenses", "references_list", "legal_opinion", "suitability", "attachments_list"],
+      required: ["basics", "timeline", "facts", "requests", "plaintiff_grounds", "defendant_defenses", "references_list", "legal_opinion", "suitability", "attachments_list", "what_changed", "precedents", "statutes", "proposals"],
     },
   };
   const model = await getModel();
@@ -219,8 +300,23 @@ ${blocks.length > 0 ? `المستندات المرفقة أعلاه (${readDocs.
     throw new Error(`دراسة غير مكتملة (stop: ${data.stop_reason})`);
   }
 
+  // نسخة سابقة؟ تُحفظ في السجل قبل الاستبدال — لا يضيع تحرير محامٍ
+  const nextVersion = (prev?.version ?? 0) + 1;
+  if (prev) {
+    await admin.from("case_study_versions").insert({
+      case_id: caseId, version: prev.version ?? 1,
+      snapshot: prev, reason: reason ?? "إعادة توليد",
+    });
+  }
+
   const row = {
     case_id: caseId,
+    version: nextVersion,
+    what_changed: parsed.what_changed ?? null,
+    precedents: parsed.precedents ?? null,
+    statutes: parsed.statutes ?? null,
+    stale_since: null,
+    stale_reasons: [],
     basics: parsed.basics ?? null,
     timeline: parsed.timeline ?? null,
     facts: parsed.facts ?? null,
@@ -241,6 +337,23 @@ ${blocks.length > 0 ? `المستندات المرفقة أعلاه (${readDocs.
     .from("case_studies")
     .upsert(row, { onConflict: "case_id" });
   if (saveErr) throw new Error(`تعذّر حفظ الدراسة: ${saveErr.message}`);
+
+  // المقترحات: تُستبدل المعلّقة فقط — ما اعتمده المحامي أو رفضه يبقى شاهداً
+  const props: any[] = Array.isArray(parsed.proposals) ? parsed.proposals : [];
+  await admin.from("case_study_proposals").delete().eq("case_id", caseId).eq("status", "proposed");
+  if (props.length) {
+    const today = new Date();
+    await admin.from("case_study_proposals").insert(props.slice(0, 10).map((p) => {
+      const d = Number(p.due_in_days);
+      const due = Number.isFinite(d) && d > 0 ? new Date(today.getTime() + d * 86_400_000).toISOString().slice(0, 10) : null;
+      return {
+        case_id: caseId, study_version: nextVersion,
+        kind: ["task", "risk", "question"].includes(p.kind) ? p.kind : "task",
+        title: String(p.title ?? "").slice(0, 200), detail: p.detail ? String(p.detail) : null,
+        due_date: due, priority: p.priority ?? null,
+      };
+    }));
+  }
 }
 
 Deno.serve(async (req) => {
@@ -249,6 +362,24 @@ Deno.serve(async (req) => {
   if (!ANTHROPIC_API_KEY) return json({ error: "مفتاح Anthropic غير مُعدّ." }, 500);
   try {
     const body = await req.json();
+
+    // cron ليلي: تجديد الدراسات التي علّمتها أحداث الملف قديمة (بحد ٥ كل ليلة)
+    if (body?.mode === "stale") {
+      const { data: stale } = await admin.from("case_studies")
+        .select("case_id, stale_reasons").not("stale_since", "is", null)
+        .order("stale_since", { ascending: true }).limit(5);
+      const work = (async () => {
+        for (const st of stale ?? []) {
+          const why = (st.stale_reasons ?? []).map((r: any) => r.kind).join("، ");
+          await generateStudy(st.case_id, "تجديد ليلي", `تجديد تلقائي — أحداث: ${why}`).catch((e) =>
+            console.error("stale refresh", st.case_id, e?.message || e));
+        }
+      })();
+      const er: any = (globalThis as any).EdgeRuntime;
+      if (er?.waitUntil) er.waitUntil(work);
+      return json({ ok: true, queued: (stale ?? []).length }, 202);
+    }
+
     const caseId = String(body?.case_id || "");
     if (!caseId) return json({ error: "case_id مطلوب" }, 400);
     const userName = body?.user_name ? String(body.user_name) : null;
@@ -257,7 +388,7 @@ Deno.serve(async (req) => {
     const { data: exists } = await admin.from("cases").select("id").eq("id", caseId).maybeSingle();
     if (!exists) return json({ error: "القضية غير موجودة" }, 404);
 
-    const work = generateStudy(caseId, userName).catch((e) => {
+    const work = generateStudy(caseId, userName, body?.reason ? String(body.reason) : undefined).catch((e) => {
       console.error("case-study background error:", e?.message || e);
     });
     // التوليد يكمل في الخلفية بعد الرد الفوري — الواجهة تتابع الصف

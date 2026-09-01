@@ -60,6 +60,8 @@ import { FilePreviewDialog } from '@/components/FilePreviewDialog'
 import { DualDatePicker } from '@/components/DualDatePicker'
 import { Switch } from '@/components/ui/switch'
 import { QueryErrorState } from '@/components/QueryErrorState'
+import { useAuth } from '@/stores/auth'
+import { useSessionBrief, useGenerateSessionBrief } from '@/hooks/useCaseStudy'
 import { EmptyState } from '@/components/EmptyState'
 
 import { cn } from '@/lib/utils'
@@ -267,6 +269,8 @@ export function SessionsTab({
         nextNumber={nextSessionNumber}
         onClose={() => setPostponeFor(null)}
       />
+
+      <SessionBriefBlock session={s} />
 
       {/* إغلاق الجلسة */}
       <CloseSessionDialog
@@ -1607,5 +1611,53 @@ function SessionForm({
         </Button>
       </DialogFooter>
     </form>
+  )
+}
+
+
+/* ===================== ملخص ما قبل الجلسة ===================== */
+
+// صفحة واحدة يقرؤها المحامي قبل القاعة — تُولَّد صباحاً قبل الجلسة بيومين
+// (cron session-briefs) أو الآن بضغطة. مشتقة من دراسة القضية + ما حدث بعدها.
+function SessionBriefBlock({ session: s }: { session: CaseSession }) {
+  const { teamMember } = useAuth()
+  const { data: brief, isLoading } = useSessionBrief(s.id)
+  const genM = useGenerateSessionBrief()
+  const [open, setOpen] = useState(false)
+  if (!s.case_id || s.closed_at) return null
+
+  const run = (force: boolean) =>
+    genM.mutate({ sessionId: s.id, caseId: s.case_id!, userName: teamMember?.name ?? null, force })
+
+  return (
+    <div className="rounded-xl border border-dashed border-gold/40 bg-gold/5">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
+        <button
+          type="button"
+          onClick={() => brief && setOpen((o) => !o)}
+          className="flex items-center gap-2 text-sm font-medium text-foreground"
+        >
+          <span>📋 ملخص ما قبل الجلسة</span>
+          {isLoading ? (
+            <span className="text-xs text-muted-foreground">…</span>
+          ) : brief ? (
+            <span className="text-xs text-muted-foreground">
+              {fmtDateTime(brief.generated_at)} — {open ? 'إخفاء' : 'عرض'}
+            </span>
+          ) : (
+            <span className="text-xs text-muted-foreground">لم يُعدّ بعد — يُعدّ تلقائياً قبل الجلسة بيومين</span>
+          )}
+        </button>
+        <Button size="sm" variant={brief ? 'ghost' : 'outline'} disabled={genM.isPending} onClick={() => run(!!brief)}>
+          {genM.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+          {brief ? 'تحديث' : 'أعدّه الآن'}
+        </Button>
+      </div>
+      {open && brief && (
+        <div className="whitespace-pre-wrap border-t border-gold/20 px-4 py-3 text-sm leading-relaxed text-foreground">
+          {brief.brief}
+        </div>
+      )}
+    </div>
   )
 }
