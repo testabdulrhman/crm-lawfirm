@@ -396,23 +396,15 @@ export function QuotePdfDialog({
           >
             {/* الترويسة: شعار يميناً + بيانات العرض يساراً */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                {/* الشعار المجرّد (assets/emblem-gold من مشروع الهوية) — لا
-                    الشعار الكامل: ذاك يحمل اسم الشركة داخله فيتكرر مع النص */}
+              {/* شعار المكتب المرفوع في الإعدادات — يحمل اسم الشركة داخله،
+                  فلا يُكتب الاسم نصاً بجانبه (قرار المستخدم 2026-09-01) */}
+              {office?.logo_url && (
                 <img
-                  src="/brand/emblem-gold.png"
-                  style={{ height: 62, objectFit: 'contain' }}
+                  src={office.logo_url}
+                  crossOrigin="anonymous"
+                  style={{ height: 82, objectFit: 'contain' }}
                 />
-                <div style={{ fontSize: 15, fontWeight: 700, lineHeight: 1.55, maxWidth: 250 }}>
-                  شركة
-                  <br />
-                  عبدالرحمن بن رضوان المشيقح
-                  <br />
-                  <span style={{ fontSize: 12.5, fontWeight: 500 }}>
-                    للمحاماة وإدارة إجراءات الإفلاس
-                  </span>
-                </div>
-              </div>
+              )}
               <div style={{ fontSize: 12, lineHeight: 2.1, textAlign: 'left' }}>
                 <div>
                   <span style={{ color: GOLD_DEEP }}>رقم العرض&nbsp;&nbsp;</span>
