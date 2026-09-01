@@ -71,8 +71,7 @@ import {
   fmtTime,
   todayISO,
   arPlural,
-  daysLabel,
-} from '@/lib/format'
+  daysLabel, fmtDateTime } from '@/lib/format'
 import { pickFile, uploadFile } from '@/lib/files'
 import { getTemplate, fillTemplate } from '@/lib/templates'
 import { useExtractSessionMinutes } from '@/hooks/useAiAnalysis'
@@ -269,8 +268,6 @@ export function SessionsTab({
         nextNumber={nextSessionNumber}
         onClose={() => setPostponeFor(null)}
       />
-
-      <SessionBriefBlock session={s} />
 
       {/* إغلاق الجلسة */}
       <CloseSessionDialog
@@ -573,6 +570,7 @@ function SessionCard({
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
+        <SessionBriefBlock session={s} />
       </CardContent>
     </Card>
   )
