@@ -397,13 +397,12 @@ export function QuotePdfDialog({
             {/* الترويسة: شعار يميناً + بيانات العرض يساراً */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                {office?.logo_url && (
-                  <img
-                    src={office.logo_url}
-                    crossOrigin="anonymous"
-                    style={{ height: 64, objectFit: 'contain' }}
-                  />
-                )}
+                {/* الشعار المجرّد (assets/emblem-gold من مشروع الهوية) — لا
+                    الشعار الكامل: ذاك يحمل اسم الشركة داخله فيتكرر مع النص */}
+                <img
+                  src="/brand/emblem-gold.png"
+                  style={{ height: 62, objectFit: 'contain' }}
+                />
                 <div style={{ fontSize: 15, fontWeight: 700, lineHeight: 1.55, maxWidth: 250 }}>
                   شركة
                   <br />
