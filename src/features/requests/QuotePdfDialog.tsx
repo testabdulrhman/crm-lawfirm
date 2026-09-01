@@ -32,9 +32,16 @@ import type { IncomingRequest } from '@/types/db'
 const COMPANY = 'شركة عبدالرحمن بن رضوان المشيقح للمحاماة وإدارة إجراءات الإفلاس'
 const VAT = 0.15
 
-const NAVY = '#111D3A'
-const GOLD = '#C9A84C'
-const MUTED = '#8A8676'
+// ألوان الهوية الرسمية — مسحوبة من مشروع Claude Design
+// «Al-Mushaiqeh Law Design System» (tokens/colors.css) لا من تقدير يدوي:
+// الذهب شامبين لا نحاسي، والكحلي أعمق قليلاً مما كان.
+const NAVY = '#131C30'      // ink-800 — الكحلي الأساسي
+const NAVY_DEEP = '#0B1220' // ink-900 — رؤوس الجداول
+const GOLD = '#C9A982'      // gold-500 — الذهب الشامبين (الشعار والفواصل)
+const GOLD_DEEP = '#A8855B' // gold-700 — نص ذهبي على فاتح
+const MUTED = '#6B7589'     // text-muted
+const LINE = '#E7DACD'      // خط شعري دافئ
+const SAND = '#F7EFE8'      // sand-100 — صفوف متناوبة
 
 // أرقام لاتينية بفواصل آلاف — أسلوب النموذج المرجعي
 const money = (n: number, frac = 2) =>
@@ -438,7 +445,7 @@ export function QuotePdfDialog({
               </div>
             </div>
 
-            <div style={{ height: 1.5, background: '#D9D5C9', margin: '16px 0 18px' }} />
+            <div style={{ height: 1.5, background: LINE, margin: '16px 0 18px' }} />
 
             {/* العنوان */}
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
@@ -451,7 +458,7 @@ export function QuotePdfDialog({
             <div
               style={{
                 marginTop: 14,
-                background: '#F5F2EA',
+                background: SAND,
                 borderRadius: 10,
                 padding: '10px 16px',
                 fontSize: 14,
@@ -486,7 +493,7 @@ export function QuotePdfDialog({
             <SectionHead>الأتعاب المهنية</SectionHead>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.6 }}>
               <thead>
-                <tr style={{ background: NAVY, color: '#fff' }}>
+                <tr style={{ background: NAVY_DEEP, color: '#fff' }}>
                   <th style={{ padding: '8px 14px', textAlign: 'right', fontWeight: 700 }}>البيان</th>
                   <th style={{ padding: '8px 14px', textAlign: 'left', fontWeight: 700, width: 150 }}>
                     المبلغ (ر.س)
@@ -494,24 +501,24 @@ export function QuotePdfDialog({
                 </tr>
               </thead>
               <tbody>
-                <tr style={{ borderBottom: '1px solid #E3E0D6' }}>
+                <tr style={{ borderBottom: `1px solid ${LINE}` }}>
                   <td style={{ padding: '9px 14px' }}>الأتعاب المهنية — {title}</td>
                   <td style={{ padding: '9px 14px', textAlign: 'left', fontWeight: 700 }} dir="ltr">
                     {money(netN)}
                   </td>
                 </tr>
-                <tr style={{ borderBottom: '1px solid #E3E0D6' }}>
+                <tr style={{ borderBottom: `1px solid ${LINE}` }}>
                   <td style={{ padding: '9px 14px' }}>ضريبة القيمة المضافة (15%)</td>
                   <td style={{ padding: '9px 14px', textAlign: 'left', fontWeight: 700 }} dir="ltr">
                     {money(vatN)}
                   </td>
                 </tr>
-                <tr style={{ background: '#F5F2EA' }}>
+                <tr style={{ background: SAND }}>
                   <td style={{ padding: '9px 14px', fontWeight: 800 }}>
                     الإجمالي شاملاً ضريبة القيمة المضافة
                   </td>
                   <td
-                    style={{ padding: '9px 14px', textAlign: 'left', fontWeight: 800, color: '#8C7129' }}
+                    style={{ padding: '9px 14px', textAlign: 'left', fontWeight: 800, color: GOLD_DEEP }}
                     dir="ltr"
                   >
                     {money(grossN)}
@@ -531,7 +538,7 @@ export function QuotePdfDialog({
                 <SectionHead>جدول الدفعات</SectionHead>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.6 }}>
                   <thead>
-                    <tr style={{ background: NAVY, color: '#fff' }}>
+                    <tr style={{ background: NAVY_DEEP, color: '#fff' }}>
                       <th style={{ padding: '7px 14px', textAlign: 'right', width: 70, fontWeight: 700 }}>
                         الدفعة
                       </th>
@@ -543,7 +550,7 @@ export function QuotePdfDialog({
                   </thead>
                   <tbody>
                     {payRows.map((p, i) => (
-                      <tr key={i} style={{ borderBottom: '1px solid #E3E0D6' }}>
+                      <tr key={i} style={{ borderBottom: `1px solid ${LINE}` }}>
                         <td style={{ padding: '8px 14px', fontWeight: 700 }}>
                           {['الأولى', 'الثانية', 'الثالثة'][i] ?? i + 1}
                         </td>
@@ -661,7 +668,7 @@ function SectionHead({ children }: { children: React.ReactNode }) {
     >
       <span style={{ color: GOLD, fontSize: 13 }}>◆</span>
       <span style={{ fontSize: 14.5, fontWeight: 800 }}>{children}</span>
-      <span style={{ flex: 1, height: 1, background: '#D9D5C9' }} />
+      <span style={{ flex: 1, height: 1, background: LINE }} />
     </div>
   )
 }
