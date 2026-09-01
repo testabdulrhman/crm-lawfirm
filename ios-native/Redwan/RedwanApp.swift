@@ -3,7 +3,8 @@ import CoreSpotlight
 import UserNotifications
 
 // تطبيق «Redwan» الأصيل — SwiftUI على نفس قاعدة Supabase التي يقرأها الويب.
-// التبويبات: الرئيسية · المهام · التقويم · النقاشات.
+// التبويبات: الرئيسية · الملفات · المهام · التقويم · النقاشات.
+// «الملفات» أُضيف 2026-09-02 (ثلاثية المحكمة: ملف القضية، ملخّص الجلسة، إغلاقها من القاعة).
 // «النقاشات» أُضيف 2026-08-21 لحلّ تشتّت العمل بين خاص الواتساب وقروبه.
 
 @main
@@ -120,15 +121,18 @@ struct MainTabs: View {
             HomeView()
                 .tabItem { Label("الرئيسية", systemImage: "house.fill") }
                 .tag(0)
+            CasesView()
+                .tabItem { Label("الملفات", systemImage: "folder.fill") }
+                .tag(1)
             TasksView()
                 .tabItem { Label("المهام", systemImage: "checklist") }
-                .tag(1)
+                .tag(2)
             CalendarView()
                 .tabItem { Label("التقويم", systemImage: "calendar") }
-                .tag(2)
+                .tag(3)
             DiscussionsView()
                 .tabItem { Label("النقاشات", systemImage: "bubble.left.and.bubble.right.fill") }
-                .tag(3)
+                .tag(4)
         }
         // مسار الإشعار يقلب التبويب — والشاشة نفسها تفتح وجهتها ثم تصفّر الجسر
         .onChange(of: router.route) { _, r in switchTab(for: r) }
@@ -137,7 +141,8 @@ struct MainTabs: View {
 
     private func switchTab(for route: String?) {
         guard let r = route else { return }
-        if r.hasPrefix("/tasks/") { tab = 1 }
-        else if r.hasPrefix("/discussions") || r.hasPrefix("/cases/") { tab = 3 }
+        if r.hasPrefix("/tasks/") { tab = 2 }
+        else if r.hasPrefix("/discussions") { tab = 4 }
+        else if r.hasPrefix("/cases/") { tab = 1 }
     }
 }

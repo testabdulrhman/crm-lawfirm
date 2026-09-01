@@ -10,6 +10,9 @@ struct HomeView: View {
     @State private var overview: DashboardOverview?
     @State private var errorMessage: String?
     @State private var unreadCount = 0
+    // ثلاثية المحكمة: الجلسات المنعقدة بلا نتيجة مسجّلة — تُغلق من هنا مباشرة
+    @State private var needClosure: [SessionNeedingClosure] = []
+    @State private var closing: CloseTarget?
 
     var body: some View {
         NavigationStack {
@@ -72,6 +75,9 @@ struct HomeView: View {
             }
         }
         .task { await load() }
+        .sheet(item: $closing) { t in
+            SessionCloseSheet(target: t, mode: .close) { Task { await load() } }
+        }
     }
 
     // MARK: - المحتوى
@@ -92,6 +98,10 @@ struct HomeView: View {
                 statsGrid(ov.stats)
 
                 todayCard
+
+                if !needClosure.isEmpty {
+                    closureCard
+                }
 
                 if let poas = ov.expiring_poas, !poas.isEmpty {
                     poaCard(poas)
@@ -171,7 +181,8 @@ struct HomeView: View {
                 date: today,
                 time: normTime(session.session_time),
                 title: session.title ?? session.case_title ?? "جلسة",
-                subtitle: session.court ?? session.case_title
+                subtitle: session.court ?? session.case_title,
+                caseId: session.case_id
             ))
         }
         for appointment in ov.appointments ?? []
@@ -207,7 +218,22 @@ struct HomeView: View {
         }
     }
 
+    @ViewBuilder
     private func todayRow(_ item: CalItem) -> some View {
+        // الجلسة تفتح ملفها (تبويب الجلسات) — الملخّص وتسجيل النتيجة هناك
+        if item.kind == .session, let cid = item.caseId {
+            NavigationLink {
+                CaseDetailView(caseId: cid, initialTab: .sessions)
+            } label: {
+                todayRowBody(item)
+            }
+            .buttonStyle(.plain)
+        } else {
+            todayRowBody(item)
+        }
+    }
+
+    private func todayRowBody(_ item: CalItem) -> some View {
         HStack(alignment: .center, spacing: 10) {
             // عمود وقت ثابت العرض حتى تصطف الصفوف بصرياً
             Group {
@@ -244,6 +270,50 @@ struct HomeView: View {
             Spacer(minLength: 0)
         }
         .padding(.vertical, 9)
+    }
+
+    // MARK: - جلسات تحتاج تسجيل نتيجتها (sessions_need_closure — نفس تنبيه لوحة الويب)
+
+    private var closureCard: some View {
+        SectionCard(title: "جلسات تحتاج تسجيل نتيجتها", icon: "exclamationmark.circle.fill", count: needClosure.count) {
+            VStack(spacing: 0) {
+                ForEach(Array(needClosure.enumerated()), id: \.element.id) { index, s in
+                    Button {
+                        closing = CloseTarget(
+                            id: s.id, caseId: s.case_id, sessionTitle: s.title, caseTitle: s.case_title,
+                            clientName: nil, clientPhone: nil, outcome: nil, nextAction: nil, rulingDate: nil
+                        )
+                    } label: {
+                        HStack(alignment: .center, spacing: 10) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(s.case_title ?? "ملف")
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundStyle(Theme.navy)
+                                    .lineLimit(1)
+                                Text([s.title ?? "جلسة", Fmt.gregLong(s.session_date)].joined(separator: " · "))
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(Theme.muted)
+                                    .lineLimit(1)
+                            }
+                            Spacer(minLength: 8)
+                            let d = s.days_ago ?? 0
+                            Text(d <= 0 ? "اليوم" : d == 1 ? "أمس" : "منذ \(d) يوم")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(d >= 3 ? Theme.danger : Theme.amber)
+                            Image(systemName: "chevron.backward")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(Theme.muted)
+                        }
+                        .padding(.vertical, 9)
+                    }
+                    .buttonStyle(.plain)
+
+                    if index < needClosure.count - 1 {
+                        Divider().overlay(Theme.line)
+                    }
+                }
+            }
+        }
     }
 
     // MARK: - الوكالات المنتهية قريباً
@@ -304,6 +374,8 @@ struct HomeView: View {
             let effectiveScope = sb.member?.is_director == true ? scope : "mine"
             overview = try await sb.dashboard(scope: effectiveScope)
             errorMessage = nil
+            // ثانوي — لا يُفشل الشاشة
+            needClosure = (try? await sb.sessionsNeedClosure(scope: effectiveScope)) ?? []
         } catch {
             errorMessage = error.localizedDescription
         }

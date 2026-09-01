@@ -326,7 +326,21 @@ struct CalendarView: View {
         .padding(.top, 10)
     }
 
+    @ViewBuilder
     private func agendaRow(_ it: CalItem) -> some View {
+        if it.kind == .session, let cid = it.caseId {
+            NavigationLink {
+                CaseDetailView(caseId: cid, initialTab: .sessions)
+            } label: {
+                agendaRowBody(it)
+            }
+            .buttonStyle(.plain)
+        } else {
+            agendaRowBody(it)
+        }
+    }
+
+    private func agendaRowBody(_ it: CalItem) -> some View {
         HStack(spacing: 10) {
             Image(systemName: kindIcon(it.kind))
                 .font(.system(size: 14))

@@ -126,7 +126,8 @@ extension SB {
             guard let d = r.session_date else { return nil }
             return CalItem(
                 id: "s-\(r.id)", kind: .session, date: d, time: hhmm(r.session_time),
-                title: r.cases?.title ?? r.title ?? "جلسة", subtitle: r.court
+                title: r.cases?.title ?? r.title ?? "جلسة", subtitle: r.court,
+                caseId: r.case_id
             )
         }
         items += ap.compactMap { r in

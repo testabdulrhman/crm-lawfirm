@@ -129,6 +129,8 @@ struct CalItem: Identifiable {
     let time: String?
     let title: String
     let subtitle: String?
+    /// معرف الملف — للجلسات فقط، يفتح ملف القضية بنقرة
+    var caseId: String? = nil
 }
 
 // ===== نقاش القضايا بالخيوط =====

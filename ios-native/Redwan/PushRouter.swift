@@ -14,16 +14,18 @@ final class PushRouter: ObservableObject {
         return String(r.dropFirst("/tasks/".count))
     }
 
-    /// "/discussions?case=<id>" أو "/cases/<id>" → معرف القضية لفتح نقاشها
+    /// "/discussions?case=<id>" → معرف القضية لفتح نقاشها
     var discussionCaseId: String? {
-        guard let r = route else { return nil }
-        if let q = r.range(of: "/discussions?case=") {
-            return String(r[q.upperBound...])
-        }
-        if r.hasPrefix("/cases/") {
-            return String(r.dropFirst("/cases/".count))
-        }
-        return nil
+        guard let r = route, let q = r.range(of: "/discussions?case=") else { return nil }
+        return String(r[q.upperBound...])
+    }
+
+    /// "/cases/<id>[?tab=…]" → معرف القضية لفتح ملفها (تبويب الملفات)
+    var caseId: String? {
+        guard let r = route, r.hasPrefix("/cases/") else { return nil }
+        let rest = r.dropFirst("/cases/".count)
+        let id = rest.split(whereSeparator: { $0 == "?" || $0 == "/" }).first.map(String.init) ?? ""
+        return id.isEmpty ? nil : id
     }
 
     func clear() { route = nil }
