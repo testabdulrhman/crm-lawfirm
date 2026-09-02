@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useLocation } from 'wouter'
 import {
   Menu,
@@ -45,8 +45,22 @@ async function hardRefresh() {
   window.location.replace(u.toString())
 }
 
+// بعد التحديث القوي تبقى ?cb=… في الرابط بلا فائدة — نمسحها فور التحميل
+// (المسار بعد # يبقى كما هو)
+function stripCacheBuster() {
+  try {
+    const u = new URL(window.location.href)
+    if (!u.searchParams.has('cb')) return
+    u.searchParams.delete('cb')
+    window.history.replaceState(window.history.state, '', u.toString())
+  } catch {
+    /* رابط غير قابل للتحليل — نتركه */
+  }
+}
+
 export function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
   const [location, navigate] = useLocation()
+  useEffect(() => { stripCacheBuster() }, [])
   const { theme, toggle } = useTheme()
   const { teamMember, logout } = useAuth()
   const [refreshing, setRefreshing] = useState(false)
