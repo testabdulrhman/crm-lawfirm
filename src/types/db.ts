@@ -86,6 +86,38 @@ export interface PayrollEntryInput {
   created_by?: string | null
 }
 
+/* ===== طلبات الموظفين: إجازة · استئذان · دوام عن بعد ===== */
+
+export interface HrRequest {
+  id: string
+  member_id: string
+  kind: string // leave | permission | remote
+  leave_type: string | null // annual | sick | emergency | unpaid
+  start_date: string
+  end_date: string
+  from_time: string | null
+  to_time: string | null
+  reason: string | null
+  status: string // pending | approved | rejected | cancelled
+  decided_by: string | null
+  decided_at: string | null
+  decision_note: string | null
+  created_at: string
+  updated_at: string | null
+  member?: { id: string; name: string | null; short_name: string | null; avatar_initial: string | null; avatar_color: string | null } | null
+  decider?: { id: string; name: string | null; short_name: string | null } | null
+}
+
+export interface HrRequestInput {
+  kind: string
+  leave_type?: string | null
+  start_date: string
+  end_date: string
+  from_time?: string | null
+  to_time?: string | null
+  reason?: string | null
+}
+
 export interface OfficeInfo {
   id: string
   office_name: string | null

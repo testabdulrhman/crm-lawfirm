@@ -13,6 +13,7 @@ import {
   FileSignature,
   CalendarClock,
   CalendarDays,
+  CalendarOff,
   CalendarRange,
   MessagesSquare,
   FolderOpen,
@@ -34,6 +35,7 @@ import { useExpiringPOAsCount } from '@/hooks/usePOAs'
 import { useUpcomingAppointmentsCount } from '@/hooks/useAppointments'
 import { useMyOpenTasksCount } from '@/hooks/useTasks'
 import { useMyReviewCount } from '@/hooks/useTaskRoom'
+import { usePendingHrCount } from '@/hooks/useHrRequests'
 import { fmtNumber } from '@/lib/format'
 
 interface NavItem {
@@ -47,6 +49,7 @@ interface NavItem {
     | 'upcoming_appointments'
     | 'pending_out_approvals'
     | 'my_open_tasks'
+    | 'pending_hr'
 }
 
 // أقسام التنقل: تجميع منطقي بدل قائمة طويلة مسطّحة
@@ -106,6 +109,8 @@ const navSections: { title?: string; items: NavItem[] }[] = [
         icon: Users,
         badge: 'pending_applications',
       },
+      // إجازة · استئذان · دوام عن بعد — الموظف يقدّم والمدير يعتمد
+      { label: 'الإجازات والاستئذان', href: '/hr', icon: CalendarOff, badge: 'pending_hr' },
       { label: 'التقارير', href: '/reports', icon: BarChart3 },
       { label: 'الإعدادات', href: '/settings', icon: Settings },
     ],
@@ -125,6 +130,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const { data: myTasks } = useMyOpenTasksCount()
   // شارة المهام = المستحق عليّ + ما ينتظر اعتمادي
   const { data: myReviews } = useMyReviewCount()
+  const { data: pendingHr } = usePendingHrCount(isDirector)
 
   return (
     <aside className="pt-safe pb-safe flex h-full w-64 flex-col bg-card text-foreground">
@@ -182,7 +188,9 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                             ? (isDirector ? (pendingApprovals ?? 0) : 0)
                             : item.badge === 'my_open_tasks'
                               ? (myTasks ?? 0) + (myReviews ?? 0)
-                              : 0
+                              : item.badge === 'pending_hr'
+                                ? (isDirector ? (pendingHr ?? 0) : 0)
+                                : 0
                 const showBadge = !!item.badge && badgeCount > 0
                 return (
                   <Link

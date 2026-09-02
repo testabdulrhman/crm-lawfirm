@@ -71,6 +71,8 @@ function destination(n: AppNotification): string {
     return '/discussions'
   }
   if (n.case_id) return `/cases/${n.case_id}`
+  // طلبات الإجازة والاستئذان — صفحتها لا مهمة ولا ملف
+  if (n.type === 'hr_request' || n.type === 'hr_result') return '/hr'
   switch (n.type) {
     case 'task_assigned':
     case 'task_due':

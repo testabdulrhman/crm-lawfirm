@@ -26,6 +26,7 @@ private let CATEGORIES: [PrefCategory] = [
     .init(id: "appointments", label: "المواعيد", detail: "حجز موعد جديد من رابط الحجز", icon: "calendar.badge.clock"),
     .init(id: "birthdays", label: "أعياد الميلاد", detail: "احتفال الفريق بيوم ميلاد زميل", icon: "gift"),
     .init(id: "inbox", label: "الرسائل الواردة", detail: "رسائل العملاء الواردة", icon: "envelope"),
+    .init(id: "hr", label: "الإجازات والاستئذان", detail: "طلبات الفريق وقرارات المدير عليها", icon: "calendar.badge.minus"),
 ]
 
 struct NotificationPrefsView: View {
