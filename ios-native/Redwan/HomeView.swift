@@ -13,6 +13,7 @@ struct HomeView: View {
     // ثلاثية المحكمة: الجلسات المنعقدة بلا نتيجة مسجّلة — تُغلق من هنا مباشرة
     @State private var needClosure: [SessionNeedingClosure] = []
     @State private var closing: CloseTarget?
+    @State private var showPrefs = false
 
     var body: some View {
         NavigationStack {
@@ -35,6 +36,7 @@ struct HomeView: View {
             .navigationTitle("الرئيسية")
             .onAppear { Usage.shared.screen("الرئيسية") }
             .navigationBarTitleDisplayMode(.inline)
+            .navigationDestination(isPresented: $showPrefs) { NotificationPrefsView() }
             .toolbar {
                 // جرس الإشعارات — يشوف الموظف كل ما يخصه (طلب 2026-08-22)
                 ToolbarItem(placement: .topBarLeading) {
@@ -64,6 +66,11 @@ struct HomeView: View {
                             // سطر تعريفي فقط — معطّل حتى لا يوحي بأنه إجراء
                             Button(name) {}
                                 .disabled(true)
+                        }
+                        Button {
+                            showPrefs = true
+                        } label: {
+                            Label("إعدادات الإشعارات", systemImage: "bell.badge")
                         }
                         Button("تسجيل الخروج", role: .destructive) {
                             sb.logout()

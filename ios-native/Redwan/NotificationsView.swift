@@ -46,6 +46,13 @@ struct NotificationsView: View {
         .onAppear { Usage.shared.screen("الإشعارات") }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                NavigationLink {
+                    NotificationPrefsView()
+                } label: {
+                    Image(systemName: "gearshape").foregroundStyle(Theme.goldDark)
+                }
+            }
             if rows.contains(where: { $0.is_read == false }) {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("قراءة الكل") {
