@@ -197,8 +197,19 @@ struct AvatarCircle: View {
             Text(initialText)
                 .font(.system(size: size * 0.42, weight: .semibold))
                 .foregroundStyle(.white)
+
+            // الصورة فوق الحرف: الحرف يبقى ظاهراً أثناء التحميل وعند تعذّره،
+            // فلا تظهر دائرة فارغة إن انقطع الاتصال أو حُذف الملف
+            if let raw = member?.avatar_url, let url = URL(string: raw) {
+                AsyncImage(url: url) { phase in
+                    if case .success(let image) = phase {
+                        image.resizable().scaledToFill()
+                    }
+                }
+            }
         }
         .frame(width: size, height: size)
+        .clipShape(Circle())
     }
 
     private var initialText: String {

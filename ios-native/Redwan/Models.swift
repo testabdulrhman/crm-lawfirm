@@ -10,6 +10,8 @@ struct TeamMember: Codable, Identifiable, Equatable {
     let is_director: Bool?
     let avatar_initial: String?
     let avatar_color: String?
+    /// صورة الموظف من الويب — تُعرض بدل حرف الاسم متى وُجدت
+    var avatar_url: String? = nil
 }
 
 struct CaseRef: Codable, Equatable, Hashable { let title: String? }

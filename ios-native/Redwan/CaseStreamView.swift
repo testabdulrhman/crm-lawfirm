@@ -6,7 +6,6 @@ import UniformTypeIdentifiers
 // تفاعل إيموجي + حفظ (بوك مارك) + تعديل وحذف رسالتي + إرسال صور وملفات.
 // caseId فارغ = القناة العامة «عام — المكتب».
 
-private let QUICK_EMOJIS = ["👍", "❤️", "✅", "😂", "😮", "🙏"]
 
 // MARK: - منشن الموظفين (طلب المستخدم 2026-08-21: «ابي اعمل منشن للي عندي»)
 
@@ -432,80 +431,6 @@ struct ReactionsBar: View {
     }
 }
 
-/// قائمة السياق المشتركة: تفاعل سريع + حفظ + (تعديل/حذف لرسالتي)
-struct MessageContextMenu: View {
-    let commentId: String
-    let messageBody: String?
-    let reactions: [Reaction]
-    let bookmarked: Bool
-    let mine: Bool
-    let createdAt: String?
-    let onChange: () -> Void
-    let onEdit: (() -> Void)?
-    @EnvironmentObject private var sb: SB
-
-    /// مهلة التعديل والحذف ساعة — القاعدة تفرضها أيضاً (enforce_edit_window)
-    private var withinEditWindow: Bool {
-        guard let createdAt,
-              let d = ISO8601DateFormatter.flexible.date(from: createdAt)
-        else { return false }
-        return Date().timeIntervalSince(d) < 3600
-    }
-
-    var body: some View {
-        Group {
-            ForEach(QUICK_EMOJIS, id: \.self) { e in
-                let isMine = reactions.first(where: { $0.e == e })?.me ?? false
-                Button {
-                    Task {
-                        try? await sb.toggleReaction(commentId: commentId, emoji: e, currentlyMine: isMine)
-                        onChange()
-                    }
-                } label: {
-                    Label("\(e) تفاعل", systemImage: isMine ? "checkmark.circle.fill" : "face.smiling")
-                }
-            }
-
-            Divider()
-
-            Button {
-                Task {
-                    try? await sb.toggleBookmark(commentId: commentId, currentlyOn: bookmarked)
-                    onChange()
-                }
-            } label: {
-                Label(bookmarked ? "إزالة من المحفوظات" : "حفظ للرجوع إليها",
-                      systemImage: bookmarked ? "bookmark.slash" : "bookmark")
-            }
-
-            if let messageBody, !messageBody.isEmpty {
-                Button {
-                    UIPasteboard.general.string = messageBody
-                } label: {
-                    Label("نسخ النص", systemImage: "doc.on.doc")
-                }
-            }
-
-            if mine && withinEditWindow {
-                Divider()
-                if let onEdit {
-                    Button { onEdit() } label: {
-                        Label("تعديل", systemImage: "pencil")
-                    }
-                }
-                Button(role: .destructive) {
-                    Task {
-                        try? await sb.deleteMessage(id: commentId)
-                        onChange()
-                    }
-                } label: {
-                    Label("حذف", systemImage: "trash")
-                }
-            }
-        }
-    }
-}
-
 // MARK: - فقاعة في المجرى (جذر خيط)
 
 private struct StreamBubble: View {
@@ -603,18 +528,16 @@ private struct StreamBubble: View {
                 RoundedRectangle(cornerRadius: 14)
                     .stroke(mine ? .clear : (isAI ? Theme.gold.opacity(0.4) : Theme.line), lineWidth: 1)
             )
-            .contextMenu {
-                MessageContextMenu(
-                    commentId: msg.id,
-                    messageBody: msg.body,
-                    reactions: msg.reactions ?? [],
-                    bookmarked: msg.bookmarked ?? false,
-                    mine: mine,
-                    createdAt: msg.created_at,
-                    onChange: onChange,
-                    onEdit: mine ? onEdit : nil
-                )
-            }
+            .messageActions(
+                commentId: msg.id,
+                messageBody: msg.body,
+                reactions: msg.reactions ?? [],
+                bookmarked: msg.bookmarked ?? false,
+                mine: mine,
+                createdAt: msg.created_at,
+                onChange: onChange,
+                onEdit: mine ? onEdit : nil
+            )
 
             ReactionsBar(commentId: msg.id, reactions: msg.reactions ?? [], onChange: onChange)
         }
@@ -863,18 +786,16 @@ private struct ThreadView: View {
                     RoundedRectangle(cornerRadius: 12)
                         .stroke(mine ? .clear : (isAI ? Theme.gold.opacity(0.4) : Theme.line), lineWidth: 1)
                 )
-                .contextMenu {
-                    MessageContextMenu(
-                        commentId: r.id,
-                        messageBody: r.body,
-                        reactions: r.reactions ?? [],
-                        bookmarked: r.bookmarked ?? false,
-                        mine: mine,
-                        createdAt: r.created_at,
-                        onChange: { Task { await load() } },
-                        onEdit: mine ? { editingReply = r; editDraft = r.body ?? "" } : nil
-                    )
-                }
+                .messageActions(
+                    commentId: r.id,
+                    messageBody: r.body,
+                    reactions: r.reactions ?? [],
+                    bookmarked: r.bookmarked ?? false,
+                    mine: mine,
+                    createdAt: r.created_at,
+                    onChange: { Task { await load() } },
+                    onEdit: mine ? { editingReply = r; editDraft = r.body ?? "" } : nil
+                )
 
                 ReactionsBar(commentId: r.id, reactions: r.reactions ?? []) {
                     Task { await load() }

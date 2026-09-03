@@ -39,7 +39,7 @@ extension SB {
     // task_comments → team_members عبر author_id (FK واحد — لا لبس PGRST201)
     func comments(taskId: String) async throws -> [CommentRow] {
         try await get("task_comments", query: [
-            ("select", "id,body,created_at,author_id,author:team_members(id,name,short_name,is_director,avatar_initial,avatar_color)"),
+            ("select", "id,body,created_at,author_id,author:team_members(id,name,short_name,is_director,avatar_initial,avatar_color,avatar_url)"),
             ("task_id", "eq.\(taskId)"),
             ("deleted_at", "is.null"),
             ("order", "created_at.asc"),
@@ -189,7 +189,7 @@ extension SB {
     /// موظفو المكتب النشطون — قائمة المنشن في النقاش
     func staff() async throws -> [TeamMember] {
         try await get("team_members", query: [
-            ("select", "id,name,short_name,is_director,avatar_initial,avatar_color"),
+            ("select", "id,name,short_name,is_director,avatar_initial,avatar_color,avatar_url"),
             ("is_active", "not.is.false"),
             ("order", "name.asc"),
         ])

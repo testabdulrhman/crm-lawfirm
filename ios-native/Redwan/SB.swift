@@ -206,7 +206,7 @@ final class SB: ObservableObject {
         guard let uid = session?.userId else { return }
         do {
             let rows: [TeamMember] = try await get("team_members", query: [
-                ("select", "id,name,short_name,is_director,avatar_initial,avatar_color"),
+                ("select", "id,name,short_name,is_director,avatar_initial,avatar_color,avatar_url"),
                 ("auth_id", "eq.\(uid)"),
                 ("limit", "1"),
             ])
