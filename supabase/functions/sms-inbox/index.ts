@@ -124,14 +124,19 @@ function redactOtp(message: string): string {
 
 /* ============ موعد ناجز (كما كان) ============ */
 
+const UMM_AL_QURA = new Intl.DateTimeFormat('en-u-ca-islamic-umalqura-nu-latn', {
+  day: 'numeric', month: 'numeric', year: 'numeric', timeZone: 'UTC',
+})
+
 /**
- * تحويل تاريخ هجري (أم القرى تقريباً) إلى ميلادي.
+ * تحويل تاريخ هجري إلى ميلادي بتقويم **أم القرى الفعلي**.
  * ⚠️ ناجز يرسل التاريخ هجرياً أحياناً وميلادياً أحياناً بنفس الصيغة DD/MM/YYYY.
- *    كان المحلّل يأخذه كما هو، فسُجّل موعد فعلي بتاريخ «1448-03-12» — أي ضاع
- *    في سنة 1448 ميلادية. الآن: سنة أقل من 1500 = هجرية فتُحوَّل.
+ *    كان المحلّل يأخذه كما هو، فسُجّل موعد بتاريخ «1448-03-12» — ضاع في سنة
+ *    1448 ميلادية. ثم صُحّح بصيغة حسابية تقريبية، وتلك **تنحرف يومين**
+ *    (26/04/1448 تعطي 2026-10-09 والصحيح 2026-10-07) — ويومان في موعد
+ *    محكمة يعنيان موعداً فائتاً. الآن: تقدير حسابي ثم مطابقة دقيقة ±٥ أيام.
  */
 function hijriToGregorian(hy: number, hm: number, hd: number): Date {
-  // الصيغة الفلكية المعتادة للتقويم الهجري (انحراف ±يوم مقبول لموعد إداري)
   const jd =
     Math.floor((11 * hy + 3) / 30) +
     354 * hy +
@@ -140,7 +145,14 @@ function hijriToGregorian(hy: number, hm: number, hd: number): Date {
     hd +
     1948440 -
     385
-  return new Date((jd - 2440588) * 86400000)
+  const approx = new Date((jd - 2440588) * 86400000)
+  for (let off = -5; off <= 5; off++) {
+    const d = new Date(approx.getTime() + off * 86400000)
+    const p: Record<string, string> = {}
+    for (const part of UMM_AL_QURA.formatToParts(d)) p[part.type] = part.value
+    if (+p.year === hy && +p.month === hm && +p.day === hd) return d
+  }
+  return approx // تعذّرت المطابقة — التقدير أفضل من لا شيء
 }
 
 function parseNajizAppointment(msg: string): {
