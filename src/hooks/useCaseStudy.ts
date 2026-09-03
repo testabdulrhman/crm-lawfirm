@@ -99,7 +99,10 @@ export function useGenerateCaseStudy(caseId: string) {
       }
       if (data?.error) throw new Error(data.error)
 
-      // متابعة كل 6 ثوانٍ حتى 7 دقائق
+      // متابعة كل 6 ثوانٍ حتى 7 دقائق — ومعها فحص سجل الأخطاء كل نصف دقيقة.
+      // بدونه كان فشل الخلفية (مثل قطع المخرَج) يظهر للمحامي «استغرق وقتاً
+      // أطول» بعد سبع دقائق انتظار، والسبب الحقيقي مدفون في سجل الدالة.
+      const startedIso = new Date(startedAt - 10000).toISOString()
       for (let i = 0; i < 70; i++) {
         await new Promise((r) => setTimeout(r, 6000))
         const { data: row } = await supabase
@@ -113,6 +116,18 @@ export function useGenerateCaseStudy(caseId: string) {
           new Date(study.generated_at).getTime() >= startedAt - 10000
         ) {
           return study
+        }
+        if (i % 5 === 4) {
+          const { data: fail } = await supabase
+            .from('error_logs')
+            .select('message')
+            .eq('source', 'case-study')
+            .eq('url', caseId)
+            .gte('created_at', startedIso)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+          if (fail?.message) throw new Error(fail.message as string)
         }
       }
       throw new Error(

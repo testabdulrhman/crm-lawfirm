@@ -9,6 +9,14 @@
 //     بنطاقات رسمية) ثم تُسند الدراسة للمواد بأرقامها
 //   • مخرجات تنفيذية: مقترحات (مهام/مخاطر/أسئلة للموكّل) يعتمدها المحامي بضغطة
 //   • mode=stale (cron ليلي): يجدّد الدراسات التي علّمتها أحداث الملف قديمة
+// v11 (2026-09-03) — إصلاح «يشتغل فترة بعدين يوقف» على الملفات الكبيرة
+//   (بلاغ المستخدم على CASE25008: ٧٣ مستنداً و٤ جلسات، والسجل قال
+//    stop: max_tokens). السقف كان 16000 رمزاً يتقاسمها تفكير النموذج
+//   ونصّ الدراسة، فتُقطع الأداة في منتصفها ويسقط كل شيء بلا حفظ:
+//   • بثّ (stream) مع سقف 32000 — البثّ شرط عملي لأي مخرَج طويل
+//   • تعليمات طول صريحة لكل قسم كي لا يسترسل النموذج أصلاً
+//   • تقليص سياق السوابق (٢٥ → ١٢ وملخّصات أقصر) لتخفيف زمن القراءة
+//   • تسجيل الفشل في error_logs ليظهر سببه للمحامي بدل «استغرق وقتاً أطول»
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
@@ -80,6 +88,97 @@ function buildDocBlock(doc: Doc): any {
   return null;
 }
 
+/** يسجّل فشل التوليد ليعرضه تبويب الدراسة بدل رسالة المهلة العامة */
+async function logFailure(caseId: string, message: string): Promise<void> {
+  try {
+    await admin.from("error_logs").insert({
+      error_type: "case_study",
+      source: "case-study",
+      url: caseId,
+      message: message.slice(0, 500),
+    });
+  } catch (_) { /* التسجيل ثانوي — لا يبتلع الخطأ الأصلي */ }
+}
+
+/* ===================== نداء الذكاء بالبثّ ===================== */
+
+/**
+ * يستدعي النموذج ببثّ SSE ويجمّع مدخلات أداة save_study قطعةً قطعة.
+ * البثّ ليس ترفاً: المخرَج الطويل بلا بثّ يصطدم بمهلة HTTP، والسقف الواسع
+ * (32000) يمنع قطع الأداة في منتصفها — وهو ما كان يُسقط دراسات الملفات الكبيرة.
+ */
+async function streamStudy(
+  model: string,
+  content: unknown,
+  tool: unknown
+): Promise<{ parsed: any; stopReason: string | null }> {
+  const res = await fetch(ANTHROPIC_URL, {
+    method: "POST",
+    headers: { "x-api-key": ANTHROPIC_API_KEY!, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+    body: JSON.stringify({
+      model,
+      max_tokens: 32000,
+      stream: true,
+      system: STUDY_SYSTEM,
+      tools: [tool],
+      tool_choice: { type: "tool", name: "save_study" },
+      messages: [{ role: "user", content }],
+    }),
+  });
+  if (!res.ok || !res.body) {
+    const t = await res.text().catch(() => "");
+    throw new Error(`مزوّد الذكاء (${res.status}): ${t.slice(0, 300)}`);
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  let toolJson = "";
+  let inTool = false;
+  let stopReason: string | null = null;
+  let inTokens = 0, outTokens = 0;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    const lines = buf.split("\n");
+    buf = lines.pop() ?? "";                 // السطر الأخير قد يكون ناقصاً
+    for (const line of lines) {
+      if (!line.startsWith("data:")) continue;
+      const raw = line.slice(5).trim();
+      if (!raw || raw === "[DONE]") continue;
+      let ev: any;
+      try { ev = JSON.parse(raw); } catch { continue; }
+      switch (ev.type) {
+        case "message_start":
+          inTokens = ev.message?.usage?.input_tokens ?? 0;
+          break;
+        case "content_block_start":
+          if (ev.content_block?.type === "tool_use") inTool = true;
+          break;
+        case "content_block_delta":
+          if (inTool && ev.delta?.type === "input_json_delta") toolJson += ev.delta.partial_json ?? "";
+          break;
+        case "content_block_stop":
+          inTool = false;
+          break;
+        case "message_delta":
+          if (ev.delta?.stop_reason) stopReason = ev.delta.stop_reason;
+          if (ev.usage?.output_tokens) outTokens = ev.usage.output_tokens;
+          break;
+        case "error":
+          throw new Error(`مزوّد الذكاء: ${ev.error?.message ?? "خطأ أثناء البثّ"}`);
+      }
+    }
+  }
+
+  console.log(`case-study stream: in=${inTokens} out=${outTokens} stop=${stopReason} json=${toolJson.length}`);
+  let parsed: any = null;
+  try { parsed = JSON.parse(toolJson); } catch { /* مقطوع → parsed يبقى null */ }
+  return { parsed, stopReason };
+}
+
 /* ===================== دراسة القضية ===================== */
 
 const STUDY_SYSTEM = `أنت مستشار قانوني خبير في ${FIRM_NAME}، متمرّس في دراسة القضايا وفق القضاء السعودي والأنظمة السعودية.
@@ -88,7 +187,9 @@ const STUDY_SYSTEM = `أنت مستشار قانوني خبير في ${FIRM_NAME
 - اعتمد فقط على المعلومات والمستندات المقدمة — لا تختلق وقائع أو تواريخ أو أرقام مواد لست متأكداً منها.
 - ما لا يتوفر في الملف اكتب عنه: «غير متوفر في الملف — يُستكمل يدوياً».
 - نص عادي فقط (لا Markdown): النقاط بشرطة «- » أول السطر، والأرقام لاتينية، والتواريخ كما وردت.
-- كن وافياً موجزاً: المجموع الكلي للدراسة لا يتجاوز نحو 3000 كلمة.
+- كن وافياً موجزاً: المجموع الكلي للدراسة لا يتجاوز 2200 كلمة، ولا يتجاوز أي قسم 250 كلمة
+  (عدا الرأي القانوني: 450 كلمة). الإيجاز شرط مهني هنا لا اختصاراً للجهد — المحامي
+  يقرأ الدراسة قبل الجلسة، والاسترسال يدفن الفكرة المهمة.
 - سلّم الدراسة حصراً عبر استدعاء أداة save_study بأقسامها العشرة كاملة.`;
 
 async function generateStudy(caseId: string, userName: string | null, reason?: string): Promise<void> {
@@ -150,10 +251,10 @@ async function generateStudy(caseId: string, userName: string | null, reason?: s
     .select("id, title, subject, type, status, close_date, rulings(result, summary, ruling_date)")
     .eq("kind", "case").is("deleted_at", null).neq("id", caseId)
     .eq("type", c.type ?? "").in("status", ["muntahia", "closed", "منتهية"])
-    .order("close_date", { ascending: false }).limit(25);
+    .order("close_date", { ascending: false }).limit(12);
   const precedentsCtx = (precedentRows ?? []).map((p: any) => ({
-    العنوان: p.title, الموضوع: (p.subject ?? "").slice(0, 300),
-    الأحكام: (p.rulings ?? []).map((r: any) => `${r.ruling_date ?? ""}: ${r.result ?? ""} — ${(r.summary ?? "").slice(0, 200)}`),
+    العنوان: p.title, الموضوع: (p.subject ?? "").slice(0, 200),
+    الأحكام: (p.rulings ?? []).slice(0, 2).map((r: any) => `${r.ruling_date ?? ""}: ${r.result ?? ""} — ${(r.summary ?? "").slice(0, 120)}`),
   }));
 
   // ── الأسانيد النظامية: بحث في المصادر الرسمية فقط (مرحلة أولى، اختيارية)
@@ -281,25 +382,15 @@ ${blocks.length > 0 ? `المستندات المرفقة أعلاه (${readDocs.
     },
   };
   const model = await getModel();
-  const aiRes = await fetch(ANTHROPIC_URL, {
-    method: "POST",
-    headers: { "x-api-key": ANTHROPIC_API_KEY!, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-    body: JSON.stringify({
-      model,
-      max_tokens: 16000,
-      system: STUDY_SYSTEM,
-      tools: [STUDY_TOOL],
-      tool_choice: { type: "tool", name: "save_study" },
-      messages: [{ role: "user", content }],
-    }),
-  });
-  const data = await aiRes.json();
-  if (!aiRes.ok) throw new Error(`مزوّد الذكاء: ${data?.error?.message || aiRes.status}`);
-
-  const toolUse = (data.content || []).find((b: any) => b.type === "tool_use");
-  const parsed: any = toolUse?.input;
+  const { parsed, stopReason } = await streamStudy(model, content, STUDY_TOOL);
   if (!parsed || !parsed.basics || !parsed.legal_opinion || !parsed.suitability || !parsed.attachments_list) {
-    throw new Error(`دراسة غير مكتملة (stop: ${data.stop_reason})`);
+    // stop=max_tokens يعني أن النموذج قُطع في منتصف الأداة — رسالة صريحة
+    // لا «دراسة غير مكتملة» المبهمة التي لا تدل المحامي على شيء
+    throw new Error(
+      stopReason === "max_tokens"
+        ? "الدراسة تجاوزت سقف الطول فقُطعت — الملف كبير؛ أعد المحاولة أو قلّل مستندات الملف الداخلة في القراءة."
+        : `دراسة غير مكتملة (توقّف: ${stopReason ?? "غير معروف"})`
+    );
   }
 
   // نسخة سابقة؟ تُحفظ في السجل قبل الاستبدال — لا يضيع تحرير محامٍ
@@ -376,8 +467,10 @@ Deno.serve(async (req) => {
       const work = (async () => {
         for (const st of stale ?? []) {
           const why = (st.stale_reasons ?? []).map((r: any) => r.kind).join("، ");
-          await generateStudy(st.case_id, "تجديد ليلي", `تجديد تلقائي — أحداث: ${why}`).catch((e) =>
-            console.error("stale refresh", st.case_id, e?.message || e));
+          await generateStudy(st.case_id, "تجديد ليلي", `تجديد تلقائي — أحداث: ${why}`).catch(async (e) => {
+            console.error("stale refresh", st.case_id, e?.message || e);
+            await logFailure(st.case_id, `تجديد ليلي: ${String(e?.message || e)}`);
+          });
         }
       })();
       const er: any = (globalThis as any).EdgeRuntime;
@@ -393,8 +486,9 @@ Deno.serve(async (req) => {
     const { data: exists } = await admin.from("cases").select("id").eq("id", caseId).maybeSingle();
     if (!exists) return json({ error: "القضية غير موجودة" }, 404);
 
-    const work = generateStudy(caseId, userName, body?.reason ? String(body.reason) : undefined).catch((e) => {
+    const work = generateStudy(caseId, userName, body?.reason ? String(body.reason) : undefined).catch(async (e) => {
       console.error("case-study background error:", e?.message || e);
+      await logFailure(caseId, String(e?.message || e));
     });
     // التوليد يكمل في الخلفية بعد الرد الفوري — الواجهة تتابع الصف
     // deno-lint-ignore no-explicit-any
