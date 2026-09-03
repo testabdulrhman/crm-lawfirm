@@ -415,6 +415,8 @@ struct SessionCardView: View {
     let onReport: () -> Void
     let onBrief: () -> Void
 
+    @State private var showMinutes = false
+
     private var s: CaseSession { session }
 
     var body: some View {
@@ -506,8 +508,10 @@ struct SessionCardView: View {
                             .foregroundStyle(Theme.success)
                     }
                 }
-                if let u = s.minutes_url, let url = URL(string: u) {
-                    Link(destination: url) {
+                // المحضر يُعرض **داخل التطبيق** (QuickLook) لا في سفاري —
+                // القفز خارج التطبيق يقطع سياق الجلسة ويطلب تسجيل دخول التخزين
+                if s.minutes_url != nil {
+                    Button { showMinutes = true } label: {
                         Label("المحضر", systemImage: "doc.text")
                             .font(.system(size: 13, weight: .medium))
                             .padding(.horizontal, 12).padding(.vertical, 8)
@@ -520,6 +524,12 @@ struct SessionCardView: View {
         .background(Theme.card)
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .overlay(RoundedRectangle(cornerRadius: 16).stroke(s.needsClosure ? Theme.amber.opacity(0.4) : Theme.line, lineWidth: 1))
+        .sheet(isPresented: $showMinutes) {
+            FilePreviewSheet(
+                name: "محضر \(s.title ?? "الجلسة") — \(Fmt.gregLong(s.session_date))",
+                url: s.minutes_url
+            )
+        }
     }
 
     private var sessionBadge: some View {
