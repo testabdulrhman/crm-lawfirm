@@ -155,7 +155,7 @@ Deno.serve(async (req) => {
     return json({ error: "forbidden" }, 403);
   }
 
-  const { sms_id } = await req.json().catch(() => ({}));
+  const { sms_id, dry_run } = await req.json().catch(() => ({}));
   if (!sms_id) return json({ skipped: "sms_id مفقود" });
 
   const { data: sms } = await admin
@@ -183,6 +183,7 @@ Deno.serve(async (req) => {
   // (دلالته تختلف بين شطب وتأجيل غير مسمّى — يقرّرها بشر)، وغير ذلك.
   if (!acts) {
     if (kind === "session_cancelled" && sms.case_id) {
+      if (dry_run) return json({ ok: true, dry_run: true, kind, verdict: "إلغاء — يدوي" });
       await notifyTeam(sms.case_id as string, "⚠️ إشعار إلغاء جلسة من ناجز",
         "وصلنا إشعار بإلغاء/شطب جلسة — راجع الملف في ناجز وحدّث الجلسة يدوياً.");
       return json({ ok: true, kind, action: "notified" });
@@ -199,6 +200,7 @@ Deno.serve(async (req) => {
         ? `تعذّر فهم التاريخ (${r.date_hijri ?? r.date_gregorian ?? "غير مذكور"})`
         : "ثقة الاستخراج منخفضة";
     const what = kind === "ruling" ? "حكم" : kind === "session_postponed" ? "تأجيل جلسة" : "جلسة";
+    if (dry_run) return json({ ok: true, dry_run: true, kind, verdict: "يحتاج يدوياً", reason: why, title: r.title, date });
     await notifyTeam(sms.case_id as string | null,
       `📩 إشعار ${what} من ناجز يحتاج تسجيلاً يدوياً`,
       `${why} — افتح «الرسائل» وسجّله بنفسك.`);
@@ -206,7 +208,32 @@ Deno.serve(async (req) => {
   }
 
   const { data: kase } = await admin
-    .from("cases").select("court, hearing_date, title").eq("id", sms.case_id).maybeSingle();
+    .from("cases").select("court, hearing_date, title, office_num").eq("id", sms.case_id).maybeSingle();
+
+  // وضع الجرد: نقول ماذا كنّا سنفعل ولا نكتب شيئاً — يُستعمل لمراجعة
+  // الرسائل القديمة التي وصلت قبل تشغيل الأتمتة
+  if (dry_run) {
+    const { data: existing } = await admin
+      .from("sessions").select("id, session_date, status").eq("case_id", sms.case_id)
+      .eq("session_date", date).limit(1).maybeSingle();
+    let existingRuling: any = null;
+    if (kind === "ruling") {
+      let rq = admin.from("rulings").select("id").eq("case_id", sms.case_id);
+      rq = r.ruling_number ? rq.eq("ruling_number", String(r.ruling_number)) : rq.eq("ruling_date", date);
+      existingRuling = (await rq.limit(1).maybeSingle()).data;
+    }
+    const hit = kind === "ruling" ? existingRuling : existing;
+    return json({
+      ok: true, dry_run: true, kind, date, time,
+      case_office_num: kase?.office_num ?? null,
+      case_title: kase?.title ?? null,
+      title: r.title, ruling_number: r.ruling_number ?? null,
+      confidence: r.confidence,
+      verdict: hit ? "موجودة" : "ناقصة",
+      existing_id: hit?.id ?? null,
+    });
+  }
+
   const src = `أُنشئ تلقائياً من رسالة ناجز الواردة في ${String(sms.created_at ?? "").slice(0, 10)}.`;
   const asWritten = `${r.date_hijri ?? r.date_gregorian ?? "—"}${r.date_hijri ? " هـ" : ""}`;
 
