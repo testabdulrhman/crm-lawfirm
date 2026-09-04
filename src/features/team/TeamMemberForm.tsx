@@ -16,7 +16,11 @@ import {
 } from '@/components/ui/dialog'
 import { DualDatePicker } from '@/components/DualDatePicker'
 import { UserAvatar } from '@/components/UserAvatar'
-import { useCreateTeamMember, useUpdateTeamMember } from '@/hooks/useTeam'
+import {
+  useCreateTeamMember,
+  useUpdateTeamMember,
+  useProvisionMember,
+} from '@/hooks/useTeam'
 import { pickFile, uploadFile } from '@/lib/files'
 import { toast } from '@/hooks/use-toast'
 import type { TeamMember, TeamMemberInput } from '@/types/db'
@@ -139,6 +143,10 @@ export function TeamMemberForm({ member, onDone }: Props) {
   const isEdit = Boolean(member)
   const createM = useCreateTeamMember()
   const updateM = useUpdateTeamMember()
+  const provisionM = useProvisionMember()
+  // فتح الدخول افتراضياً للموظف الجديد — بغيره يبقى الموظف عاجزاً عن الدخول
+  // بلا رسالة خطأ تدلّه (دالة رمز الدخول تصمت أمام من لا حساب له)
+  const [openLogin, setOpenLogin] = useState(true)
   const pending = createM.isPending || updateM.isPending
 
   // الصورة الشخصية: تُرفع لمخزن avatars وتُحفظ مع النموذج
@@ -184,7 +192,12 @@ export function TeamMemberForm({ member, onDone }: Props) {
     if (isEdit && member) {
       await updateM.mutateAsync({ id: member.id, input })
     } else {
-      await createM.mutateAsync(input)
+      const created = await createM.mutateAsync(input)
+      // فشل فتح الدخول لا يُلغي إضافة الموظف — الخطاف يُظهر السبب،
+      // ويبقى زر «فتح الدخول» في صفحة الموظف للمحاولة ثانيةً
+      if (openLogin && created?.id && values.email) {
+        await provisionM.mutateAsync({ memberId: created.id, welcome: true })
+      }
     }
     onDone()
   }
@@ -274,6 +287,23 @@ export function TeamMemberForm({ member, onDone }: Props) {
               نشط
             </label>
           </div>
+          {!isEdit && (
+            <div className="rounded-lg bg-muted/60 p-3">
+              <label className="flex items-center gap-2 text-sm font-medium">
+                <Switch
+                  checked={openLogin}
+                  onCheckedChange={setOpenLogin}
+                  disabled={!watch('email')}
+                />
+                فتح حساب الدخول وإرسال رسالة ترحيب
+              </label>
+              <p className="mt-1.5 text-xs text-muted-foreground">
+                {watch('email')
+                  ? 'يدخل الموظف برقم جواله ورمز يصله كرسالة — بلا كلمة مرور. وبدون هذا لن يستطيع الدخول.'
+                  : 'أدخل البريد الإلكتروني أولاً — حساب الدخول يحتاجه.'}
+              </p>
+            </div>
+          )}
         </Section>
 
         {/* شخصي */}

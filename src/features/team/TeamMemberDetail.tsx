@@ -9,6 +9,7 @@ import {
   Pencil,
   Trash2,
   Paperclip,
+  KeyRound,
   Loader2,
   Phone,
   Mail,
@@ -60,7 +61,7 @@ import { errMessage } from '@/lib/errors'
 import { toast } from '@/hooks/use-toast'
 import { useAuth } from '@/stores/auth'
 import { useIsDirector } from '@/hooks/useIsDirector'
-import { useTeamMembers } from '@/hooks/useTeam'
+import { useTeamMembers, useProvisionMember } from '@/hooks/useTeam'
 import {
   usePayrollEntries,
   useAddPayrollEntry,
@@ -95,6 +96,7 @@ export function TeamMemberDetail({ id }: { id: string }) {
   const { data: entries, isLoading: loadingPay } = usePayrollEntries(
     allowed ? id : null
   )
+  const provisionM = useProvisionMember()
   const addM = useAddPayrollEntry()
   const deleteM = useDeletePayrollEntry()
 
@@ -195,21 +197,50 @@ export function TeamMemberDetail({ id }: { id: string }) {
                 <Badge variant={member.is_active ? 'success' : 'secondary'}>
                   {member.is_active ? 'نشط' : 'موقوف'}
                 </Badge>
+                {!member.auth_id && (
+                  <Badge variant="warning">بلا حساب دخول</Badge>
+                )}
               </h2>
               {member.role && (
                 <p className="text-sm text-muted-foreground">{member.role}</p>
               )}
             </div>
-            {isDirector && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setEditOpen(true)}
-              >
-                <Pencil className="h-4 w-4" />
-                تعديل
-              </Button>
-            )}
+            <div className="flex flex-wrap gap-2">
+              {/* موظف بلا حساب دخول لا يستطيع طلب رمز أصلاً — والفشل صامت،
+                  فنُظهر الحالة هنا ونتيح فتحه بضغطة */}
+              {isDirector && !member.auth_id && (
+                <Button
+                  variant="gold"
+                  size="sm"
+                  onClick={() =>
+                    provisionM.mutate({ memberId: member.id, welcome: true })
+                  }
+                  disabled={provisionM.isPending || !member.email}
+                  title={
+                    member.email
+                      ? undefined
+                      : 'يحتاج بريداً إلكترونياً — عدّل بياناته أولاً'
+                  }
+                >
+                  {provisionM.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <KeyRound className="h-4 w-4" />
+                  )}
+                  فتح حساب الدخول
+                </Button>
+              )}
+              {isDirector && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setEditOpen(true)}
+                >
+                  <Pencil className="h-4 w-4" />
+                  تعديل
+                </Button>
+              )}
+            </div>
           </div>
 
           <div className="flex flex-wrap gap-x-6 gap-y-1.5 border-t pt-3 text-sm text-muted-foreground">
