@@ -244,7 +244,8 @@ export function QuotePdfDialog({
             phone: intl,
             recipient_name: recipient,
             template: {
-              name: 'quote_document',
+              // اسم القالب المعتمد في لوحة هاتف — لا يُغيَّر إلا بتغييره هناك
+              name: 'crm_law_05',
               lang: 'ar',
               params: [recipient, quoteNo, String(Number(validity) || 10)],
               document: { url, name: fileName },
@@ -253,7 +254,7 @@ export function QuotePdfDialog({
         })
         if (tErr || t?.error)
           throw new Error(
-            `${t?.detail || t?.error || errMessage(tErr)} — تأكد من اعتماد قالب quote_document في لوحة هاتف`
+            `${t?.detail || t?.error || errMessage(tErr)} — تأكد من اعتماد قالب crm_law_05 في لوحة هاتف`
           )
       } else if (error || data?.error) {
         throw new Error(data?.detail || data?.error || errMessage(error))
