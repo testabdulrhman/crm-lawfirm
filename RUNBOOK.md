@@ -179,6 +179,17 @@ select jobname, schedule, active from cron.job order by jobname;
 select * from cron.job_run_details order by start_time desc limit 20;  -- التشخيص
 ```
 
+⚠️ **pg_cron لا يقلّم سجلّه**. مهمة `cron-log-retention` (يومياً ٠٢:١٥ UTC) تحذف
+ما مضى عليه ٧ أيام. بدونها بلغ `cron.job_run_details` ١٥ م.ب في شهرين وأنهك
+رصيد الإدخال/الإخراج على حوسبة nano. وكذلك `net._http_response` ينتفخ ولا
+يستعيد مساحته — عند تنبيه IO افحص حجم الجدولين أولاً:
+
+```sql
+select pg_size_pretty(pg_total_relation_size('cron.job_run_details')),
+       pg_size_pretty(pg_total_relation_size('net._http_response'));
+-- العلاج: delete القديم ثم vacuum full (قفل حصري، ثوانٍ على هذا الحجم)
+```
+
 ---
 
 ## ٦. عند العطل — من أين تبدأ
