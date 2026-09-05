@@ -5,7 +5,7 @@
 -- وnet._http_response ١٥ م.ب لـ١٣٩ صفاً حيّاً (٩٩٪ انتفاخ). والحوسبة nano
 -- وهي أصغر شريحة إدخال/إخراج، فهذا العبث وحده يستنزف رصيدها.
 --
--- ١) احتفاظ بسجل الجدولة ٧ أيام + مهمة تنظيف يومية.
+-- ١) احتفاظ بسجل الجدولة ٣٠ يوماً + مهمة تنظيف يومية.
 -- ٢) فهارس للنداءات التي تمسح جداول كاملة — أهمها team_members(auth_id):
 --    كل سياسة RLS في النظام تنادي is_director_caller()/my_member_id() وهما
 --    تبحثان بـauth_id بلا فهرس (١٫٤٩ مليون مسح كامل). وtasks(case_id) لأن
@@ -51,10 +51,15 @@ revoke all on public.lead_counters from anon, authenticated;
 commit;
 
 /* ============ ٣) نُفِّذ خارج المعاملة (‏VACUUM لا يقبل transaction) ============ */
--- delete from cron.job_run_details where start_time < now() - interval '7 days';  -- ١٧٢٩٩ صفاً
+-- delete from cron.job_run_details where start_time < now() - interval '7 days';  -- التنظيف الأول: ١٧٢٩٩ صفاً
 -- vacuum full cron.job_run_details;   -- ١٥ م.ب ← ٢٫٧ م.ب
 -- vacuum full net._http_response;     -- ١٥ م.ب ← ٢١٦ ك.ب
 -- select cron.schedule('cron-log-retention', '15 2 * * *',
---   $$delete from cron.job_run_details where start_time < now() - interval '7 days'$$);
+--   $$delete from cron.job_run_details where start_time < now() - interval '30 days'$$);
 --
 -- النتيجة: حجم القاعدة ٥٦ م.ب ← **٣١ م.ب**.
+--
+-- ⚠️ الاحتفاظ ضُبط ٧ أيام أولاً ثم **رُفع إلى ٣٠ يوماً** بعد ترقية الحوسبة إلى
+--    micro (مبدأ المستخدم: «دائماً أعمل ترقية أفضل من أني أحذف شيء أو أأخّر
+--    ميزة»). ولنفس السبب **لم تُخفَّف** أي مهمة مجدولة — booking-warm و
+--    email-sync-5min تبقيان كل ٥ دقائق.

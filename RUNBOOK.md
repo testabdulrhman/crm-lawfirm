@@ -180,7 +180,7 @@ select * from cron.job_run_details order by start_time desc limit 20;  -- الت
 ```
 
 ⚠️ **pg_cron لا يقلّم سجلّه**. مهمة `cron-log-retention` (يومياً ٠٢:١٥ UTC) تحذف
-ما مضى عليه ٧ أيام. بدونها بلغ `cron.job_run_details` ١٥ م.ب في شهرين وأنهك
+ما مضى عليه ٣٠ يوماً. بدونها بلغ `cron.job_run_details` ١٥ م.ب في شهرين وأنهك
 رصيد الإدخال/الإخراج على حوسبة nano. وكذلك `net._http_response` ينتفخ ولا
 يستعيد مساحته — عند تنبيه IO افحص حجم الجدولين أولاً:
 
