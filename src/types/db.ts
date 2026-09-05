@@ -179,8 +179,11 @@ export interface IncomingRequest {
   id: string
   client_name: string
   client_phone: string | null
+  client_email: string | null
   client_id: string | null
   request_type: string | null
+  /** نوع القضية بمفردات المكتب (CASE_TYPES) — ينتقل إلى cases.type عند فتح الملف */
+  case_type: string | null
   received_at: string | null
   description: string | null
   status: string | null
@@ -244,6 +247,8 @@ export type IncomingRequestInput = {
   converted_at?: string | null
   client_name: string
   client_phone?: string | null
+  client_email?: string | null
+  case_type?: string | null
   client_id?: string | null
   request_type?: string | null
   received_at?: string | null

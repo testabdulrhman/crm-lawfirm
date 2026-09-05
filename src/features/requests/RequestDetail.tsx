@@ -3,6 +3,7 @@ import { useLocation } from 'wouter'
 import {
   ArrowRight,
   Phone,
+  Mail,
   CalendarDays,
   UserCog,
   Paperclip,
@@ -140,6 +141,16 @@ export function RequestDetail({ id }: { id: string }) {
                     {r.client_phone}
                   </span>
                 )}
+                {r.client_email && (
+                  <a
+                    href={`mailto:${r.client_email}`}
+                    dir="ltr"
+                    className="flex items-center gap-1 hover:text-foreground hover:underline"
+                  >
+                    <Mail className="h-3.5 w-3.5" />
+                    {r.client_email}
+                  </a>
+                )}
                 <span className="flex items-center gap-1">
                   <CalendarDays className="h-3.5 w-3.5" />
                   {fmtDatePref(r.received_at)}
@@ -147,6 +158,9 @@ export function RequestDetail({ id }: { id: string }) {
               </div>
               {/* بيانات الجلسة التمهيدية — بند ٢ */}
               <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                {r.case_type && (
+                  <Badge variant="secondary">{r.case_type}</Badge>
+                )}
                 {r.capacity && (
                   <Badge variant="secondary">
                     {CAPACITY_LABELS[r.capacity]}
@@ -602,6 +616,8 @@ function DecisionCard({
         contact_id: r.client_id ?? null,
         subject: r.description ?? null,
         open_date: todayISO(),
+        // نوع القضية المسجَّل على الطلب ينتقل للملف — فلا يُصنَّف مرتين
+        type: r.case_type ?? null,
         // نطاق عرض السعر يصير نطاق الملف المتفق عليه — لا يُعاد كتابته
         agreed_scope: r.quote_scope ?? null,
       })

@@ -26,6 +26,7 @@ import { useCreateRequest, useUpdateRequest } from '@/hooks/useRequests'
 import { ContactPicker } from '@/components/ContactPicker'
 import { DualDatePicker } from '@/components/DualDatePicker'
 import { CAPACITY_LABELS, CRITICAL_KIND_LABELS, SOURCE_OPTIONS, TYPE_OPTIONS } from './labels'
+import { CASE_TYPES } from '@/lib/caseLabels'
 import type { Contact, IncomingRequest, IncomingRequestInput } from '@/types/db'
 
 const NONE = '__none__'
@@ -33,7 +34,9 @@ const NONE = '__none__'
 const schema = z.object({
   client_name: z.string().min(1, 'اختر العميل من جهات الاتصال أو أضفه جديداً'),
   client_phone: z.string().optional(),
+  client_email: z.string().optional(),
   request_type: z.string().min(1, 'نوع الطلب مطلوب'),
+  case_type: z.string().optional(),
   source: z.string().optional(),
   received_at: z.string().min(1, 'تاريخ الاستلام مطلوب'),
   description: z.string().optional(),
@@ -54,7 +57,9 @@ function toDefaults(r?: IncomingRequest | null): FormValues {
   return {
     client_name: r?.client_name ?? '',
     client_phone: r?.client_phone ?? '',
+    client_email: r?.client_email ?? '',
     request_type: r?.request_type ?? 'case',
+    case_type: r?.case_type ?? NONE,
     source: r?.source ?? 'هاتف',
     received_at: r?.received_at ?? todayISO(),
     description: r?.description ?? '',
@@ -106,6 +111,8 @@ export function RequestForm({
     const input: IncomingRequestInput = {
       client_name: values.client_name.trim(),
       client_phone: values.client_phone?.trim() || null,
+      client_email: values.client_email?.trim() || null,
+      case_type: values.case_type && values.case_type !== NONE ? values.case_type : null,
       request_type: values.request_type,
       source: values.source ?? 'هاتف',
       received_at: values.received_at,
@@ -174,6 +181,17 @@ export function RequestForm({
           </div>
 
           <div className="space-y-1.5">
+            <Label htmlFor="client_email">البريد الإلكتروني</Label>
+            <Input
+              id="client_email"
+              type="email"
+              dir="ltr"
+              placeholder="example@email.com"
+              {...register('client_email')}
+            />
+          </div>
+
+          <div className="space-y-1.5">
             <Label>نوع الطلب *</Label>
             <Controller
               control={control}
@@ -198,6 +216,35 @@ export function RequestForm({
                 {errors.request_type.message}
               </p>
             )}
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>نوع القضية</Label>
+            <Controller
+              control={control}
+              name="case_type"
+              render={({ field }) => (
+                <Select
+                  value={field.value || NONE}
+                  onValueChange={field.onChange}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="غير محدّد" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NONE}>غير محدّد</SelectItem>
+                    {CASE_TYPES.map((t) => (
+                      <SelectItem key={t} value={t}>
+                        {t}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
+            <p className="text-xs text-muted-foreground">
+              ينتقل إلى الملف عند فتحه — فلا يُعاد تصنيفه مرتين.
+            </p>
           </div>
 
           <div className="space-y-1.5">

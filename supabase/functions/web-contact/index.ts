@@ -36,17 +36,19 @@ function normalizeSaudi(raw: string): string {
 const isValidSaudiMobile = (n: string): boolean => /^9665\d{8}$/.test(n);
 const isValidEmail = (e: string): boolean => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e);
 
-/** خدمات النموذج في الموقع → تسمية عربية + نوع الطلب في النظام */
-const SERVICES: Record<string, { label: string; type: string }> = {
-  civil:        { label: "القضايا المدنية والتجارية", type: "case" },
-  labor:        { label: "قضايا العمل والعمال",       type: "case" },
-  criminal:     { label: "القضايا الجنائية",           type: "case" },
-  personal:     { label: "الأحوال الشخصية",            type: "case" },
-  realestate:   { label: "النزاعات العقارية",          type: "case" },
-  bankruptcy:   { label: "الإفلاس والتصفية",           type: "case" },
-  arbitration:  { label: "التحكيم",                    type: "case" },
-  consultation: { label: "الاستشارات القانونية",       type: "legal_service" },
-  other:        { label: "أخرى",                       type: "case" },
+/** خدمات النموذج في الموقع → تسمية عربية · نوع الطلب · نوع القضية بمفردات المكتب
+ *  ⚠️ caseType يبقى null حين لا يوجد في CASE_TYPES ما يقابل الخدمة بدقّة
+ *     (العقاري والتحكيم) — تسمية خاطئة أسوأ من خانة فارغة. */
+const SERVICES: Record<string, { label: string; type: string; caseType: string | null }> = {
+  civil:        { label: "القضايا المدنية والتجارية", type: "case",          caseType: "تجاري" },
+  labor:        { label: "قضايا العمل والعمال",       type: "case",          caseType: "عمالي" },
+  criminal:     { label: "القضايا الجنائية",           type: "case",          caseType: "جزائي" },
+  personal:     { label: "الأحوال الشخصية",            type: "case",          caseType: "أحوال شخصية" },
+  realestate:   { label: "النزاعات العقارية",          type: "case",          caseType: null },
+  bankruptcy:   { label: "الإفلاس والتصفية",           type: "case",          caseType: "إفلاس" },
+  arbitration:  { label: "التحكيم",                    type: "case",          caseType: null },
+  consultation: { label: "الاستشارات القانونية",       type: "legal_service", caseType: null },
+  other:        { label: "أخرى",                       type: "case",          caseType: null },
 };
 
 const clip = (s: unknown, n: number): string =>
@@ -126,9 +128,9 @@ Deno.serve(async (req) => {
   // ===== الوصف: ما كتبه العميل + ما لا يسع له عمود مستقل =====
   const lines = [
     message || "(بلا تفاصيل)",
-    "",
-    service ? `الخدمة المطلوبة: ${service.label}` : null,
-    email ? `البريد الإلكتروني: ${email}` : null,
+    // الخدمة تُحفظ في عمود case_type حين تقابل نوعاً معروفاً؛ وإلا فاختيار
+    // العميل الحرفيّ يبقى هنا كي لا يضيع (العقاري والتحكيم والاستشارة).
+    service && !service.caseType ? `الخدمة المطلوبة: ${service.label}` : null,
     "وصل عبر نموذج التواصل في redwan.sa",
   ].filter(Boolean);
 
@@ -138,9 +140,11 @@ Deno.serve(async (req) => {
       client_name: name,
       client_phone: phone,
       client_id: clientId,
+      client_email: email || null,
       request_type: service?.type ?? "case",
+      case_type: service?.caseType ?? null,
       description: lines.join("\n"),
-      source: "الموقع الإلكتروني",
+      source: "الموقع",
       created_by: "نموذج الموقع",
     })
     .select("id, ref_no")
