@@ -8,6 +8,7 @@ import {
   Stamp,
   CalendarDays,
   MessageSquare,
+  Globe,
   CheckCheck,
   Loader2,
   type LucideIcon,
@@ -49,6 +50,7 @@ const ICONS: Record<string, LucideIcon> = {
   approval_result: Stamp,
   session_soon: CalendarDays,
   incoming_message: MessageSquare,
+  incoming_request: Globe,
 }
 
 function destination(n: AppNotification): string {
@@ -73,6 +75,8 @@ function destination(n: AppNotification): string {
   if (n.case_id) return `/cases/${n.case_id}`
   // طلبات الإجازة والاستئذان — صفحتها لا مهمة ولا ملف
   if (n.type === 'hr_request' || n.type === 'hr_result') return '/hr'
+  // طلب وصل من نموذج التواصل في الموقع — الوارد لم يُحوَّل لملف بعد
+  if (n.type === 'incoming_request') return '/requests'
   switch (n.type) {
     case 'task_assigned':
     case 'task_due':
