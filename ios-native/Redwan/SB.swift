@@ -169,8 +169,29 @@ final class SB: ObservableObject {
         return data
     }
 
-    private func refresh() async -> Bool {
-        guard let s = session else { return false }
+    /// نتيجة محاولة التجديد — التمييز بينها هو بيت العلّة:
+    /// رفض الخادم للرمز شيء، وتعذّر الوصول إليه شيء آخر تماماً.
+    enum RefreshOutcome {
+        case ok          // جلسة جديدة محفوظة
+        case rejected    // الخادم رفض رمز التجديد نفسه ⇒ لا مخرج إلا دخول جديد
+        case transient   // شبكة أو خادم متوقف مؤقتاً ⇒ الجلسة تبقى ونعيد لاحقاً
+    }
+
+    /// تجديد واحد فقط في كل لحظة. بدون هذا القفل تتسابق طلبات ٤٠١ المتزامنة
+    /// على رمز التجديد، فيستهلكه أوّلها (Supabase يدوّره) وتفشل البقية بلا سبب.
+    private var refreshTask: Task<RefreshOutcome, Never>?
+
+    private func refresh() async -> RefreshOutcome {
+        if let t = refreshTask { return await t.value }
+        let t = Task { () -> RefreshOutcome in await self.performRefresh() }
+        refreshTask = t
+        let out = await t.value
+        refreshTask = nil
+        return out
+    }
+
+    private func performRefresh() async -> RefreshOutcome {
+        guard let s = session else { return .rejected }
         var comps = URLComponents(
             url: baseURL.appendingPathComponent("auth/v1/token"),
             resolvingAgainstBaseURL: false
@@ -183,8 +204,13 @@ final class SB: ObservableObject {
         req.httpBody = try? JSONEncoder().encode(["refresh_token": s.refreshToken])
 
         guard let (data, resp) = try? await URLSession.shared.data(for: req),
-              (resp as? HTTPURLResponse)?.statusCode == 200
-        else { return false }
+              let http = resp as? HTTPURLResponse
+        else { return .transient }          // بلا شبكة — لا نُخرج المستخدم
+
+        // ٤٠٠/٤٠١/٤٠٣ = الرمز نفسه مرفوض. أما ٥٠٠ و٥٠٣ (كإعادة تشغيل القاعدة
+        // عند ترقية الحوسبة) فعارض مؤقت لا يستحق طرد المستخدم.
+        if [400, 401, 403, 422].contains(http.statusCode) { return .rejected }
+        guard http.statusCode == 200 else { return .transient }
 
         struct R: Codable {
             let access_token: String?
@@ -194,12 +220,12 @@ final class SB: ObservableObject {
         }
         guard let r = try? JSONDecoder().decode(R.self, from: data),
               let at = r.access_token, let rt = r.refresh_token
-        else { return false }
+        else { return .transient }
 
         let ns = Session(accessToken: at, refreshToken: rt, userId: r.user?.id ?? s.userId)
         session = ns
         Keychain.save(ns)
-        return true
+        return .ok
     }
 
     func loadMember() async {
@@ -317,11 +343,22 @@ final class SB: ObservableObject {
         let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
 
         // انتهاء التوكن: تجديد صامت ومحاولة واحدة
-        if code == 401, !retried, await refresh() {
-            return try await raw(
-                path: path, method: method, query: query,
-                body: body, prefer: prefer, retried: true
-            )
+        if code == 401, !retried {
+            switch await refresh() {
+            case .ok:
+                return try await raw(
+                    path: path, method: method, query: query,
+                    body: body, prefer: prefer, retried: true
+                )
+            case .rejected:
+                // ⚠️ كانت هذه الحالة تُسقط الرسالة الخام «JWT expired» وتُبقي
+                //    الجلسة الميتة في الـKeychain، فيعلق التطبيق عليها في كل
+                //    إقلاع بلا طريق إلى شاشة الدخول. الآن نُنهيها فتظهر الشاشة.
+                logout()
+                throw SBError(message: "انتهت الجلسة — سجّل الدخول من جديد")
+            case .transient:
+                throw SBError(message: "تعذّر الوصول إلى الخادم — أعد المحاولة بعد قليل")
+            }
         }
 
         guard (200..<300).contains(code) else {
