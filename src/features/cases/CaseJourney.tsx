@@ -2,11 +2,30 @@
 // ولا جداول إضافية: القيد والإسناد من cases، والجلسات والأحكام من عدّاداتها.
 //
 // المراحل خمس ثابتة تصلح لكل الأنواع. المرحلة «الحالية» هي أول غير مكتملة.
-import { Check, type LucideIcon, FileText, UserCheck, CalendarDays, Gavel, Landmark } from 'lucide-react'
+import {
+  Check,
+  type LucideIcon,
+  FileText,
+  UserCheck,
+  CalendarDays,
+  Gavel,
+  Landmark,
+  Building2,
+  ClipboardList,
+  Vote,
+  Stamp,
+  FileCheck2,
+} from 'lucide-react'
 
 import { cn } from '@/lib/utils'
 import { fmtDatePref, fmtNumber } from '@/lib/format'
+import { BANKRUPTCY_STAGES } from '@/lib/caseLabels'
 import type { Case } from '@/types/db'
+
+/** أيقونة لكل مرحلة إفلاس بترتيب BANKRUPTCY_STAGES */
+const BK_ICONS: LucideIcon[] = [
+  FileText, Building2, UserCheck, ClipboardList, FileCheck2, Vote, Stamp, Landmark,
+]
 
 interface Step {
   key: string
@@ -21,6 +40,25 @@ export function buildSteps(
   counts: { sessions: number; rulings: number }
 ): Step[] {
   const closed = c.status === 'muntahia'
+
+  // إجراء الإفلاس مساره نظاميّ معلوم، لا «قُيّدت → حكم → إغلاق».
+  // المرحلة تُضبط يدوياً (bankruptcy_stage) وما قبلها يُعدّ منجزاً.
+  if (c.kind === 'bankruptcy') {
+    const idx = BANKRUPTCY_STAGES.findIndex((x) => x.value === c.bankruptcy_stage)
+    return BANKRUPTCY_STAGES.map((st, i) => ({
+      key: st.value,
+      label: st.label,
+      icon: BK_ICONS[i] ?? FileText,
+      done: idx >= 0 && i < idx,
+      hint:
+        i === idx
+          ? 'المرحلة الحالية'
+          : st.value === 'claims'
+            ? 'التفاصيل في نظام الإفلاس'
+            : null,
+    }))
+  }
+
   return [
     {
       key: 'filed',
@@ -76,7 +114,9 @@ export function CaseJourney({
 
   return (
     <div className="rounded-2xl border border-border/70 bg-card p-4 shadow-sm">
-      <p className="mb-3 text-xs font-semibold text-muted-foreground">مسار القضية</p>
+      <p className="mb-3 text-xs font-semibold text-muted-foreground">
+        {caseData.kind === 'bankruptcy' ? 'سير الإجراء' : 'مسار القضية'}
+      </p>
       <ol className="flex items-start">
         {steps.map((s, i) => {
           const isCurrent = i === currentIdx

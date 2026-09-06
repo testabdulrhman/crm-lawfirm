@@ -23,7 +23,7 @@ import { fmtNumber } from '@/lib/format'
 import { useCaseDocuments } from '@/hooks/useCaseDocuments'
 import { useCaseSessions } from '@/hooks/useCaseSessions'
 import { useCaseTasks } from '@/hooks/useCaseTasks'
-import { useCase, useUpdateCaseStatus } from '@/hooks/useCases'
+import { useCase, useUpdateCase, useUpdateCaseStatus } from '@/hooks/useCases'
 import { useCaseStudy } from '@/hooks/useCaseStudy'
 import { useCaseRulings } from '@/hooks/useCaseRulings'
 import { useCaseMemos } from '@/hooks/useCaseMemos'
@@ -31,6 +31,7 @@ import { CaseJourney } from './CaseJourney'
 import { CaseFactsPanel } from './CaseFactsPanel'
 import { usePageState } from '@/hooks/usePageState'
 import {
+  BANKRUPTCY_STAGES,
   CASE_STATUS_OPTIONS,
   caseStatusBadge,
   caseStatusLabel,
@@ -65,6 +66,7 @@ export function CaseDetail({ id }: { id: string }) {
   const [, navigate] = useLocation()
   const { data: c, isLoading, isError, error, refetch } = useCase(id)
   const statusM = useUpdateCaseStatus()
+  const updateM = useUpdateCase()
   const [editOpen, setEditOpen] = useState(false)
   // التبويب المفتوح يدوم للرجوع/التحديث (لكل قضية على حدة)
   const [tab, setTab] = usePageState('case-tab:' + id, 'overview')
@@ -174,7 +176,8 @@ export function CaseDetail({ id }: { id: string }) {
         </div>
       </div>
 
-      {/* مسار القضية — يُشتق من البيانات الموجودة بلا إدخال جديد */}
+      {/* مسار القضية — يُشتق من البيانات الموجودة بلا إدخال جديد.
+          وإجراء الإفلاس مساره نظاميّ تُضبط مرحلته يدوياً. */}
       <CaseJourney
         caseData={c}
         counts={{
@@ -182,6 +185,34 @@ export function CaseDetail({ id }: { id: string }) {
           rulings: caseRulings?.length ?? 0,
         }}
       />
+
+      {c.kind === 'bankruptcy' && (
+        <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-border/70 bg-card p-3 shadow-sm">
+          <span className="text-xs font-semibold text-muted-foreground">
+            المرحلة الحالية
+          </span>
+          <Select
+            value={c.bankruptcy_stage ?? undefined}
+            onValueChange={(v) =>
+              updateM.mutate({ id: c.id, input: { bankruptcy_stage: v } })
+            }
+          >
+            <SelectTrigger className="w-56">
+              <SelectValue placeholder="لم تُحدَّد بعد" />
+            </SelectTrigger>
+            <SelectContent>
+              {BANKRUPTCY_STAGES.map((st) => (
+                <SelectItem key={st.value} value={st.value}>
+                  {st.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <span className="text-xs text-muted-foreground">
+            كل انتقال يُسجَّل في «قصة الملف». والديون والدائنون في نظام الإفلاس.
+          </span>
+        </div>
+      )}
 
       {/* عمودان على الشاشات العريضة: الحقائق ثابتة يميناً والنشاط يساراً.
           على الجوال ينهار لعمود واحد (الحقائق فوق ثم التبويبات). */}

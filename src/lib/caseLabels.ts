@@ -261,3 +261,18 @@ export const BANKRUPTCY_PROCEDURES = [
   'التصفية لصغار المدينين',
   'التصفية الإدارية',
 ] as const
+
+/** مراحل إجراء الإفلاس — «متابعة سير المشروع» (التفاصيل المالية في نظام الإفلاس المنفصل) */
+export const BANKRUPTCY_STAGES = [
+  { value: 'filed', label: 'تقديم الطلب' },
+  { value: 'opened', label: 'افتتاح الإجراء' },
+  { value: 'trustee', label: 'تعيين الأمين' },
+  { value: 'claims', label: 'حصر الديون' },
+  { value: 'plan', label: 'اقتراح الخطة' },
+  { value: 'vote', label: 'تصويت الدائنين' },
+  { value: 'ratified', label: 'التصديق' },
+  { value: 'closed', label: 'انتهاء الإجراء' },
+] as const
+
+export const bankruptcyStageLabel = (s: string | null | undefined): string =>
+  BANKRUPTCY_STAGES.find((x) => x.value === s)?.label ?? '—'
