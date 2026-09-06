@@ -9,6 +9,7 @@ import {
   CalendarDays,
   MessageSquare,
   Globe,
+  Users,
   CheckCheck,
   Loader2,
   type LucideIcon,
@@ -51,6 +52,7 @@ const ICONS: Record<string, LucideIcon> = {
   session_soon: CalendarDays,
   incoming_message: MessageSquare,
   incoming_request: Globe,
+  case_shared: Users,
 }
 
 function destination(n: AppNotification): string {

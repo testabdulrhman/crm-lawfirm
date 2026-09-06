@@ -6,6 +6,7 @@ import { openExternal } from '@/lib/external'
 import { fmtDatePref, fmtNumber } from '@/lib/format'
 import { caseStatusLabel, caseTypeLabel } from '@/lib/caseLabels'
 import type { Case } from '@/types/db'
+import { CaseTeamCard } from '../CaseTeamCard'
 
 export function OverviewTab({ caseData: c }: { caseData: Case }) {
   return (
@@ -128,6 +129,9 @@ export function OverviewTab({ caseData: c }: { caseData: Case }) {
             </CardContent>
           </Card>
         )}
+
+        {/* فريق الملف — من يعمل عليه غير مسؤوله */}
+        <CaseTeamCard caseData={c} />
       </div>
     </div>
   )
