@@ -12,8 +12,10 @@ import { Sidebar } from './Sidebar'
 import { TopBar } from './TopBar'
 import { MobileTabBar } from './MobileTabBar'
 import { AiAssistant } from '@/components/AiAssistant'
+import { useIsCollaborator } from '@/hooks/useIsCollaborator'
 
 export function AppLayout({ children }: { children: ReactNode }) {
+  const isCollaborator = useIsCollaborator()
   const [mobileOpen, setMobileOpen] = useState(false)
   const { teamMember } = useAuth()
   const [location, navigate] = useLocation()
@@ -114,8 +116,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
       </div>
 
-      {/* المساعد الذكي — زر عائم متاح في كل الصفحات */}
-      <AiAssistant />
+      {/* المساعد الذكي — زر عائم؛ يُخفى عن المتعاون لأنه مساعد على مستوى المكتب */}
+      {!isCollaborator && <AiAssistant />}
     </div>
   )
 }

@@ -233,6 +233,9 @@ export function TeamPage() {
                     <p className="flex items-center gap-2 font-medium text-foreground">
                       {m.name}
                       {m.is_director && <Badge variant="gold">مدير</Badge>}
+                      {m.member_type === 'collaborator' && (
+                        <Badge variant="outline">متعاون</Badge>
+                      )}
                     </p>
                     <p className="text-xs text-muted-foreground">
                       {m.role ?? '—'}

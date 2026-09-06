@@ -95,13 +95,19 @@ interface Mentionable {
   color: string | null
 }
 
-/** موظفو المكتب النشطون بالاسم المختصر — قائمة المنشن */
-function useMentionables(): Mentionable[] {
+/**
+ * موظفو المكتب النشطون بالاسم المختصر — قائمة المنشن.
+ *
+ * المتعاون الخارجي يُستبعد من **القناة العامة** (لا يصلها أصلاً فمنشنه فيها
+ * وعدٌ كاذب)، ويبقى قابلاً للمنشن داخل نقاش ملفٍ هو من فريقه.
+ */
+function useMentionables(inCaseThread = false): Mentionable[] {
   const { data } = useTeamMembers()
   return useMemo(
     () =>
       (data ?? [])
         .filter((m) => m.is_active !== false)
+        .filter((m) => inCaseThread || m.member_type !== 'collaborator')
         .map((m) => ({
           id: m.id,
           label: (m.short_name ?? m.name).trim(),
@@ -564,7 +570,7 @@ function StreamPane({
   const isDirector = useIsDirector()
   const [membersOpen, setMembersOpen] = useState(false)
   const [, navigate] = useLocation()
-  const people = useMentionables()
+  const people = useMentionables(!!caseId)   // داخل ملف: المتعاون قابل للمنشن
   const { data: msgs, isLoading, error, refetch } = useStream(caseId, true)
   const post = usePostMessage()
   const postFile = usePostAttachment()
@@ -978,7 +984,7 @@ function ThreadPane({
   onClose: () => void
 }) {
   const { teamMember } = useAuth()
-  const people = useMentionables()
+  const people = useMentionables(!!caseId)
   const { data: replies, isLoading, refetch } = useThread(root.id)
   const post = usePostMessage()
   const [draft, setDraft] = useState('')

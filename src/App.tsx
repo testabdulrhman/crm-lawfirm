@@ -4,6 +4,7 @@ import { useHashLocation } from 'wouter/use-hash-location'
 import { Loader2 } from 'lucide-react'
 
 import { useAuth } from '@/stores/auth'
+import { useIsCollaborator } from '@/hooks/useIsCollaborator'
 import { AppLayout } from '@/components/layout/AppLayout'
 import Login from '@/pages/Login'
 import Booking from '@/pages/Booking'
@@ -52,10 +53,31 @@ function FullScreenLoader() {
   )
 }
 
+/**
+ * المتعاون الخارجي: تحويل من صفحات المكتب إلى لوحته.
+ * ⚠️ تجميلي فقط — الحاجز الحقيقي سياسات RLS؛ هذا يمنع صفحةً فارغة محيّرة.
+ */
+const COLLAB_BLOCKED = [
+  '/contacts', '/inbox', '/mail', '/requests', '/staff-applications',
+  '/engagements', '/poa', '/appointments', '/outgoing', '/team',
+  '/reports', '/settings', '/hr',
+]
+
+function CollaboratorGuard() {
+  const isCollaborator = useIsCollaborator()
+  const [location, navigate] = useLocation()
+  useEffect(() => {
+    if (!isCollaborator) return
+    if (COLLAB_BLOCKED.some((p) => location.startsWith(p))) navigate('/')
+  }, [isCollaborator, location, navigate])
+  return null
+}
+
 // المسارات المحمية داخل الإطار
 function ProtectedRoutes() {
   return (
     <AppLayout>
+      <CollaboratorGuard />
       <Switch>
         <Route path="/" component={Dashboard} />
         {/* قبل /cases/:id ضرورةً — وإلا فُهمت «new» معرّف قضية */}

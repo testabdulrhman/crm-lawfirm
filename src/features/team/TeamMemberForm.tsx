@@ -8,6 +8,13 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import {
   DialogFooter,
@@ -50,6 +57,7 @@ const schema = z.object({
     .optional()
     .or(z.literal('')),
   is_director: z.boolean(),
+  member_type: z.enum(['employee', 'collaborator']),
   is_active: z.boolean(),
   date_of_birth: optionalText,
   id_number: optionalText,
@@ -73,6 +81,7 @@ function toDefaults(member?: TeamMember | null): FormValues {
     email: member?.email ?? '',
     phone: member?.phone ?? '',
     is_director: member?.is_director ?? false,
+    member_type: member?.member_type ?? 'employee',
     is_active: member?.is_active ?? true,
     date_of_birth: member?.date_of_birth ?? '',
     id_number: member?.id_number ?? '',
@@ -185,6 +194,7 @@ export function TeamMemberForm({ member, onDone }: Props) {
   })
 
   const isDirector = watch('is_director')
+  const memberType = watch('member_type')
   const isActive = watch('is_active')
 
   const onSubmit = async (values: FormValues) => {
@@ -271,10 +281,33 @@ export function TeamMemberForm({ member, onDone }: Props) {
           <Field label="الجوال" htmlFor="phone" error={errors.phone?.message}>
             <Input id="phone" dir="ltr" {...register('phone')} />
           </Field>
+          <Field label="نوع العضوية" htmlFor="member_type">
+            <Select
+              value={memberType}
+              onValueChange={(v) => {
+                setValue('member_type', v as 'employee' | 'collaborator')
+                if (v === 'collaborator') setValue('is_director', false)
+              }}
+            >
+              <SelectTrigger id="member_type">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="employee">موظف المكتب</SelectItem>
+                <SelectItem value="collaborator">متعاون خارجي</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="mt-1.5 text-xs text-muted-foreground">
+              {memberType === 'collaborator'
+                ? 'يرى الملفات التي أُسندت إليه أو أُضيف لفريقها ومهامه فقط — ولا يرى جهات الاتصال ولا الوارد ولا الوكالات ولا قناة المكتب.'
+                : 'يرى ملفاته وجهات الاتصال والتقويم والنقاش العام وبقية أدوات المكتب.'}
+            </p>
+          </Field>
           <div className="flex items-center gap-6 pt-2">
             <label className="flex items-center gap-2 text-sm">
               <Switch
                 checked={isDirector}
+                disabled={memberType === 'collaborator'}
                 onCheckedChange={(v) => setValue('is_director', v)}
               />
               مدير

@@ -11,6 +11,8 @@ export interface TeamMember {
   is_director: boolean | null
   is_active: boolean | null
   is_reviewer: boolean | null // حساب مراجعة أبل المعزول — يُستثنى من القوائم
+  /** employee = موظف المكتب · collaborator = متعاون خارجي يرى ملفاته فقط */
+  member_type: 'employee' | 'collaborator' | null
   avatar_color: string | null
   avatar_initial: string | null
   avatar_url: string | null

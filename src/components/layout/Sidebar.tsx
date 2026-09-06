@@ -27,6 +27,7 @@ import { cn } from '@/lib/utils'
 import { useAuth } from '@/stores/auth'
 import { useOfficeInfo } from '@/hooks/useSettings'
 import { useIsDirector } from '@/hooks/useIsDirector'
+import { useIsCollaborator } from '@/hooks/useIsCollaborator'
 import { UserAvatar } from '@/components/UserAvatar'
 import { usePendingRequestsCount } from '@/hooks/useRequests'
 import { usePendingOutgoingApprovalsCount } from '@/hooks/useOutgoingApprovals'
@@ -42,6 +43,8 @@ interface NavItem {
   label: string
   href: string
   icon: LucideIcon
+  /** يظهر للمتعاون الخارجي؟ الافتراضي لا — فهو لا يرى المكتب */
+  collab?: true
   badge?:
     | 'pending_requests'
     | 'pending_applications'
@@ -56,9 +59,9 @@ interface NavItem {
 const navSections: { title?: string; items: NavItem[] }[] = [
   {
     items: [
-      { label: 'لوحة التحكم', href: '/', icon: LayoutDashboard },
-      { label: 'التقويم', href: '/calendar', icon: CalendarRange },
-      { label: 'النقاشات', href: '/discussions', icon: MessagesSquare },
+      { label: 'لوحة التحكم', href: '/', icon: LayoutDashboard , collab: true },
+      { label: 'التقويم', href: '/calendar', icon: CalendarRange , collab: true },
+      { label: 'النقاشات', href: '/discussions', icon: MessagesSquare , collab: true },
     ],
   },
   {
@@ -67,9 +70,9 @@ const navSections: { title?: string; items: NavItem[] }[] = [
       { label: 'العقود', href: '/engagements', icon: Handshake },
       // «المشاريع» يوحّد القضايا والاستشارات واللوائح والتوثيق العقاري
       // (نموذج Matter — قرار 2026-08-21). المسارات القديمة تعمل للتفاصيل.
-      { label: 'المشاريع', href: '/matters', icon: FolderOpen },
-      { label: 'المهام', href: '/tasks', icon: ListTodo, badge: 'my_open_tasks' },
-      { label: 'الجلسات', href: '/sessions', icon: CalendarDays },
+      { label: 'المشاريع', href: '/matters', icon: FolderOpen , collab: true },
+      { label: 'المهام', href: '/tasks', icon: ListTodo, badge: 'my_open_tasks' , collab: true },
+      { label: 'الجلسات', href: '/sessions', icon: CalendarDays , collab: true },
       { label: 'الوكالات', href: '/poa', icon: FileSignature, badge: 'expiring_poas' },
       {
         label: 'مواعيد العملاء',
@@ -122,6 +125,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const { teamMember, logout } = useAuth()
   const { data: office } = useOfficeInfo()
   const isDirector = useIsDirector()
+  const isCollaborator = useIsCollaborator()
   const { data: pendingApprovals } = usePendingOutgoingApprovalsCount()
   const { data: pendingCount } = usePendingRequestsCount()
   const { data: pendingApps } = usePendingApplicationsCount()
@@ -158,15 +162,21 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
 
       {/* التنقل */}
       <nav className="flex-1 space-y-4 overflow-y-auto px-3 pb-4">
-        {navSections.map((section, si) => (
+        {navSections.map((section, si) => {
+          // المتعاون الخارجي: البنود الموسومة collab فقط، والأقسام التي تفرغ تُسقط
+          const items = isCollaborator
+            ? section.items.filter((i) => i.collab)
+            : section.items
+          if (items.length === 0) return null
+          return (
           <div key={si}>
-            {section.title && (
+            {section.title && !isCollaborator && (
               <p className="px-3 pb-1.5 text-[11px] font-semibold tracking-wide text-muted-foreground/70">
                 {section.title}
               </p>
             )}
             <div className="space-y-0.5">
-              {section.items.map((item) => {
+              {items.map((item) => {
                 const active =
                   item.href === '/'
                     ? location === '/'
@@ -223,7 +233,8 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
               })}
             </div>
           </div>
-        ))}
+          )
+        })}
       </nav>
 
       {/* المستخدم الحالي + خروج */}

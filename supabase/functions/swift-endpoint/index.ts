@@ -197,7 +197,8 @@ serve(async (req) => {
         email, password, name, role, short_name, avatar_initial, phone,
         date_of_birth, id_number, national_address, bank_name, bank_iban,
         qualifications, cv_url, qualification_doc_url, lawyer_license_url,
-        emergency_contact_name, emergency_contact_phone, emergency_contact_relation
+        emergency_contact_name, emergency_contact_phone, emergency_contact_relation,
+        member_type
       } = body;
 
       if (!email || !password || !name) {
@@ -221,6 +222,8 @@ serve(async (req) => {
         phone: phone || null,
         auth_id: authData.user.id,
         is_active: true,
+        // متعاون خارجي أم موظف مكتب — يحكم ما يراه من النظام كله
+        member_type: member_type === 'collaborator' ? 'collaborator' : 'employee',
       };
       if (date_of_birth) tmPayload.date_of_birth = date_of_birth;
       if (id_number) tmPayload.id_number = id_number;
