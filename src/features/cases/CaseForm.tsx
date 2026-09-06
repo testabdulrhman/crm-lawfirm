@@ -24,7 +24,11 @@ import { todayISO } from '@/lib/format'
 import { useContacts } from '@/hooks/useContacts'
 import { useTeamMembers } from '@/hooks/useTeam'
 import { useCreateCase, useUpdateCase } from '@/hooks/useCases'
-import { CASE_STATUS_OPTIONS, CASE_TYPES } from '@/lib/caseLabels'
+import {
+  BANKRUPTCY_PROCEDURES,
+  CASE_STATUS_OPTIONS,
+  CASE_TYPES,
+} from '@/lib/caseLabels'
 import { ContactPicker } from '@/components/ContactPicker'
 import { DualDatePicker } from '@/components/DualDatePicker'
 import { CaseDocDropzone, type ExtractedCase } from './CaseDocDropzone'
@@ -78,13 +82,22 @@ export function CaseForm({
   caseItem,
   onDone,
   variant = 'dialog',
+  kind,
 }: {
   caseItem?: Case | null
   onDone: () => void
   /** 'page' يعرض شريط حفظ ثابت + منطقة إسقاط مستند */
   variant?: 'dialog' | 'page'
+  /**
+   * نوع المشروع عند الإنشاء. إجراء الإفلاس يعيش في `cases` نفسه فيرث
+   * الجلسات والأحكام والمذكرات والنقاش — ولا يتغيّر إلا المفردات وقائمة
+   * «النوع» (أنواع إجراءات نظام الإفلاس بدل تصنيفات القضايا).
+   */
+  kind?: 'case' | 'bankruptcy'
 }) {
   const isPage = variant === 'page'
+  const matterKind = caseItem?.kind ?? kind ?? 'case'
+  const isBankruptcy = matterKind === 'bankruptcy'
   const { teamMember } = useAuth()
   // مستند أُسقط قبل الحفظ: يُرفع أول مستند للقضية بعد نجاح الإنشاء
   const [pendingDoc, setPendingDoc] = useState<File | null>(null)
@@ -183,6 +196,7 @@ export function CaseForm({
       contact_id: contactId,
       subject: t(values.subject),
       open_date: values.open_date || null,
+      ...(isEdit ? {} : { kind: matterKind }),
     }
     if (isEdit && caseItem) {
       await updateM.mutateAsync({ id: caseItem.id, input })
@@ -237,7 +251,7 @@ export function CaseForm({
 
   const typeField = (
     <div className="space-y-1.5">
-      <Label>النوع</Label>
+      <Label>{isBankruptcy ? 'نوع الإجراء' : 'النوع'}</Label>
       <Controller
         control={control}
         name="type"
@@ -247,7 +261,7 @@ export function CaseForm({
               <SelectValue placeholder="اختر النوع" />
             </SelectTrigger>
             <SelectContent>
-              {CASE_TYPES.map((t) => (
+              {(isBankruptcy ? BANKRUPTCY_PROCEDURES : CASE_TYPES).map((t) => (
                 <SelectItem key={t} value={t}>
                   {t}
                 </SelectItem>

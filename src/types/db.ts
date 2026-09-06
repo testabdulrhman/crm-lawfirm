@@ -391,6 +391,8 @@ export interface Case {
   /** نطاق العمل المتفق عليه — ينتقل من عرض السعر عند فتح الملف */
   agreed_scope: string | null
   office_num: string | null
+  /** نوع المشروع: case | legal_service | property | bankruptcy | channel */
+  kind: string | null
   court_num: string | null
   title: string | null
   type: string | null
@@ -421,6 +423,7 @@ export interface Case {
 
 export interface CaseInput {
   title: string
+  kind?: string | null
   agreed_scope?: string | null
   type?: string | null
   status?: string | null

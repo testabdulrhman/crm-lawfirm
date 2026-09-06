@@ -4,6 +4,7 @@ import {
   BookOpen,
   FolderOpen,
   Landmark,
+  Building2,
   Plus,
   Scale,
   Search,
@@ -63,6 +64,7 @@ const KINDS: Record<
   case: { label: 'قضية', icon: Scale, chip: 'bg-navy/10 text-navy dark:bg-navy-100/10 dark:text-navy-100' },
   legal_service: { label: 'استشارة / لائحة', icon: BookOpen, chip: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' },
   property: { label: 'توثيق عقاري', icon: Landmark, chip: 'bg-amber-500/10 text-amber-700 dark:text-amber-300' },
+  bankruptcy: { label: 'إجراء إفلاس', icon: Building2, chip: 'bg-violet-500/10 text-violet-700 dark:text-violet-300' },
 }
 
 // حالات كل نوع — صف الفرز الثاني يظهر عند اختيار تصنيف بعينه
@@ -71,6 +73,8 @@ const STATUSES: Record<MatterKind, { value: string; label: string }[]> = {
   legal_service: LS_STATUS_OPTIONS,
   // التوثيق العقاري يخزّن الحالة بالعربية مباشرةً (القيمة = التسمية)
   property: PROPERTY_STATUS_OPTIONS.map((v) => ({ value: v, label: v })),
+  // الإفلاس يشارك القضايا حالاتها (جارية/معلّقة/منتهية) فيتّسق مع اللوحة والتقارير
+  bankruptcy: CASE_STATUS_OPTIONS,
 }
 
 function statusOf(m: MatterRow): { label: string; badge: any } {
@@ -81,6 +85,8 @@ function statusOf(m: MatterRow): { label: string; badge: any } {
       return { label: lsStatusLabel(m.status), badge: lsStatusBadge(m.status) }
     case 'property':
       return { label: propertyStatusLabel(m.status), badge: 'outline' }
+    case 'bankruptcy':
+      return { label: caseStatusLabel(m.status), badge: caseStatusBadge(m.status) }
   }
 }
 
@@ -168,6 +174,7 @@ export function MattersPage() {
               ['case', `قضايا ${fmtNumber(countOf('case'))}`],
               ['legal_service', `استشارات ولوائح ${fmtNumber(countOf('legal_service'))}`],
               ['property', `توثيق عقاري ${fmtNumber(countOf('property'))}`],
+              ['bankruptcy', `إجراءات إفلاس ${fmtNumber(countOf('bankruptcy'))}`],
             ] as const
           ).map(([value, label]) => (
             <button
@@ -326,6 +333,7 @@ export function MattersPage() {
                 ['case', 'قضية', 'دعوى أمام محكمة — جلسات وأحكام ومذكرات'],
                 ['legal_service', 'استشارة / لائحة', 'استشارة قانونية أو صياغة لائحة أو عقد'],
                 ['property', 'توثيق عقاري', 'نقل ملكية عقار بين بائع ومشترٍ'],
+                ['bankruptcy', 'إجراء إفلاس', 'تسوية وقائية أو إعادة تنظيم مالي أو تصفية'],
               ] as const
             ).map(([k, label, desc]) => {
               const Icon = KINDS[k].icon
@@ -336,6 +344,7 @@ export function MattersPage() {
                   onClick={() => {
                     setPicking(false)
                     if (k === 'case') navigate('/cases/new')
+                    else if (k === 'bankruptcy') navigate('/cases/new?kind=bankruptcy')
                     else setCreating(k)
                   }}
                   className="flex items-center gap-3 rounded-xl border border-border/70 p-3.5 text-right transition-all hover:border-gold/60 hover:bg-gold/5"

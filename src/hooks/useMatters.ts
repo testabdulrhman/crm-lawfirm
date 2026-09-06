@@ -10,7 +10,7 @@ import { supabase } from '@/lib/supabase'
 // قائمة واحدة. توحيد القاعدة نفسها (جدول ملفات واحد يرث النقاش والذكاء
 // والاشتقاق لكل الأنواع) مرحلة ثانية مدروسة عند تجهيز SaaS.
 
-export type MatterKind = 'case' | 'legal_service' | 'property'
+export type MatterKind = 'case' | 'legal_service' | 'property' | 'bankruptcy'
 
 export interface MatterRow {
   /** مركّب: kind-id — يضمن التفرد عبر الجداول الثلاثة */
@@ -36,7 +36,7 @@ export function useMatters() {
     queryKey: ['matters'],
     staleTime: 60_000,
     queryFn: async (): Promise<MatterRow[]> => {
-      const [cases, services, transfers] = await Promise.all([
+      const [cases, services, transfers, bankruptcies] = await Promise.all([
         supabase
           .from('cases')
           .select(
@@ -58,10 +58,21 @@ export function useMatters() {
           .select('id, transfer_type, status, seller_name, buyer_name, transfer_date, created_at')
           .is('deleted_at', null)
           .order('created_at', { ascending: false }),
+        // إجراءات الإفلاس تعيش في cases نفسه فترث النقاش والمستندات والمهام
+        supabase
+          .from('cases')
+          .select(
+            'id, title, status, type, open_date, office_num, assignee_id, ' +
+              'contact:contacts(name), assignee:team_members!cases_assignee_id_fkey(name, short_name)'
+          )
+          .eq('kind', 'bankruptcy')
+          .is('deleted_at', null)
+          .order('created_at', { ascending: false }),
       ])
       if (cases.error) throw cases.error
       if (services.error) throw services.error
       if (transfers.error) throw transfers.error
+      if (bankruptcies.error) throw bankruptcies.error
 
       const rows: MatterRow[] = [
         ...(cases.data ?? []).map((c: any) => ({
@@ -105,6 +116,19 @@ export function useMatters() {
           assigneeId: null,
           assigneeName: null,
           href: `/property/${p.id}`,
+        })),
+        ...(bankruptcies.data ?? []).map((b: any) => ({
+          key: `bk-${b.id}`,
+          kind: 'bankruptcy' as const,
+          id: b.id,
+          title: b.title || 'إجراء إفلاس',
+          client: b.contact?.name ?? null,
+          status: b.status,
+          date: b.open_date,
+          ref: b.office_num,
+          assigneeId: b.assignee_id ?? null,
+          assigneeName: b.assignee?.short_name ?? b.assignee?.name ?? null,
+          href: `/cases/${b.id}`,
         })),
       ]
 
