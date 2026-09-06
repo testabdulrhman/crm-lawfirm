@@ -5,13 +5,7 @@ import { FileSignature, Link2, X } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import { POAPicker } from '@/components/POAPicker'
 import { useCasePOAs, useLinkPOAToCase, usePOAs } from '@/hooks/usePOAs'
 import { fmtDatePref } from '@/lib/format'
 import { expirySoonText, isExpiringSoon, poaStatusLabel } from '@/lib/poaLabels'
@@ -38,10 +32,7 @@ export function CasePOAsCard({ caseData: c }: { caseData: Case }) {
 
   // المرشّحات: السارية غير المربوطة، والأقرب انتهاءً أولاً
   const candidates = useMemo(
-    () =>
-      (all ?? [])
-        .filter((p) => !p.case_id && p.status === 'active')
-        .slice(0, 100),
+    () => (all ?? []).filter((p) => !p.case_id && p.status === 'active'),
     [all]
   )
 
@@ -67,24 +58,14 @@ export function CasePOAsCard({ caseData: c }: { caseData: Case }) {
 
       <CardContent className="space-y-3">
         {picking && (
-          <Select
-            onValueChange={(id) => {
+          <POAPicker
+            poas={candidates}
+            autoFocus
+            onPick={(id) => {
               linkM.mutate({ poaId: id, caseId: c.id })
               setPicking(false)
             }}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="اختر وكالة سارية غير مربوطة" />
-            </SelectTrigger>
-            <SelectContent>
-              {candidates.map((p) => (
-                <SelectItem key={p.id} value={p.id}>
-                  {[p.poa_number, p.client_name].filter(Boolean).join(' — ') ||
-                    'وكالة'}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          />
         )}
 
         {(linked ?? []).length === 0 && !picking && (
