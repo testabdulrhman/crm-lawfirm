@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useLocation } from 'wouter'
+import { Link, useLocation } from 'wouter'
 import {
   Plus,
   Search,
@@ -29,6 +29,7 @@ import {
   poaStatusBadge,
   poaStatusLabel,
   isExpiringSoon,
+  onClosedMatter,
   isActuallyExpired,
   expirySoonText,
 } from '@/lib/poaLabels'
@@ -53,7 +54,7 @@ export function POAsPage() {
     for (const p of data ?? []) {
       const s = p.status ?? 'active'
       c[s] = (c[s] ?? 0) + 1
-      if (isExpiringSoon(p)) c.soon++
+      if (isExpiringSoon(p) && !onClosedMatter(p)) c.soon++
     }
     return c
   }, [data])
@@ -68,7 +69,7 @@ export function POAsPage() {
         if (!hay.includes(q)) return false
       }
       if (status !== 'all' && (p.status ?? 'active') !== status) return false
-      if (soonOnly && !isExpiringSoon(p)) return false
+      if (soonOnly && (!isExpiringSoon(p) || onClosedMatter(p))) return false
       return true
     })
     // الترتيب حسب تاريخ الإصدار تنازلياً (الأحدث أولاً)، والفارغ في الأسفل
@@ -246,8 +247,10 @@ function POACard({
   poa: PowerOfAttorney
   onOpen: () => void
 }) {
-  const soon = isExpiringSoon(p)
-  const overdue = isActuallyExpired(p)
+  // الوكالة على ملف منتهٍ: لا تنبيه — التمثيل انتهى بانتهاء الملف
+  const closedMatter = onClosedMatter(p)
+  const soon = isExpiringSoon(p) && !closedMatter
+  const overdue = isActuallyExpired(p) && !closedMatter
   return (
     <Card
       className="flex cursor-pointer flex-col"
@@ -290,6 +293,25 @@ function POACard({
             {p.agent_name || '—'}
           </span>
         </div>
+
+        {p.case ? (
+          <div className="flex items-center gap-1.5 text-xs">
+            <Link
+              href={`/cases/${p.case.id}`}
+              onClick={(e) => e.stopPropagation()}
+              className="truncate text-gold hover:underline"
+            >
+              {p.case.office_num || p.case.title || 'المشروع'}
+            </Link>
+            {closedMatter && (
+              <Badge variant="secondary" className="shrink-0">
+                منتهٍ — لا تنبيه
+              </Badge>
+            )}
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground">بلا ربط بمشروع</p>
+        )}
 
         <div className="space-y-0.5 text-xs text-muted-foreground">
           {p.poa_date && <p>الإصدار: {fmtDatePref(p.poa_date)}</p>}

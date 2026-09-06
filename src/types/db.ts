@@ -762,7 +762,12 @@ export interface PowerOfAttorney {
   deleted_by: string | null
   created_at: string | null
   // علاقة القضية (FK موجود). لا embed لجهة الاتصال (لا FK) — نعتمد client_id/client_name.
-  case?: { id: string; title: string | null; office_num: string | null } | null
+  case?: {
+    id: string
+    title: string | null
+    office_num: string | null
+    status?: string | null
+  } | null
 }
 
 export interface POAInput {

@@ -7,6 +7,7 @@ import { fmtDatePref, fmtNumber } from '@/lib/format'
 import { caseStatusLabel, caseTypeLabel } from '@/lib/caseLabels'
 import type { Case } from '@/types/db'
 import { CaseTeamCard } from '../CaseTeamCard'
+import { CasePOAsCard } from '../CasePOAsCard'
 
 export function OverviewTab({ caseData: c }: { caseData: Case }) {
   return (
@@ -132,6 +133,9 @@ export function OverviewTab({ caseData: c }: { caseData: Case }) {
 
         {/* فريق الملف — من يعمل عليه غير مسؤوله */}
         <CaseTeamCard caseData={c} />
+
+        {/* الوكالات المربوطة بهذا الملف */}
+        <CasePOAsCard caseData={c} />
       </div>
     </div>
   )

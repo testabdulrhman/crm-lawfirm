@@ -10,7 +10,7 @@ import { errMessage } from '@/lib/errors'
 const LIST_KEY = ['poas'] as const
 
 // لا embed لجهة الاتصال (لا FK)؛ فقط القضية (FK موجود).
-const SELECT = '*, case:cases(id,title,office_num)'
+const SELECT = '*, case:cases(id,title,office_num,status)'
 
 function errToast(title: string) {
   return (e: unknown) =>
@@ -26,6 +26,43 @@ function plusDaysISO(days: number): string {
   d.setHours(0, 0, 0, 0)
   d.setDate(d.getDate() + days)
   return d.toISOString().slice(0, 10)
+}
+
+/** وكالات مشروع بعينه — بطاقة «الوكالات» في صفحة الملف */
+export function useCasePOAs(caseId: string | undefined) {
+  return useQuery({
+    queryKey: ['poas', 'by_case', caseId ?? ''],
+    enabled: !!caseId,
+    queryFn: async (): Promise<PowerOfAttorney[]> => {
+      const { data, error } = await supabase
+        .from('powers_of_attorney')
+        .select(SELECT)
+        .eq('case_id', caseId!)
+        .is('deleted_at', null)
+        .order('expiry_date', { ascending: true })
+      if (error) throw error
+      return (data ?? []) as unknown as PowerOfAttorney[]
+    },
+  })
+}
+
+/** ربط/فكّ ربط وكالة بمشروع — من بطاقة الملف بلا فتح نموذج الوكالة كاملاً */
+export function useLinkPOAToCase() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (args: { poaId: string; caseId: string | null }) => {
+      const { error } = await supabase
+        .from('powers_of_attorney')
+        .update({ case_id: args.caseId })
+        .eq('id', args.poaId)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['poas'] })
+      toast({ variant: 'success', title: 'حُدّث ربط الوكالة' })
+    },
+    onError: errToast('تعذّر ربط الوكالة'),
+  })
 }
 
 export function usePOAs() {
@@ -59,16 +96,19 @@ export function usePOA(id: string | null) {
   })
 }
 
-// عدد السارية التي تنتهي خلال 30 يوماً (لـ badge الـ Sidebar)
+/**
+ * عدد السارية التي تنتهي خلال ٣٠ يوماً (شارة الشريط الجانبي).
+ *
+ * ⚠️ يُقرأ من العرض `poas_needing_renewal` لا من الجدول: العرض يُسقط الوكالات
+ *    المربوطة بمشروع **منتهٍ** — تجديدها بلا معنى بعد انتهاء التمثيل.
+ */
 export function useExpiringPOAsCount() {
   return useQuery({
     queryKey: ['poas', 'expiring_count'],
     queryFn: async (): Promise<number> => {
       const { count, error } = await supabase
-        .from('powers_of_attorney')
+        .from('poas_needing_renewal')
         .select('*', { count: 'exact', head: true })
-        .is('deleted_at', null)
-        .eq('status', 'active')
         .gte('expiry_date', todayISO())
         .lte('expiry_date', plusDaysISO(SOON_DAYS))
       if (error) throw error

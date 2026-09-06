@@ -73,3 +73,14 @@ export function expirySoonText(expiry: string | null | undefined): string {
 
 // تاريخ اليوم (لإعادة الاستخدام)
 export { todayISO }
+
+/**
+ * الوكالة مربوطة بمشروع مُغلق؟ حينها تجديدها بلا معنى — التمثيل انتهى بانتهائه.
+ * ⚠️ يجب أن تطابق `matter_is_closed()` في القاعدة (هي الحاكمة، وهذه للعرض).
+ */
+export function onClosedMatter(poa: {
+  case?: { status?: string | null } | null
+}): boolean {
+  const s = poa.case?.status
+  return s === 'muntahia' || s === 'delivered' || s === 'مكتملة'
+}
