@@ -19,6 +19,9 @@ struct MemberLite: Codable, Equatable {
 /// صف في قائمة «الملفات»
 struct CaseRow: Codable, Identifiable, Hashable {
     let id: String
+    /// case · legal_service · property · bankruptcy
+    let kind: String?
+    let bankruptcy_stage: String?
     let office_num: String?
     let court_num: String?
     let title: String?
@@ -35,6 +38,8 @@ struct CaseRow: Codable, Identifiable, Hashable {
 /// الملف كاملاً — رأس الشاشة وتبويب «نظرة»
 struct CaseFull: Codable {
     let id: String
+    let kind: String?
+    let bankruptcy_stage: String?
     let office_num: String?
     let court_num: String?
     let title: String?
@@ -210,7 +215,44 @@ func caseStatusLabel(_ s: String?) -> String {
     case "jarri": return "جارية"
     case "muntahia": return "منتهية"
     case "muallaq": return "معلّقة"
+    // الاستشارات/اللوائح لها قاموسها — ظهرت بالإنجليزية حين اختلطت القائمة
+    case "draft": return "مسودة"
+    case "in_progress": return "قيد العمل"
+    case "review": return "مراجعة"
+    case "delivered": return "مُسلَّمة"
     default: return s ?? "—"
+    }
+}
+
+/// نوع المشروع — نفس مفردات الويب (MattersPage) حرفياً
+func matterKindLabel(_ k: String?) -> String {
+    switch k {
+    case "case": return "قضية"
+    case "legal_service": return "استشارة / لائحة"
+    case "property": return "توثيق عقاري"
+    case "bankruptcy": return "إجراء إفلاس"
+    default: return "مشروع"
+    }
+}
+
+/// أنواع المشاريع التي تشارك القضايا حالاتها (جارية/معلّقة/منتهية).
+/// غيرها له قاموسه (الاستشارة draft/delivered، والتوثيق «مكتملة») فلا يُفلتر بها.
+func sharesCaseStatuses(_ k: String?) -> Bool {
+    k == "case" || k == "bankruptcy" || k == nil
+}
+
+/// مراحل إجراء الإفلاس — نفس ترتيب BANKRUPTCY_STAGES في الويب
+func bankruptcyStageLabel(_ s: String?) -> String {
+    switch s {
+    case "filed": return "تقديم الطلب"
+    case "opened": return "افتتاح الإجراء"
+    case "trustee": return "تعيين الأمين"
+    case "claims": return "حصر الديون"
+    case "plan": return "اقتراح الخطة"
+    case "vote": return "تصويت الدائنين"
+    case "ratified": return "التصديق"
+    case "closed": return "انتهاء الإجراء"
+    default: return "—"
     }
 }
 

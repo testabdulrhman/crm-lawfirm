@@ -14,13 +14,20 @@ struct CasesView: View {
     @State private var error: String?
     @State private var search = ""
     @State private var status = "jarri"
+    /// النوع أولاً ثم الحالة — الافتراضي «قضية» فيبقى سلوك الشاشة كما اعتاده
+    @State private var kind = "case"
     @State private var routed: CaseRoute?
     @State private var showScan = false
+
+    /// الحالة تُطبَّق على الأنواع التي تشارك قاموس القضايا فقط — وإلا أخفى
+    /// فلتر «جارية» كل الاستشارات والتوثيقات لأن حالاتها بمفردات أخرى.
+    private var showsStatusFilter: Bool { sharesCaseStatuses(kind == "all" ? nil : kind) && kind != "all" }
 
     private var filtered: [CaseRow] {
         let q = search.trimmingCharacters(in: .whitespaces)
         return rows.filter { r in
-            (status == "all" || r.status == status)
+            (kind == "all" || r.kind == kind)
+                && (!showsStatusFilter || status == "all" || r.status == status)
                 && (q.isEmpty
                     || (r.title ?? "").arContains(q)
                     || (r.office_num ?? "").contains(q)
@@ -40,19 +47,32 @@ struct CasesView: View {
                     ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     VStack(spacing: 0) {
-                        Picker("الحالة", selection: $status) {
-                            Text("جارية").tag("jarri")
-                            Text("معلّقة").tag("muallaq")
-                            Text("منتهية").tag("muntahia")
+                        Picker("النوع", selection: $kind) {
+                            Text("قضايا").tag("case")
+                            Text("إفلاس").tag("bankruptcy")
+                            Text("استشارات").tag("legal_service")
+                            Text("عقاري").tag("property")
                             Text("الكل").tag("all")
                         }
                         .pickerStyle(.segmented)
                         .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
+                        .padding(.top, 8)
+
+                        if showsStatusFilter {
+                            Picker("الحالة", selection: $status) {
+                                Text("جارية").tag("jarri")
+                                Text("معلّقة").tag("muallaq")
+                                Text("منتهية").tag("muntahia")
+                                Text("الكل").tag("all")
+                            }
+                            .pickerStyle(.segmented)
+                            .padding(.horizontal, 16)
+                            .padding(.top, 6)
+                        }
 
                         if filtered.isEmpty {
                             EmptyBox(icon: "folder", text: "لا مشاريع هنا",
-                                     subtext: search.isEmpty ? "غيّر الحالة" : "جرّب كلمة أخرى")
+                                     subtext: search.isEmpty ? "غيّر النوع أو الحالة" : "جرّب كلمة أخرى")
                                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                         } else {
                             List(filtered) { r in
@@ -125,6 +145,14 @@ struct CaseRowView: View {
                     .foregroundStyle(Theme.navy)
                     .lineLimit(2)
                 HStack(spacing: 6) {
+                    // وسم النوع لغير القضايا — القائمة صارت مختلطة
+                    if row.kind != "case", row.kind != nil {
+                        Text(matterKindLabel(row.kind))
+                            .font(.system(size: 10, weight: .semibold))
+                            .padding(.horizontal, 6).padding(.vertical, 2)
+                            .background(Theme.gold.opacity(0.18), in: Capsule())
+                            .foregroundStyle(Theme.goldDark)
+                    }
                     if let n = row.office_num, !n.isEmpty {
                         Text(n).font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.goldDark)
                     }

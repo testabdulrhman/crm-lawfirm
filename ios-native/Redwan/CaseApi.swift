@@ -6,11 +6,14 @@ import Foundation
 extension SB {
     // ===== قائمة الملفات =====
 
-    /// القضايا الحرفية فقط (kind=case) — الأحدث أولاً؛ البحث محلي بالعربية المطبَّعة
+    /// **كل** المشاريع لا القضايا وحدها — قضية · استشارة/لائحة · توثيق عقاري ·
+    /// إجراء إفلاس. (كان الاستعلام يفلتر `kind=eq.case` فيخفي البقية رغم أن
+    /// التبويب اسمه «المشاريع».) القنوات وحدها تُستثنى: ليست ملفاً.
+    /// الأحدث أولاً؛ البحث والفرز محليان بالعربية المطبَّعة.
     func cases() async throws -> [CaseRow] {
         try await get("cases", query: [
-            ("select", "id,office_num,court_num,title,type,status,court,hearing_date,contact:contacts!cases_contact_id_fkey(id,name,phone)"),
-            ("kind", "eq.case"),
+            ("select", "id,kind,office_num,court_num,title,type,status,court,hearing_date,bankruptcy_stage,contact:contacts!cases_contact_id_fkey(id,name,phone)"),
+            ("kind", "neq.channel"),
             ("deleted_at", "is.null"),
             ("order", "created_at.desc"),
             ("limit", "500"),
@@ -21,7 +24,7 @@ extension SB {
 
     func caseFull(id: String) async throws -> CaseFull? {
         let rows: [CaseFull] = try await get("cases", query: [
-            ("select", "id,office_num,court_num,title,type,status,court,court_division,subject,agreed_scope,open_date,close_date,hearing_date,hearing_label,contact:contacts!cases_contact_id_fkey(id,name,phone),assignee:team_members!cases_assignee_id_fkey(id,name,short_name)"),
+            ("select", "id,kind,bankruptcy_stage,office_num,court_num,title,type,status,court,court_division,subject,agreed_scope,open_date,close_date,hearing_date,hearing_label,contact:contacts!cases_contact_id_fkey(id,name,phone),assignee:team_members!cases_assignee_id_fkey(id,name,short_name)"),
             ("id", "eq.\(id)"),
             ("limit", "1"),
         ])

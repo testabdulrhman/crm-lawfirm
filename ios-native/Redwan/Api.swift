@@ -107,10 +107,12 @@ extension SB {
             ("due_date", "gte.\(fromISO)"),
             ("due_date", "lte.\(toISO)"),
         ])
-        async let poas: [PoaRow] = get("powers_of_attorney", query: [
+        // ⚠️ من العرض `poas_needing_renewal` لا من الجدول: العرض يُسقط الوكالات
+        //    المربوطة بمشروع **منتهٍ** (تجديدها بلا معنى بعد انتهاء التمثيل)،
+        //    ويطبّق شرطي `active` و`deleted_at is null` بنفسه. الويب يقرأ منه
+        //    كذلك — وقراءة الجدول هنا كانت تُبقي التنبيه حيّاً على الجوال وحده.
+        async let poas: [PoaRow] = get("poas_needing_renewal", query: [
             ("select", "id,poa_number,client_name,expiry_date"),
-            ("deleted_at", "is.null"),
-            ("status", "eq.active"),
             ("expiry_date", "gte.\(fromISO)"),
             ("expiry_date", "lte.\(toISO)"),
         ])

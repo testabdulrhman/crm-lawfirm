@@ -110,11 +110,29 @@ struct CaseDetailView: View {
                 .foregroundStyle(Theme.navy)
             HStack(spacing: 8) {
                 StatusChip(status: c?.status)
+                // وسم النوع لغير القضايا — الشاشة صارت تفتح كل أنواع المشاريع
+                if let k = c?.kind, k != "case" {
+                    Text(matterKindLabel(k))
+                        .font(.system(size: 10, weight: .semibold))
+                        .padding(.horizontal, 6).padding(.vertical, 2)
+                        .background(Theme.gold.opacity(0.18), in: Capsule())
+                        .foregroundStyle(Theme.goldDark)
+                }
                 if let t = c?.type, !t.isEmpty {
                     Text(t).font(.system(size: 12)).foregroundStyle(Theme.muted)
                 }
                 if let n = c?.court_num, !n.isEmpty {
                     Text("قضية \(n)").font(.system(size: 12)).foregroundStyle(Theme.muted)
+                }
+            }
+            // سير الإجراء — «متابعة سير المشروع» (الديون والدائنون في نظام الإفلاس)
+            if c?.kind == "bankruptcy" {
+                HStack(spacing: 6) {
+                    Image(systemName: "flag.checkered")
+                        .font(.system(size: 11)).foregroundStyle(Theme.goldDark)
+                    Text("المرحلة: \(bankruptcyStageLabel(c?.bankruptcy_stage))")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Theme.navy)
                 }
             }
             if let client = c?.contact, let name = client.name, !name.isEmpty {
