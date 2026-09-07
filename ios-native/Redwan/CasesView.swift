@@ -21,6 +21,17 @@ struct CasesView: View {
 
     /// الحالة تُطبَّق على الأنواع التي تشارك قاموس القضايا فقط — وإلا أخفى
     /// فلتر «جارية» كل الاستشارات والتوثيقات لأن حالاتها بمفردات أخرى.
+    /// عدد كل نوع — يُعرض داخل شريحته كما في الويب
+    private var kindCounts: [String: Int] {
+        var m: [String: Int] = ["all": rows.count]
+        for r in rows { m[r.kind ?? "case", default: 0] += 1 }
+        return m
+    }
+
+    private var statusMenuLabel: String {
+        status == "all" ? "كل الحالات" : caseStatusLabel(status)
+    }
+
     private var showsStatusFilter: Bool { sharesCaseStatuses(kind == "all" ? nil : kind) && kind != "all" }
 
     private var filtered: [CaseRow] {
@@ -47,28 +58,9 @@ struct CasesView: View {
                     ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     VStack(spacing: 0) {
-                        Picker("النوع", selection: $kind) {
-                            Text("قضايا").tag("case")
-                            Text("إفلاس").tag("bankruptcy")
-                            Text("استشارات").tag("legal_service")
-                            Text("عقاري").tag("property")
-                            Text("الكل").tag("all")
-                        }
-                        .pickerStyle(.segmented)
-                        .padding(.horizontal, 16)
-                        .padding(.top, 8)
-
-                        if showsStatusFilter {
-                            Picker("الحالة", selection: $status) {
-                                Text("جارية").tag("jarri")
-                                Text("معلّقة").tag("muallaq")
-                                Text("منتهية").tag("muntahia")
-                                Text("الكل").tag("all")
-                            }
-                            .pickerStyle(.segmented)
-                            .padding(.horizontal, 16)
-                            .padding(.top, 6)
-                        }
+                        // شريط شرائح أفقي بالعدّاد — خمسة خيارات عربية لا تتّسع
+                        // في شريط مقسّم على عرض الجوال؛ والشرائح تنزلق وتتنفّس.
+                        KindChips(kind: $kind, counts: kindCounts)
 
                         if filtered.isEmpty {
                             EmptyBox(icon: "folder", text: "لا مشاريع هنا",
@@ -101,6 +93,28 @@ struct CasesView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { showScan = true } label: {
                         Image(systemName: "camera.fill").foregroundStyle(Theme.goldDark)
+                    }
+                }
+                // الحالة قائمةٌ في الشريط لا شريطاً مقسّماً ثانياً — توفّر صفاً
+                // كاملاً من الارتفاع، وتظهر فقط للأنواع التي لها هذا القاموس.
+                if showsStatusFilter {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Menu {
+                            Picker("الحالة", selection: $status) {
+                                Text("جارية").tag("jarri")
+                                Text("معلّقة").tag("muallaq")
+                                Text("منتهية").tag("muntahia")
+                                Text("الكل").tag("all")
+                            }
+                        } label: {
+                            // أيقونة لا نصّ: شريط العنوان يضغط النص فينقطع
+                            // («ج…»)؛ والنقطة الذهبية تُعلم أن تصفيةً مفعّلة.
+                            Image(systemName: status == "jarri"
+                                  ? "line.3.horizontal.decrease.circle"
+                                  : "line.3.horizontal.decrease.circle.fill")
+                                .foregroundStyle(Theme.goldDark)
+                        }
+                        .accessibilityLabel("تصفية الحالة: \(statusMenuLabel)")
                     }
                 }
             }
@@ -194,6 +208,55 @@ struct StatusChip: View {
         case "jarri": return Theme.success
         case "muallaq": return Theme.amber
         default: return Theme.muted
+        }
+    }
+}
+
+
+/// شرائح النوع — أفقية منزلقة بالعدّاد، على نمط صفّ التصفية في الويب.
+/// (كانت شريطاً مقسّماً بخمسة خيارات عربية فازدحم على عرض الجوال.)
+private struct KindChips: View {
+    @Binding var kind: String
+    let counts: [String: Int]
+
+    private let items: [(String, String)] = [
+        ("all", "الكل"),
+        ("case", "قضايا"),
+        ("bankruptcy", "إفلاس"),
+        ("legal_service", "استشارات"),
+        ("property", "عقاري"),
+    ]
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(items, id: \.0) { value, label in
+                    let on = kind == value
+                    let n = counts[value] ?? 0
+                    Button {
+                        withAnimation(.easeOut(duration: 0.15)) { kind = value }
+                    } label: {
+                        HStack(spacing: 5) {
+                            Text(label)
+                                .font(.system(size: 13, weight: on ? .semibold : .regular))
+                            Text("\(n)")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(on ? Theme.gold.opacity(0.85) : Theme.muted.opacity(0.7))
+                        }
+                        .padding(.horizontal, 11)
+                        .padding(.vertical, 6)
+                        .background(on ? Theme.navy : Theme.card)
+                        .foregroundStyle(on ? .white : Theme.navy)
+                        .overlay(
+                            Capsule().stroke(on ? Color.clear : Theme.line, lineWidth: 1)
+                        )
+                        .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
         }
     }
 }
