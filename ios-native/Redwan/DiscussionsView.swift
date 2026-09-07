@@ -169,6 +169,9 @@ struct DiscussionsView: View {
 private struct DiscussionRowView: View {
     let row: DiscussionRow
 
+    /// نقاش فيه ما لم يُقرأ — يُميَّز بالخط الغامق لا بالعدّاد وحده
+    private var unread: Bool { (row.unread ?? 0) > 0 }
+
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: row.isGeneral ? "megaphone.fill" : "building.columns.fill")
@@ -181,13 +184,13 @@ private struct DiscussionRowView: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(row.case_title ?? "قضية")
-                        .font(.system(size: 14, weight: .medium))
+                        .font(.system(size: 14, weight: unread ? .bold : .medium))
                         .foregroundStyle(Theme.navy)
                         .lineLimit(1)
                     Spacer(minLength: 0)
                     Text(shortStamp(row.last_at))
-                        .font(.system(size: 11))
-                        .foregroundStyle(Theme.muted)
+                        .font(.system(size: 11, weight: unread ? .semibold : .regular))
+                        .foregroundStyle(unread ? Theme.goldDark : Theme.muted)
                 }
 
                 HStack(spacing: 5) {
@@ -197,8 +200,8 @@ private struct DiscussionRowView: View {
                             .foregroundStyle(Theme.muted)
                     }
                     Text(preview)
-                        .font(.system(size: 12))
-                        .foregroundStyle(Theme.muted)
+                        .font(.system(size: 12, weight: unread ? .medium : .regular))
+                        .foregroundStyle(unread ? Theme.navy : Theme.muted)
                         .lineLimit(1)
                     Spacer(minLength: 0)
                     if let n = row.unread, n > 0 {

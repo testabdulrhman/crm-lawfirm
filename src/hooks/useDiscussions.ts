@@ -80,6 +80,26 @@ const invalidate = (qc: ReturnType<typeof useQueryClient>, caseId: string | null
   qc.invalidateQueries({ queryKey: ['disc_thread'] })
 }
 
+/**
+ * مجموع الرسائل غير المقروءة عبر كل النقاشات — شارة «النقاشات» في الشريط.
+ *
+ * يشارك نفس مفتاح الاستعلام والتحديث الدوري، فلا نداء إضافي على الخادم.
+ * والحساب في القاعدة (case_discussions) لكل موظف بحسابه: رسائله هو لا تُعدّ
+ * عليه، وما بعد آخر فتحٍ للقناة فقط.
+ */
+export function useUnreadDiscussionsCount() {
+  return useQuery({
+    queryKey: ['discussions'],
+    refetchInterval: 30_000,
+    queryFn: async (): Promise<DiscussionRow[]> => {
+      const { data, error } = await supabase.rpc('case_discussions')
+      if (error) throw error
+      return (data ?? []) as DiscussionRow[]
+    },
+    select: (rows) => rows.reduce((n, r) => n + Number(r.unread ?? 0), 0),
+  })
+}
+
 export function useDiscussions() {
   return useQuery({
     queryKey: ['discussions'],

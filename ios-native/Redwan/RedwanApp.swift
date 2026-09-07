@@ -115,6 +115,9 @@ struct RootView: View {
 struct MainTabs: View {
     @ObservedObject private var router = PushRouter.shared
     @State private var tab = 0
+    /// مجموع غير المقروء في النقاشات — شارة التبويب. يُحدَّث عند الظهور
+    /// وكل ٣٠ ثانية، وهو نفس ما يحسبه case_discussions لكل موظف بحسابه.
+    @State private var unreadDiscussions = 0
 
     var body: some View {
         TabView(selection: $tab) {
@@ -132,11 +135,24 @@ struct MainTabs: View {
                 .tag(3)
             DiscussionsView()
                 .tabItem { Label("النقاشات", systemImage: "bubble.left.and.bubble.right.fill") }
+                .badge(unreadDiscussions)
                 .tag(4)
+        }
+        .task { await refreshUnread() }
+        .task {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(30))
+                await refreshUnread()
+            }
         }
         // مسار الإشعار يقلب التبويب — والشاشة نفسها تفتح وجهتها ثم تصفّر الجسر
         .onChange(of: router.route) { _, r in switchTab(for: r) }
         .task { switchTab(for: router.route) }
+    }
+
+    private func refreshUnread() async {
+        let rows = (try? await SB.shared.discussions()) ?? []
+        unreadDiscussions = rows.reduce(0) { $0 + ($1.unread ?? 0) }
     }
 
     private func switchTab(for route: String?) {

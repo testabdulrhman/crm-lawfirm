@@ -37,6 +37,7 @@ import { useUpcomingAppointmentsCount } from '@/hooks/useAppointments'
 import { useMyOpenTasksCount } from '@/hooks/useTasks'
 import { useMyReviewCount } from '@/hooks/useTaskRoom'
 import { usePendingHrCount } from '@/hooks/useHrRequests'
+import { useUnreadDiscussionsCount } from '@/hooks/useDiscussions'
 import { fmtNumber } from '@/lib/format'
 
 interface NavItem {
@@ -53,6 +54,7 @@ interface NavItem {
     | 'pending_out_approvals'
     | 'my_open_tasks'
     | 'pending_hr'
+    | 'unread_discussions'
 }
 
 // أقسام التنقل: تجميع منطقي بدل قائمة طويلة مسطّحة
@@ -61,7 +63,7 @@ const navSections: { title?: string; items: NavItem[] }[] = [
     items: [
       { label: 'لوحة التحكم', href: '/', icon: LayoutDashboard , collab: true },
       { label: 'التقويم', href: '/calendar', icon: CalendarRange , collab: true },
-      { label: 'النقاشات', href: '/discussions', icon: MessagesSquare , collab: true },
+      { label: 'النقاشات', href: '/discussions', icon: MessagesSquare, badge: 'unread_discussions', collab: true },
     ],
   },
   {
@@ -135,6 +137,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   // شارة المهام = المستحق عليّ + ما ينتظر اعتمادي
   const { data: myReviews } = useMyReviewCount()
   const { data: pendingHr } = usePendingHrCount(isDirector)
+  const { data: unreadDisc } = useUnreadDiscussionsCount()
 
   return (
     <aside className="pt-safe pb-safe flex h-full w-64 flex-col bg-card text-foreground">
@@ -200,7 +203,9 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                               ? (myTasks ?? 0) + (myReviews ?? 0)
                               : item.badge === 'pending_hr'
                                 ? (isDirector ? (pendingHr ?? 0) : 0)
-                                : 0
+                                : item.badge === 'unread_discussions'
+                                  ? (unreadDisc ?? 0)
+                                  : 0
                 const showBadge = !!item.badge && badgeCount > 0
                 return (
                   <Link

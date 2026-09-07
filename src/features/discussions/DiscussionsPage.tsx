@@ -489,13 +489,19 @@ function ChannelList({
             const isGeneral = c.case_id === null
             const isChannel = c.kind === 'channel'
             const active = selected !== undefined && (selected ?? null) === c.case_id
+            // نقاش فيه ما لم يُقرأ: يُرى دون تدقيق — شريط ذهبي وخطّ أغمق
+            const unread = Number(c.unread ?? 0) > 0
             return (
               <button
                 key={c.case_id ?? 'general'}
                 onClick={() => onSelect(c.case_id)}
                 className={cn(
                   'flex w-full items-start gap-2.5 border-b border-border/40 px-3 py-2.5 text-right transition-colors',
-                  active ? 'bg-gold/10' : 'hover:bg-muted/50'
+                  active
+                    ? 'bg-gold/10'
+                    : unread
+                      ? 'border-s-2 border-s-gold bg-gold/[0.06] hover:bg-gold/10'
+                      : 'hover:bg-muted/50'
                 )}
               >
                 <span
@@ -516,10 +522,22 @@ function ChannelList({
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="flex items-baseline justify-between gap-2">
-                    <span className="truncate text-[13px] font-medium text-foreground">
+                    <span
+                      className={cn(
+                        'truncate text-[13px] text-foreground',
+                        unread ? 'font-bold' : 'font-medium'
+                      )}
+                    >
                       {c.case_title ?? 'مشروع'}
                     </span>
-                    <span className="shrink-0 text-[10px] text-muted-foreground">
+                    <span
+                      className={cn(
+                        'shrink-0 text-[10px]',
+                        unread
+                          ? 'font-semibold text-gold-600 dark:text-gold-300'
+                          : 'text-muted-foreground'
+                      )}
+                    >
                       {stamp(c.last_at)}
                     </span>
                   </span>
@@ -527,7 +545,14 @@ function ChannelList({
                     {c.has_file && (
                       <Paperclip className="h-3 w-3 shrink-0 text-muted-foreground" />
                     )}
-                    <span className="truncate text-xs text-muted-foreground">
+                    <span
+                      className={cn(
+                        'truncate text-xs',
+                        unread
+                          ? 'font-medium text-foreground'
+                          : 'text-muted-foreground'
+                      )}
+                    >
                       {c.last_author ? `${c.last_author}: ` : ''}
                       {c.last_body ?? (c.has_file ? 'مرفق' : 'ابدأ النقاش…')}
                     </span>
