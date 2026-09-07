@@ -1,12 +1,9 @@
-import { Link } from 'wouter'
-import { Phone, ExternalLink, UserCog } from 'lucide-react'
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { openExternal } from '@/lib/external'
 import { fmtDatePref, fmtNumber } from '@/lib/format'
 import { caseStatusLabel, caseTypeLabel } from '@/lib/caseLabels'
 import type { Case } from '@/types/db'
-import { CaseTeamCard } from '../CaseTeamCard'
+import { CasePeopleCard } from '../CasePeopleCard'
 import { CasePOAsCard } from '../CasePOAsCard'
 
 export function OverviewTab({ caseData: c }: { caseData: Case }) {
@@ -84,55 +81,8 @@ export function OverviewTab({ caseData: c }: { caseData: Case }) {
       )}
 
       <div className="grid gap-4 md:grid-cols-2">
-        {/* الموكّل */}
-        {c.contact && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">الموكّل</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <p className="font-medium text-foreground">{c.contact.name}</p>
-              {c.contact.phone && (
-                <button
-                  dir="ltr"
-                  className="flex items-center justify-end gap-1 rounded-sm text-sm text-muted-foreground hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  onClick={() => openExternal(`tel:${c.contact!.phone}`)}
-                >
-                  <span>{c.contact.phone}</span>
-                  <Phone className="h-3.5 w-3.5" />
-                </button>
-              )}
-              <Link
-                href={`/contacts/${c.contact.id}`}
-                className="inline-flex items-center gap-1 text-sm text-gold hover:underline"
-              >
-                <ExternalLink className="h-3.5 w-3.5" />
-                عرض ملف الموكّل
-              </Link>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* المسؤول */}
-        {c.assignee && (
-          <Card>
-            <CardHeader className="flex-row items-center gap-2 space-y-0">
-              <UserCog className="h-4 w-4 text-gold" />
-              <CardTitle className="text-base">المحامي المسؤول</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="font-medium text-foreground">{c.assignee.name}</p>
-              {c.assignee.short_name && (
-                <p className="text-xs text-muted-foreground">
-                  {c.assignee.short_name}
-                </p>
-              )}
-            </CardContent>
-          </Card>
-        )}
-
-        {/* فريق الملف — من يعمل عليه غير مسؤوله */}
-        <CaseTeamCard caseData={c} />
+        {/* الأشخاص: الموكّل + المسؤول + الفريق في بطاقة واحدة */}
+        <CasePeopleCard caseData={c} />
 
         {/* الوكالات المربوطة بهذا الملف */}
         <CasePOAsCard caseData={c} />
