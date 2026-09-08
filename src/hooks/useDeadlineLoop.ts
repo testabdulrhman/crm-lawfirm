@@ -52,7 +52,8 @@ const sourceOf = (key: string | null): DeadlineRow['source'] => {
 export const DEADLINE_SOURCE_LABEL: Record<DeadlineRow['source'], string> = {
   ruling: 'مهلة اعتراض',
   session: 'تحضير جلسة',
-  poa: 'تجديد وكالة',
+  // الوكالة لا تُجدَّد — تُستخرج وكالة جديدة (تصحيح المستخدم 2026-09-08)
+  poa: 'وكالة جديدة',
   other: 'مهلة',
 }
 

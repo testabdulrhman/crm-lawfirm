@@ -75,7 +75,7 @@ export function expirySoonText(expiry: string | null | undefined): string {
 export { todayISO }
 
 /**
- * الوكالة مربوطة بمشروع مُغلق؟ حينها تجديدها بلا معنى — التمثيل انتهى بانتهائه.
+ * الوكالة مربوطة بمشروع مُغلق؟ حينها لا داعي لاستخراج بديلة — التمثيل انتهى بانتهائه.
  * ⚠️ يجب أن تطابق `matter_is_closed()` في القاعدة (هي الحاكمة، وهذه للعرض).
  */
 export function onClosedMatter(poa: {
