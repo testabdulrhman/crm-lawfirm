@@ -39,6 +39,31 @@ extension SB {
         ])
     }
 
+    // ===== فريق الملف (case_members) — نفس استعلام useCaseMembers في الويب =====
+
+    func caseMembers(caseId: String) async throws -> [CaseMemberRow] {
+        try await get("case_members", query: [
+            ("select", "case_id,member_id,role,member:team_members!case_members_member_id_fkey(id,name,short_name,is_director,avatar_initial,avatar_color,avatar_url)"),
+            ("case_id", "eq.\(caseId)"),
+            ("order", "created_at.asc"),
+        ])
+    }
+
+    /// الإشراك: المدير أو مسؤول الملف (تحكمه سياسة case_members_write)؛ الإشعار
+    /// للمُضاف يكتبه ترقر القاعدة (case_member_notify) فلا يُرسل من هنا.
+    func addCaseMember(caseId: String, memberId: String, addedBy: String?) async throws {
+        try await insertVoid("case_members", values: [
+            "case_id": caseId, "member_id": memberId, "role": "متعاون",
+            "added_by": addedBy ?? NSNull(),
+        ])
+    }
+
+    func removeCaseMember(caseId: String, memberId: String) async throws {
+        try await delete("case_members", query: [
+            ("case_id", "eq.\(caseId)"), ("member_id", "eq.\(memberId)"),
+        ])
+    }
+
     func caseSessions(caseId: String) async throws -> [CaseSession] {
         try await get("sessions", query: [
             ("select", "id,case_id,session_number,title,session_date,session_time,court,status,preparation,outcome,minutes_url,closed_at,next_action,ruling_due_date,report_sent_at,report_sent_via"),

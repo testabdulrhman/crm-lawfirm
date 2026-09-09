@@ -48,10 +48,15 @@ export function CasePeopleCard({ caseData: c }: { caseData: Case }) {
 
   const candidates = useMemo(() => {
     const taken = new Set((members ?? []).map((m) => m.member_id))
+    // يُستبعد المسؤول والمُشركون سلفاً والمستخدم نفسه (إشراك الذات بلا معنى)
     return (allMembers ?? []).filter(
-      (m) => m.is_active && m.id !== c.assignee_id && !taken.has(m.id)
+      (m) =>
+        m.is_active &&
+        m.id !== c.assignee_id &&
+        m.id !== teamMember?.id &&
+        !taken.has(m.id)
     )
-  }, [allMembers, members, c.assignee_id])
+  }, [allMembers, members, c.assignee_id, teamMember?.id])
 
   const remove = (memberId: string, name: string) =>
     confirm({

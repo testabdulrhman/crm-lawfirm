@@ -10,6 +10,15 @@ struct ContactLite: Codable, Equatable {
     let phone: String?
 }
 
+/// عضو فريق الملف (case_members) — زميل أُشرك في الملف بلا أن يكون مسؤوله
+struct CaseMemberRow: Codable, Identifiable {
+    let case_id: String
+    let member_id: String
+    let role: String?
+    let member: TeamMember?
+    var id: String { member_id }
+}
+
 struct MemberLite: Codable, Equatable {
     let id: String?
     let name: String?

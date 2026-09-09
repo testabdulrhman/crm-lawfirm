@@ -30,6 +30,10 @@ struct CaseDetailView: View {
     @State private var documents: [DocumentRow] = []
     @State private var previewDoc: DocumentRow?
     @State private var showScan = false
+    // فريق الملف — الإشراك من الجوال (طلب المدير 2026-09-09)
+    @State private var members: [CaseMemberRow] = []
+    @State private var showAddMember = false
+    @State private var removing: CaseMemberRow?
 
     var body: some View {
         Group {
@@ -95,6 +99,43 @@ struct CaseDetailView: View {
                 tab = .documents
                 Task { await load() }
             }
+        }
+        .sheet(isPresented: $showAddMember) {
+            MemberPickerSheet(
+                exclude: Set(members.map(\.member_id) + [c?.assignee?.id, sb.member?.id].compactMap { $0 })
+            ) { picked in
+                showAddMember = false
+                Task {
+                    do {
+                        try await sb.addCaseMember(caseId: caseId, memberId: picked.id, addedBy: sb.member?.id)
+                    } catch {
+                        toast = teamErrorText(error)
+                    }
+                    // في الحالتين: القائمة المحلية قد تكون قديمة (أضاف زميل من الويب)
+                    members = (try? await sb.caseMembers(caseId: caseId)) ?? members
+                }
+            }
+        }
+        .alert("إزالة من فريق الملف؟", isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } })) {
+            Button("أزِل", role: .destructive) {
+                guard let m = removing else { return }
+                removing = nil
+                Task {
+                    do {
+                        try await sb.removeCaseMember(caseId: caseId, memberId: m.member_id)
+                    } catch {
+                        toast = teamErrorText(error)
+                    }
+                    let fresh = (try? await sb.caseMembers(caseId: caseId)) ?? members
+                    if fresh.contains(where: { $0.member_id == m.member_id }) {
+                        toast = "لم تُزَل — ربما تغيّر مسؤول الملف. اسحب لتحديث الصفحة."
+                    }
+                    members = fresh
+                }
+            }
+            Button("إلغاء", role: .cancel) { removing = nil }
+        } message: {
+            Text("\(removing?.member?.short_name ?? removing?.member?.name ?? "العضو") لن يعود يرى هذا الملف ولا جلساته ولا مستنداته.")
         }
         .alert("تنبيه", isPresented: Binding(get: { toast != nil }, set: { if !$0 { toast = nil } })) {
             Button("حسناً") { toast = nil }
@@ -178,6 +219,49 @@ struct CaseDetailView: View {
                     InfoRow("المسؤول", c?.assignee?.short_name ?? c?.assignee?.name)
                     InfoRow("تاريخ الفتح", c?.open_date.map { Fmt.gregLong($0) })
                     InfoRow("تاريخ الإغلاق", c?.close_date.map { Fmt.gregLong($0) })
+                }
+            }
+            InfoCard(title: "الفريق", icon: "person.3.fill") {
+                VStack(alignment: .leading, spacing: 10) {
+                    if members.isEmpty {
+                        Text("لا أحد غير المسؤول. من يُضاف هنا يرى الملف وجلساته ومستنداته ومهامه — ولا يرى الأتعاب.")
+                            .font(.system(size: 12)).foregroundStyle(Theme.muted)
+                    }
+                    ForEach(members) { m in
+                        HStack(spacing: 10) {
+                            AvatarCircle(member: m.member, size: 30)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(m.member?.short_name ?? m.member?.name ?? "عضو")
+                                    .font(.system(size: 14, weight: .medium)).foregroundStyle(Theme.navy)
+                                if let r = m.role, !r.isEmpty {
+                                    Text(r).font(.system(size: 12)).foregroundStyle(Theme.muted)
+                                }
+                            }
+                            Spacer()
+                            if canManageTeam {
+                                Button { removing = m } label: {
+                                    Image(systemName: "xmark").font(.system(size: 12, weight: .semibold))
+                                        .foregroundStyle(Theme.muted)
+                                        .frame(width: 44, height: 44)
+                                        .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel("إزالة من فريق الملف")
+                            }
+                        }
+                    }
+                    if canManageTeam {
+                        Button { showAddMember = true } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "person.badge.plus").font(.system(size: 13, weight: .semibold))
+                                Text("إشراك زميل").font(.system(size: 13, weight: .semibold))
+                            }
+                            .foregroundStyle(Theme.goldDark)
+                            .padding(.horizontal, 12).padding(.vertical, 7)
+                            .background(Theme.gold.opacity(0.18), in: Capsule())
+                        }
+                        .padding(.top, 2)
+                    }
                 }
             }
             if let s = c?.subject, !s.isEmpty {
@@ -401,6 +485,20 @@ struct CaseDetailView: View {
 
     // MARK: - الجلب
 
+    /// الإشراك للمدير أو مسؤول الملف — تُطبّقه سياسة القاعدة، وهذا يخفي الزر فقط
+    private var canManageTeam: Bool {
+        guard let me = sb.member else { return false }
+        return me.is_director == true || (c?.assignee?.id != nil && c?.assignee?.id == me.id)
+    }
+
+    /// أخطاء القاعدة الشائعة هنا بلغة المستخدم لا بنصّ Postgres الخام
+    private func teamErrorText(_ error: Error) -> String {
+        let m = error.localizedDescription
+        if m.contains("duplicate key") { return "هذا الزميل مُشرَك في الملف أصلاً" }
+        if m.contains("row-level security") { return "لا تملك صلاحية الإشراك في هذا الملف — ربما تغيّر مسؤوله" }
+        return m
+    }
+
     private func load() async {
         error = nil
         do {
@@ -412,9 +510,11 @@ struct CaseDetailView: View {
             async let st = sb.caseStudy(caseId: caseId)
             async let pr = sb.studyProposals(caseId: caseId)
             async let dc = sb.caseDocuments(caseId: caseId)
-            let (cf, ps, ss, bs, es, sd, prs, docs) = try await (a, b, s, br, ev, st, pr, dc)
+            async let cm = sb.caseMembers(caseId: caseId)
+            let (cf, ps, ss, bs, es, sd, prs, docs, mbs) = try await (a, b, s, br, ev, st, pr, dc, cm)
             guard let cf else { throw SBError(message: "الملف غير موجود أو لا تملك صلاحية فتحه") }
             c = cf; parties = ps; sessions = ss; events = es; study = sd; proposals = prs; documents = docs
+            members = mbs
             briefs = Dictionary(uniqueKeysWithValues: bs.map { ($0.session_id, $0) })
             loaded = true
         } catch {
@@ -594,5 +694,67 @@ struct InfoRow: View {
                 Spacer(minLength: 0)
             }
         }
+    }
+}
+
+
+// MARK: - اختيار زميل لإشراكه في الملف
+
+struct MemberPickerSheet: View {
+    let exclude: Set<String>
+    let onPick: (TeamMember) -> Void
+    @EnvironmentObject private var sb: SB
+    @Environment(\.dismiss) private var dismiss
+    @State private var staff: [TeamMember] = []
+    @State private var loaded = false
+    @State private var loadError: String?
+    @State private var search = ""
+
+    private var candidates: [TeamMember] {
+        let q = search.trimmingCharacters(in: .whitespaces)
+        return staff.filter { !exclude.contains($0.id) }
+            .filter { q.isEmpty || ($0.name ?? "").arContains(q) || ($0.short_name ?? "").arContains(q) }
+    }
+
+    var body: some View {
+        NavigationStack {
+            List(candidates) { m in
+                Button { onPick(m) } label: {
+                    HStack(spacing: 10) {
+                        AvatarCircle(member: m, size: 34)
+                        Text(m.short_name ?? m.name ?? "—")
+                            .font(.system(size: 15, weight: .medium)).foregroundStyle(Theme.navy)
+                        Spacer()
+                    }
+                }
+                .listRowBackground(Theme.card)
+            }
+            .listStyle(.plain)
+            .overlay {
+                if let loadError {
+                    ErrorBox(message: loadError) { Task { await load() } }.padding(16)
+                } else if !loaded {
+                    ProgressView()
+                } else if candidates.isEmpty {
+                    if search.isEmpty {
+                        EmptyBox(icon: "person.3", text: "لا زملاء متاحين", subtext: "الكل مُشرَك أصلاً")
+                    } else {
+                        EmptyBox(icon: "magnifyingglass", text: "لا زميل بهذا الاسم", subtext: "جرّب كلمة أخرى")
+                    }
+                }
+            }
+            .searchable(text: $search, prompt: "ابحث باسم الزميل")
+            .navigationTitle("إشراك زميل")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("إلغاء") { dismiss() } } }
+            .task { await load() }
+        }
+        .presentationDetents([.medium, .large])
+    }
+
+    private func load() async {
+        loadError = nil
+        do { staff = try await sb.staff(); loaded = true }
+        catch { loadError = error.localizedDescription }
     }
 }
