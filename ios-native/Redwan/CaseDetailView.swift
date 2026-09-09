@@ -72,7 +72,7 @@ struct CaseDetailView: View {
             }
             ToolbarItem(placement: .topBarTrailing) {
                 NavigationLink {
-                    CaseStreamView(caseId: caseId, title: c?.title ?? "نقاش الملف")
+                    CaseStreamView(caseId: caseId, title: c?.title ?? "نقاش الملف", fromMatter: true)
                 } label: {
                     Image(systemName: "bubble.left.and.bubble.right.fill")
                         .foregroundStyle(Theme.goldDark)

@@ -95,7 +95,8 @@ struct DiscussionsView: View {
                         NavigationLink {
                             CaseStreamView(
                                 caseId: row.case_id,
-                                title: row.case_title ?? (row.isGeneral ? "عام — المكتب" : "قضية")
+                                title: row.case_title ?? (row.isGeneral ? "عام — المكتب" : "قضية"),
+                                matter: MatterDoor(caseId: row.case_id, officeNum: row.office_num, kind: row.kind)
                             )
                         } label: {
                             DiscussionRowView(row: row)
@@ -137,7 +138,11 @@ struct DiscussionsView: View {
                 }
             }
             .navigationDestination(item: $pickedMatter) { m in
-                CaseStreamView(caseId: m.id, title: m.title ?? m.office_num ?? "ملف")
+                CaseStreamView(
+                    caseId: m.id,
+                    title: m.title ?? m.office_num ?? "ملف",
+                    matter: MatterDoor(caseId: m.id, officeNum: m.office_num, kind: m.kind)
+                )
             }
         }
         .task {
@@ -151,8 +156,12 @@ struct DiscussionsView: View {
     private func openFromPush() {
         guard let cid = router.discussionCaseId else { return }
         router.clear()
-        let title = rows.first { $0.case_id == cid }?.case_title
-        pickedMatter = MatterLite(id: cid, title: title ?? "ملف", office_num: nil, kind: nil)
+        // النوع والرقم من الصف إن كان محمّلاً؛ وإلا تأتي الرقاقة من الجلب الاحتياطي في CaseStreamView
+        let row = rows.first { $0.case_id == cid }
+        pickedMatter = MatterLite(
+            id: cid, title: row?.case_title ?? "ملف",
+            office_num: row?.office_num, kind: row?.kind
+        )
     }
 
     private func load() async {

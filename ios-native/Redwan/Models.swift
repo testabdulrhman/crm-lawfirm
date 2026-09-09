@@ -147,6 +147,9 @@ struct DiscussionRow: Codable, Identifiable {
     let last_author: String?
     let has_file: Bool?
     let unread: Int?
+    /// نوع الملف (cases.kind) — تُرجعه case_discussions أصلاً؛ 'channel' = قناة
+    /// خاصة لا ملف لها، وفارغ = القناة العامة. وجهة رقاقة الملف في شريط النقاش.
+    let kind: String?
 
     var id: String { case_id ?? "general" }
     var isGeneral: Bool { case_id == nil }

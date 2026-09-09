@@ -393,6 +393,17 @@ struct MatterLite: Codable, Identifiable, Hashable {
 }
 
 extension SB {
+    /// ملف واحد بخفّة (نوع + رقم + عنوان) — لرقاقة الملف في شريط النقاش حين
+    /// لا يعرف المنادي نوعه (المحفوظات، إشعار المنشن قبل تحميل الصفوف)
+    func matter(id: String) async throws -> MatterLite? {
+        let rows: [MatterLite] = try await get("cases", query: [
+            ("select", "id,title,office_num,kind"),
+            ("id", "eq.\(id)"),
+            ("limit", "1"),
+        ])
+        return rows.first
+    }
+
     func matters() async throws -> [MatterLite] {
         try await get("cases", query: [
             ("select", "id,title,office_num,kind"),

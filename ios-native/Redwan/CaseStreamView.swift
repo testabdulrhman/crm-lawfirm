@@ -106,9 +106,70 @@ struct MentionSuggestBar: View {
     }
 }
 
+
+/// «باب الملف» في شريط النقاش — يُبنى فقط حين يكون النقاش نقاش *ملف*:
+/// لا للقناة العامة (caseId فارغ)، ولا للقنوات الخاصة (kind == "channel")،
+/// ولا حين جئنا من الملف نفسه (زر الرجوع هو الطريق إليه)، ولا حين النوع مجهول
+/// (فخطأ الإخفاء أهون من فتح قناة كأنها ملف). الحارس كله في مكان واحد.
+struct MatterDoor: Hashable {
+    let caseId: String
+    let officeNum: String?
+    let kind: String
+
+    init?(caseId: String?, officeNum: String?, kind: String?, fromMatter: Bool = false) {
+        guard let caseId, !fromMatter, let kind, kind != "channel" else { return nil }
+        self.caseId = caseId
+        self.officeNum = officeNum
+        self.kind = kind
+    }
+
+    /// رقم الملف قصير ولاتيني فلا يُقصّ؛ وإن غاب فكلمة «الملف»
+    var label: String {
+        if let n = officeNum, !n.isEmpty { return n }
+        return "الملف"
+    }
+}
+
+/// رقاقة الملف في شريط العنوان (طلب المدير 2026-09-09: «ودي أقدر أنتقل لملف
+/// المشروع اللي نتناقش فيه… زر جميل») — نفس رابط المشروع الذهبي في الويب
+/// (bg-gold/15 + text-gold-600 = Theme.gold.opacity(0.18) + Theme.goldDark).
+/// مجلّد «المشاريع» + رقم الملف؛ الضغط يفتح ملف المشروع — مرآة زر الفقاعات في الملف.
+/// اختير بلجنة تصميم (٣ تصاميم × ٣ حكّام) — الفائز بالاتساق وسلامة العربية.
+struct MatterFileChip: View {
+    let door: MatterDoor
+
+    var body: some View {
+        NavigationLink {
+            CaseDetailView(caseId: door.caseId)
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: "folder.fill")
+                    .font(.system(size: 11, weight: .semibold))
+                Text(door.label)
+                    .font(.system(size: 12, weight: .semibold))
+                    .lineLimit(1)
+                    .fixedSize()
+            }
+            .foregroundStyle(Theme.goldDark)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 5)
+            .background(Theme.gold.opacity(0.18), in: Capsule())
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .accessibilityLabel("افتح ملف \(door.officeNum ?? matterKindLabel(door.kind))")
+        .accessibilityHint("يفتح ملف المشروع")
+    }
+}
+
 struct CaseStreamView: View {
     let caseId: String?
     let title: String
+    /// باب الملف إن عرفه المنادي (صف النقاشات / المنتقي / إشعار المنشن).
+    /// nil = نسأل القاعدة مرة (المحفوظات)؛ والقيم الافتراضية تُبقي كل المنادين يترجمون.
+    var matter: MatterDoor? = nil
+    /// فُتح من ملف المشروع نفسه (زر الفقاعات في CaseDetailView)؟ زر الرجوع هو الطريق إليه فلا نكرّره.
+    var fromMatter: Bool = false
 
     @EnvironmentObject private var sb: SB
     @State private var msgs: [StreamMsg] = []
@@ -130,6 +191,10 @@ struct CaseStreamView: View {
 
     // قائمة المنشن
     @State private var staff: [TeamMember] = []
+
+    /// باب الملف المستنتج من القاعدة حين لم يمرّره المنادي
+    @State private var resolvedDoor: MatterDoor?
+    private var door: MatterDoor? { matter ?? resolvedDoor }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -177,10 +242,22 @@ struct CaseStreamView: View {
         .background(Theme.ivory.ignoresSafeArea())
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            // رقاقة الملف — في الخانة الطرفية نفسها التي تشغلها الكاميرا/التصفية في
+            // «المشاريع» والفقاعات في «ملف القضية». لا باب للعامة ولا للقنوات ولا من داخل الملف.
+            if let door {
+                ToolbarItem(placement: .topBarTrailing) {
+                    MatterFileChip(door: door)
+                }
+            }
+        }
         .task {
+            // النوع يُجلب بالتوازي مع الرسائل فتظهر الرقاقة معها لا بعدها
+            async let fallback = resolveDoor()
             await load()
             try? await sb.markRead(caseId: caseId)
             staff = (try? await sb.staff()) ?? []
+            resolvedDoor = await fallback
         }
         .sheet(item: $editing) { m in
             EditMessageSheet(draft: $editDraft) { newBody in
@@ -292,6 +369,13 @@ struct CaseStreamView: View {
         }
         .background(Theme.card)
         .overlay(Rectangle().frame(height: 0.5).foregroundStyle(Theme.line), alignment: .top)
+    }
+
+    /// تعذُّر الجلب (بلا صلاحية أو انقطاع) = لا رقاقة، بصمت — فشل مغلق
+    private func resolveDoor() async -> MatterDoor? {
+        guard matter == nil, !fromMatter, let caseId else { return nil }
+        let m = try? await sb.matter(id: caseId)
+        return MatterDoor(caseId: caseId, officeNum: m?.office_num, kind: m?.kind)
     }
 
     private func send() {
