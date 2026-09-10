@@ -646,6 +646,9 @@ struct AttachmentChip: View {
 
     // المعاينة داخل التطبيق (QuickLook) — لا قفز إلى سفاري
     @State private var showPreview = false
+    @State private var sharing: ShareFile?
+    @State private var busy = false
+    @State private var shareError: String?
 
     var body: some View {
         Button {
@@ -665,12 +668,47 @@ struct AttachmentChip: View {
                         .foregroundStyle(Theme.success)
                 }
                 Spacer(minLength: 0)
+                shareButton
             }
         }
         .buttonStyle(.plain)
         .sheet(isPresented: $showPreview) {
             FilePreviewSheet(name: name, url: url)
         }
+        .sheet(item: $sharing) { f in
+            ActivitySheet(url: f.url)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.hidden)
+        }
+        .alert("تنبيه", isPresented: Binding(get: { shareError != nil }, set: { if !$0 { shareError = nil } })) {
+            Button("حسناً", role: .cancel) { shareError = nil }
+        } message: { Text(shareError ?? "") }
+    }
+
+    /// زر المشاركة المرئي — لا قائمة سياق: الفقاعة تملك الضغط المطوّل أصلاً
+    /// (تفاعل/تعديل/حذف) وقائمةٌ ثانية على نفس اللمسة تتنازعان.
+    private var shareButton: some View {
+        Button { Task { await share() } } label: {
+            Group {
+                if busy { ProgressView().controlSize(.small).tint(Theme.goldDark) }
+                else { Image(systemName: "square.and.arrow.up").font(.system(size: 14, weight: .medium)) }
+            }
+            .foregroundStyle(Theme.goldDark)
+            .frame(width: 44, height: 44)
+            .contentShape(Rectangle())
+            .padding(.vertical, -6)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("مشاركة المرفق")
+    }
+
+    private func share() async {
+        guard !busy else { return }
+        busy = true
+        defer { busy = false }
+        do { sharing = ShareFile(url: try await FileFetch.download(url: url, name: name)) }
+        catch let e as SBError { shareError = e.message }
+        catch { shareError = "تعذّر تحميل المرفق للمشاركة — تحقق من الاتصال" }
     }
 }
 

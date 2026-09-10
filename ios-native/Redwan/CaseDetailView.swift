@@ -29,6 +29,9 @@ struct CaseDetailView: View {
     @State private var toast: String?
     @State private var documents: [DocumentRow] = []
     @State private var previewDoc: DocumentRow?
+    // مشاركة مستند من صفّه بلا فتح المعاينة (طلب الموظفين 2026-09-10)
+    @State private var sharing: ShareFile?
+    @State private var sharingId: String?
     @State private var showScan = false
     // فريق الملف — الإشراك من الجوال (طلب المدير 2026-09-09)
     @State private var members: [CaseMemberRow] = []
@@ -90,6 +93,13 @@ struct CaseDetailView: View {
         }
         .sheet(item: $reporting) { t in
             SessionCloseSheet(target: t, mode: .report) { Task { await load() } }
+        }
+        // ورقة المشاركة على الجذر لا داخل تبويب المستندات — وإلا ضاعت إن بدّل
+        // المستخدم التبويب أثناء التنزيل ثم ظهرت فجأة عند عودته
+        .sheet(item: $sharing) { f in
+            ActivitySheet(url: f.url)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.hidden)
         }
         .sheet(item: $previewDoc) { d in
             FilePreviewSheet(name: d.name ?? "مستند", url: d.file_url)
@@ -373,6 +383,21 @@ struct CaseDetailView: View {
                             }
                         }
                         Spacer(minLength: 0)
+                        // مشاركة مباشرة — واتساب/إيردروب/بريد — الملف نفسه لا رابطه
+                        Button { Task { await shareDocument(d) } } label: {
+                            Group {
+                                if sharingId == d.id { ProgressView().controlSize(.small).tint(Theme.goldDark) }
+                                else { Image(systemName: "square.and.arrow.up").font(.system(size: 15, weight: .medium)) }
+                            }
+                            .foregroundStyle(Theme.goldDark)
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
+                            .padding(.vertical, -4)   // منطقة اللمس ٤٤ والصفّ لا يطول
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(sharingId != nil && sharingId != d.id)
+                        .opacity(sharingId != nil && sharingId != d.id ? 0.4 : 1)
+                        .accessibilityLabel("مشاركة المستند")
                     }
                     .padding(12)
                     .background(Theme.card)
@@ -380,8 +405,22 @@ struct CaseDetailView: View {
                     .overlay(RoundedRectangle(cornerRadius: 14).stroke(Theme.line, lineWidth: 1))
                 }
                 .buttonStyle(.plain)
+                .contextMenu {
+                    Button { Task { await shareDocument(d) } } label: { Label("مشاركة", systemImage: "square.and.arrow.up") }
+                    Button { previewDoc = d } label: { Label("فتح", systemImage: "eye") }
+                }
             }
         }
+    }
+
+    /// تنزيل ثم ورقة المشاركة — التعذّر يُقال بوضوح لا بصمت
+    private func shareDocument(_ d: DocumentRow) async {
+        guard sharingId == nil else { return }
+        sharingId = d.id
+        defer { sharingId = nil }
+        do { sharing = ShareFile(url: try await FileFetch.download(url: d.file_url, name: d.name ?? "مستند")) }
+        catch let e as SBError { toast = e.message }
+        catch { toast = "تعذّر تحميل المستند للمشاركة — تحقق من الاتصال" }
     }
 
     // MARK: - القصة
