@@ -6,7 +6,9 @@ import { todayISO } from '@/lib/format'
 import type { LegalService, LegalServiceInput } from '@/types/db'
 import { errMessage } from '@/lib/errors'
 
-const SELECT = '*, assignee:team_members(id,name,short_name)'
+// ⚠️ تسمية العلاقة إلزامية: منذ إضافة case_members (2026-09-06) صار بين الملفات
+//    والموظفين أكثر من مسار، وبلا التسمية يرفض PostgREST الاستعلام (PGRST201)
+const SELECT = '*, assignee:team_members!cases_assignee_id_fkey(id,name,short_name)'
 
 function errToast(title: string) {
   return (e: unknown) =>

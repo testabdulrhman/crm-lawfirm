@@ -331,7 +331,7 @@ async function runAgentTool(name: string, input: any, userName: string, actions:
       const q = String(input.query ?? "").trim();
       const { data, error } = await admin
         .from("cases")
-        .select("id, office_num, title, status, court, contact:contacts(name, phone), assignee:team_members(name)")
+        .select("id, office_num, title, status, court, contact:contacts(name, phone), assignee:team_members!cases_assignee_id_fkey(name)")
         .or(`office_num.ilike.%${q}%,title.ilike.%${q}%,court_num.ilike.%${q}%`)
         .limit(5);
       if (error) return JSON.stringify({ error: error.message });
@@ -352,7 +352,7 @@ async function runAgentTool(name: string, input: any, userName: string, actions:
       const to = String(input.to_date || isoPlusDays(7));
       const { data, error } = await admin
         .from("sessions")
-        .select("id, session_number, title, session_date, session_time, court, status, closed_at, case:cases!sessions_case_id_fkey(office_num, title, assignee:team_members(name))")
+        .select("id, session_number, title, session_date, session_time, court, status, closed_at, case:cases!sessions_case_id_fkey(office_num, title, assignee:team_members!cases_assignee_id_fkey(name))")
         .gte("session_date", from)
         .lte("session_date", to)
         .order("session_date", { ascending: true })
