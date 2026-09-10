@@ -183,12 +183,17 @@ private struct DiscussionRowView: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            Image(systemName: row.isGeneral ? "megaphone.fill" : "building.columns.fill")
-                .font(.system(size: 15))
-                .foregroundStyle(row.isGeneral ? Theme.gold : Theme.goldDark)
-                .frame(width: 38, height: 38)
-                .background(row.isGeneral ? Theme.navy : Theme.goldPale)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
+            Group {
+                if row.isGeneral || row.kind == "channel" {
+                    Image(systemName: row.isGeneral ? "megaphone.fill" : "building.columns.fill")
+                        .font(.system(size: 15)).foregroundStyle(Theme.gold)
+                } else {
+                    Text(matterKindEmoji(row.kind)).font(.system(size: 18))
+                }
+            }
+            .frame(width: 38, height: 38)
+            .background(row.isGeneral || row.kind == "channel" ? Theme.navy : Theme.goldPale)
+            .clipShape(RoundedRectangle(cornerRadius: 10))
 
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {

@@ -32,6 +32,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { QueryErrorState } from '@/components/QueryErrorState'
 import { EmptyState, FilteredEmptyState } from '@/components/EmptyState'
 import { useMatters, type MatterKind, type MatterRow } from '@/hooks/useMatters'
+import { matterKindEmoji } from '@/lib/matterHref'
 import { useTeamMembers } from '@/hooks/useTeam'
 import { LegalServiceForm } from '@/features/legal-services/LegalServiceForm'
 import { PropertyTransferForm } from '@/features/property/PropertyTransferForm'
@@ -171,10 +172,10 @@ export function MattersPage() {
           {(
             [
               ['all', `الكل ${fmtNumber(rows.length)}`],
-              ['case', `قضايا ${fmtNumber(countOf('case'))}`],
-              ['legal_service', `استشارات ولوائح ${fmtNumber(countOf('legal_service'))}`],
-              ['property', `توثيق عقاري ${fmtNumber(countOf('property'))}`],
-              ['bankruptcy', `إجراءات إفلاس ${fmtNumber(countOf('bankruptcy'))}`],
+              ['case', `⚖️ قضايا ${fmtNumber(countOf('case'))}`],
+              ['legal_service', `📝 استشارات ولوائح ${fmtNumber(countOf('legal_service'))}`],
+              ['property', `🏠 توثيق عقاري ${fmtNumber(countOf('property'))}`],
+              ['bankruptcy', `🏦 إجراءات إفلاس ${fmtNumber(countOf('bankruptcy'))}`],
             ] as const
           ).map(([value, label]) => (
             <button
@@ -269,7 +270,6 @@ export function MattersPage() {
         <div className="space-y-2">
           {filtered.map((m) => {
             const meta = KINDS[m.kind]
-            const Icon = meta.icon
             const st = statusOf(m)
             return (
               <button
@@ -279,11 +279,12 @@ export function MattersPage() {
               >
                 <span
                   className={cn(
-                    'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl',
+                    'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-xl',
                     meta.chip
                   )}
+                  aria-label={meta.label}
                 >
-                  <Icon className="h-5 w-5" />
+                  {matterKindEmoji(m.kind)}
                 </span>
 
                 <span className="min-w-0 flex-1">
@@ -336,7 +337,6 @@ export function MattersPage() {
                 ['bankruptcy', 'إجراء إفلاس', 'تسوية وقائية أو إعادة تنظيم مالي أو تصفية'],
               ] as const
             ).map(([k, label, desc]) => {
-              const Icon = KINDS[k].icon
               return (
                 <button
                   key={k}
@@ -349,8 +349,8 @@ export function MattersPage() {
                   }}
                   className="flex items-center gap-3 rounded-xl border border-border/70 p-3.5 text-right transition-all hover:border-gold/60 hover:bg-gold/5"
                 >
-                  <span className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-xl', KINDS[k].chip)}>
-                    <Icon className="h-5 w-5" />
+                  <span className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-xl', KINDS[k].chip)}>
+                    {matterKindEmoji(k)}
                   </span>
                   <span className="min-w-0">
                     <span className="block text-sm font-semibold text-foreground">{label}</span>

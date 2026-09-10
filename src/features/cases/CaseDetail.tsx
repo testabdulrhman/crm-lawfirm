@@ -38,6 +38,7 @@ import {
   caseTypeLabel,
 } from '@/lib/caseLabels'
 import { CaseForm } from './CaseForm'
+import { matterKindEmoji } from '@/lib/matterHref'
 import { OverviewTab } from './tabs/OverviewTab'
 import { StudyTab } from './tabs/StudyTab'
 import { PartiesTab } from './tabs/PartiesTab'
@@ -124,6 +125,7 @@ export function CaseDetail({ id }: { id: string }) {
           <div className="flex items-center gap-2">
             <Scale className="h-5 w-5 shrink-0 text-gold" />
             <h2 className="text-2xl font-bold tracking-tight text-foreground">
+              <span className="me-2" aria-hidden>{matterKindEmoji(c.kind)}</span>
               {c.title}
             </h2>
           </div>

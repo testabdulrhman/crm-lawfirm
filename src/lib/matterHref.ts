@@ -11,3 +11,13 @@ export function matterHref(kind: string | null | undefined, id: string): string 
       return `/cases/${id}`
   }
 }
+
+/** إيموجي كل نوع مشروع — طلب المستخدم 2026-09-10 («ابي رموز، قصدي إيموجي») */
+export const MATTER_KIND_EMOJI: Record<string, string> = {
+  case: '⚖️',
+  bankruptcy: '🏦',
+  legal_service: '📝',
+  property: '🏠',
+}
+export const matterKindEmoji = (kind: string | null | undefined): string =>
+  MATTER_KIND_EMOJI[kind ?? 'case'] ?? '📁'

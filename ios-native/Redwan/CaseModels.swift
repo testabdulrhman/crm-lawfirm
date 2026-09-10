@@ -233,6 +233,17 @@ func caseStatusLabel(_ s: String?) -> String {
     }
 }
 
+/// إيموجي كل نوع — نفس خريطة الويب (MATTER_KIND_EMOJI) حرفياً
+func matterKindEmoji(_ k: String?) -> String {
+    switch k {
+    case "case": return "⚖️"
+    case "bankruptcy": return "🏦"
+    case "legal_service": return "📝"
+    case "property": return "🏠"
+    default: return "📁"
+    }
+}
+
 /// نوع المشروع — نفس مفردات الويب (MattersPage) حرفياً
 func matterKindLabel(_ k: String?) -> String {
     switch k {

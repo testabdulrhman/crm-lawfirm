@@ -143,8 +143,7 @@ struct MatterFileChip: View {
             CaseDetailView(caseId: door.caseId)
         } label: {
             HStack(spacing: 5) {
-                Image(systemName: "folder.fill")
-                    .font(.system(size: 11, weight: .semibold))
+                Text(matterKindEmoji(door.kind)).font(.system(size: 12))
                 Text(door.label)
                     .font(.system(size: 12, weight: .semibold))
                     .lineLimit(1)

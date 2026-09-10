@@ -162,8 +162,8 @@ struct CaseDetailView: View {
             HStack(spacing: 8) {
                 StatusChip(status: c?.status)
                 // وسم النوع لغير القضايا — الشاشة صارت تفتح كل أنواع المشاريع
-                if let k = c?.kind, k != "case" {
-                    Text(matterKindLabel(k))
+                if let k = c?.kind {
+                    Text("\(matterKindEmoji(k)) \(matterKindLabel(k))")
                         .font(.system(size: 10, weight: .semibold))
                         .padding(.horizontal, 6).padding(.vertical, 2)
                         .background(Theme.gold.opacity(0.18), in: Capsule())

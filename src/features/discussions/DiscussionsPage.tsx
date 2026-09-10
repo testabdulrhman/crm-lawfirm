@@ -42,7 +42,7 @@ import { useAuth } from '@/stores/auth'
 import { useTeamMembers } from '@/hooks/useTeam'
 import { pickFile } from '@/lib/files'
 import { arNorm } from '@/lib/arabic'
-import { matterHref } from '@/lib/matterHref'
+import { matterHref, matterKindEmoji } from '@/lib/matterHref'
 import { fmtDatePref, fmtNumber, fmtTime } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import {
@@ -517,7 +517,9 @@ function ChannelList({
                   ) : isChannel ? (
                     <Landmark className="h-4 w-4" />
                   ) : (
-                    <MessagesSquare className="h-4 w-4" />
+                    <span className="text-base leading-none" aria-hidden>
+                      {matterKindEmoji(c.kind)}
+                    </span>
                   )}
                 </span>
                 <span className="min-w-0 flex-1">

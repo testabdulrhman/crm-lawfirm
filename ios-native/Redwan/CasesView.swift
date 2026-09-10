@@ -154,10 +154,13 @@ struct CaseRowView: View {
     var body: some View {
         HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 3) {
-                Text(row.title ?? "ملف")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Theme.navy)
-                    .lineLimit(2)
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(matterKindEmoji(row.kind)).font(.system(size: 14))
+                    Text(row.title ?? "ملف")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Theme.navy)
+                        .lineLimit(2)
+                }
                 HStack(spacing: 6) {
                     // وسم النوع لغير القضايا — القائمة صارت مختلطة
                     if row.kind != "case", row.kind != nil {
