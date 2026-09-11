@@ -10,6 +10,8 @@ struct NotificationsView: View {
     @State private var rows: [AppNotification] = []
     @State private var loaded = false
     @State private var error: String?
+    /// أُلغي الجلب السابق (اختفت الشاشة أثناءه) — يُعاد عند عودتها
+    @State private var cancelled = false
     @State private var openedTask: TaskRow?
     @State private var openingId: String?
 
@@ -70,6 +72,7 @@ struct NotificationsView: View {
             TaskDetailView(task: t)
         }
         .task { await load() }
+        .retryIfCancelled($cancelled) { await load() }
     }
 
     private func row(_ n: AppNotification) -> some View {
@@ -137,7 +140,8 @@ struct NotificationsView: View {
             loaded = true
             await syncBadge()
         } catch {
-            self.error = error.localizedDescription
+            // الإلغاء ليس خطأً — تُعاد المحاولة صامتاً عند عودة الشاشة
+            if let t = uiErrorText(error) { self.error = t } else { cancelled = true }
         }
     }
 

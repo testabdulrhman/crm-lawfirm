@@ -250,3 +250,46 @@ func kindIcon(_ k: CalKind) -> String {
     case .poa: return "doc.text.fill"
     }
 }
+
+// MARK: - الأخطاء التي لا تُعرض
+
+/// نص الخطأ للعرض — و nil لِما لا يستحق أن يُعرض أصلاً.
+///
+/// ⚠️ **الإلغاء ليس خطأً.** SwiftUI يُلغي `.task` حين تختفي الشاشة (تبديل تبويب،
+///    أو فتح شاشة فوقها، أو خروج التطبيق للخلفية أثناء الجلب)، فيرمي URLSession
+///    خطأ `cancelled` ونصّه العربي في iOS هو **«مُلغى»** — فكان يجلس مكان
+///    المحتوى مع زرّ «إعادة المحاولة» حتى يتدخّل المستخدم يدوياً
+///    (بلاغ المدير 2026-09-11: «ليه يطلع كذا بعض الأيام؟»).
+///    والشاشة الرئيسية أكثرها إصابةً لأن جلبها ثلاث رحلات متتابعة، فنافذة
+///    الإلغاء عندها أطول.
+func uiErrorText(_ error: Error) -> String? {
+    if error is CancellationError { return nil }
+    if let u = error as? URLError, u.code == .cancelled { return nil }
+    return error.localizedDescription
+}
+
+/// إن أُلغي الجلب السابق، أعِد المحاولة صامتاً عند عودة الشاشة أو عودة التطبيق
+/// من الخلفية — فلا يبقى المستخدم أمام شاشة فارغة تنتظر سحبةً منه.
+private struct RetryIfCancelled: ViewModifier {
+    @Binding var pending: Bool
+    let load: () async -> Void
+    @Environment(\.scenePhase) private var phase
+
+    func body(content: Content) -> some View {
+        content
+            .onAppear { fire() }
+            .onChange(of: phase) { if phase == .active { fire() } }
+    }
+
+    private func fire() {
+        guard pending else { return }
+        pending = false
+        Task { await load() }
+    }
+}
+
+extension View {
+    func retryIfCancelled(_ pending: Binding<Bool>, _ load: @escaping () async -> Void) -> some View {
+        modifier(RetryIfCancelled(pending: pending, load: load))
+    }
+}

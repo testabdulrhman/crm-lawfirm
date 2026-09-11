@@ -9,6 +9,8 @@ struct HomeView: View {
     @State private var scope = "mine"
     @State private var overview: DashboardOverview?
     @State private var errorMessage: String?
+    /// أُلغي الجلب السابق (اختفت الشاشة أثناءه) — يُعاد عند عودتها
+    @State private var cancelled = false
     @State private var unreadCount = 0
     // ثلاثية المحكمة: الجلسات المنعقدة بلا نتيجة مسجّلة — تُغلق من هنا مباشرة
     @State private var needClosure: [SessionNeedingClosure] = []
@@ -82,6 +84,7 @@ struct HomeView: View {
             }
         }
         .task { await load() }
+        .retryIfCancelled($cancelled) { await load() }
         .sheet(item: $closing) { t in
             SessionCloseSheet(target: t, mode: .close) { Task { await load() } }
         }
@@ -384,7 +387,8 @@ struct HomeView: View {
             // ثانوي — لا يُفشل الشاشة
             needClosure = (try? await sb.sessionsNeedClosure(scope: effectiveScope)) ?? []
         } catch {
-            errorMessage = error.localizedDescription
+            // الإلغاء ليس خطأً — تُعاد المحاولة صامتاً عند عودة الشاشة
+            if let t = uiErrorText(error) { errorMessage = t } else { cancelled = true }
         }
         // عدّاد الجرس — ثانوي، لا يفشل الشاشة. شارة الأيقونة تتبعه
         // حتى لا يعلق رقم على الأيقونة بعد قراءة كل شيء

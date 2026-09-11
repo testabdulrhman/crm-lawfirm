@@ -8,6 +8,8 @@ struct BookmarksView: View {
     @State private var rows: [BookmarkRow] = []
     @State private var loaded = false
     @State private var error: String?
+    /// أُلغي الجلب السابق (اختفت الشاشة أثناءه) — يُعاد عند عودتها
+    @State private var cancelled = false
 
     var body: some View {
         Group {
@@ -81,6 +83,7 @@ struct BookmarksView: View {
         .navigationTitle("محفوظاتي")
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
+        .retryIfCancelled($cancelled) { await load() }
     }
 
     private func load() async {
@@ -89,7 +92,8 @@ struct BookmarksView: View {
             rows = try await sb.bookmarks()
             loaded = true
         } catch {
-            self.error = error.localizedDescription
+            // الإلغاء ليس خطأً — تُعاد المحاولة صامتاً عند عودة الشاشة
+            if let t = uiErrorText(error) { self.error = t } else { cancelled = true }
         }
     }
 }

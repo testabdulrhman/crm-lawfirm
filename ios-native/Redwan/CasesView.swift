@@ -12,6 +12,8 @@ struct CasesView: View {
     @State private var rows: [CaseRow] = []
     @State private var loaded = false
     @State private var error: String?
+    /// أُلغي الجلب السابق (اختفت الشاشة أثناءه) — يُعاد عند عودتها
+    @State private var cancelled = false
     @State private var search = ""
     @State private var status = "jarri"
     /// النوع أولاً ثم الحالة — الافتراضي «قضية» فيبقى سلوك الشاشة كما اعتاده
@@ -127,6 +129,7 @@ struct CasesView: View {
             await load()
             openFromPush()
         }
+        .retryIfCancelled($cancelled) { await load() }
         .onChange(of: router.route) { _, _ in openFromPush() }
     }
 
@@ -143,7 +146,8 @@ struct CasesView: View {
             rows = try await sb.cases()
             loaded = true
         } catch {
-            self.error = error.localizedDescription
+            // الإلغاء ليس خطأً — تُعاد المحاولة صامتاً عند عودة الشاشة
+            if let t = uiErrorText(error) { self.error = t } else { cancelled = true }
         }
     }
 }

@@ -23,6 +23,8 @@ struct CaseDetailView: View {
     @State private var proposals: [StudyProposal] = []
     @State private var loaded = false
     @State private var error: String?
+    /// أُلغي الجلب السابق (اختفت الشاشة أثناءه) — يُعاد عند عودتها
+    @State private var cancelled = false
     @State private var closing: CloseTarget?
     @State private var reporting: CloseTarget?
     @State private var generating: String?
@@ -88,6 +90,7 @@ struct CaseDetailView: View {
         }
         .onAppear { tab = initialTab; Usage.shared.screen("ملف القضية") }
         .task { await load() }
+        .retryIfCancelled($cancelled) { await load() }
         .sheet(item: $closing) { t in
             SessionCloseSheet(target: t, mode: .close) { Task { await load() } }
         }
@@ -557,7 +560,8 @@ struct CaseDetailView: View {
             briefs = Dictionary(uniqueKeysWithValues: bs.map { ($0.session_id, $0) })
             loaded = true
         } catch {
-            self.error = error.localizedDescription
+            // الإلغاء ليس خطأً — تُعاد المحاولة صامتاً عند عودة الشاشة
+            if let t = uiErrorText(error) { self.error = t } else { cancelled = true }
         }
     }
 }

@@ -55,6 +55,8 @@ struct DiscussionsView: View {
     @State private var rows: [DiscussionRow] = []
     @State private var loaded = false
     @State private var error: String?
+    /// أُلغي الجلب السابق (اختفت الشاشة أثناءه) — يُعاد عند عودتها
+    @State private var cancelled = false
     @State private var search = ""
     @State private var showNewDiscussion = false
     @State private var pickedMatter: MatterLite?
@@ -149,6 +151,7 @@ struct DiscussionsView: View {
             await load()
             openFromPush()
         }
+        .retryIfCancelled($cancelled) { await load() }
         .onChange(of: router.route) { _, _ in openFromPush() }
     }
 
@@ -170,7 +173,8 @@ struct DiscussionsView: View {
             rows = try await sb.discussions()
             loaded = true
         } catch {
-            self.error = error.localizedDescription
+            // الإلغاء ليس خطأً — تُعاد المحاولة صامتاً عند عودة الشاشة
+            if let t = uiErrorText(error) { self.error = t } else { cancelled = true }
         }
     }
 }
@@ -249,6 +253,8 @@ struct MatterPicker: View {
     @State private var matters: [MatterLite] = []
     @State private var loaded = false
     @State private var error: String?
+    /// أُلغي الجلب السابق (اختفت الشاشة أثناءه) — يُعاد عند عودتها
+    @State private var cancelled = false
     @State private var search = ""
 
     private var filtered: [MatterLite] {
@@ -309,6 +315,7 @@ struct MatterPicker: View {
             .navigationTitle("نقاش جديد")
             .navigationBarTitleDisplayMode(.inline)
             .task { await load() }
+            .retryIfCancelled($cancelled) { await load() }
         }
         .environment(\.layoutDirection, .rightToLeft)
     }
@@ -319,7 +326,8 @@ struct MatterPicker: View {
             matters = try await sb.matters()
             loaded = true
         } catch {
-            self.error = error.localizedDescription
+            // الإلغاء ليس خطأً — تُعاد المحاولة صامتاً عند عودة الشاشة
+            if let t = uiErrorText(error) { self.error = t } else { cancelled = true }
         }
     }
 }

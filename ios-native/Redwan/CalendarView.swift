@@ -71,6 +71,8 @@ struct CalendarView: View {
     @State private var items: [CalItem] = []
     @State private var loaded = false
     @State private var error: String?
+    /// أُلغي الجلب السابق (اختفت الشاشة أثناءه) — يُعاد عند عودتها
+    @State private var cancelled = false
     @State private var showOptions = false
     /// موعد جديد — من زرّ + أو بالضغط على ساعة فارغة في عرض اليوم
     @State private var newAppt: NewApptTarget?
@@ -155,6 +157,7 @@ struct CalendarView: View {
             }
         }
         .task(id: Fmt.iso(anchor)) { await load() }
+        .retryIfCancelled($cancelled) { await load() }
     }
 
     // MARK: - المحتوى
@@ -511,7 +514,8 @@ struct CalendarView: View {
             items = try await sb.calendar(fromISO: Fmt.iso(first), toISO: Fmt.iso(last))
             loaded = true
         } catch {
-            self.error = error.localizedDescription
+            // الإلغاء ليس خطأً — تُعاد المحاولة صامتاً عند عودة الشاشة
+            if let t = uiErrorText(error) { self.error = t } else { cancelled = true }
         }
     }
 }
