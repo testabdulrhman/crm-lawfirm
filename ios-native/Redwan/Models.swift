@@ -8,6 +8,8 @@ struct TeamMember: Codable, Identifiable, Equatable {
     let name: String?
     let short_name: String?
     let is_director: Bool?
+    /// حساب مراجعة أبل — يكتب بيانات تجريبية فقط ولا تنطلق له رسائل
+    var is_reviewer: Bool? = nil
     let avatar_initial: String?
     let avatar_color: String?
     /// صورة الموظف من الويب — تُعرض بدل حرف الاسم متى وُجدت
@@ -236,4 +238,14 @@ struct AppNotification: Codable, Identifiable {
     let task_id: String?
     let is_read: Bool?
     let created_at: String?
+}
+
+
+/// موعد مختصر — لفحص التعارض في شاشة إنشاء الموعد
+struct ApptLite: Codable, Identifiable {
+    let id: String
+    let client_name: String?
+    let appointment_time: String?
+    let duration_minutes: Int?
+    let status: String?
 }

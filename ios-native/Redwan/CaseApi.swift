@@ -209,7 +209,8 @@ extension SB {
     // ===== الإرسال للعميل — الدوال الخادمية نفسها التي يستعملها الويب =====
 
     /// نداء Edge Function بجلسة المستخدم — يُرجع الحمولة وحالة HTTP بلا رمي
-    private func callFunctionAuthed(_ name: String, body: [String: Any]) async -> (code: Int, json: [String: Any]) {
+    /// ⚠️ internal لا private: تستعملها AppointmentSheet لمزامنة تقويم قوقل
+    func callFunctionAuthed(_ name: String, body: [String: Any]) async -> (code: Int, json: [String: Any]) {
         guard let s = session else { return (0, ["error": "انتهت الجلسة — سجّل الدخول من جديد"]) }
         var req = URLRequest(url: URL(string: "https://zwaahunavepleczuamuy.supabase.co/functions/v1/\(name)")!)
         req.httpMethod = "POST"

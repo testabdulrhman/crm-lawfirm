@@ -72,6 +72,8 @@ struct CalendarView: View {
     @State private var loaded = false
     @State private var error: String?
     @State private var showOptions = false
+    /// موعد جديد — من زرّ + أو بالضغط على ساعة فارغة في عرض اليوم
+    @State private var newAppt: NewApptTarget?
 
     private var hidden: Set<CalKind> {
         Set(hiddenRaw.split(separator: ",").compactMap { CalKind(rawValue: String($0)) })
@@ -113,6 +115,16 @@ struct CalendarView: View {
                             .foregroundStyle(Theme.navy)
                     }
                 }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        newAppt = NewApptTarget(dateISO: selectedISO, hour: nil)
+                    } label: {
+                        Image(systemName: "plus")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(Theme.goldDark)
+                    }
+                    .accessibilityLabel("موعد جديد")
+                }
                 ToolbarItem(placement: .topBarLeading) {
                     Button("اليوم") {
                         withAnimation {
@@ -132,6 +144,14 @@ struct CalendarView: View {
                         .mapValues { $0.count }
                 )
                 .presentationDetents([.medium])
+            }
+            .sheet(item: $newAppt) { t in
+                AppointmentSheet(defaultDateISO: t.dateISO, defaultHour: t.hour) { savedISO in
+                    // انتقل إلى يوم الموعد — قد يكون المستخدم غيّر التاريخ داخل النموذج
+                    selectedISO = savedISO
+                    anchor = firstOfMonth(Fmt.date(savedISO) ?? Date())
+                    Task { await load() }
+                }
             }
         }
         .task(id: Fmt.iso(anchor)) { await load() }
@@ -420,6 +440,10 @@ struct CalendarView: View {
                                 .padding(.top, 6)
                         }
                         .frame(height: hourH, alignment: .top)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            newAppt = NewApptTarget(dateISO: selectedISO, hour: h)
+                        }
                     }
                 }
 
@@ -555,4 +579,11 @@ private struct CalendarOptionsSheet: View {
             }
         }
     }
+}
+
+/// وجهة إنشاء الموعد: التاريخ المختار وساعة اختيارية من عرض اليوم
+struct NewApptTarget: Identifiable {
+    let dateISO: String
+    let hour: Int?
+    var id: String { "\(dateISO)-\(hour ?? -1)" }
 }

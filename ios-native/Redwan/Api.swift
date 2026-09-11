@@ -189,6 +189,55 @@ extension SB {
     }
 
     /// موظفو المكتب النشطون — قائمة المنشن في النقاش
+    // ===== جهات الاتصال — لمنتقي الموكّل عند إنشاء موعد (2026-09-11) =====
+
+    /// جهات الاتصال للاختيار منها؛ البحث محلي بالعربية المطبَّعة كبقية المنتقيات
+    /// جهات الاتصال للمنتقي — البحث محلي بالعربية المطبَّعة.
+    /// ⚠️ السقف ٢٠٠٠ وعددها اليوم ٧٨٨؛ إن تجاوزتها يوماً فانقل البحث للخادم
+    ///    وإلا اختفت الجهات الأخيرة من المنتقي بلا أثر.
+    func contacts(limit: Int = 2000) async throws -> [ContactLite] {
+        try await get("contacts", query: [
+            ("select", "id,name,phone"),
+            ("order", "name.asc"),
+            ("limit", String(limit)),
+        ])
+    }
+
+    // ===== المواعيد =====
+
+    /// مواعيد يوم واحد — لفحص التعارض قبل الحفظ (المكتب تقويم واحد: قيد
+    /// استبعاد في القاعدة يمنع التداخل، فنكشفه قبل الإرسال برسالة مفهومة)
+    func appointmentsOn(dateISO: String) async throws -> [ApptLite] {
+        try await get("appointments", query: [
+            ("select", "id,client_name,appointment_time,duration_minutes,status"),
+            ("appointment_date", "eq.\(dateISO)"),
+            ("status", "neq.cancelled"),
+        ])
+    }
+
+    /// الرقم المرجعي — نفس RPC الذي يستعمله الويب (بدونه تصل رسالة التأكيد
+    /// بمرجع فارغ؛ درس 2026-08-26)
+    func nextBookingReference() async throws -> String? {
+        let v: String? = try? await rpc("next_booking_reference", params: [:])
+        return v
+    }
+
+    /// إنشاء موعد. ⚠️ ترقر في القاعدة يرسل رسالة تأكيد للموكّل فور الإدراج
+    /// متى كان status='confirmed' وللموكّل جوال — كما في الويب تماماً.
+    func createAppointment(_ values: [String: Any]) async throws -> String? {
+        let body = try JSONSerialization.data(withJSONObject: values)
+        let data = try await raw(
+            path: "rest/v1/appointments", method: "POST", query: [],
+            body: body, prefer: "return=representation"
+        )
+        struct R: Codable { let id: String }
+        return (try? JSONDecoder().decode([R].self, from: data))?.first?.id
+    }
+
+    func setAppointmentGcalId(_ id: String, eventId: String) async throws {
+        try await patch("appointments", query: [("id", "eq.\(id)")], values: ["gcal_event_id": eventId])
+    }
+
     func staff() async throws -> [TeamMember] {
         try await get("team_members", query: [
             ("select", "id,name,short_name,is_director,avatar_initial,avatar_color,avatar_url"),
