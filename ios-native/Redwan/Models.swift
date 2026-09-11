@@ -135,6 +135,32 @@ struct CalItem: Identifiable {
     let subtitle: String?
     /// معرف الملف — للجلسات فقط، يفتح ملف القضية بنقرة
     var caseId: String? = nil
+    /// معرف الموعد — للمواعيد فقط، يفتح تفاصيله بنقرة
+    var apptId: String? = nil
+}
+
+/// الموعد كاملاً — شاشة التفاصيل في التطبيق
+struct AppointmentFull: Codable, Identifiable {
+    let id: String
+    let reference_no: String?
+    let client_name: String?
+    let client_phone: String?
+    let client_email: String?
+    let company_name: String?
+    let appointment_date: String?
+    let appointment_time: String?
+    let duration_minutes: Int?
+    let meeting_method: String?
+    let meeting_link: String?
+    let service_type: String?
+    let status: String?
+    let notes: String?
+    let source: String?
+    let created_by: String?
+    let created_at: String?
+    let confirmation_sent_at: String?
+    let meeting_link_sent_at: String?
+    let client_id: String?
 }
 
 // ===== نقاش القضايا بالخيوط =====

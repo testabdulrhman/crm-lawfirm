@@ -76,6 +76,16 @@ struct CalendarView: View {
     @State private var showOptions = false
     /// موعد جديد — من زرّ + أو بالضغط على ساعة فارغة في عرض اليوم
     @State private var newAppt: NewApptTarget?
+    /// إشعار حجز جديد وصل؟ افتح قائمة المواعيد (بلاغ 2026-09-11)
+    @ObservedObject private var router = PushRouter.shared
+    @State private var showAppointments = false
+
+    /// «/appointments» من إشعار الحجز — يُستهلك المسار مرة واحدة
+    private func openFromPush() {
+        guard router.route == "/appointments" else { return }
+        router.clear()
+        showAppointments = true
+    }
 
     private var hidden: Set<CalKind> {
         Set(hiddenRaw.split(separator: ",").compactMap { CalKind(rawValue: String($0)) })
@@ -147,6 +157,8 @@ struct CalendarView: View {
                 )
                 .presentationDetents([.medium])
             }
+            .navigationDestination(isPresented: $showAppointments) { AppointmentsListView() }
+            .onChange(of: router.route) { _, _ in openFromPush() }
             .sheet(item: $newAppt) { t in
                 AppointmentSheet(defaultDateISO: t.dateISO, defaultHour: t.hour) { savedISO in
                     // انتقل إلى يوم الموعد — قد يكون المستخدم غيّر التاريخ داخل النموذج
@@ -157,6 +169,7 @@ struct CalendarView: View {
             }
         }
         .task(id: Fmt.iso(anchor)) { await load() }
+        .onAppear { openFromPush() }
         .retryIfCancelled($cancelled) { await load() }
     }
 
@@ -354,6 +367,13 @@ struct CalendarView: View {
         if it.kind == .session, let cid = it.caseId {
             NavigationLink {
                 CaseDetailView(caseId: cid, initialTab: .sessions)
+            } label: {
+                agendaRowBody(it)
+            }
+            .buttonStyle(.plain)
+        } else if it.kind == .appointment, let aid = it.apptId {
+            NavigationLink {
+                AppointmentDetailView(appointmentId: aid)
             } label: {
                 agendaRowBody(it)
             }

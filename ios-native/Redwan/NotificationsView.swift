@@ -175,6 +175,9 @@ struct NotificationsView: View {
                 // تذكير جلسة / ملخّص ما قبل الجلسة / أي إشعار مربوط بملف —
                 // يفتح ملف القضية (تبويب المشاريع) حيث الجلسات والملخّص
                 PushRouter.shared.route = "/cases/\(caseId)"
+            } else if (n.type ?? "").hasPrefix("appointment") {
+                // حجوزات الموقع بلا case_id ولا task_id، فكان النقر لا يفعل شيئاً
+                PushRouter.shared.route = "/appointments"
             } else if n.type == "mention" || n.type == "birthday" {
                 // منشن في القناة العامة (بلا ملف) — تبويب النقاشات يكفي
                 PushRouter.shared.route = "/discussions"

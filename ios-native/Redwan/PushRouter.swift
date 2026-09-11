@@ -28,5 +28,8 @@ final class PushRouter: ObservableObject {
         return id.isEmpty ? nil : id
     }
 
+    /// "/appointments" → قائمة المواعيد (إشعار حجز جديد من الموقع)
+    var isAppointments: Bool { route == "/appointments" }
+
     func clear() { route = nil }
 }

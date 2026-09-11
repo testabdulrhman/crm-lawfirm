@@ -139,7 +139,7 @@ extension SB {
             return CalItem(
                 id: "a-\(r.id)", kind: .appointment, date: d,
                 time: hhmm(r.appointment_time),
-                title: r.client_name ?? "موعد", subtitle: sub
+                title: r.client_name ?? "موعد", subtitle: sub, apptId: r.id
             )
         }
         items += tk.compactMap { r in
@@ -232,6 +232,30 @@ extension SB {
         )
         struct R: Codable { let id: String }
         return (try? JSONDecoder().decode([R].self, from: data))?.first?.id
+    }
+
+    private static let APPT_COLS =
+        "id,reference_no,client_name,client_phone,client_email,company_name,appointment_date," +
+        "appointment_time,duration_minutes,meeting_method,meeting_link,service_type,status,notes," +
+        "source,created_by,created_at,confirmation_sent_at,meeting_link_sent_at,client_id"
+
+    func appointment(id: String) async throws -> AppointmentFull? {
+        let rows: [AppointmentFull] = try await get("appointments", query: [
+            ("select", SB.APPT_COLS), ("id", "eq.\(id)"), ("limit", "1")])
+        return rows.first
+    }
+
+    /// مواعيد اليوم فصاعداً — الأقرب أولاً (ما يفتحه إشعار الحجز)
+    func upcomingAppointments(limit: Int = 100) async throws -> [AppointmentFull] {
+        try await get("appointments", query: [
+            ("select", SB.APPT_COLS),
+            ("appointment_date", "gte.\(Fmt.todayISO())"),
+            ("order", "appointment_date.asc,appointment_time.asc"),
+            ("limit", String(limit))])
+    }
+
+    func setAppointmentStatus(_ id: String, status: String) async throws {
+        try await patch("appointments", query: [("id", "eq.\(id)")], values: ["status": status])
     }
 
     func setAppointmentGcalId(_ id: String, eventId: String) async throws {

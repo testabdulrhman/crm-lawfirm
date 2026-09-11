@@ -160,5 +160,6 @@ struct MainTabs: View {
         if r.hasPrefix("/tasks/") { tab = 2 }
         else if r.hasPrefix("/discussions") { tab = 4 }
         else if r.hasPrefix("/cases/") { tab = 1 }
+        else if r.hasPrefix("/appointments") { tab = 3 }   // التقويم يحمل قائمة المواعيد
     }
 }
