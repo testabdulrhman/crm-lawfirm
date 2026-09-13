@@ -599,7 +599,7 @@ private struct StreamBubble: View {
                 Text(isAI ? "الذكاء" : (msg.author_name ?? "—"))
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(isAI ? Theme.goldDark : Theme.muted)
-                Text(shortStamp(msg.created_at))
+                Text(msgStamp(msg.created_at))
                     .font(.system(size: 10))
                     .foregroundStyle(Theme.muted.opacity(0.8))
                 if msg.edited_at != nil {
@@ -830,7 +830,7 @@ private struct ThreadView: View {
                             Text(root.kind == "ai" ? "الذكاء" : (root.author_name ?? "—"))
                                 .font(.system(size: 11, weight: .medium))
                                 .foregroundStyle(Theme.muted)
-                            Text(shortStamp(root.created_at))
+                            Text(msgStamp(root.created_at))
                                 .font(.system(size: 10))
                                 .foregroundStyle(Theme.muted.opacity(0.8))
                         }
@@ -931,7 +931,7 @@ private struct ThreadView: View {
                     Text(isAI ? "الذكاء" : (r.author_name ?? "—"))
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(isAI ? Theme.goldDark : Theme.muted)
-                    Text(shortStamp(r.created_at))
+                    Text(msgStamp(r.created_at))
                         .font(.system(size: 10))
                         .foregroundStyle(Theme.muted.opacity(0.8))
                     if r.edited_at != nil {

@@ -97,7 +97,7 @@ struct ReadReceiptsSheet: View {
                 .font(.system(size: 14, weight: .medium)).foregroundStyle(Theme.navy)
             Spacer(minLength: 8)
             if let time {
-                Text(shortStamp(time)).font(.system(size: 12)).foregroundStyle(Theme.muted)
+                Text(msgStamp(time)).font(.system(size: 12)).foregroundStyle(Theme.muted)
             }
         }
     }

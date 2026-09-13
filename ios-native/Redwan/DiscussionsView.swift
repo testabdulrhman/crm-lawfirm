@@ -33,6 +33,26 @@ func shortStamp(_ iso: String?) -> String {
     return stampF.string(from: d)
 }
 
+/// وقت الرسالة داخل الفقاعة — الساعة دائماً، ومعها اليوم إن لم تكن من اليوم
+/// (طلب المدير 2026-09-14: كانت الساعة تظهر لرسائل اليوم وحدها، كالويب قبل إصلاحه).
+/// قائمة النقاشات تبقى على shortStamp المختصر كالواتساب.
+func msgStamp(_ iso: String?) -> String {
+    guard let d = ISO8601DateFormatter.parse(iso) else { return "" }
+    let cal = Calendar(identifier: .gregorian)
+    stampF.dateFormat = "h:mm a"
+    let time = stampF.string(from: d)
+    if cal.isDateInToday(d) { return time }
+    if cal.isDateInYesterday(d) { return "أمس · \(time)" }
+    if let days = cal.dateComponents([.day], from: cal.startOfDay(for: d), to: cal.startOfDay(for: Date())).day,
+       days < 7 {
+        stampF.dateFormat = "EEEE"
+        return "\(stampF.string(from: d)) · \(time)"
+    }
+    let sameYear = cal.component(.year, from: d) == cal.component(.year, from: Date())
+    stampF.dateFormat = sameYear ? "d MMMM" : "d MMMM yyyy"
+    return "\(stampF.string(from: d)) · \(time)"
+}
+
 extension ISO8601DateFormatter {
     /// طوابع Postgres قد تحمل كسور ثانية أو لا — صيغة واحدة لا تكفي
     static let flexible: ISO8601DateFormatter = {
