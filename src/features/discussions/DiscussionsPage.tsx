@@ -46,8 +46,9 @@ import { useTeamMembers } from '@/hooks/useTeam'
 import { pickFile } from '@/lib/files'
 import { arNorm } from '@/lib/arabic'
 import { matterHref, matterKindEmoji } from '@/lib/matterHref'
-import { fmtDatePref, fmtNumber, fmtTime } from '@/lib/format'
+import { fmtNumber } from '@/lib/format'
 import { cn } from '@/lib/utils'
+import { stamp, msgStamp, fullStamp } from './stamps'
 import { errMessage } from '@/lib/errors'
 import {
   useBookmarks,
@@ -85,18 +86,6 @@ import { Label } from '@/components/ui/label'
 const QUICK_EMOJIS = ['👍', '❤️', '✅', '😂', '😮', '🙏']
 
 /** طابع مختصر بأسلوب الواتساب */
-function stamp(iso: string | null): string {
-  if (!iso) return ''
-  const d = new Date(iso)
-  if (isNaN(d.getTime())) return ''
-  const now = new Date()
-  const sameDay = d.toDateString() === now.toDateString()
-  if (sameDay) return fmtTime(d.toTimeString().slice(0, 5))
-  const yest = new Date(now.getTime() - 86400000)
-  if (d.toDateString() === yest.toDateString()) return 'أمس'
-  return fmtDatePref(d.toISOString().slice(0, 10))
-}
-
 /* ===================== منشن الموظفين ===================== */
 
 interface Mentionable {
@@ -821,7 +810,7 @@ function MessageBubble({
         <span className={cn('font-medium', isAI && 'text-gold-600 dark:text-gold-300')}>
           {isAI ? 'الذكاء' : msg.author_name ?? '—'}
         </span>
-        <span className="opacity-80">{stamp(msg.created_at)}</span>
+        <span className="opacity-80" title={fullStamp(msg.created_at)}>{msgStamp(msg.created_at)}</span>
         {msg.edited_at && <span className="text-[10px] opacity-70">(معدّلة)</span>}
         {mine && msg.kind === 'user' && receipt && (
           <ReadTicks count={receipt} onClick={() => setReceiptsOpen(true)} />
@@ -919,7 +908,7 @@ function ReadReceiptsDialog({
   const row = (p: ReadPerson, time?: string | null) => (
     <div key={p.member_id} className="flex items-center justify-between gap-3 rounded-lg px-2 py-1.5">
       <span className="text-sm text-foreground">{p.name ?? p.short_name ?? '—'}</span>
-      {time && <span className="text-xs text-muted-foreground">{stamp(time)}</span>}
+      {time && <span className="text-xs text-muted-foreground" title={fullStamp(time)}>{msgStamp(time)}</span>}
     </div>
   )
   return (
@@ -1200,7 +1189,7 @@ function ThreadPane({
             <span className="font-medium">
               {root.kind === 'ai' ? 'الذكاء' : root.author_name ?? '—'}
             </span>{' '}
-            · {stamp(root.created_at)}
+            · {msgStamp(root.created_at)}
           </p>
           <Body
             text={root.body ?? root.document_name ?? '—'}
@@ -1272,7 +1261,7 @@ function ThreadReply({
         <span className={cn('font-medium', isAI && 'text-gold-600 dark:text-gold-300')}>
           {isAI ? 'الذكاء' : r.author_name ?? '—'}
         </span>
-        <span className="opacity-80">{stamp(r.created_at)}</span>
+        <span className="opacity-80" title={fullStamp(r.created_at)}>{msgStamp(r.created_at)}</span>
         {r.edited_at && <span className="text-[10px] opacity-70">(معدّلة)</span>}
         <MessageActions msg={r} caseId={caseId} mine={mine} />
       </p>
