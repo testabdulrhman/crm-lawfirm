@@ -349,3 +349,31 @@ struct MyProfile: Codable {
     let emergency_contact_phone: String?
     let emergency_contact_relation: String?
 }
+
+
+// ===== إيصالات القراءة في النقاشات =====
+
+struct ReadCount: Codable {
+    let comment_id: String
+    let readers: Int
+    let pending: Int
+}
+
+struct ReadReceipts: Codable {
+    struct Person: Codable, Identifiable {
+        let member_id: String
+        let name: String?
+        let short_name: String?
+        let avatar_initial: String?
+        let avatar_color: String?
+        let avatar_url: String?
+        var read_at: String? = nil
+        var id: String { member_id }
+        var asTeamMember: TeamMember {
+            TeamMember(id: member_id, name: name, short_name: short_name, is_director: nil,
+                       avatar_initial: avatar_initial, avatar_color: avatar_color, avatar_url: avatar_url)
+        }
+    }
+    let readers: [Person]
+    let not_read: [Person]
+}

@@ -512,3 +512,55 @@ export function useRenameChannel(channelId: string | null) {
       toast({ variant: 'destructive', title: 'تعذّر تغيير الاسم', description: errMessage(e) }),
   })
 }
+
+/* ===== إيصالات القراءة (مثل الواتساب) =====
+ * «قرأها» = فتح النقاش بعد إرسالها. case_reads يحجب صفوف الآخرين، فالحساب بدالتين في
+ * القاعدة تُرجعان للمُرسل وحده ما يخصّ رسائله. */
+
+export interface ReadCount {
+  comment_id: string
+  readers: number
+  pending: number
+}
+
+export interface ReadPerson {
+  member_id: string
+  name: string | null
+  short_name: string | null
+  avatar_initial: string | null
+  avatar_color: string | null
+  avatar_url: string | null
+  read_at?: string | null
+}
+
+export interface ReadReceipts {
+  readers: ReadPerson[]
+  not_read: ReadPerson[]
+}
+
+/** علامات رسائلي في مجرى نقاش */
+export function useStreamReadCounts(caseId: string | null, enabled: boolean) {
+  return useQuery({
+    queryKey: ['disc_read_counts', caseId],
+    enabled,
+    refetchInterval: 20_000,
+    queryFn: async (): Promise<Record<string, ReadCount>> => {
+      const { data, error } = await supabase.rpc('stream_read_counts', { p_case_id: caseId })
+      if (error) throw error
+      return Object.fromEntries(((data ?? []) as ReadCount[]).map((r) => [r.comment_id, r]))
+    },
+  })
+}
+
+/** من قرأ رسالتي ومن لم يقرأها — لمُرسلها وحده */
+export function useReadReceipts(commentId: string | null) {
+  return useQuery({
+    queryKey: ['disc_read_receipts', commentId],
+    enabled: !!commentId,
+    queryFn: async (): Promise<ReadReceipts> => {
+      const { data, error } = await supabase.rpc('message_read_receipts', { p_comment_id: commentId })
+      if (error) throw error
+      return data as ReadReceipts
+    },
+  })
+}

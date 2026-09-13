@@ -174,6 +174,8 @@ struct CaseStreamView: View {
 
     @EnvironmentObject private var sb: SB
     @State private var msgs: [StreamMsg] = []
+    /// إيصالات قراءة رسائلي في هذا النقاش
+    @State private var receipts: [String: ReadCount] = [:]
     @State private var loaded = false
     @State private var error: String?
     @State private var draft = ""
@@ -227,7 +229,8 @@ struct CaseStreamView: View {
                                     msg: m, caseId: caseId,
                                     mine: m.author_id == sb.member?.id,
                                     onChange: { Task { await load() } },
-                                    onEdit: { editing = m; editDraft = m.body ?? "" }
+                                    onEdit: { editing = m; editDraft = m.body ?? "" },
+                                    receipt: receipts[m.id]
                                 )
                                 .id(m.id)
                             }
@@ -277,6 +280,17 @@ struct CaseStreamView: View {
             let fb = await fallback
             resolvedDoor = fb.door
             resolvedKind = fb.kind
+        }
+        // إيصالات القراءة: ما حُمّل هنا رآه صاحبه، فتُعلَّم القراءة مع كل رسالة جديدة (لا عند الفتح
+        // وحده — وإلا بدا من يقرأ مباشرةً كأنه لم يقرأ)، وتُحدَّث علامات رسائلي كل ٢٠ ثانية ما
+        // دامت الشاشة ظاهرة؛ المهمة تُلغى باختفائها وتُعاد عند وصول رسالة جديدة.
+        .task(id: msgs.last?.id) {
+            guard loaded else { return }
+            try? await sb.markRead(caseId: caseId)
+            while !Task.isCancelled {
+                if let r = try? await sb.streamReadCounts(caseId: caseId) { receipts = r }
+                try? await Task.sleep(for: .seconds(20))
+            }
         }
         .sheet(item: $editing) { m in
             EditMessageSheet(draft: $editDraft) { newBody in
@@ -549,8 +563,11 @@ private struct StreamBubble: View {
     let mine: Bool
     let onChange: () -> Void
     let onEdit: () -> Void
+    /// إيصال القراءة لرسالتي (nil لغير رسائلي أو قبل وصوله)
+    var receipt: ReadCount? = nil
 
     @State private var openThread = false
+    @State private var showReceipts = false
 
     private var isAI: Bool { msg.kind == "ai" }
     private var isSystem: Bool { msg.kind == "system" }
@@ -589,6 +606,10 @@ private struct StreamBubble: View {
                     Text("(معدّلة)")
                         .font(.system(size: 9))
                         .foregroundStyle(Theme.muted.opacity(0.7))
+                }
+                if mine, msg.kind == "user", let r = receipt {
+                    Button { showReceipts = true } label: { ReadTicks(count: r) }
+                        .buttonStyle(.plain)
                 }
             }
 
@@ -653,6 +674,9 @@ private struct StreamBubble: View {
         }
         .navigationDestination(isPresented: $openThread) {
             ThreadView(root: msg, caseId: caseId, onChange: onChange)
+        }
+        .sheet(isPresented: $showReceipts) {
+            ReadReceiptsSheet(commentId: msg.id, preview: msg.body)
         }
     }
 

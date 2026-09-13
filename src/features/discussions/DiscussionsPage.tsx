@@ -3,6 +3,8 @@ import { useLocation } from 'wouter'
 import {
   Bookmark,
   BookmarkX,
+  Check,
+  CheckCheck,
   FolderOpen,
   Landmark,
   Loader2,
@@ -46,6 +48,7 @@ import { arNorm } from '@/lib/arabic'
 import { matterHref, matterKindEmoji } from '@/lib/matterHref'
 import { fmtDatePref, fmtNumber, fmtTime } from '@/lib/format'
 import { cn } from '@/lib/utils'
+import { errMessage } from '@/lib/errors'
 import {
   useBookmarks,
   useChannelMembers,
@@ -59,6 +62,10 @@ import {
   useThread,
   useToggleBookmark,
   useToggleChannelMember,
+  useStreamReadCounts,
+  useReadReceipts,
+  type ReadCount,
+  type ReadPerson,
   useCreateChannel,
   useRenameChannel,
   useToggleReaction,
@@ -628,6 +635,15 @@ function StreamPane({
   const [, navigate] = useLocation()
   const people = useMentionables(!!caseId)   // داخل ملف: المتعاون قابل للمنشن
   const { data: msgs, isLoading, error, refetch } = useStream(caseId, true)
+  // إيصالات القراءة: ما يُعرض هنا رآه صاحبه — تُعلَّم القراءة مع كل رسالة جديدة والنافذة ظاهرة
+  // (لا عند اختيار النقاش وحده، وإلا بدا من يقرأ مباشرةً كأنه لم يقرأ)
+  const markSeen = useMarkRead()
+  const lastId = msgs?.[msgs.length - 1]?.id
+  useEffect(() => {
+    if (lastId && document.visibilityState === 'visible') markSeen.mutate(caseId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastId, caseId])
+  const { data: readCounts } = useStreamReadCounts(caseId, true)
   const post = usePostMessage()
   const postFile = usePostAttachment()
   const [draft, setDraft] = useState('')
@@ -750,6 +766,7 @@ function StreamPane({
               caseId={caseId}
               mine={m.author_id === teamMember?.id}
               onOpenThread={() => openThread(m)}
+              receipt={readCounts?.[m.id]}
             />
           ))
         )}
@@ -776,12 +793,16 @@ function MessageBubble({
   caseId,
   mine,
   onOpenThread,
+  receipt,
 }: {
   msg: StreamMsg
   caseId: string | null
   mine: boolean
   onOpenThread: () => void
+  /** إيصال القراءة لرسالتي */
+  receipt?: ReadCount
 }) {
+  const [receiptsOpen, setReceiptsOpen] = useState(false)
   const isAI = msg.kind === 'ai'
   const isSystem = msg.kind === 'system'
 
@@ -802,6 +823,9 @@ function MessageBubble({
         </span>
         <span className="opacity-80">{stamp(msg.created_at)}</span>
         {msg.edited_at && <span className="text-[10px] opacity-70">(معدّلة)</span>}
+        {mine && msg.kind === 'user' && receipt && (
+          <ReadTicks count={receipt} onClick={() => setReceiptsOpen(true)} />
+        )}
         <MessageActions msg={msg} caseId={caseId} mine={mine} />
       </div>
 
@@ -846,7 +870,100 @@ function MessageBubble({
       </div>
 
       <ReactionChips msg={msg} caseId={caseId} />
+      {receiptsOpen && (
+        <ReadReceiptsDialog commentId={msg.id} body={msg.body} onClose={() => setReceiptsOpen(false)} />
+      )}
     </div>
+  )
+}
+
+/* ===================== إيصالات القراءة =====================
+ * مثل مجموعات الواتساب: ✓ لم يقرأها أحد · ✓✓ وعدد: قرأها بعضهم · ✓✓ زرقاء: قرأها كل من يُنتظر
+ * أن يقرأ. «قرأها» = فتح النقاش بعد إرسالها — لمُرسلها وحده. */
+
+function ReadTicks({ count, onClick }: { count: ReadCount; onClick: () => void }) {
+  const all = count.readers > 0 && count.pending === 0
+  const label = all
+    ? 'قرأها الجميع'
+    : count.readers === 0
+      ? 'لم يقرأها أحد بعد'
+      : `قرأها ${fmtNumber(count.readers)}`
+  const Icon = count.readers > 0 ? CheckCheck : Check
+  return (
+    <button
+      type="button"
+      title={label}
+      aria-label={label}
+      onClick={onClick}
+      className={cn(
+        'flex items-center gap-0.5 rounded px-1 transition-colors hover:bg-muted',
+        all ? 'text-blue-600 dark:text-blue-400' : 'text-muted-foreground'
+      )}
+    >
+      <Icon className="h-3.5 w-3.5" />
+      {count.readers > 0 && !all && <span className="text-[10px] font-medium">{fmtNumber(count.readers)}</span>}
+    </button>
+  )
+}
+
+function ReadReceiptsDialog({
+  commentId,
+  body,
+  onClose,
+}: {
+  commentId: string
+  body: string | null
+  onClose: () => void
+}) {
+  const { data, isLoading, error } = useReadReceipts(commentId)
+  const row = (p: ReadPerson, time?: string | null) => (
+    <div key={p.member_id} className="flex items-center justify-between gap-3 rounded-lg px-2 py-1.5">
+      <span className="text-sm text-foreground">{p.name ?? p.short_name ?? '—'}</span>
+      {time && <span className="text-xs text-muted-foreground">{stamp(time)}</span>}
+    </div>
+  )
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o) onClose() }}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>معلومات القراءة</DialogTitle>
+        </DialogHeader>
+        {body && (
+          <p className="line-clamp-3 rounded-lg bg-muted/60 px-3 py-2 text-sm text-foreground">{body}</p>
+        )}
+        {isLoading ? (
+          <Skeleton className="h-20 w-full" />
+        ) : error ? (
+          <p className="text-sm text-destructive">{errMessage(error)}</p>
+        ) : data ? (
+          <div className="max-h-80 space-y-4 overflow-y-auto">
+            <div>
+              <p className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-blue-600 dark:text-blue-400">
+                <CheckCheck className="h-3.5 w-3.5" />
+                قرأها · {fmtNumber(data.readers.length)}
+              </p>
+              {data.readers.length ? (
+                data.readers.map((p) => row(p, p.read_at))
+              ) : (
+                <p className="px-2 text-xs text-muted-foreground">لم يفتح أحدٌ النقاش منذ إرسالها</p>
+              )}
+            </div>
+            {data.not_read.length > 0 && (
+              <div>
+                <p className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+                  <Check className="h-3.5 w-3.5" />
+                  لم يقرأها بعد · {fmtNumber(data.not_read.length)}
+                </p>
+                {data.not_read.map((p) => row(p))}
+              </div>
+            )}
+            {data.readers.length > 0 && (
+              <p className="text-[11px] text-muted-foreground">الوقت هو آخر فتح للنقاش.</p>
+            )}
+          </div>
+        ) : null}
+      </DialogContent>
+    </Dialog>
   )
 }
 

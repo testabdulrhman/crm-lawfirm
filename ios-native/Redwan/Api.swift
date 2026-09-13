@@ -618,3 +618,19 @@ extension SB {
         return (try? JSONDecoder().decode([R].self, from: data))?.count ?? 0
     }
 }
+
+
+// ===== إيصالات القراءة (مثل الواتساب) =====
+// الحساب في القاعدة: case_reads يحجب صفوف الآخرين، فالدالتان تُرجعان للمُرسل وحده ما يخصّ رسائله.
+
+extension SB {
+    /// علامات رسائلي في مجرى نقاش — caseId فارغ = العامة
+    func streamReadCounts(caseId: String?) async throws -> [String: ReadCount] {
+        let rows: [ReadCount] = try await rpc("stream_read_counts", params: ["p_case_id": caseId ?? NSNull()])
+        return Dictionary(rows.map { ($0.comment_id, $0) }, uniquingKeysWith: { a, _ in a })
+    }
+
+    func readReceipts(commentId: String) async throws -> ReadReceipts {
+        try await rpc("message_read_receipts", params: ["p_comment_id": commentId])
+    }
+}
