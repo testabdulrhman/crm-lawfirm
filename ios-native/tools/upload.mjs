@@ -15,6 +15,20 @@ if (!ipaPath || !version || !build) {
   process.exit(2);
 }
 const buf = fs.readFileSync(ipaPath);
+
+// ⓪ منع الرفع المكرر (2026-09-14): إن كان لهذا الإصدار والبناء رفعٌ قائم غير فاشل فلا نُنشئ آخر —
+// إعادة التشغيل بعد انقطاع كانت تُنشئ سجلاً مكرراً فترفضه أبل («bundle version must be higher»)
+{
+  const prev = await call('GET', `/apps/${APP}/buildUploads?limit=10`);
+  const same = (prev.data ?? []).find((u) =>
+    u.attributes?.cfBundleVersion === build &&
+    u.attributes?.cfBundleShortVersionString === version &&
+    u.attributes?.state?.state !== 'FAILED');
+  if (same) {
+    console.log(`البناء ${version} (${build}) مرفوع سابقاً — الحالة: ${same.attributes.state?.state} (${same.id})`);
+    process.exit(0);
+  }
+}
 const md5 = crypto.createHash('md5').update(buf).digest('hex').toUpperCase();
 const fail = (step, r) => { console.error('✗', step, JSON.stringify(r?.errors ?? r, null, 1)); process.exit(1); };
 
@@ -60,8 +74,16 @@ if (!done.data) fail('commit', done);
 console.log('أُقفل الملف');
 
 // ٥) حالة الرفع (معالجة البناء نفسها يتابعها submit.mjs)
+// ⚠️ انقطاع الاتصال هنا لا يعني فشل الرفع — الملف أُقفل أعلاه. لا تُعِد تشغيل الأداة بسببه.
 for (let i = 0; i < 15; i++) {
-  const s = await call('GET', `/buildUploads/${uploadId}`);
+  let s;
+  try {
+    s = await call('GET', `/buildUploads/${uploadId}`);
+  } catch (e) {
+    console.log('تعثّر الاتصال أثناء المتابعة — الرفع نفسه تمّ:', e.cause?.code ?? e.message);
+    await new Promise((r) => setTimeout(r, 20000));
+    continue;
+  }
   const st = s.data?.attributes?.state;
   const notes = [...(st?.errors ?? []), ...(st?.warnings ?? [])].map((e) => e.description ?? e.code ?? JSON.stringify(e));
   console.log('الحالة:', st?.state ?? JSON.stringify(s.errors ?? s).slice(0, 200), notes.length ? notes.join(' | ') : '');
