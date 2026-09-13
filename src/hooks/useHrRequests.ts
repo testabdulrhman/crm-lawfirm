@@ -171,3 +171,38 @@ export function useDecideHrRequest() {
     onError: errToast('تعذّر تسجيل القرار'),
   })
 }
+
+/* ===== رصيد الإجازة السنوية (leave_balance) ===== */
+
+export interface LeaveBalance {
+  member_id: string
+  join_date: string | null
+  missing_join_date?: boolean
+  not_started?: boolean
+  years_of_service?: number
+  service_year_start?: string
+  service_year_end?: string
+  entitlement?: number
+  used?: number
+  pending?: number
+  remaining?: number
+  senior_after_years?: number
+}
+
+/**
+ * رصيد سنة الخدمة الجارية: ٢١ يوماً، و٣٠ بعد خمس سنوات متصلة (م١٠٩ من نظام العمل)،
+ * يُخصم منه المعتمد من الإجازات السنوية، بأيام التقويم كعدّ الطلبات (hrDays).
+ * memberId فارغ = رصيدي؛ غيره للمدير فقط — والقاعدة تفرض ذلك.
+ * المفتاح تحت [KEY] فيُحدَّث تلقائياً مع التقديم والإلغاء والقرار.
+ */
+export function useLeaveBalance(memberId?: string | null, enabled = true) {
+  return useQuery({
+    queryKey: [KEY, 'balance', memberId ?? 'me'],
+    enabled,
+    queryFn: async (): Promise<LeaveBalance> => {
+      const { data, error } = await supabase.rpc('leave_balance', memberId ? { p_member: memberId } : {})
+      if (error) throw error
+      return data as LeaveBalance
+    },
+  })
+}

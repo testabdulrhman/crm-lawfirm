@@ -523,3 +523,98 @@ extension SB {
         ])
     }
 }
+
+
+// ===== الخدمة الذاتية للموظف («صفحتي») =====
+// نفس جداول الويب تحت RLS: الموظف طلباته وقيوده، والمدير الكل. الإشعارات من الترقرات.
+
+extension SB {
+    private static let HR_SELECT =
+        "id,member_id,kind,leave_type,start_date,end_date,from_time,to_time,reason,status," +
+        "decision_note,decided_at,created_at," +
+        "member:team_members!hr_requests_member_id_fkey(id,name,short_name,avatar_initial,avatar_color,avatar_url)"
+
+    func myProfile() async throws -> MyProfile? {
+        guard let id = member?.id else { return nil }
+        let rows: [MyProfile] = try await get("team_members", query: [
+            ("select", "id,name,role,email,phone,join_date,national_address,bank_name,bank_iban,qualifications," +
+                       "emergency_contact_name,emergency_contact_phone,emergency_contact_relation"),
+            ("id", "eq.\(id)"), ("limit", "1")])
+        return rows.first
+    }
+
+    /// الحقول التي يحدّثها الموظف بنفسه — الهوية وتاريخ التعيين يحرسها ترقر القاعدة للمدير
+    func updateMyProfile(_ values: [String: Any]) async throws {
+        guard let id = member?.id else { throw SBError(message: "لم يُحمَّل ملفك بعد — أعد فتح التطبيق") }
+        try await patch("team_members", query: [("id", "eq.\(id)")], values: values)
+    }
+
+    func leaveBalance(memberId: String? = nil) async throws -> LeaveBalance {
+        var p: [String: Any] = [:]
+        if let memberId { p["p_member"] = memberId }
+        return try await rpc("leave_balance", params: p)
+    }
+
+    func myHrRequests() async throws -> [HrRequestRow] {
+        guard let id = member?.id else { return [] }
+        return try await get("hr_requests", query: [
+            ("select", SB.HR_SELECT), ("member_id", "eq.\(id)"),
+            ("order", "created_at.desc"), ("limit", "100")])
+    }
+
+    /// للمدير — RLS يحصر غيره على طلباته
+    func teamHrRequests() async throws -> [HrRequestRow] {
+        try await get("hr_requests", query: [
+            ("select", SB.HR_SELECT), ("order", "created_at.desc"), ("limit", "150")])
+    }
+
+    func pendingHrCount() async throws -> Int {
+        struct R: Codable { let id: String }
+        let rows: [R] = try await get("hr_requests", query: [
+            ("select", "id"), ("status", "eq.pending"), ("limit", "200")])
+        return rows.count
+    }
+
+    func createHrRequest(_ values: [String: Any]) async throws {
+        guard let id = member?.id else { throw SBError(message: "لم يُحمَّل ملفك بعد — أعد فتح التطبيق") }
+        var v = values
+        v["member_id"] = id
+        v["status"] = "pending"
+        try await insertVoid("hr_requests", values: v)
+    }
+
+    /// مشروط بالمعلّق: صفر صفوف = بُتّ فيه قبل الإلغاء (درس «توست نجاح كاذب» في الويب)
+    func cancelHrRequest(_ id: String) async throws {
+        let n = try await patchReturningCount("hr_requests",
+            query: [("id", "eq.\(id)"), ("status", "eq.pending")], values: ["status": "cancelled"])
+        if n == 0 { throw SBError(message: "الطلب لم يعد معلّقاً — بُتّ فيه قبل الإلغاء") }
+    }
+
+    func decideHrRequest(_ id: String, approve: Bool, note: String?) async throws {
+        var v: [String: Any] = [
+            "status": approve ? "approved" : "rejected",
+            "decided_at": ISO8601DateFormatter().string(from: Date()),
+        ]
+        if let me = member?.id { v["decided_by"] = me }
+        if let note, !note.isEmpty { v["decision_note"] = note }
+        let n = try await patchReturningCount("hr_requests",
+            query: [("id", "eq.\(id)"), ("status", "eq.pending")], values: v)
+        if n == 0 { throw SBError(message: "الطلب لم يعد معلّقاً — ربما ألغاه صاحبه") }
+    }
+
+    func myPayroll() async throws -> [PayrollRow] {
+        guard let id = member?.id else { return [] }
+        return try await get("payroll_entries", query: [
+            ("select", "id,entry_type,amount,entry_date,note,file_url"),
+            ("team_member_id", "eq.\(id)"), ("deleted_at", "is.null"),
+            ("order", "entry_date.desc"), ("limit", "200")])
+    }
+
+    private func patchReturningCount(_ table: String, query: [(String, String)], values: [String: Any]) async throws -> Int {
+        let body = try JSONSerialization.data(withJSONObject: values)
+        let data = try await raw(path: "rest/v1/\(table)", method: "PATCH",
+                                 query: query + [("select", "id")], body: body, prefer: "return=representation")
+        struct R: Codable { let id: String }
+        return (try? JSONDecoder().decode([R].self, from: data))?.count ?? 0
+    }
+}

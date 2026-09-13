@@ -38,6 +38,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { QueryErrorState } from '@/components/QueryErrorState'
 import { useConfirm } from '@/components/ConfirmDialog'
 import { useIsDirector } from '@/hooks/useIsDirector'
+import { LeaveBalanceCard } from './LeaveBalanceCard'
 import { usePageState } from '@/hooks/usePageState'
 import { fmtDatePref, fmtDateTime, fmtNumber, fmtTime, todayISO, daysLabel } from '@/lib/format'
 import { cn } from '@/lib/utils'
@@ -46,6 +47,7 @@ import {
   useCreateHrRequest,
   useCancelHrRequest,
   useDecideHrRequest,
+  useLeaveBalance,
   hrDays,
   hrHours,
   hrKindLabel,
@@ -94,12 +96,16 @@ export function HrRequestsPage() {
           <TabsContent value="team" className="mt-4">
             <RequestsList scope="all" canDecide />
           </TabsContent>
-          <TabsContent value="mine" className="mt-4">
+          <TabsContent value="mine" className="mt-4 space-y-4">
+            <LeaveBalanceCard />
             <RequestsList scope="mine" />
           </TabsContent>
         </Tabs>
       ) : (
-        <RequestsList scope="mine" />
+        <div className="space-y-4">
+          <LeaveBalanceCard />
+          <RequestsList scope="mine" />
+        </div>
       )}
 
       <NewRequestDialog open={newOpen} onClose={() => setNewOpen(false)} />
@@ -345,6 +351,16 @@ function NewRequestDialog({ open, onClose }: { open: boolean; onClose: () => voi
     !!start &&
     (kind === 'permission' ? !!fromTime && !!toTime && toTime > fromTime : !!end && end >= start)
 
+  // رصيد الإجازة السنوية قبل التقديم — تنبيه لا منع: القرار للمدير
+  const { data: bal } = useLeaveBalance(null, open)
+  const reqDays = start && end && end >= start ? hrDays({ start_date: start, end_date: end }) : 0
+  // المعلّق محجوز من الرصيد: المتاح لهذا الطلب = المتبقي − قيد الاعتماد
+  const pend = bal?.pending ?? 0
+  const balanceHint =
+    kind === 'leave' && leaveType === 'annual' && bal?.remaining != null && !bal.missing_join_date && reqDays > 0
+      ? { remaining: bal.remaining, pending: pend, after: bal.remaining - pend - reqDays }
+      : null
+
   const submit = async () => {
     if (!valid) return
     await createM.mutateAsync({
@@ -431,6 +447,14 @@ function NewRequestDialog({ open, onClose }: { open: boolean; onClose: () => voi
               {start && end && end >= start && (
                 <p className="col-span-2 text-xs text-muted-foreground">
                   المدة: {daysLabel(hrDays({ start_date: start, end_date: end }))}
+                </p>
+              )}
+              {balanceHint && (
+                <p className={cn('col-span-2 text-xs', balanceHint.after < 0 ? 'text-destructive' : 'text-muted-foreground')}>
+                  {`رصيدك ${fmtNumber(balanceHint.remaining)}${balanceHint.pending > 0 ? ` (${fmtNumber(balanceHint.pending)} منها قيد الاعتماد)` : ''} — `}
+                  {balanceHint.after < 0
+                    ? `هذا الطلب يتجاوزه بـ${daysLabel(-balanceHint.after)}، والقرار للمدير`
+                    : `يبقى بعد هذا الطلب ${fmtNumber(balanceHint.after)}`}
                 </p>
               )}
             </div>

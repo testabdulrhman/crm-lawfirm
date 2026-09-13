@@ -16,6 +16,11 @@ struct HomeView: View {
     @State private var needClosure: [SessionNeedingClosure] = []
     @State private var closing: CloseTarget?
     @State private var showPrefs = false
+    /// «صفحتي» والاعتمادات — الخدمة الذاتية للموظف (2026-09-13)
+    @State private var showMyPage = false
+    @State private var showApprovals = false
+    @State private var pendingHr = 0
+    @ObservedObject private var router = PushRouter.shared
 
     var body: some View {
         NavigationStack {
@@ -36,9 +41,15 @@ struct HomeView: View {
             }
             .background(Theme.ivory.ignoresSafeArea())
             .navigationTitle("الرئيسية")
-            .onAppear { Usage.shared.screen("الرئيسية") }
+            .onAppear {
+                Usage.shared.screen("الرئيسية")
+                openFromPush()
+            }
             .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(isPresented: $showPrefs) { NotificationPrefsView() }
+            .navigationDestination(isPresented: $showMyPage) { MyPageView() }
+            .navigationDestination(isPresented: $showApprovals) { HrApprovalsView() }
+            .onChange(of: router.route) { _, _ in openFromPush() }
             .toolbar {
                 // جرس الإشعارات — يشوف الموظف كل ما يخصه (طلب 2026-08-22)
                 ToolbarItem(placement: .topBarLeading) {
@@ -68,6 +79,11 @@ struct HomeView: View {
                             // سطر تعريفي فقط — معطّل حتى لا يوحي بأنه إجراء
                             Button(name) {}
                                 .disabled(true)
+                        }
+                        Button {
+                            showMyPage = true
+                        } label: {
+                            Label("صفحتي", systemImage: "person.text.rectangle")
                         }
                         Button {
                             showPrefs = true
@@ -107,6 +123,10 @@ struct HomeView: View {
 
                 statsGrid(ov.stats)
 
+                if sb.member?.is_director == true && pendingHr > 0 {
+                    hrPendingCard
+                }
+
                 todayCard
 
                 if !needClosure.isEmpty {
@@ -122,6 +142,54 @@ struct HomeView: View {
         .refreshable { await load() }
         .onChange(of: scope) {
             Task { await load() }
+        }
+    }
+
+    /// طلبات إجازة/استئذان بانتظار المدير — قرارٌ ينتظره موظف
+    private var hrPendingCard: some View {
+        Button { showApprovals = true } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "calendar.badge.clock")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(Theme.goldDark)
+                    .frame(width: 38, height: 38)
+                    .background(Theme.goldPale)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("طلبات موظفين بانتظار اعتمادك")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Theme.navy)
+                    Text("إجازة أو استئذان أو دوام عن بعد")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.muted)
+                }
+                Spacer(minLength: 8)
+                Text("\(pendingHr)")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(minWidth: 26, minHeight: 26)
+                    .background(Theme.danger)
+                    .clipShape(Capsule())
+            }
+            .padding(14)
+            .background(Theme.card)
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .overlay(RoundedRectangle(cornerRadius: 14).stroke(Theme.line, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// إشعار «طلب من موظف» ← الاعتمادات، و«اعتُمد/رُفض طلبك» ← صفحتي
+    private func openFromPush() {
+        switch router.route {
+        case "/me":
+            router.clear()
+            showMyPage = true
+        case "/hr/approvals":
+            router.clear()
+            showApprovals = true
+        default:
+            break
         }
     }
 
@@ -395,6 +463,10 @@ struct HomeView: View {
         if let list = try? await sb.notifications(limit: 50) {
             unreadCount = list.filter { $0.is_read == false }.count
             try? await UNUserNotificationCenter.current().setBadgeCount(unreadCount)
+        }
+        // طلبات الموظفين المعلّقة — للمدير فقط، ثانوي لا يُفشل الشاشة
+        if sb.member?.is_director == true {
+            pendingHr = (try? await sb.pendingHrCount()) ?? 0
         }
     }
 }

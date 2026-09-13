@@ -275,3 +275,77 @@ struct ApptLite: Codable, Identifiable {
     let duration_minutes: Int?
     let status: String?
 }
+
+
+// ===== الخدمة الذاتية للموظف («صفحتي») =====
+
+struct HrRequestRow: Codable, Identifiable {
+    let id: String
+    let member_id: String
+    let kind: String
+    let leave_type: String?
+    let start_date: String
+    let end_date: String
+    let from_time: String?
+    let to_time: String?
+    let reason: String?
+    let status: String
+    let decision_note: String?
+    let decided_at: String?
+    let created_at: String?
+    let member: MemberMini?
+
+    struct MemberMini: Codable {
+        let id: String?
+        let name: String?
+        let short_name: String?
+        let avatar_initial: String?
+        let avatar_color: String?
+        let avatar_url: String?
+
+        var asTeamMember: TeamMember {
+            TeamMember(id: id ?? "", name: name, short_name: short_name, is_director: nil,
+                       avatar_initial: avatar_initial, avatar_color: avatar_color, avatar_url: avatar_url)
+        }
+    }
+}
+
+struct PayrollRow: Codable, Identifiable {
+    let id: String
+    let entry_type: String?
+    let amount: Double?
+    let entry_date: String?
+    let note: String?
+    let file_url: String?
+}
+
+/// ناتج leave_balance — سنة الخدمة الجارية
+struct LeaveBalance: Codable {
+    let join_date: String?
+    let missing_join_date: Bool?
+    let not_started: Bool?
+    let years_of_service: Int?
+    let service_year_start: String?
+    let service_year_end: String?
+    let entitlement: Int?
+    let used: Int?
+    let pending: Int?
+    let remaining: Int?
+    let senior_after_years: Int?
+}
+
+struct MyProfile: Codable {
+    let id: String
+    let name: String?
+    let role: String?
+    let email: String?
+    let phone: String?
+    let join_date: String?
+    let national_address: String?
+    let bank_name: String?
+    let bank_iban: String?
+    let qualifications: String?
+    let emergency_contact_name: String?
+    let emergency_contact_phone: String?
+    let emergency_contact_relation: String?
+}

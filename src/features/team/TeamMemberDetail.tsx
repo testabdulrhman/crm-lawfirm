@@ -74,6 +74,8 @@ import {
   signedAmount,
 } from './payrollLabels'
 import { TeamMemberForm } from './TeamMemberForm'
+import { MyDetailsDialog } from './MyDetailsDialog'
+import { LeaveBalanceCard } from '@/features/hr/LeaveBalanceCard'
 import type { PayrollEntry } from '@/types/db'
 
 // اسم الشهر بالعربية + السنة بأرقام لاتينية (وفق نمط النظام)
@@ -240,6 +242,7 @@ export function TeamMemberDetail({ id }: { id: string }) {
                   تعديل
                 </Button>
               )}
+              {isSelf && !isDirector && <MyDetailsDialog member={member} />}
             </div>
           </div>
 
@@ -272,6 +275,8 @@ export function TeamMemberDetail({ id }: { id: string }) {
           </div>
         </CardContent>
       </Card>
+
+      <LeaveBalanceCard memberId={member.id} isSelf={isSelf} />
 
       {/* السجل المالي */}
       <Card>

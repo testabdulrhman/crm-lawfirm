@@ -76,10 +76,8 @@ struct AppointmentSheet: View {
                         }
                     }
                     TextField("الاسم", text: $clientName)
-                    TextField("الجوال", text: $clientPhone)
-                        .keyboardType(.phonePad)
-                        .environment(\.layoutDirection, .leftToRight)
-                        .multilineTextAlignment(.trailing)
+                    // لوحة الأرقام لا ترسم المكتوب في تطبيق عربي الاتجاه — LTRNumberField يعالجها
+                    LTRNumberField(placeholder: "الجوال", text: $clientPhone)
                 }
 
                 Section("الموعد") {
