@@ -37,3 +37,19 @@ node ios-native/tools/submit.mjs 1.0.7 9 "نص ما الجديد"
 `submit.mjs` ينفّذ الدورة كاملة: انتظار `processingState=VALID` → إقرار التشفير
 (`usesNonExemptEncryption:false` — بدونه يفشل ربط الإرسال) → إنشاء النسخة →
 «ما الجديد» لكل توطين → ربط البناء → إرسال المراجعة.
+
+## حين يتعطّل مرفوع Xcode (2026-09-13)
+
+إن فشل `-exportArchive` بـ«No Accounts with App Store Connect Access» (‎-1202
+lookupGenericSettingsForSubmission) مع أن المفتاح يعمل مع الواجهة وصفحة حالة أبل خالية —
+و`altool` معطوب في Xcode 26 («Defaults.properties couldn't be opened») — صدّر IPA محلياً
+ثم ارفعه عبر Build Upload API مباشرة:
+
+```bash
+# destination=export بدل upload (بقية الخطة مثل ExportUpload.plist)
+xcodebuild -exportArchive -archivePath <archive> -exportOptionsPlist <ExportIPA.plist> -exportPath <dir> ...
+node ios-native/tools/upload.mjs <dir>/Redwan.ipa 1.0.15 18
+node ios-native/tools/submit.mjs 1.0.15 18 "نص ما الجديد"
+```
+
+⚠️ تحقق دائماً بعد submit أن البناء المرفق هو الجديد: `appStoreVersions/<id>?include=build`.
