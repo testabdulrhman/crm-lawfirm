@@ -60,6 +60,9 @@ struct DiscussionsView: View {
     @State private var search = ""
     @State private var showNewDiscussion = false
     @State private var pickedMatter: MatterLite?
+    /// نقاش مُسمّى جديد (للمدير) — يُفتح بعد انغلاق الورقة لا أثناءه
+    @State private var showNewChannel = false
+    @State private var createdChannel: MatterLite?
     @ObservedObject private var router = PushRouter.shared
 
     /// العامة مثبّتة أولاً دائماً — ثم البقية بالأحدث (ترتيب الدالة)
@@ -98,7 +101,8 @@ struct DiscussionsView: View {
                             CaseStreamView(
                                 caseId: row.case_id,
                                 title: row.case_title ?? (row.isGeneral ? "عام — المكتب" : "قضية"),
-                                matter: MatterDoor(caseId: row.case_id, officeNum: row.office_num, kind: row.kind)
+                                matter: MatterDoor(caseId: row.case_id, officeNum: row.office_num, kind: row.kind),
+                                isChannel: row.kind == "channel"
                             )
                         } label: {
                             DiscussionRowView(row: row)
@@ -117,11 +121,28 @@ struct DiscussionsView: View {
             .toolbar {
                 // نقاش جديد لملفٍ لم يبدأ نقاشه بعد (طلب المستخدم 2026-08-22)
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showNewDiscussion = true
-                    } label: {
-                        Image(systemName: "square.and.pencil")
-                            .foregroundStyle(Theme.goldDark)
+                    // المدير: نقاش باسم وأعضاء، أو نقاش على ملف (طلبه 2026-09-13).
+                    // غيره يبقى على نقاش الملف وحده — إدارة الأعضاء للمدير في القاعدة
+                    if sb.member?.is_director == true {
+                        Menu {
+                            Button { showNewChannel = true } label: {
+                                Label("نقاش جديد باسم وأعضاء", systemImage: "bubble.left.and.bubble.right")
+                            }
+                            Button { showNewDiscussion = true } label: {
+                                Label("نقاش على ملف", systemImage: "folder")
+                            }
+                        } label: {
+                            Image(systemName: "square.and.pencil")
+                                .foregroundStyle(Theme.goldDark)
+                        }
+                        .accessibilityLabel("نقاش جديد")
+                    } else {
+                        Button {
+                            showNewDiscussion = true
+                        } label: {
+                            Image(systemName: "square.and.pencil")
+                                .foregroundStyle(Theme.goldDark)
+                        }
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
@@ -131,6 +152,15 @@ struct DiscussionsView: View {
                         Image(systemName: "bookmark")
                             .foregroundStyle(Theme.goldDark)
                     }
+                }
+            }
+            .sheet(isPresented: $showNewChannel, onDismiss: {
+                // الانتقال بعد انغلاق الورقة: الدفع أثناء حركة الإغلاق يضيع بصمت
+                if let c = createdChannel { createdChannel = nil; pickedMatter = c }
+                Task { await load() }
+            }) {
+                NewChannelSheet { id, title in
+                    createdChannel = MatterLite(id: id, title: title, office_num: nil, kind: "channel")
                 }
             }
             .sheet(isPresented: $showNewDiscussion) {
@@ -143,7 +173,8 @@ struct DiscussionsView: View {
                 CaseStreamView(
                     caseId: m.id,
                     title: m.title ?? m.office_num ?? "ملف",
-                    matter: MatterDoor(caseId: m.id, officeNum: m.office_num, kind: m.kind)
+                    matter: MatterDoor(caseId: m.id, officeNum: m.office_num, kind: m.kind),
+                    isChannel: m.kind == "channel"
                 )
             }
         }

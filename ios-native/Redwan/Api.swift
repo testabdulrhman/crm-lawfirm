@@ -262,9 +262,46 @@ extension SB {
         try await patch("appointments", query: [("id", "eq.\(id)")], values: ["gcal_event_id": eventId])
     }
 
+    // ===== النقاشات المُسمّاة (قنوات بعضوية) =====
+
+    /// ذرّي في القاعدة: الصف + الأعضاء + رسالة «أنشأ… وأضاف…» — وللمدير فقط.
+    /// ⚠️ لا JSONDecoder: الدالة تُرجع uuid نصاً مجرّداً، فيُقرأ كما هو
+    func createChannel(title: String, memberIds: [String]) async throws -> String {
+        let body = try JSONSerialization.data(withJSONObject: ["p_title": title, "p_member_ids": memberIds])
+        let data = try await raw(path: "rest/v1/rpc/create_channel", method: "POST", query: [], body: body)
+        let id = String(decoding: data, as: UTF8.self)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "\" \n"))
+        guard !id.isEmpty else { throw SBError(message: "تعذّر إنشاء النقاش") }
+        return id
+    }
+
+    func channelMemberIds(_ channelId: String) async throws -> Set<String> {
+        struct R: Codable { let member_id: String }
+        let rows: [R] = try await get("channel_members", query: [
+            ("select", "member_id"), ("channel_id", "eq.\(channelId)")])
+        return Set(rows.map(\.member_id))
+    }
+
+    /// الإضافة تُشعر العضو من القاعدة (ترقر channel_member_added_notify)
+    func addChannelMember(_ channelId: String, memberId: String) async throws {
+        var v: [String: Any] = ["channel_id": channelId, "member_id": memberId]
+        if let me = member?.id { v["added_by"] = me }
+        try await insertVoid("channel_members", values: v)
+    }
+
+    func removeChannelMember(_ channelId: String, memberId: String) async throws {
+        try await delete("channel_members", query: [
+            ("channel_id", "eq.\(channelId)"), ("member_id", "eq.\(memberId)")])
+    }
+
+    func renameChannel(_ channelId: String, title: String) async throws {
+        try await patch("cases", query: [("id", "eq.\(channelId)"), ("kind", "eq.channel")],
+                        values: ["title": title])
+    }
+
     func staff() async throws -> [TeamMember] {
         try await get("team_members", query: [
-            ("select", "id,name,short_name,is_director,avatar_initial,avatar_color,avatar_url"),
+            ("select", "id,name,short_name,is_director,is_reviewer,avatar_initial,avatar_color,avatar_url"),
             ("is_active", "not.is.false"),
             ("order", "name.asc"),
         ])

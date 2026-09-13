@@ -10,6 +10,7 @@ import {
   MessagesSquare,
   Paperclip,
   Pencil,
+  Plus,
   Search,
   Send,
   Sparkles,
@@ -58,6 +59,8 @@ import {
   useThread,
   useToggleBookmark,
   useToggleChannelMember,
+  useCreateChannel,
+  useRenameChannel,
   useToggleReaction,
   type DiscussionRow,
   type Reaction,
@@ -66,6 +69,7 @@ import {
 } from '@/hooks/useDiscussions'
 import { useIsDirector } from '@/hooks/useIsDirector'
 import { Switch } from '@/components/ui/switch'
+import { Label } from '@/components/ui/label'
 
 // «النقاشات» في الويب — نفس بنية التطبيق (مجرى بخيوط + ذكاء + قناة عامة)
 // بأسلوب سلاك المكتبي: ثلاث لوحات — القنوات، المجرى، والخيط المفتوح.
@@ -305,6 +309,8 @@ export function DiscussionsPage() {
   const [selected, setSelected] = useState<string | null | undefined>(undefined)
   const [openThreadRoot, setOpenThreadRoot] = useState<StreamMsg | null>(null)
   const [showBookmarks, setShowBookmarks] = useState(false)
+  const [showNewChannel, setShowNewChannel] = useState(false)
+  const isDirector = useIsDirector()
 
   const { data: channels, isLoading, error, refetch } = useDiscussions()
   const markRead = useMarkRead()
@@ -366,6 +372,7 @@ export function DiscussionsPage() {
           selected={selected}
           onSelect={setSelected}
           onBookmarks={() => setShowBookmarks(true)}
+          onNewChannel={isDirector ? () => setShowNewChannel(true) : undefined}
         />
 
         {selected === undefined ? (
@@ -409,6 +416,15 @@ export function DiscussionsPage() {
           setSelected(caseId)
         }}
       />
+
+      <NewChannelDialog
+        open={showNewChannel}
+        onOpenChange={setShowNewChannel}
+        onCreated={(id) => {
+          setShowNewChannel(false)
+          setSelected(id)
+        }}
+      />
     </div>
   )
 }
@@ -423,6 +439,7 @@ function ChannelList({
   selected,
   onSelect,
   onBookmarks,
+  onNewChannel,
 }: {
   channels: DiscussionRow[]
   loading: boolean
@@ -431,6 +448,8 @@ function ChannelList({
   selected: string | null | undefined
   onSelect: (id: string | null) => void
   onBookmarks: () => void
+  /** للمدير فقط — غيابه يخفي الزرّ */
+  onNewChannel?: () => void
 }) {
   const [q, setQ] = useState('')
 
@@ -453,6 +472,16 @@ function ChannelList({
     <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-border/70 bg-card">
       <div className="flex items-center gap-2 border-b border-border/60 p-3">
         <h2 className="flex-1 text-[15px] font-bold text-foreground">النقاشات</h2>
+        {onNewChannel && (
+          <button
+            type="button"
+            title="نقاش جديد باسم وأعضاء"
+            onClick={onNewChannel}
+            className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-gold"
+          >
+            <Plus className="h-4 w-4" />
+          </button>
+        )}
         <button
           type="button"
           title="محفوظاتي"
@@ -694,6 +723,7 @@ function StreamPane({
       {kind === 'channel' && caseId && (
         <ChannelMembersDialog
           channelId={caseId}
+          title={title}
           open={membersOpen}
           onOpenChange={setMembersOpen}
         />
@@ -1270,16 +1300,23 @@ function Composer({
 /** إدارة أعضاء قناة خاصة — للمدير: مفاتيح تشغيل لكل موظف */
 function ChannelMembersDialog({
   channelId,
+  title,
   open,
   onOpenChange,
 }: {
   channelId: string
+  title: string
   open: boolean
   onOpenChange: (v: boolean) => void
 }) {
   const { data: team } = useTeamMembers()
   const { data: members, isLoading } = useChannelMembers(channelId)
   const toggle = useToggleChannelMember(channelId)
+  const rename = useRenameChannel(channelId)
+  const [name, setName] = useState(title)
+  useEffect(() => {
+    if (open) setName(title)
+  }, [open, title])
   const memberIds = new Set((members ?? []).map((m) => m.member_id))
 
   // حسابات المراجعة والموقوفون لا يُعرضون
@@ -1291,8 +1328,31 @@ function ChannelMembersDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle>أعضاء القناة</DialogTitle>
+          <DialogTitle>إدارة النقاش</DialogTitle>
         </DialogHeader>
+        <div className="space-y-1.5">
+          <Label htmlFor="channel-rename">اسم النقاش</Label>
+          <div className="flex gap-2">
+            <Input
+              id="channel-rename"
+              value={name}
+              maxLength={80}
+              onChange={(e) => setName(e.target.value)}
+              className="h-9"
+            />
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-9 shrink-0"
+              disabled={!name.trim() || name.trim() === title || rename.isPending}
+              onClick={() => rename.mutate(name.trim())}
+            >
+              {rename.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              حفظ الاسم
+            </Button>
+          </div>
+        </div>
+        <Label>الأعضاء</Label>
         {isLoading ? (
           <div className="space-y-2">
             {Array.from({ length: 4 }).map((_, i) => (
@@ -1327,8 +1387,136 @@ function ChannelMembersDialog({
           </div>
         )}
         <p className="text-xs text-muted-foreground">
-          العضو يرى القناة ورسائلها وملفاتها — ومن يُزال تختفي عنه فوراً.
+          العضو يرى النقاش ورسائله وملفاته ويصله إشعار عند إضافته — ومن يُزال يختفي عنه فوراً.
         </p>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+/** نقاش جديد مُسمّى بأعضاء — للمدير (القاعدة تفرض ذلك أيضاً) */
+function NewChannelDialog({
+  open,
+  onOpenChange,
+  onCreated,
+}: {
+  open: boolean
+  onOpenChange: (v: boolean) => void
+  onCreated: (id: string) => void
+}) {
+  const { teamMember } = useAuth()
+  const { data: team } = useTeamMembers()
+  const create = useCreateChannel()
+  const [title, setTitle] = useState('')
+  const [picked, setPicked] = useState<Set<string>>(() => new Set())
+  const [q, setQ] = useState('')
+
+  useEffect(() => {
+    if (!open) {
+      setTitle('')
+      setPicked(new Set())
+      setQ('')
+    }
+  }, [open])
+
+  // حساب المراجعة والموقوفون لا يُضافون، والمنشئ عضو دائماً فلا يُعرض
+  const eligible = (team ?? []).filter(
+    (t) => !t.is_reviewer && t.is_active !== false && t.id !== teamMember?.id
+  )
+  const needle = arNorm(q.trim())
+  const shown = needle
+    ? eligible.filter(
+        (t) => arNorm(t.name ?? '').includes(needle) || arNorm(t.short_name ?? '').includes(needle)
+      )
+    : eligible
+  const trimmed = title.trim()
+
+  const toggle = (id: string) =>
+    setPicked((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+
+  const submit = () => {
+    if (!trimmed || create.isPending) return
+    create.mutate({ title: trimmed, memberIds: [...picked] }, { onSuccess: (id) => onCreated(id) })
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>نقاش جديد</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="channel-title">اسم النقاش</Label>
+            <Input
+              id="channel-title"
+              autoFocus
+              value={title}
+              maxLength={80}
+              onChange={(e) => setTitle(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') submit()
+              }}
+              placeholder="مثال: قضايا الإفلاس — متابعة أسبوعية"
+            />
+            <p className="text-xs text-muted-foreground">يراه أعضاؤه وأنت فقط، ولا يُربط بملف.</p>
+          </div>
+
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <Label>الأعضاء</Label>
+              {picked.size > 0 && (
+                <span className="text-xs font-medium text-gold-600 dark:text-gold-300">
+                  {fmtNumber(picked.size)} مختار
+                </span>
+              )}
+            </div>
+            <div className="relative">
+              <Search className="absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="ابحث عن زميل…"
+                className="h-8 pr-8 text-sm"
+              />
+            </div>
+            <div className="max-h-64 space-y-0.5 overflow-y-auto rounded-lg border border-border/60 p-1">
+              {shown.length === 0 ? (
+                <p className="py-4 text-center text-xs text-muted-foreground">
+                  {eligible.length === 0 ? 'لا زملاء لإضافتهم' : 'لا أحد بهذا الاسم'}
+                </p>
+              ) : (
+                shown.map((t) => (
+                  <label
+                    key={t.id}
+                    className="flex cursor-pointer items-center justify-between gap-3 rounded-md px-2 py-1.5 hover:bg-muted/60"
+                  >
+                    <span className="text-sm text-foreground">
+                      {t.name}
+                      {t.is_director && <span className="mr-1.5 text-xs text-gold">مدير</span>}
+                    </span>
+                    <Switch checked={picked.has(t.id)} onCheckedChange={() => toggle(t.id)} />
+                  </label>
+                ))
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">يصل كلَّ من تضيفه إشعارٌ بأنك أضفته.</p>
+          </div>
+        </div>
+        <DialogFooter className="gap-2">
+          <Button variant="gold" disabled={!trimmed || create.isPending} onClick={submit}>
+            {create.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+            إنشاء النقاش
+          </Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            إلغاء
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )

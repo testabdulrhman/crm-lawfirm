@@ -169,6 +169,8 @@ struct CaseStreamView: View {
     var matter: MatterDoor? = nil
     /// فُتح من ملف المشروع نفسه (زر الفقاعات في CaseDetailView)؟ زر الرجوع هو الطريق إليه فلا نكرّره.
     var fromMatter: Bool = false
+    /// نقاش مُسمّى (قناة بعضوية)؟ يُظهر للمدير زرّ إدارة الأعضاء والاسم
+    var isChannel: Bool = false
 
     @EnvironmentObject private var sb: SB
     @State private var msgs: [StreamMsg] = []
@@ -194,6 +196,12 @@ struct CaseStreamView: View {
     /// باب الملف المستنتج من القاعدة حين لم يمرّره المنادي
     @State private var resolvedDoor: MatterDoor?
     private var door: MatterDoor? { matter ?? resolvedDoor }
+
+    /// نوع الخيط من القاعدة حين لم يمرّره المنادي (فتحٌ من إشعار قبل تحميل القائمة)
+    @State private var resolvedKind: String?
+    @State private var showChannelAdmin = false
+    @State private var renamedTitle: String?
+    private var channelThread: Bool { isChannel || resolvedKind == "channel" }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -239,7 +247,7 @@ struct CaseStreamView: View {
             composer
         }
         .background(Theme.ivory.ignoresSafeArea())
-        .navigationTitle(title)
+        .navigationTitle(renamedTitle ?? title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             // رقاقة الملف — في الخانة الطرفية نفسها التي تشغلها الكاميرا/التصفية في
@@ -249,6 +257,16 @@ struct CaseStreamView: View {
                     MatterFileChip(door: door)
                 }
             }
+            // النقاش المُسمّى: أعضاؤه واسمه — للمدير (القاعدة تفرض ذلك أيضاً)
+            if channelThread, sb.member?.is_director == true, caseId != nil {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { showChannelAdmin = true } label: {
+                        Image(systemName: "person.2.fill")
+                            .foregroundStyle(Theme.goldDark)
+                    }
+                    .accessibilityLabel("أعضاء النقاش")
+                }
+            }
         }
         .task {
             // النوع يُجلب بالتوازي مع الرسائل فتظهر الرقاقة معها لا بعدها
@@ -256,7 +274,9 @@ struct CaseStreamView: View {
             await load()
             try? await sb.markRead(caseId: caseId)
             staff = (try? await sb.staff()) ?? []
-            resolvedDoor = await fallback
+            let fb = await fallback
+            resolvedDoor = fb.door
+            resolvedKind = fb.kind
         }
         .sheet(item: $editing) { m in
             EditMessageSheet(draft: $editDraft) { newBody in
@@ -264,6 +284,13 @@ struct CaseStreamView: View {
                     try? await sb.editMessage(id: m.id, body: newBody)
                     editing = nil
                     await load()
+                }
+            }
+        }
+        .sheet(isPresented: $showChannelAdmin) {
+            if let caseId {
+                ChannelMembersSheet(channelId: caseId, currentTitle: renamedTitle ?? title) {
+                    renamedTitle = $0
                 }
             }
         }
@@ -371,10 +398,10 @@ struct CaseStreamView: View {
     }
 
     /// تعذُّر الجلب (بلا صلاحية أو انقطاع) = لا رقاقة، بصمت — فشل مغلق
-    private func resolveDoor() async -> MatterDoor? {
-        guard matter == nil, !fromMatter, let caseId else { return nil }
+    private func resolveDoor() async -> (door: MatterDoor?, kind: String?) {
+        guard matter == nil, !fromMatter, let caseId else { return (nil, nil) }
         let m = try? await sb.matter(id: caseId)
-        return MatterDoor(caseId: caseId, officeNum: m?.office_num, kind: m?.kind)
+        return (MatterDoor(caseId: caseId, officeNum: m?.office_num, kind: m?.kind), m?.kind)
     }
 
     private func send() {

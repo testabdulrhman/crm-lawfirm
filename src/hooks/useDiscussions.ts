@@ -468,3 +468,47 @@ export function useToggleChannelMember(channelId: string | null) {
       }),
   })
 }
+
+/**
+ * نقاش جديد مُسمّى بأعضاء (طلب المدير 2026-09-13) — ذرّي في القاعدة: الصف + الأعضاء
+ * + رسالة «أنشأ… وأضاف…» التي تُظهره في القائمة فوراً. للمدير فقط، والإشعار
+ * لكل مضاف يصدر من القاعدة (ترقر channel_member_added_notify).
+ */
+export function useCreateChannel() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: { title: string; memberIds: string[] }): Promise<string> => {
+      const { data, error } = await supabase.rpc('create_channel', {
+        p_title: input.title,
+        p_member_ids: input.memberIds,
+      })
+      if (error) throw error
+      return data as string
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['discussions'] }),
+    onError: (e) =>
+      toast({ variant: 'destructive', title: 'تعذّر إنشاء النقاش', description: errMessage(e) }),
+  })
+}
+
+/** تغيير اسم نقاش مُسمّى — للمدير (بوابة channels_update_gate) */
+export function useRenameChannel(channelId: string | null) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (title: string) => {
+      if (!channelId) return
+      const { error } = await supabase
+        .from('cases')
+        .update({ title })
+        .eq('id', channelId)
+        .eq('kind', 'channel')
+      if (error) throw error
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['discussions'] })
+      toast({ variant: 'success', title: 'تم تغيير اسم النقاش' })
+    },
+    onError: (e) =>
+      toast({ variant: 'destructive', title: 'تعذّر تغيير الاسم', description: errMessage(e) }),
+  })
+}
