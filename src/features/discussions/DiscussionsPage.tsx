@@ -49,6 +49,7 @@ import { matterHref, matterKindEmoji } from '@/lib/matterHref'
 import { fmtNumber } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { stamp, msgStamp, fullStamp } from './stamps'
+import { VoiceNotePlayer, isAudioName } from './VoiceNote'
 import { errMessage } from '@/lib/errors'
 import {
   useBookmarks,
@@ -831,9 +832,12 @@ function MessageBubble({
         {msg.body && (
           <Body text={msg.body} className="whitespace-pre-wrap text-sm text-foreground" />
         )}
-        {msg.document_name && (
-          <AttachmentChip name={msg.document_name} url={msg.document_url} />
-        )}
+        {msg.document_name &&
+          (isAudioName(msg.document_name) ? (
+            <VoiceNotePlayer name={msg.document_name} url={msg.document_url} />
+          ) : (
+            <AttachmentChip name={msg.document_name} url={msg.document_url} />
+          ))}
 
         <button
           onClick={onOpenThread}
@@ -1276,9 +1280,12 @@ function ThreadReply({
         )}
       >
         {r.body && <Body text={r.body} className="whitespace-pre-wrap text-sm text-foreground" />}
-        {r.document_name && (
-          <AttachmentChip name={r.document_name} url={r.document_url} compact />
-        )}
+        {r.document_name &&
+          (isAudioName(r.document_name) ? (
+            <VoiceNotePlayer name={r.document_name} url={r.document_url} compact />
+          ) : (
+            <AttachmentChip name={r.document_name} url={r.document_url} compact />
+          ))}
       </div>
       <ReactionChips msg={r} caseId={caseId} />
     </div>
