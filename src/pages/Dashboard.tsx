@@ -36,6 +36,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { fmtNumber, fmtDatePref, fmtTime, daysLabel, arPlural, todayISO } from '@/lib/format'
 import { Ltr } from '@/components/Ltr'
+import { WeatherBadge } from '@/components/WeatherBadge'
 import { taskPriorityBadge, taskPriorityLabel } from '@/lib/caseLabels'
 import { typeLabel as requestTypeLabel } from '@/features/requests/labels'
 import { FeedContent } from '@/features/feed/FeedPage'
@@ -166,14 +167,18 @@ export default function Dashboard() {
         </svg>
 
         <div className="relative flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0">
-            <h2 className="text-[26px] font-bold leading-snug tracking-tight">
-              {greeting}
-              {teamMember?.short_name || teamMember?.name
-                ? `، ${teamMember.short_name || teamMember.name}`
-                : ''}
-            </h2>
-            <p className="mt-1 text-sm text-white/60">{fmtDatePref(todayISO())}</p>
+          <div className="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-3">
+            <div className="min-w-0">
+              <h2 className="text-[26px] font-bold leading-snug tracking-tight">
+                {greeting}
+                {teamMember?.short_name || teamMember?.name
+                  ? `، ${teamMember.short_name || teamMember.name}`
+                  : ''}
+              </h2>
+              <p className="mt-1 text-sm text-white/60">{fmtDatePref(todayISO())}</p>
+            </div>
+            {/* طقس بريدة بجانب التحية (طلب المدير 2026-09-14) */}
+            <WeatherBadge />
           </div>
 
           <div className="flex items-center gap-2">
