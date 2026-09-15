@@ -45,9 +45,12 @@ type FormValues = z.infer<typeof schema>
 
 export function POAForm({
   poa,
+  defaults,
   onDone,
 }: {
   poa?: PowerOfAttorney | null
+  /** تعبئة أولية لوكالة جديدة — من بطاقة الملف: الملف نفسه وموكّله */
+  defaults?: { caseId?: string | null; clientId?: string | null; clientName?: string | null }
   onDone: () => void
 }) {
   const isEdit = Boolean(poa)
@@ -56,8 +59,8 @@ export function POAForm({
   const createM = useCreatePOA()
   const updateM = useUpdatePOA()
 
-  const [clientId, setClientId] = useState<string | null>(poa?.client_id ?? null)
-  const [caseId, setCaseId] = useState<string | null>(poa?.case_id ?? null)
+  const [clientId, setClientId] = useState<string | null>(poa?.client_id ?? defaults?.clientId ?? null)
+  const [caseId, setCaseId] = useState<string | null>(poa?.case_id ?? defaults?.caseId ?? null)
   const [file, setFile] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
   const pending = createM.isPending || updateM.isPending || uploading
@@ -71,7 +74,7 @@ export function POAForm({
     resolver: zodResolver(schema),
     defaultValues: {
       poa_number: poa?.poa_number ?? '',
-      client_name: poa?.client_name ?? '',
+      client_name: poa?.client_name ?? defaults?.clientName ?? '',
       agent_name: poa?.agent_name ?? '',
       poa_date: poa?.poa_date ?? '',
       expiry_date: poa?.expiry_date ?? '',
