@@ -39,7 +39,11 @@ export async function setBrowserNotifEnabled(on: boolean): Promise<boolean> {
  */
 export function showNewBrowserNotifications(
   items: AppNotification[],
-  destinationOf: (n: AppNotification) => string
+  /**
+   * يُنادى عند الضغط (null = الإشعار المجمّع). الوجهة تُحسب عند الضغط لا عند الظهور:
+   * كانت تُحسب عند الظهور، ووجهة المنشن تحمل أثراً (فتح نقاشه) فيتبدّل النقاش المفتوح بلا ضغط
+   */
+  onOpen: (n: AppNotification | null) => void
 ): void {
   if (!browserNotifEnabled()) return
 
@@ -61,15 +65,15 @@ export function showNewBrowserNotifications(
 
   // أكثر من ثلاثة: إشعار واحد مجمّع بدل قصف المستخدم
   if (fresh.length > 3) {
-    spawn('إشعارات جديدة', `لديك ${fresh.length} إشعارات جديدة`, '/')
+    spawn('إشعارات جديدة', `لديك ${fresh.length} إشعارات جديدة`, () => onOpen(null))
     return
   }
   for (const n of fresh) {
-    spawn(n.title ?? 'إشعار جديد', n.message ?? '', destinationOf(n))
+    spawn(n.title ?? 'إشعار جديد', n.message ?? '', () => onOpen(n))
   }
 }
 
-function spawn(title: string, body: string, route: string): void {
+function spawn(title: string, body: string, onClick: () => void): void {
   try {
     const notification = new Notification(title, {
       body,
@@ -79,8 +83,7 @@ function spawn(title: string, body: string, route: string): void {
     })
     notification.onclick = () => {
       window.focus()
-      // التوجيه بالهاش — نفس نمط توجيه التطبيق (wouter hash routing)
-      window.location.hash = '#' + route
+      onClick()
       notification.close()
     }
   } catch {

@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { useLocation } from 'wouter'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   Bookmark,
   BookmarkX,
@@ -52,6 +53,8 @@ import { stamp, msgStamp, fullStamp } from './stamps'
 import { VoiceNotePlayer, isAudioName } from './VoiceNote'
 import { errMessage } from '@/lib/errors'
 import {
+  findMessageAt,
+  newMessageId,
   useBookmarks,
   useChannelMembers,
   useDeleteMessage,
@@ -79,6 +82,11 @@ import {
 import { useIsDirector } from '@/hooks/useIsDirector'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
+import {
+  DISCUSSION_JUMP_EVENT,
+  takeDiscussionJump,
+  type DiscussionJump,
+} from '@/lib/discussionJump'
 
 // «النقاشات» في الويب — نفس بنية التطبيق (مجرى بخيوط + ذكاء + قناة عامة)
 // بأسلوب سلاك المكتبي: ثلاث لوحات — القنوات، المجرى، والخيط المفتوح.
@@ -308,41 +316,115 @@ export function DiscussionsPage() {
   const [showBookmarks, setShowBookmarks] = useState(false)
   const [showNewChannel, setShowNewChannel] = useState(false)
   const isDirector = useIsDirector()
+  const qc = useQueryClient()
+
+  // وجهة إشعار المنشن: الرسالة تُبرز في المجرى — وإن كانت رداً فجذرها يُبرز في المجرى
+  // ويُفتح خيطها وتُبرز فيه. كان الإشعار يختار النقاش وحده، فإن كان مفتوحاً أصلاً لم
+  // يتغير شيء وبدا الضغط كأنه لا يعمل (بلاغ المدير 2026-09-15).
+  const [jump, setJump] = useState<DiscussionJump | null>(null)
+  const [streamFocus, setStreamFocus] = useState<string | null>(null)
+  const [threadFocus, setThreadFocus] = useState<string | null>(null)
+  const [rootToOpen, setRootToOpen] = useState<string | null>(null)
+  const refetchedForRoot = useRef(false)
+  // وجهة أول فتح تُقرأ مرة واحدة (الوضع الصارم يعيد تشغيل المؤثرات عند التركيب)
+  const initialJump = useRef<DiscussionJump | null | undefined>(undefined)
 
   const { data: channels, isLoading, error, refetch } = useDiscussions()
   const markRead = useMarkRead()
 
-  // أول فتح: وجهة الإشعار إن وُجدت (منشن ← نقاشه هو)، وإلا الأحدث نشاطاً
+  /** اختيار نقاش: يغلق الخيط المفتوح ويُسقط أي وجهة معلّقة */
+  const choose = (id: string | null) => {
+    setSelected(id)
+    setOpenThreadRoot(null)
+    setJump(null)
+    setStreamFocus(null)
+    setThreadFocus(null)
+    setRootToOpen(null)
+  }
+
+  // أول فتح: وجهة الإشعار إن وُجدت (منشن ← نقاشه ورسالته)، وإلا الأحدث نشاطاً
   useEffect(() => {
     if (selected !== undefined || !channels?.length) return
-    let fromNotif: string | null = null
-    try {
-      fromNotif = sessionStorage.getItem('discussions:open-case')
-      if (fromNotif) sessionStorage.removeItem('discussions:open-case')
-    } catch {
-      /* تخزين معطّل */
-    }
-    if (fromNotif && channels.some((c) => c.case_id === fromNotif)) {
-      setSelected(fromNotif)
+    if (initialJump.current === undefined) initialJump.current = takeDiscussionJump()
+    const j = initialJump.current
+    if (j && channels.some((c) => c.case_id === j.caseId)) {
+      setSelected(j.caseId)
+      if (j.at) setJump(j)
       return
     }
     setSelected(channels[0].case_id)
   }, [channels, selected])
 
-  // الصفحة مفتوحة والجرس ضُغط؟ الحدث الحي ينقلنا بلا إعادة تركيب
+  // الصفحة مفتوحة والجرس ضُغط؟ الحدث الحي ينقلنا بلا إعادة تركيب — ولو كان النقاش نفسه مفتوحاً
   useEffect(() => {
-    const onOpen = (e: Event) => {
-      const id = (e as CustomEvent<string>).detail
-      if (id) setSelected(id)
+    const onJump = (e: Event) => {
+      const j = takeDiscussionJump() ?? (e as CustomEvent<DiscussionJump>).detail
+      if (!j) return
+      choose(j.caseId)
+      if (j.at) setJump(j)
     }
-    window.addEventListener('discussions:open-case', onOpen)
-    return () => window.removeEventListener('discussions:open-case', onOpen)
+    window.addEventListener(DISCUSSION_JUMP_EVENT, onJump)
+    return () => window.removeEventListener(DISCUSSION_JUMP_EVENT, onJump)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // وقت الإشعار ← الرسالة نفسها (ومعرّف جذرها إن كانت رداً في خيط)
+  useEffect(() => {
+    const at = jump?.at
+    if (!jump || !at) return
+    const caseId = jump.caseId
+    let alive = true
+    qc.fetchQuery({
+      queryKey: ['disc_msg_at', caseId, at],
+      queryFn: () => findMessageAt(caseId, at),
+      staleTime: Infinity,
+      retry: false,
+    })
+      .then((m) => {
+        if (!alive) return
+        setJump(null)
+        if (!m) return // حُذفت أو لم تعد مرئية — يكفي فتح نقاشها
+        if (m.parent_id) {
+          refetchedForRoot.current = false
+          setRootToOpen(m.parent_id)
+          setThreadFocus(m.id)
+          setStreamFocus(m.parent_id)
+        } else {
+          setStreamFocus(m.id)
+        }
+      })
+      .catch(() => {
+        if (alive) setJump(null)
+      })
+    return () => {
+      alive = false
+    }
+  }, [jump, qc])
+
+  // خيط الرد يُفتح بجذره من المجرى نفسه (مخزن مشترك مع لوحة المجرى — بلا جلب زائد)
+  const rootsQuery = useStream(selected ?? null, selected !== undefined && !!rootToOpen)
+  useEffect(() => {
+    if (!rootToOpen || !rootsQuery.data) return
+    const root = rootsQuery.data.find((m) => m.id === rootToOpen)
+    if (root) {
+      setOpenThreadRoot(root)
+      setRootToOpen(null)
+      return
+    }
+    if (rootsQuery.isFetching) return
+    // نسخة المجرى المحفوظة أقدم من الجذر؟ جلبة واحدة، ثم يكفي المجرى
+    if (!refetchedForRoot.current) {
+      refetchedForRoot.current = true
+      rootsQuery.refetch()
+      return
+    }
+    setRootToOpen(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rootToOpen, rootsQuery.data, rootsQuery.isFetching])
 
   useEffect(() => {
     if (selected === undefined) return
     markRead.mutate(selected)
-    setOpenThreadRoot(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected])
 
@@ -367,7 +449,7 @@ export function DiscussionsPage() {
           error={error}
           onRetry={() => refetch()}
           selected={selected}
-          onSelect={setSelected}
+          onSelect={choose}
           onBookmarks={() => setShowBookmarks(true)}
           onNewChannel={isDirector ? () => setShowNewChannel(true) : undefined}
         />
@@ -388,6 +470,8 @@ export function DiscussionsPage() {
             officeNum={current?.office_num ?? null}
             openThread={setOpenThreadRoot}
             kind={current?.kind ?? null}
+            focusId={streamFocus}
+            onFocused={() => setStreamFocus(null)}
             caseHref={
               selected && current?.kind !== 'channel'
                 ? matterHref(current?.kind ?? 'case', selected)
@@ -401,6 +485,8 @@ export function DiscussionsPage() {
             root={openThreadRoot}
             caseId={selected ?? null}
             onClose={() => setOpenThreadRoot(null)}
+            focusId={threadFocus}
+            onFocused={() => setThreadFocus(null)}
           />
         )}
       </div>
@@ -410,7 +496,7 @@ export function DiscussionsPage() {
         onOpenChange={setShowBookmarks}
         onJump={(caseId) => {
           setShowBookmarks(false)
-          setSelected(caseId)
+          choose(caseId)
         }}
       />
 
@@ -419,7 +505,7 @@ export function DiscussionsPage() {
         onOpenChange={setShowNewChannel}
         onCreated={(id) => {
           setShowNewChannel(false)
-          setSelected(id)
+          choose(id)
         }}
       />
     </div>
@@ -600,6 +686,59 @@ function ChannelList({
   )
 }
 
+/* ===================== إرسال بلا تكرار ===================== */
+
+interface PendingSend {
+  body: string
+  id?: string
+}
+
+/**
+ * معرّف الرسالة يُولَّد في المتصفح ويبقى معها إن فشل إرسالها: إعادة إرسال النص نفسه تحمل
+ * المعرّف نفسه، فإن كانت الأولى قد حُفظت وانقطع ردّها رفضتها القاعدة نسخةً مكررة
+ * (usePostMessage تعدّ ذلك نجاحاً) — لا رسالة مكررة ولا إشعار منشن مكرر.
+ */
+function sendId(pending: RefObject<PendingSend | null>, body: string): string | undefined {
+  const id = pending.current?.body === body ? pending.current.id : newMessageId()
+  pending.current = { body, id }
+  return id
+}
+
+/* ===================== إبراز رسالة (وجهة إشعار) ===================== */
+
+/**
+ * يمرّر إلى الرسالة المقصودة في وسط اللوحة ويومض إطارها ذهبياً لحظات. يُنادى onFocused
+ * بمجرد عرضها كي لا يتكرر التمرير مع كل تحديث دوري للمجرى.
+ */
+function useFocusFlash(
+  listRef: RefObject<HTMLDivElement | null>,
+  focusId: string | null,
+  items: { id: string }[] | undefined,
+  onFocused?: () => void
+): string | null {
+  const [flashId, setFlashId] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!focusId || !items?.some((m) => m.id === focusId)) return
+    requestAnimationFrame(() =>
+      listRef.current
+        ?.querySelector(`[data-msg-id="${focusId}"]`)
+        ?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    )
+    setFlashId(focusId)
+    onFocused?.()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusId, items])
+
+  useEffect(() => {
+    if (!flashId) return
+    const t = setTimeout(() => setFlashId(null), 2600)
+    return () => clearTimeout(t)
+  }, [flashId])
+
+  return flashId
+}
+
 /* ===================== لوحة المجرى ===================== */
 
 function StreamPane({
@@ -609,6 +748,8 @@ function StreamPane({
   openThread,
   caseHref = null,
   kind = null,
+  focusId = null,
+  onFocused,
 }: {
   caseId: string | null
   title: string
@@ -618,6 +759,9 @@ function StreamPane({
   caseHref?: string | null
   /** نوع المشروع — 'channel' = قناة خاصة بعضوية (لها زر أعضاء بدل فتح المشروع) */
   kind?: string | null
+  /** رسالة يُمرَّر إليها وتُبرز (وجهة إشعار) */
+  focusId?: string | null
+  onFocused?: () => void
 }) {
   const { teamMember } = useAuth()
   const isDirector = useIsDirector()
@@ -637,23 +781,31 @@ function StreamPane({
   const post = usePostMessage()
   const postFile = usePostAttachment()
   const [draft, setDraft] = useState('')
+  const pendingSend = useRef<PendingSend | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const listRef = useRef<HTMLDivElement>(null)
+  const flashId = useFocusFlash(listRef, focusId, msgs, onFocused)
 
   useEffect(() => {
+    // القادم من إشعار إلى رسالة بعينها لا يُقفز به إلى الأسفل
+    if (focusId) return
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [msgs?.length])
 
   const send = () => {
     const body = draft.trim()
     if (!body) return
+    const id = sendId(pendingSend, body)
     // تفريغ فوري + عرض متفائل في usePostMessage = إحساس الواتساب؛
     // الفشل يرجع النص للحقل كي لا يضيع
     setDraft('')
     post.mutate(
-      { caseId, body, mentions: extractMentions(body, people) },
+      { id, caseId, body, mentions: extractMentions(body, people) },
       {
         onError: () => setDraft(body),
         onSuccess: () => {
+          pendingSend.current = null
           // ردّ الذكاء يصل بعد ثوانٍ عبر الخادم
           setTimeout(() => refetch(), 6000)
           setTimeout(() => refetch(), 14000)
@@ -735,7 +887,7 @@ function StreamPane({
         />
       )}
 
-      <div className="flex-1 space-y-3 overflow-y-auto p-4">
+      <div ref={listRef} className="flex-1 space-y-3 overflow-y-auto p-4">
         {error ? (
           <QueryErrorState error={error} onRetry={() => refetch()} />
         ) : isLoading ? (
@@ -757,6 +909,7 @@ function StreamPane({
               mine={m.author_id === teamMember?.id}
               onOpenThread={() => openThread(m)}
               receipt={readCounts?.[m.id]}
+              flash={m.id === flashId}
             />
           ))
         )}
@@ -784,6 +937,7 @@ function MessageBubble({
   mine,
   onOpenThread,
   receipt,
+  flash = false,
 }: {
   msg: StreamMsg
   caseId: string | null
@@ -791,6 +945,8 @@ function MessageBubble({
   onOpenThread: () => void
   /** إيصال القراءة لرسالتي */
   receipt?: ReadCount
+  /** وميض الوصول إليها من إشعار */
+  flash?: boolean
 }) {
   const [receiptsOpen, setReceiptsOpen] = useState(false)
   const isAI = msg.kind === 'ai'
@@ -805,7 +961,7 @@ function MessageBubble({
   }
 
   return (
-    <div className="group">
+    <div className="group" data-msg-id={msg.id}>
       <div className="mb-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
         {isAI && <Sparkles className="h-3 w-3 text-gold" />}
         <span className={cn('font-medium', isAI && 'text-gold-600 dark:text-gold-300')}>
@@ -821,7 +977,8 @@ function MessageBubble({
 
       <div
         className={cn(
-          'rounded-2xl border p-3',
+          'rounded-2xl border p-3 transition-shadow duration-700',
+          flash && 'ring-2 ring-gold ring-offset-2 ring-offset-card',
           mine
             ? 'border-transparent bg-gold/15'
             : isAI
@@ -1145,10 +1302,15 @@ function ThreadPane({
   root,
   caseId,
   onClose,
+  focusId = null,
+  onFocused,
 }: {
   root: StreamMsg
   caseId: string | null
   onClose: () => void
+  /** ردّ يُمرَّر إليه ويُبرز (وجهة إشعار) */
+  focusId?: string | null
+  onFocused?: () => void
 }) {
   const { teamMember } = useAuth()
   const people = useMentionables(!!caseId)
@@ -1156,18 +1318,23 @@ function ThreadPane({
   const post = usePostMessage()
   const [draft, setDraft] = useState('')
   const [alsoToStream, setAlsoToStream] = useState(false)
+  const pendingSend = useRef<PendingSend | null>(null)
+  const listRef = useRef<HTMLDivElement>(null)
+  const flashId = useFocusFlash(listRef, focusId, replies, onFocused)
 
   const send = () => {
     const body = draft.trim()
     if (!body) return
+    const id = sendId(pendingSend, body)
     // تفريغ فوري + عرض متفائل — نفس نمط المجرى
     setDraft('')
     setAlsoToStream(false)
     post.mutate(
-      { caseId, body, parentId: root.id, alsoToStream, mentions: extractMentions(body, people) },
+      { id, caseId, body, parentId: root.id, alsoToStream, mentions: extractMentions(body, people) },
       {
         onError: () => setDraft(body),
         onSuccess: () => {
+          pendingSend.current = null
           setTimeout(() => refetch(), 6000)
         },
       }
@@ -1186,7 +1353,7 @@ function ThreadPane({
         </button>
       </div>
 
-      <div className="flex-1 space-y-3 overflow-y-auto p-3">
+      <div ref={listRef} className="flex-1 space-y-3 overflow-y-auto p-3">
         {/* السؤال الأصل */}
         <div className="rounded-xl border-r-[3px] border-gold bg-background/60 p-3">
           <p className="mb-1 text-[11px] text-muted-foreground">
@@ -1208,7 +1375,13 @@ function ThreadPane({
         ) : (
           <div className="space-y-2 border-r border-border/50 pr-2">
             {replies.map((r) => (
-              <ThreadReply key={r.id} r={r} caseId={caseId} mine={r.author_id === teamMember?.id} />
+              <ThreadReply
+                key={r.id}
+                r={r}
+                caseId={caseId}
+                mine={r.author_id === teamMember?.id}
+                flash={r.id === flashId}
+              />
             ))}
           </div>
         )}
@@ -1245,10 +1418,13 @@ function ThreadReply({
   r,
   caseId,
   mine,
+  flash = false,
 }: {
   r: ThreadMsg
   caseId: string | null
   mine: boolean
+  /** وميض الوصول إليه من إشعار */
+  flash?: boolean
 }) {
   const isAI = r.kind === 'ai'
   if (r.kind === 'system') {
@@ -1259,7 +1435,7 @@ function ThreadReply({
     )
   }
   return (
-    <div className="group">
+    <div className="group" data-msg-id={r.id}>
       <p className="mb-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
         {isAI && <Sparkles className="h-3 w-3 text-gold" />}
         <span className={cn('font-medium', isAI && 'text-gold-600 dark:text-gold-300')}>
@@ -1271,7 +1447,8 @@ function ThreadReply({
       </p>
       <div
         className={cn(
-          'rounded-xl border p-2.5',
+          'rounded-xl border p-2.5 transition-shadow duration-700',
+          flash && 'ring-2 ring-gold ring-offset-2 ring-offset-card',
           mine
             ? 'border-transparent bg-gold/15'
             : isAI

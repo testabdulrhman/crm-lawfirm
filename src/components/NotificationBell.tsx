@@ -31,6 +31,7 @@ import {
   setBrowserNotifEnabled,
   showNewBrowserNotifications,
 } from '@/lib/browserNotify'
+import { requestDiscussionJump } from '@/lib/discussionJump'
 import {
   useNotifications,
   useUnreadCount,
@@ -55,25 +56,12 @@ const ICONS: Record<string, LucideIcon> = {
   case_shared: Users,
 }
 
+/** مسار وجهة الإشعار — بلا آثار جانبية */
 function destination(n: AppNotification): string {
   // إشعار مرتبط بمهمة يفتح غرفتها مباشرة — أدق من صفحة القضية
   if (n.task_id) return `/tasks/${n.task_id}`
-  // منشن في نقاش: إلى النقاشات نفسها (العامة إن بلا ملف)
-  if (n.type === 'mention') {
-    // منشن في قضية؟ افتح نقاشها هي لا القائمة (جسر التخزين + حدث حي
-    // إن كانت الصفحة مفتوحة أصلاً فلا يعاد تركيبها)
-    if (n.case_id) {
-      try {
-        sessionStorage.setItem('discussions:open-case', n.case_id)
-        window.dispatchEvent(
-          new CustomEvent('discussions:open-case', { detail: n.case_id })
-        )
-      } catch {
-        /* تخزين معطّل */
-      }
-    }
-    return '/discussions'
-  }
+  // منشن في نقاش: صفحة النقاشات، والرسالة نفسها يحملها جسر النقاشات عند الفتح
+  if (n.type === 'mention') return '/discussions'
   if (n.case_id) return `/cases/${n.case_id}`
   // طلبات الإجازة والاستئذان — صفحتها لا مهمة ولا ملف
   if (n.type === 'hr_request' || n.type === 'hr_result') return '/hr'
@@ -105,13 +93,30 @@ export function NotificationBell() {
   const { data: unread } = useUnreadCount()
   const markM = useMarkRead()
   const [browserNotifs, setBrowserNotifs] = useState(browserNotifEnabled)
+  // القائمة تُغلق عند الضغط على إشعار — عناصرها أزرار عادية لا تغلقها وحدها
+  const [open, setOpen] = useState(false)
 
   const count = unread ?? 0
   const list = items ?? []
 
-  // إشعار نظام من المتصفح لكل جديد — يظهر والتبويب في الخلفية فقط
+  /**
+   * فتح إشعار من الجرس أو من إشعار المتصفح. المنشن يحمل معه رسالته فتفتح الصفحة
+   * نقاشها وخيطها وتُبرزها — كان يكتفي باختيار النقاش، فإن كان مفتوحاً أصلاً
+   * لم يتغير شيء وبدا الضغط كأنه لا يعمل (بلاغ المدير 2026-09-15).
+   */
+  const openNotification = (n: AppNotification) => {
+    if (!n.is_read) markM.mutate(n.id)
+    if (n.type === 'mention' && !n.task_id) {
+      requestDiscussionJump({ caseId: n.case_id, at: n.created_at })
+    }
+    navigate(destination(n))
+  }
+
+  // إشعار نظام من المتصفح لكل جديد — يظهر والتبويب في الخلفية فقط، ووجهته تُحسب عند الضغط
   useEffect(() => {
-    if (items?.length) showNewBrowserNotifications(items, destination)
+    if (items?.length)
+      showNewBrowserNotifications(items, (n) => (n ? openNotification(n) : navigate('/')))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items])
 
   const toggleBrowserNotifs = async (on: boolean) => {
@@ -128,7 +133,7 @@ export function NotificationBell() {
   }
 
   return (
-    <DropdownMenu dir="rtl">
+    <DropdownMenu dir="rtl" open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
         <button
           aria-label={`الإشعارات${count > 0 ? ` (${count} غير مقروء)` : ''}`}
@@ -188,8 +193,8 @@ export function NotificationBell() {
                 <button
                   key={n.id}
                   onClick={() => {
-                    if (unreadItem) markM.mutate(n.id)
-                    navigate(destination(n))
+                    setOpen(false)
+                    openNotification(n)
                   }}
                   className={cn(
                     'flex w-full items-start gap-2.5 border-b px-3 py-2.5 text-right transition-colors last:border-b-0 hover:bg-accent/10',

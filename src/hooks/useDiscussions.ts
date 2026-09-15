@@ -138,6 +138,30 @@ export function useThread(rootId: string | null) {
   })
 }
 
+/**
+ * الرسالة التي كُتب لها إشعار منشن. الإشعار يُدرج بمشغّل (notify_mentions) داخل معاملة
+ * الرسالة نفسها، فوقته = created_at الرسالة حرفياً. null إن حُذفت أو لم تعد مرئية.
+ */
+export async function findMessageAt(
+  caseId: string | null,
+  at: string
+): Promise<{ id: string; parent_id: string | null } | null> {
+  const base = supabase
+    .from('case_comments')
+    .select('id, parent_id')
+    .eq('created_at', at)
+    .is('deleted_at', null)
+  const { data, error } = await (caseId ? base.eq('case_id', caseId) : base.is('case_id', null)).limit(1)
+  if (error) throw error
+  return (data?.[0] as { id: string; parent_id: string | null } | undefined) ?? null
+}
+
+/** معرّف رسالة من المتصفح — وفي سياق غير آمن (بلا crypto.randomUUID) تولّده القاعدة */
+export const newMessageId = (): string | undefined =>
+  typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : undefined
+
 export function useBookmarks(enabled: boolean) {
   return useQuery({
     queryKey: ['disc_bookmarks'],
@@ -176,6 +200,11 @@ export function usePostMessage() {
   const { teamMember } = useAuth()
   return useMutation({
     mutationFn: async (input: {
+      /**
+       * معرّف يولّده المُرسل (newMessageId) ويُعاد مع إعادة إرسال النص نفسه بعد فشل —
+       * فإن كانت المحاولة الأولى قد حُفظت وانقطع ردّها لا تتكرر الرسالة ولا إشعارها
+       */
+      id?: string
       caseId: string | null
       body?: string | null
       documentId?: string | null
@@ -192,12 +221,22 @@ export function usePostMessage() {
       if (input.body) values.body = input.body
       if (input.mentions?.length) values.mentions = input.mentions
       if (input.documentId) values.document_id = input.documentId
+      if (input.id) values.id = input.id
       if (input.parentId) {
         values.parent_id = input.parentId
         values.also_to_stream = input.alsoToStream ?? false
       }
       const { error } = await supabase.from('case_comments').insert(values)
-      if (error) throw error
+      if (error) {
+        // المعرّف موجود = المحاولة الأولى حُفظت فعلاً وانقطع ردّها: نجاح لا نسخة ثانية
+        if (
+          input.id &&
+          error.code === '23505' &&
+          (error.message ?? '').includes('case_comments_pkey')
+        )
+          return
+        throw error
+      }
     },
     // عرض متفائل: الرسالة تظهر فوراً (نمط الواتساب) والخادم يلحق بالخلفية —
     // كان الإحساس بالبطء لأنها لا تظهر إلا بعد الإدراج + إعادة الجلب كاملة

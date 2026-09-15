@@ -6,6 +6,7 @@
 import { Capacitor } from '@capacitor/core'
 
 import { supabase } from '@/lib/supabase'
+import { requestDiscussionJump } from '@/lib/discussionJump'
 
 export const isNative = () => Capacitor.isNativePlatform()
 
@@ -98,16 +99,12 @@ export async function tapFeedback(
 
 /**
  * مسار الدفع قد يحمل وجهة داخل صفحة (نقاش قضية بعينها). التوجيه الهاشي
- * لا يمرر query عبر المسارات، فنحوّلها إلى جسر sessionStorage تقرؤه الصفحة.
+ * لا يمرر query عبر المسارات، فنحوّلها إلى جسر النقاشات الذي تقرؤه الصفحة.
  */
 export function resolvePushRoute(route: string): string {
   const m = route.match(/^\/discussions\?case=([0-9a-f-]+)$/)
   if (m) {
-    try {
-      sessionStorage.setItem('discussions:open-case', m[1])
-    } catch {
-      /* تخزين معطّل — تفتح القائمة على الأحدث */
-    }
+    requestDiscussionJump({ caseId: m[1] })
     return '/discussions'
   }
   return route
