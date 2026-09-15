@@ -19,6 +19,7 @@ import {
   FolderOpen,
   Send,
   BarChart3,
+  Bug,
   LogOut,
   type LucideIcon,
 } from 'lucide-react'
@@ -46,6 +47,8 @@ interface NavItem {
   icon: LucideIcon
   /** يظهر للمتعاون الخارجي؟ الافتراضي لا — فهو لا يرى المكتب */
   collab?: true
+  /** للمدير وحده — يُخفى عن غيره */
+  director?: true
   badge?:
     | 'pending_requests'
     | 'pending_applications'
@@ -118,6 +121,8 @@ const navSections: { title?: string; items: NavItem[] }[] = [
       { label: 'الإجازات والاستئذان', href: '/hr', icon: CalendarOff, badge: 'pending_hr' },
       { label: 'التقارير', href: '/reports', icon: BarChart3 },
       { label: 'الإعدادات', href: '/settings', icon: Settings },
+      // كل خطأ ظهر لموظف (طلب المدير 2026-09-15)
+      { label: 'سجل الأخطاء', href: '/errors', icon: Bug, director: true },
     ],
   },
 ]
@@ -167,9 +172,9 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       <nav className="flex-1 space-y-4 overflow-y-auto px-3 pb-4">
         {navSections.map((section, si) => {
           // المتعاون الخارجي: البنود الموسومة collab فقط، والأقسام التي تفرغ تُسقط
-          const items = isCollaborator
-            ? section.items.filter((i) => i.collab)
-            : section.items
+          const items = (
+            isCollaborator ? section.items.filter((i) => i.collab) : section.items
+          ).filter((i) => !i.director || isDirector)
           if (items.length === 0) return null
           return (
           <div key={si}>

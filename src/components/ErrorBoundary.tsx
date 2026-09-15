@@ -1,9 +1,10 @@
 // حدّ الخطأ الأعلى — قبله كان أي استثناء عرض = شاشة بيضاء دائمة داخل
 // Capacitor على الآيفون بلا مخرج إلا قتل التطبيق (فجوة التدقيق الأخطر).
-import { Component, type ReactNode } from 'react'
+import { Component, type ErrorInfo, type ReactNode } from 'react'
 import { AlertTriangle, RotateCw } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
+import { logError } from '@/lib/errorLog'
 
 interface State {
   error: Error | null
@@ -16,9 +17,13 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, State> {
     return { error }
   }
 
-  componentDidCatch(error: Error) {
-    // تسجيل للمطوّر — لا يُعرض للمستخدم إلا الملخّص
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    // لا يُعرض للمستخدم إلا الملخّص — والتفصيل يُحفظ في سجل الأخطاء
     console.error('ErrorBoundary:', error)
+    logError('crash', error.message, {
+      source: 'ErrorBoundary',
+      stack: [error.stack, info.componentStack].filter(Boolean).join('\n'),
+    })
   }
 
   render() {

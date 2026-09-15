@@ -43,6 +43,7 @@ import { AppointmentDetail } from '@/features/appointments/AppointmentDetail'
 import { OutgoingLettersPage } from '@/features/outgoing/OutgoingLettersPage'
 import { OutgoingLetterDetail } from '@/features/outgoing/OutgoingLetterDetail'
 import { ReportsPage } from '@/features/reports/ReportsPage'
+import { ErrorLogPage } from '@/features/settings/ErrorLogPage'
 import { HrRequestsPage } from '@/features/hr/HrRequestsPage'
 
 function FullScreenLoader() {
@@ -60,7 +61,7 @@ function FullScreenLoader() {
 const COLLAB_BLOCKED = [
   '/contacts', '/inbox', '/mail', '/requests', '/staff-applications',
   '/engagements', '/poa', '/appointments', '/outgoing', '/team',
-  '/reports', '/settings', '/hr',
+  '/reports', '/settings', '/hr', '/errors',
 ]
 
 function CollaboratorGuard() {
@@ -119,6 +120,7 @@ function ProtectedRoutes() {
         </Route>
         <Route path="/outgoing" component={OutgoingLettersPage} />
         <Route path="/reports" component={ReportsPage} />
+        <Route path="/errors" component={ErrorLogPage} />
         <Route path="/hr" component={HrRequestsPage} />
         <Route path="/inbox" component={IncomingMessagesPage} />
         <Route path="/mail" component={MailPage} />
