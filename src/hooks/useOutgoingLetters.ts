@@ -62,23 +62,59 @@ function invalidate(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: ['outgoing_letters'] })
 }
 
+/** OUT-26-011 ← OUT-26-012 بعدد الخانات نفسه؛ null لرقم خارج هذا النمط */
+export function bumpLetterNumber(n: string): string | null {
+  const m = n.trim().match(/^(.*-)(\d+)$/)
+  if (!m) return null
+  return m[1] + String(parseInt(m[2], 10) + 1).padStart(m[2].length, '0')
+}
+
+const numberTaken = (e: { code?: string; message?: string }) =>
+  e.code === '23505' && (e.message ?? '').includes('letter_number')
+
 export function useCreateOutgoingLetter() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (
-      input: OutgoingLetterInput
-    ): Promise<OutgoingLetter> => {
-      const { data, error } = await supabase
-        .from('outgoing_letters')
-        .insert(input)
-        .select(SELECT)
-        .single()
-      if (error) throw error
-      return data as unknown as OutgoingLetter
+    /**
+     * الرقم المقترح يُحسب من الخطابات التي يراها الموظف، والصلاحيات تُخفي عنه خطابات
+     * ملفات لا تخصه (والمحذوفة)، بينما قيد تفرّد الرقم يشمل الكل — فكان يُقترح رقم مأخوذ
+     * ويفشل الحفظ بخطأ القاعدة (بلاغ 2026-09-15: OUT-26-011 مربوط بملف لا تراه الموظفة).
+     * المقترح يتقدّم وحده حتى يجد رقماً حراً؛ والمكتوب يدوياً يُرفض برسالة واضحة.
+     */
+    mutationFn: async ({
+      autoNumber,
+      ...input
+    }: OutgoingLetterInput & { autoNumber?: boolean }): Promise<OutgoingLetter> => {
+      let row = input
+      for (let tries = 0; tries < 30; tries++) {
+        const { data, error } = await supabase
+          .from('outgoing_letters')
+          .insert(row)
+          .select(SELECT)
+          .single()
+        if (!error) return data as unknown as OutgoingLetter
+        if (!numberTaken(error)) throw error
+        const next =
+          autoNumber && row.letter_number ? bumpLetterNumber(row.letter_number) : null
+        if (!next) {
+          throw new Error(
+            `رقم الخطاب «${row.letter_number}» مستخدم في خطاب آخر — غيّره ثم أعد الإضافة`
+          )
+        }
+        row = { ...row, letter_number: next }
+      }
+      throw new Error('تعذّر إيجاد رقم خطاب متاح — اكتب الرقم يدوياً')
     },
-    onSuccess: () => {
+    onSuccess: (letter, vars) => {
       invalidate(qc)
-      toast({ variant: 'success', title: 'تمت إضافة الخطاب' })
+      const moved = !!vars.letter_number && letter.letter_number !== vars.letter_number
+      toast({
+        variant: 'success',
+        title: 'تمت إضافة الخطاب',
+        description: moved
+          ? `برقم ${letter.letter_number} — الرقم ${vars.letter_number} مستخدم في خطاب آخر`
+          : undefined,
+      })
     },
     onError: errToast('تعذّرت إضافة الخطاب'),
   })

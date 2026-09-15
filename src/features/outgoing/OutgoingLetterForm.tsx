@@ -151,7 +151,12 @@ export function OutgoingLetterForm({
       if (isEdit && letter) {
         await updateM.mutateAsync({ id: letter.id, input })
       } else {
-        await createM.mutateAsync({ ...input, created_by: teamMember?.id ?? null })
+        await createM.mutateAsync({
+          ...input,
+          created_by: teamMember?.id ?? null,
+          // الرقم المقترح كما هو؟ إن كان مأخوذاً في خطاب لا يراه الموظف يتقدّم للتالي وحده
+          autoNumber: input.letter_number === nextNumber,
+        })
       }
     } catch {
       // الهوك أظهر توست الفشل بسببه — نمنع تسرّب الاستثناء ونُبقي النموذج مفتوحاً
