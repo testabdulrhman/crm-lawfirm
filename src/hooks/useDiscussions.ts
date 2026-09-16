@@ -78,6 +78,50 @@ const invalidate = (qc: ReturnType<typeof useQueryClient>, caseId: string | null
   qc.invalidateQueries({ queryKey: ['discussions'] })
   qc.invalidateQueries({ queryKey: ['disc_stream', caseId] })
   qc.invalidateQueries({ queryKey: ['disc_thread'] })
+  qc.invalidateQueries({ queryKey: ['disc_media'] })
+}
+
+/** رسالة فيها مرفق أو رابط — لنافذة «الملفات والروابط» */
+export interface MediaMsg {
+  id: string
+  case_id: string | null
+  parent_id: string | null
+  author_id: string | null
+  body: string | null
+  kind: string | null
+  created_at: string
+  document: {
+    id: string
+    name: string | null
+    file_url: string | null
+    file_type: string | null
+    file_size: number | null
+  } | null
+}
+
+/**
+ * رسائل فيها مرفق أو رابط — المجرى والخيوط معاً، الأحدث أولاً.
+ * all = كل ما يراه الموظف من نقاشات (الصلاحيات تحصره)، وإلا النقاش المعطى وحده (null = العامة).
+ */
+export function useDiscussionMedia(caseId: string | null, all: boolean, enabled: boolean) {
+  return useQuery({
+    queryKey: ['disc_media', all ? 'all' : caseId],
+    enabled,
+    staleTime: 30_000,
+    queryFn: async (): Promise<MediaMsg[]> => {
+      const base = supabase
+        .from('case_comments')
+        .select(
+          'id, case_id, parent_id, author_id, body, kind, created_at, document:documents!case_comments_document_id_fkey(id, name, file_url, file_type, file_size)'
+        )
+        .is('deleted_at', null)
+        .or('document_id.not.is.null,body.ilike.*http*,body.ilike.*www.*')
+      const scoped = all ? base : caseId ? base.eq('case_id', caseId) : base.is('case_id', null)
+      const { data, error } = await scoped.order('created_at', { ascending: false }).limit(all ? 500 : 300)
+      if (error) throw error
+      return (data ?? []) as unknown as MediaMsg[]
+    },
+  })
 }
 
 /**

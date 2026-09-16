@@ -51,6 +51,9 @@ import { fmtNumber } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { stamp, msgStamp, fullStamp } from './stamps'
 import { VoiceNotePlayer, isAudioName } from './VoiceNote'
+import { DiscussionMediaDialog } from './DiscussionMediaDialog'
+import { URL_RE, cleanUrl, hrefOf } from './links'
+import { openExternal } from '@/lib/external'
 import { errMessage } from '@/lib/errors'
 import {
   findMessageAt,
@@ -154,26 +157,55 @@ function Body({ text, className }: { text: string; className?: string }) {
     return new RegExp('@\\s?(?:' + labels.join('|') + ')(?![\\p{L}\\p{N}_])', 'gu')
   }, [people])
 
+  // الروابط أولاً (قابلة للضغط — كانت نصاً عادياً)، ثم المنشن فيما بينها
   const parts = useMemo(() => {
-    const out: { t: string; hit: boolean }[] = []
-    let last = 0
-    for (const m of text.matchAll(re)) {
-      const i = m.index ?? 0
-      if (i > last) out.push({ t: text.slice(last, i), hit: false })
-      out.push({ t: m[0], hit: true })
-      last = i + m[0].length
+    const out: { t: string; kind: 'text' | 'mention' | 'link' }[] = []
+    const withMentions = (s: string) => {
+      let last = 0
+      for (const m of s.matchAll(re)) {
+        const i = m.index ?? 0
+        if (i > last) out.push({ t: s.slice(last, i), kind: 'text' })
+        out.push({ t: m[0], kind: 'mention' })
+        last = i + m[0].length
+      }
+      if (last < s.length) out.push({ t: s.slice(last), kind: 'text' })
     }
-    if (last < text.length) out.push({ t: text.slice(last), hit: false })
+    let last = 0
+    for (const m of text.matchAll(URL_RE)) {
+      const i = m.index ?? 0
+      const url = cleanUrl(m[0])
+      if (url.length <= 4) continue
+      if (i > last) withMentions(text.slice(last, i))
+      out.push({ t: url, kind: 'link' })
+      last = i + url.length
+    }
+    if (last < text.length) withMentions(text.slice(last))
     return out
   }, [text, re])
 
   return (
     <p className={className}>
       {parts.map((p, i) =>
-        p.hit ? (
+        p.kind === 'mention' ? (
           <span key={i} className="rounded bg-gold/15 px-0.5 font-medium text-gold-700 dark:text-gold-300">
             {p.t}
           </span>
+        ) : p.kind === 'link' ? (
+          <a
+            key={i}
+            href={hrefOf(p.t)}
+            target="_blank"
+            rel="noopener noreferrer"
+            dir="ltr"
+            onClick={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              openExternal(hrefOf(p.t))
+            }}
+            className="text-blue-600 underline decoration-blue-600/30 underline-offset-2 [overflow-wrap:anywhere] hover:decoration-blue-600 dark:text-blue-400"
+          >
+            {p.t}
+          </a>
         ) : (
           <span key={i}>{p.t}</span>
         )
@@ -314,6 +346,7 @@ export function DiscussionsPage() {
   const [selected, setSelected] = useState<string | null | undefined>(undefined)
   const [openThreadRoot, setOpenThreadRoot] = useState<StreamMsg | null>(null)
   const [showBookmarks, setShowBookmarks] = useState(false)
+  const [showMedia, setShowMedia] = useState(false)
   const [showNewChannel, setShowNewChannel] = useState(false)
   const isDirector = useIsDirector()
   const qc = useQueryClient()
@@ -451,6 +484,7 @@ export function DiscussionsPage() {
           selected={selected}
           onSelect={choose}
           onBookmarks={() => setShowBookmarks(true)}
+          onMedia={() => setShowMedia(true)}
           onNewChannel={isDirector ? () => setShowNewChannel(true) : undefined}
         />
 
@@ -491,6 +525,16 @@ export function DiscussionsPage() {
         )}
       </div>
 
+      {showMedia && (
+        <DiscussionMediaDialog
+          open
+          onOpenChange={setShowMedia}
+          caseId={selected}
+          title={current?.case_title ?? (selected === null ? 'عام — المكتب' : undefined)}
+          initialScope="all"
+        />
+      )}
+
       <BookmarksDialog
         open={showBookmarks}
         onOpenChange={setShowBookmarks}
@@ -522,6 +566,7 @@ function ChannelList({
   selected,
   onSelect,
   onBookmarks,
+  onMedia,
   onNewChannel,
 }: {
   channels: DiscussionRow[]
@@ -531,6 +576,8 @@ function ChannelList({
   selected: string | null | undefined
   onSelect: (id: string | null) => void
   onBookmarks: () => void
+  /** «الملفات والروابط» في كل النقاشات */
+  onMedia: () => void
   /** للمدير فقط — غيابه يخفي الزرّ */
   onNewChannel?: () => void
 }) {
@@ -565,6 +612,14 @@ function ChannelList({
             <Plus className="h-4 w-4" />
           </button>
         )}
+        <button
+          type="button"
+          title="الملفات والروابط في كل النقاشات"
+          onClick={onMedia}
+          className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-gold"
+        >
+          <Paperclip className="h-4 w-4" />
+        </button>
         <button
           type="button"
           title="محفوظاتي"
@@ -766,6 +821,7 @@ function StreamPane({
   const { teamMember } = useAuth()
   const isDirector = useIsDirector()
   const [membersOpen, setMembersOpen] = useState(false)
+  const [mediaOpen, setMediaOpen] = useState(false)
   const [, navigate] = useLocation()
   const people = useMentionables(!!caseId)   // داخل ملف: المتعاون قابل للمنشن
   const { data: msgs, isLoading, error, refetch } = useStream(caseId, true)
@@ -854,6 +910,16 @@ function StreamPane({
             officeNum && <p className="text-xs text-muted-foreground">{officeNum}</p>
           )}
         </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-1.5 text-xs"
+          title="الملفات والروابط في هذا النقاش"
+          onClick={() => setMediaOpen(true)}
+        >
+          <Paperclip className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">الملفات والروابط</span>
+        </Button>
         {kind === 'channel' && isDirector && caseId && (
           <Button
             variant="outline"
@@ -877,6 +943,10 @@ function StreamPane({
           </Button>
         )}
       </div>
+
+      {mediaOpen && (
+        <DiscussionMediaDialog open onOpenChange={setMediaOpen} caseId={caseId} title={title} />
+      )}
 
       {kind === 'channel' && caseId && (
         <ChannelMembersDialog
