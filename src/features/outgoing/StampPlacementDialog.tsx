@@ -128,7 +128,8 @@ export function StampPlacementDialog({
         const pdfjs = await import('pdfjs-dist')
         const worker = await import('pdfjs-dist/build/pdf.worker.min.mjs?url')
         pdfjs.GlobalWorkerOptions.workerSrc = worker.default
-        const doc = await pdfjs.getDocument({ url: fileUrl }).promise
+        // disableFontFace: الحروف العربية أشكالاً من خط الخطاب — بدونه تظهر مفككة (انظر ApprovalSection)
+        const doc = await pdfjs.getDocument({ url: fileUrl, disableFontFace: true }).promise
         if (cancelled) return
         setPageCount(doc.numPages)
         const target = page === 0 ? doc.numPages : Math.min(page, doc.numPages)

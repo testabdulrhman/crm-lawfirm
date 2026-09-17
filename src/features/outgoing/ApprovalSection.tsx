@@ -455,7 +455,10 @@ function PdfPagesPreview({ url }: { url: string }) {
         const pdfjs = await import('pdfjs-dist')
         const worker = await import('pdfjs-dist/build/pdf.worker.min.mjs?url')
         pdfjs.GlobalWorkerOptions.workerSrc = worker.default
-        const doc = await pdfjs.getDocument({ url }).promise
+        // disableFontFace: تُرسم الحروف أشكالاً من خط الخطاب نفسه. بدونه يمرّرها pdf.js نصاً إلى
+        // المتصفح فيعيد تشكيل كل حرف عربي منفرداً — خطابات Word كانت تظهر بحروف مفككة
+        // مقلوبة في «معاينة واعتماد» وسليمة في «معاينة ملف» (بلاغ المدير 2026-09-17)
+        const doc = await pdfjs.getDocument({ url, disableFontFace: true }).promise
         if (cancelled || !holder) return
         holder.innerHTML = ''
         const width = holder.clientWidth || 640
