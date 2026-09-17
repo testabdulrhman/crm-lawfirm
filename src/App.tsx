@@ -1,9 +1,10 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { Route, Switch, Redirect, Router, useLocation, Link } from 'wouter'
 import { useHashLocation } from 'wouter/use-hash-location'
 import { Loader2 } from 'lucide-react'
 
 import { useAuth } from '@/stores/auth'
+import { hasNewBuild, reloadForNewBuild } from '@/lib/staleBuild'
 import { useIsCollaborator } from '@/hooks/useIsCollaborator'
 import { AppLayout } from '@/components/layout/AppLayout'
 import Login from '@/pages/Login'
@@ -154,6 +155,13 @@ function ProtectedRoutes() {
 function AppRoutes() {
   const { user, loading } = useAuth()
   const [location] = useLocation()
+
+  // نُشرت نسخة أحدث والصفحة مفتوحة؟ أول تنقّل يعيد التحميل على الصفحة المقصودة نفسها،
+  // قبل أن تطلب شاشةٌ جزءاً حُذف (lib/staleBuild)
+  const firstLocation = useRef(location)
+  useEffect(() => {
+    if (location !== firstLocation.current && hasNewBuild()) reloadForNewBuild()
+  }, [location])
 
   if (loading) return <FullScreenLoader />
 

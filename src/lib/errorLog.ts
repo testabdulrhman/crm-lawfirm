@@ -9,6 +9,7 @@
 // والمتكرر نفسه في الشاشة نفسها خلال دقيقة مرة واحدة، وبسقف للجلسة كي لا يغرق السجل.
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/stores/auth'
+import { reloadPending } from '@/lib/staleBuild'
 
 export type ErrorKind = 'toast' | 'query' | 'crash' | 'unhandled'
 
@@ -27,6 +28,8 @@ export function logError(
 ): void {
   // المعاينة المحلية لا تملأ سجل الإنتاج
   if (!import.meta.env.PROD) return
+  // الصفحة تُعاد لجلب نسخة جديدة — ما يسبق ذلك أثر جانبي لا عطل
+  if (reloadPending()) return
   try {
     const text = (message ?? '').trim()
     if (!text || NOISE.some((r) => r.test(text))) return
