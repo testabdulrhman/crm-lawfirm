@@ -85,6 +85,8 @@ final class SB: ObservableObject {
         session = nil
         member = nil
         Keychain.clear()
+        // نقاشات الحساب المحفوظة على الجهاز تُمسح مع الخروج — لا يرثها من يدخل بعده
+        DiscussionCache.clearAll()
     }
 
     // MARK: - إشعارات الدفع

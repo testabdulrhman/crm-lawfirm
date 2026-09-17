@@ -73,6 +73,10 @@ extension ISO8601DateFormatter {
 struct DiscussionsView: View {
     @EnvironmentObject private var sb: SB
     @State private var rows: [DiscussionRow] = []
+    /// وقت النسخة المعروضة — من الذاكرة المحلية أو آخر جلب ناجح
+    @State private var savedAt: Date?
+    /// تعذّر آخر تحديث والمعروض نسخة محفوظة — شريط لا شاشة خطأ
+    @State private var stale = false
     @State private var loaded = false
     @State private var error: String?
     /// أُلغي الجلب السابق (اختفت الشاشة أثناءه) — يُعاد عند عودتها
@@ -116,22 +120,27 @@ struct DiscussionsView: View {
                     )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
-                    List(filtered) { row in
-                        NavigationLink {
-                            CaseStreamView(
-                                caseId: row.case_id,
-                                title: row.case_title ?? (row.isGeneral ? "عام — المكتب" : "قضية"),
-                                matter: MatterDoor(caseId: row.case_id, officeNum: row.office_num, kind: row.kind),
-                                isChannel: row.kind == "channel"
-                            )
-                        } label: {
-                            DiscussionRowView(row: row)
+                    VStack(spacing: 0) {
+                        if stale {
+                            SavedCopyBanner(savedAt: savedAt) { Task { await load() } }
                         }
-                        .listRowBackground(Theme.card)
+                        List(filtered) { row in
+                            NavigationLink {
+                                CaseStreamView(
+                                    caseId: row.case_id,
+                                    title: row.case_title ?? (row.isGeneral ? "عام — المكتب" : "قضية"),
+                                    matter: MatterDoor(caseId: row.case_id, officeNum: row.office_num, kind: row.kind),
+                                    isChannel: row.kind == "channel"
+                                )
+                            } label: {
+                                DiscussionRowView(row: row)
+                            }
+                            .listRowBackground(Theme.card)
+                        }
+                        .listStyle(.plain)
+                        .searchable(text: $search, prompt: "ابحث في النقاشات")
+                        .refreshable { await load() }
                     }
-                    .listStyle(.plain)
-                    .searchable(text: $search, prompt: "ابحث في النقاشات")
-                    .refreshable { await load() }
                 }
             }
             .background(Theme.ivory.ignoresSafeArea())
@@ -199,6 +208,14 @@ struct DiscussionsView: View {
             }
         }
         .task {
+            // آخر نسخة محفوظة تظهر فوراً — ثم الجديد متى وصل (طلب المدير 2026-09-14)
+            if !loaded, let c = DiscussionCache.load(
+                [DiscussionRow].self, key: DiscussionCache.listKey, account: DiscussionCache.account(sb)
+            ) {
+                rows = c.value
+                savedAt = c.savedAt
+                loaded = true
+            }
             await load()
             openFromPush()
         }
@@ -221,11 +238,17 @@ struct DiscussionsView: View {
     private func load() async {
         error = nil
         do {
-            rows = try await sb.discussions()
+            let latest = try await sb.discussions()
+            rows = latest
             loaded = true
+            stale = false
+            savedAt = Date()
+            DiscussionCache.save(latest, key: DiscussionCache.listKey, account: DiscussionCache.account(sb))
         } catch {
             // الإلغاء ليس خطأً — تُعاد المحاولة صامتاً عند عودة الشاشة
-            if let t = uiErrorText(error) { self.error = t } else { cancelled = true }
+            guard let t = uiErrorText(error) else { cancelled = true; return }
+            // المعروض (محفوظاً أو من جلب سابق) يبقى مقروءاً مع شريط — لا تمحوه شاشة خطأ
+            if loaded { stale = true } else { self.error = t }
         }
     }
 }

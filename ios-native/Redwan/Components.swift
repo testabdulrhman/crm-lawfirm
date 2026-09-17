@@ -262,10 +262,13 @@ func kindIcon(_ k: CalKind) -> String {
 ///    (بلاغ المدير 2026-09-11: «ليه يطلع كذا بعض الأيام؟»).
 ///    والشاشة الرئيسية أكثرها إصابةً لأن جلبها ثلاث رحلات متتابعة، فنافذة
 ///    الإلغاء عندها أطول.
-func uiErrorText(_ error: Error) -> String? {
+func uiErrorText(_ error: Error, file: String = #fileID, line: Int = #line) -> String? {
     if error is CancellationError { return nil }
     if let u = error as? URLError, u.code == .cancelled { return nil }
-    return error.localizedDescription
+    let text = error.localizedDescription
+    // كل خطأ يُعرض لموظف يُحفظ في سجل الأخطاء بموضعه (طلب المدير 2026-09-15)
+    ErrorLog.report(text, source: "\(file):\(line)")
+    return text
 }
 
 /// إن أُلغي الجلب السابق، أعِد المحاولة صامتاً عند عودة الشاشة أو عودة التطبيق

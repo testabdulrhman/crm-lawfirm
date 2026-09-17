@@ -121,7 +121,7 @@ struct MainTabs: View {
 
     var body: some View {
         TabView(selection: $tab) {
-            HomeView()
+            HomeView(openTasksTab: { tab = 2 })
                 .tabItem { Label("الرئيسية", systemImage: "house.fill") }
                 .tag(0)
             CasesView()

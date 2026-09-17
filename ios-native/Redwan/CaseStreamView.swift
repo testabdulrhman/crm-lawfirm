@@ -178,6 +178,11 @@ struct CaseStreamView: View {
     @State private var receipts: [String: ReadCount] = [:]
     @State private var loaded = false
     @State private var error: String?
+    /// وقت النسخة المعروضة، وهل تعذّر آخر تحديث (فالمعروض محفوظ)
+    @State private var savedAt: Date?
+    @State private var stale = false
+    /// وصلت الرسائل من الخادم في هذه الزيارة — نسخة محفوظة وحدها لا تُعلِّم القراءة
+    @State private var fresh = false
     @State private var draft = ""
     @State private var sending = false
     @State private var sendError: String?
@@ -187,6 +192,8 @@ struct CaseStreamView: View {
     @State private var showPhotoPicker = false
     @State private var showFilePicker = false
     @State private var uploading = false
+    /// الملاحظة الصوتية (طلب المدير 2026-09-14)
+    @StateObject private var recorder = VoiceRecorder()
 
     // تحرير رسالة
     @State private var editing: StreamMsg?
@@ -207,6 +214,9 @@ struct CaseStreamView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            if stale, loaded {
+                SavedCopyBanner(savedAt: savedAt) { Task { await load() } }
+            }
             if let error {
                 ErrorBox(message: error) { Task { await load() } }
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -272,10 +282,18 @@ struct CaseStreamView: View {
             }
         }
         .task {
+            // آخر نسخة محفوظة تظهر فوراً — ثم الجديد متى وصل (طلب المدير 2026-09-14)
+            if !loaded, let c = DiscussionCache.load(
+                [StreamMsg].self, key: DiscussionCache.streamKey(caseId), account: DiscussionCache.account(sb)
+            ) {
+                msgs = c.value
+                savedAt = c.savedAt
+                loaded = true
+            }
             // النوع يُجلب بالتوازي مع الرسائل فتظهر الرقاقة معها لا بعدها
             async let fallback = resolveDoor()
             await load()
-            try? await sb.markRead(caseId: caseId)
+            if fresh { try? await sb.markRead(caseId: caseId) }
             staff = (try? await sb.staff()) ?? []
             let fb = await fallback
             resolvedDoor = fb.door
@@ -284,8 +302,9 @@ struct CaseStreamView: View {
         // إيصالات القراءة: ما حُمّل هنا رآه صاحبه، فتُعلَّم القراءة مع كل رسالة جديدة (لا عند الفتح
         // وحده — وإلا بدا من يقرأ مباشرةً كأنه لم يقرأ)، وتُحدَّث علامات رسائلي كل ٢٠ ثانية ما
         // دامت الشاشة ظاهرة؛ المهمة تُلغى باختفائها وتُعاد عند وصول رسالة جديدة.
-        .task(id: msgs.last?.id) {
-            guard loaded else { return }
+        .task(id: "\(msgs.last?.id ?? "")|\(fresh)") {
+            // لا تُعلَّم القراءة على نسخة محفوظة لم يُؤكَّد جديدها بعد
+            guard loaded, fresh else { return }
             try? await sb.markRead(caseId: caseId)
             while !Task.isCancelled {
                 if let r = try? await sb.streamReadCounts(caseId: caseId) { receipts = r }
@@ -316,6 +335,14 @@ struct CaseStreamView: View {
             if case .success(let url) = result {
                 Task { await uploadFile(url: url) }
             }
+        }
+        // بلغ التسجيل خمس دقائق: يُرسل كما هو
+        .onChange(of: recorder.limitReached) {
+            if recorder.limitReached { sendVoice() }
+        }
+        .onDisappear {
+            if recorder.isRecording { recorder.cancel() }
+            VoicePlayer.shared.stop()
         }
         .onChange(of: photoItem) {
             guard let item = photoItem else { return }
@@ -355,22 +382,27 @@ struct CaseStreamView: View {
             // و«+» يسار يجمع كل الإضافات — حتى لا يحس الموظف بفرق.
             // في RTL أول عنصر بالكود يقع يميناً.
             HStack(spacing: 8) {
-                Button(action: send) {
-                    Group {
-                        if sending {
-                            ProgressView().tint(Theme.navy)
-                        } else {
-                            Image(systemName: "paperplane.fill")
-                                .font(.system(size: 14))
-                                .foregroundStyle(Theme.navy)
+                // الحقل فارغ؟ الميكروفون مكان الإرسال — كالواتساب (طلب المدير 2026-09-14)
+                if draft.trimmingCharacters(in: .whitespaces).isEmpty, !sending, !uploading {
+                    MicButton { Task { await startRecording() } }
+                } else {
+                    Button(action: send) {
+                        Group {
+                            if sending {
+                                ProgressView().tint(Theme.navy)
+                            } else {
+                                Image(systemName: "paperplane.fill")
+                                    .font(.system(size: 14))
+                                    .foregroundStyle(Theme.navy)
+                            }
                         }
+                        .frame(width: 36, height: 36)
+                        .background(Theme.gold)
+                        .clipShape(Circle())
                     }
-                    .frame(width: 36, height: 36)
-                    .background(Theme.gold)
-                    .clipShape(Circle())
+                    .disabled(sending || draft.trimmingCharacters(in: .whitespaces).isEmpty)
+                    .opacity(sending || draft.trimmingCharacters(in: .whitespaces).isEmpty ? 0.5 : 1)
                 }
-                .disabled(sending || draft.trimmingCharacters(in: .whitespaces).isEmpty)
-                .opacity(sending || draft.trimmingCharacters(in: .whitespaces).isEmpty ? 0.5 : 1)
 
                 TextField("اكتب رسالة…", text: $draft, axis: .vertical)
                     .font(.system(size: 14))
@@ -406,6 +438,15 @@ struct CaseStreamView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
+            // أثناء التسجيل يحلّ شريطه محل سطر الكتابة في المكان نفسه
+            .opacity(recorder.isRecording ? 0 : 1)
+            .allowsHitTesting(!recorder.isRecording)
+            .overlay {
+                if recorder.isRecording {
+                    VoiceRecordingBar(recorder: recorder, onSend: sendVoice, onCancel: { recorder.cancel() })
+                        .padding(.horizontal, 12)
+                }
+            }
         }
         .background(Theme.card)
         .overlay(Rectangle().frame(height: 0.5).foregroundStyle(Theme.line), alignment: .top)
@@ -464,6 +505,29 @@ struct CaseStreamView: View {
         }
     }
 
+    // MARK: - الملاحظة الصوتية
+
+    private func startRecording() async {
+        sendError = nil
+        do { try await recorder.start() } catch { sendError = uiErrorText(error) }
+    }
+
+    private func sendVoice() {
+        guard let note = recorder.finish() else {
+            sendError = "التسجيل أقصر من ثانية — اضغط الميكروفون وتكلّم"
+            return
+        }
+        Usage.shared.action("ملاحظة صوتية")
+        Task {
+            defer { try? FileManager.default.removeItem(at: note.url) }
+            guard let data = try? Data(contentsOf: note.url) else {
+                sendError = "تعذّرت قراءة التسجيل"
+                return
+            }
+            await uploadData(data, fileName: VoiceNote.fileName(seconds: note.seconds), mime: "audio/mp4")
+        }
+    }
+
     // MARK: - المرفقات
 
     private func uploadFile(url: URL) async {
@@ -506,10 +570,20 @@ struct CaseStreamView: View {
     private func load() async {
         error = nil
         do {
-            msgs = try await sb.stream(caseId: caseId)
+            let latest = try await sb.stream(caseId: caseId)
+            msgs = latest
             loaded = true
+            fresh = true
+            stale = false
+            savedAt = Date()
+            DiscussionCache.save(
+                Array(latest.suffix(DiscussionCache.maxMessages)),
+                key: DiscussionCache.streamKey(caseId), account: DiscussionCache.account(sb)
+            )
         } catch {
-            self.error = error.localizedDescription
+            // الإلغاء ليس خطأً؛ والمعروض يبقى مقروءاً مع شريط بدل أن تمحوه شاشة خطأ
+            guard let t = uiErrorText(error) else { return }
+            if loaded { stale = true } else { self.error = t }
         }
     }
 }
@@ -622,7 +696,7 @@ private struct StreamBubble: View {
                 }
 
                 if let name = msg.document_name {
-                    AttachmentChip(name: name, url: msg.document_url)
+                    MessageAttachment(name: name, url: msg.document_url)
                 }
 
                 Divider().overlay(mine ? Theme.gold.opacity(0.35) : Theme.line)
@@ -813,7 +887,10 @@ private struct ThreadView: View {
     @State private var replies: [ThreadMsg] = []
     @State private var loaded = false
     @State private var error: String?
+    @State private var savedAt: Date?
+    @State private var stale = false
     @State private var draft = ""
+    @StateObject private var recorder = VoiceRecorder()
     @State private var alsoToStream = false
     @State private var sending = false
     @State private var sendError: String?
@@ -847,6 +924,10 @@ private struct ThreadView: View {
                     )
                     .clipShape(RoundedRectangle(cornerRadius: 10))
 
+                    if stale, loaded {
+                        SavedCopyBanner(savedAt: savedAt) { Task { await load() } }
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                    }
                     if !loaded {
                         ProgressView().frame(maxWidth: .infinity)
                     } else if let error {
@@ -878,8 +959,22 @@ private struct ThreadView: View {
         }
         .background(Theme.ivory.ignoresSafeArea())
         .navigationTitle("خيط")
+        .onChange(of: recorder.limitReached) {
+            if recorder.limitReached { sendVoice() }
+        }
+        .onDisappear {
+            if recorder.isRecording { recorder.cancel() }
+            VoicePlayer.shared.stop()
+        }
         .navigationBarTitleDisplayMode(.inline)
         .task {
+            if !loaded, let c = DiscussionCache.load(
+                [ThreadMsg].self, key: DiscussionCache.threadKey(root.id), account: DiscussionCache.account(sb)
+            ) {
+                replies = c.value
+                savedAt = c.savedAt
+                loaded = true
+            }
             await load()
             staff = (try? await sb.staff()) ?? []
         }
@@ -948,7 +1043,7 @@ private struct ThreadView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     if let name = r.document_name {
-                        AttachmentChip(name: name, url: r.document_url)
+                        MessageAttachment(name: name, url: r.document_url)
                     }
                 }
                 .padding(10)
@@ -989,22 +1084,27 @@ private struct ThreadView: View {
 
             // نفس ترتيب الواتساب: الإرسال يمين و«+» يسار (أول الكود = يمين في RTL)
             HStack(spacing: 8) {
-                Button(action: send) {
-                    Group {
-                        if sending {
-                            ProgressView().tint(Theme.navy)
-                        } else {
-                            Image(systemName: "paperplane.fill")
-                                .font(.system(size: 14))
-                                .foregroundStyle(Theme.navy)
+                // الحقل فارغ؟ الميكروفون مكان الإرسال — كالواتساب (طلب المدير 2026-09-14)
+                if draft.trimmingCharacters(in: .whitespaces).isEmpty, !sending {
+                    MicButton { Task { await startRecording() } }
+                } else {
+                    Button(action: send) {
+                        Group {
+                            if sending {
+                                ProgressView().tint(Theme.navy)
+                            } else {
+                                Image(systemName: "paperplane.fill")
+                                    .font(.system(size: 14))
+                                    .foregroundStyle(Theme.navy)
+                            }
                         }
+                        .frame(width: 36, height: 36)
+                        .background(Theme.gold)
+                        .clipShape(Circle())
                     }
-                    .frame(width: 36, height: 36)
-                    .background(Theme.gold)
-                    .clipShape(Circle())
+                    .disabled(sending || draft.trimmingCharacters(in: .whitespaces).isEmpty)
+                    .opacity(sending || draft.trimmingCharacters(in: .whitespaces).isEmpty ? 0.5 : 1)
                 }
-                .disabled(sending || draft.trimmingCharacters(in: .whitespaces).isEmpty)
-                .opacity(sending || draft.trimmingCharacters(in: .whitespaces).isEmpty ? 0.5 : 1)
 
                 TextField("ردّ في الخيط…", text: $draft, axis: .vertical)
                     .font(.system(size: 14))
@@ -1028,6 +1128,15 @@ private struct ThreadView: View {
                 }
             }
             .padding(.horizontal, 12)
+            // أثناء التسجيل يحلّ شريطه محل سطر الكتابة في المكان نفسه
+            .opacity(recorder.isRecording ? 0 : 1)
+            .allowsHitTesting(!recorder.isRecording)
+            .overlay {
+                if recorder.isRecording {
+                    VoiceRecordingBar(recorder: recorder, onSend: sendVoice, onCancel: { recorder.cancel() })
+                        .padding(.horizontal, 12)
+                }
+            }
 
             Button {
                 alsoToStream.toggle()
@@ -1096,13 +1205,60 @@ private struct ThreadView: View {
         }
     }
 
+    // MARK: - الملاحظة الصوتية في الخيط
+
+    private func startRecording() async {
+        sendError = nil
+        do { try await recorder.start() } catch { sendError = uiErrorText(error) }
+    }
+
+    private func sendVoice() {
+        guard let note = recorder.finish() else {
+            sendError = "التسجيل أقصر من ثانية — اضغط الميكروفون وتكلّم"
+            return
+        }
+        let wasAlsoToStream = alsoToStream
+        sending = true
+        sendError = nil
+        Task {
+            defer {
+                sending = false
+                try? FileManager.default.removeItem(at: note.url)
+            }
+            do {
+                let data = try Data(contentsOf: note.url)
+                let docId = try await sb.uploadAttachment(
+                    data: data, fileName: VoiceNote.fileName(seconds: note.seconds),
+                    mime: "audio/mp4", caseId: caseId
+                )
+                try await sb.postMessage(
+                    caseId: caseId, body: nil, documentId: docId,
+                    parentId: root.id, alsoToStream: wasAlsoToStream
+                )
+                alsoToStream = false
+                await load()
+                onChange()
+            } catch {
+                sendError = uiErrorText(error)
+            }
+        }
+    }
+
     private func load() async {
         error = nil
         do {
-            replies = try await sb.thread(rootId: root.id)
+            let latest = try await sb.thread(rootId: root.id)
+            replies = latest
             loaded = true
+            stale = false
+            savedAt = Date()
+            DiscussionCache.save(
+                Array(latest.suffix(DiscussionCache.maxMessages)),
+                key: DiscussionCache.threadKey(root.id), account: DiscussionCache.account(sb)
+            )
         } catch {
-            self.error = error.localizedDescription
+            guard let t = uiErrorText(error) else { return }
+            if loaded { stale = true } else { self.error = t }
         }
     }
 }

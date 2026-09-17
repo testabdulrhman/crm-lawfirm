@@ -25,6 +25,23 @@ extension SB {
         return try await get("tasks", query: q)
     }
 
+    /// مهام أُنجزت منذ منتصف ليل اليوم (توقيت الجهاز) — «المكتملة» في الرئيسية
+    func doneTodayCount(scope: String) async throws -> Int {
+        struct IdRow: Codable { let id: String }
+        let midnight = Calendar(identifier: .gregorian).startOfDay(for: Date())
+        var q: [(String, String)] = [
+            ("select", "id"),
+            ("status", "eq.done"),
+            ("deleted_at", "is.null"),
+            ("done_at", "gte.\(ISO8601DateFormatter().string(from: midnight))"),
+        ]
+        if scope != "all", let me = member?.id {
+            q.append(("assignee_id", "eq.\(me)"))
+        }
+        let rows: [IdRow] = try await get("tasks", query: q)
+        return rows.count
+    }
+
     func completeTask(id: String) async throws {
         try await patch(
             "tasks",
