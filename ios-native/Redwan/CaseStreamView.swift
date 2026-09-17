@@ -171,9 +171,17 @@ struct CaseStreamView: View {
     var fromMatter: Bool = false
     /// نقاش مُسمّى (قناة بعضوية)؟ يُظهر للمدير زرّ إدارة الأعضاء والاسم
     var isChannel: Bool = false
+    /// الرسالة التي يُفتح النقاش عندها — منشن أو «في النقاش» (مرآة الويب 2026-09-17)
+    var focus: DiscussionFocus? = nil
 
     @EnvironmentObject private var sb: SB
     @State private var msgs: [StreamMsg] = []
+    /// القفز إلى رسالة: تمرير إليها، وإبراز ذهبي مؤقت، وفتح خيطها إن كانت ردّاً
+    @State private var scrollTarget: String?
+    @State private var highlightId: String?
+    @State private var threadJump: ThreadJump?
+    @State private var focusHandled = false
+    @State private var showMedia = false
     /// إيصالات قراءة رسائلي في هذا النقاش
     @State private var receipts: [String: ReadCount] = [:]
     @State private var loaded = false
@@ -240,7 +248,8 @@ struct CaseStreamView: View {
                                     mine: m.author_id == sb.member?.id,
                                     onChange: { Task { await load() } },
                                     onEdit: { editing = m; editDraft = m.body ?? "" },
-                                    receipt: receipts[m.id]
+                                    receipt: receipts[m.id],
+                                    highlighted: highlightId == m.id
                                 )
                                 .id(m.id)
                             }
@@ -250,8 +259,19 @@ struct CaseStreamView: View {
                     // المحادثة تفتح على آخر الرسائل مثل الواتساب (طلب 2026-08-22)
                     .defaultScrollAnchor(.bottom)
                     .onChange(of: msgs.count) {
-                        if let last = msgs.last?.id {
+                        // القفز إلى رسالة بعينها يغلب النزول إلى الأخيرة
+                        if scrollTarget == nil, let last = msgs.last?.id {
                             withAnimation { proxy.scrollTo(last, anchor: .bottom) }
+                        }
+                    }
+                    .onChange(of: scrollTarget) {
+                        if let t = scrollTarget {
+                            withAnimation { proxy.scrollTo(t, anchor: .center) }
+                            // بعد الوصول يعود النقاش ينزل مع كل رسالة جديدة كالمعتاد
+                            Task {
+                                try? await Task.sleep(for: .seconds(1))
+                                if scrollTarget == t { scrollTarget = nil }
+                            }
                         }
                     }
                 }
@@ -263,6 +283,14 @@ struct CaseStreamView: View {
         .navigationTitle(renamedTitle ?? title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            // كل مرفق ورابط في هذا النقاش أو في كل النقاشات
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { showMedia = true } label: {
+                    Image(systemName: "paperclip")
+                        .foregroundStyle(Theme.goldDark)
+                }
+                .accessibilityLabel("الملفات والروابط")
+            }
             // رقاقة الملف — في الخانة الطرفية نفسها التي تشغلها الكاميرا/التصفية في
             // «المشاريع» والفقاعات في «ملف القضية». لا باب للعامة ولا للقنوات ولا من داخل الملف.
             if let door {
@@ -293,6 +321,10 @@ struct CaseStreamView: View {
             // النوع يُجلب بالتوازي مع الرسائل فتظهر الرقاقة معها لا بعدها
             async let fallback = resolveDoor()
             await load()
+            if let focus, !focusHandled {
+                focusHandled = true
+                await applyFocus(focus)
+            }
             if fresh { try? await sb.markRead(caseId: caseId) }
             staff = (try? await sb.staff()) ?? []
             let fb = await fallback
@@ -317,6 +349,24 @@ struct CaseStreamView: View {
                     try? await sb.editMessage(id: m.id, body: newBody)
                     editing = nil
                     await load()
+                }
+            }
+        }
+        .navigationDestination(item: $threadJump) { j in
+            ThreadView(root: j.root, caseId: caseId, onChange: { Task { await load() } }, focusId: j.focusId)
+        }
+        .sheet(isPresented: $showMedia) {
+            DiscussionMediaSheet(caseId: caseId, fromDiscussion: true) { m in
+                Task {
+                    // بعد انغلاق الورقة — الدفع أثناء حركتها يضيع بصمت
+                    try? await Task.sleep(for: .milliseconds(450))
+                    let f = DiscussionFocus(messageId: m.id, parentId: m.parent_id)
+                    if m.case_id == caseId {
+                        await applyFocus(f)
+                    } else {
+                        PushRouter.shared.pendingFocus = f
+                        PushRouter.shared.route = m.case_id.map { "/discussions?case=\($0)" } ?? "/discussions"
+                    }
                 }
             }
         }
@@ -567,6 +617,33 @@ struct CaseStreamView: View {
         uploading = false
     }
 
+    /// افتح الرسالة المقصودة: بالمعرّف إن عُرف، وإلا بوقت الإشعار، وإلا آخر منشن لي هنا.
+    /// الردّ يفتح خيطه مُبرَزاً فيه؛ والجذر يُمرَّر إليه ويُبرَز في المجرى.
+    private func applyFocus(_ f: DiscussionFocus) async {
+        var id = f.messageId
+        var parent = f.parentId
+        if id == nil {
+            var at = f.at
+            if at == nil { at = try? await sb.latestMentionAt(caseId: caseId) }
+            guard let at, let hit = try? await sb.messageAt(caseId: caseId, at: at) else { return }
+            id = hit.id
+            parent = hit.parentId
+        }
+        guard let id else { return }
+        // المجرى يستقرّ على آخر رسالة أولاً — ثم التمرير إلى المقصودة
+        try? await Task.sleep(for: .milliseconds(350))
+        if let parent {
+            guard let root = msgs.first(where: { $0.id == parent }) else { return }
+            scrollTarget = root.id
+            threadJump = ThreadJump(root: root, focusId: id)
+        } else if msgs.contains(where: { $0.id == id }) {
+            scrollTarget = id
+            withAnimation { highlightId = id }
+            try? await Task.sleep(for: .seconds(2.6))
+            if highlightId == id { withAnimation(.easeOut(duration: 0.6)) { highlightId = nil } }
+        }
+    }
+
     private func load() async {
         error = nil
         do {
@@ -631,6 +708,15 @@ struct ReactionsBar: View {
 
 // MARK: - فقاعة في المجرى (جذر خيط)
 
+/// خيط يُفتح من القفز إلى ردّ — معرّفه الجذر والرد معاً
+struct ThreadJump: Identifiable, Hashable {
+    let root: StreamMsg
+    let focusId: String
+    var id: String { root.id + "|" + focusId }
+    static func == (a: ThreadJump, b: ThreadJump) -> Bool { a.id == b.id }
+    func hash(into h: inout Hasher) { h.combine(id) }
+}
+
 private struct StreamBubble: View {
     let msg: StreamMsg
     let caseId: String?
@@ -639,6 +725,8 @@ private struct StreamBubble: View {
     let onEdit: () -> Void
     /// إيصال القراءة لرسالتي (nil لغير رسائلي أو قبل وصوله)
     var receipt: ReadCount? = nil
+    /// الرسالة المقصودة بالقفز — حدّ ذهبي مؤقت
+    var highlighted: Bool = false
 
     @State private var openThread = false
     @State private var showReceipts = false
@@ -732,6 +820,11 @@ private struct StreamBubble: View {
             .overlay(
                 RoundedRectangle(cornerRadius: 14)
                     .stroke(mine ? .clear : (isAI ? Theme.gold.opacity(0.4) : Theme.line), lineWidth: 1)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .stroke(Theme.gold, lineWidth: highlighted ? 2.5 : 0)
+                    .shadow(color: Theme.gold.opacity(highlighted ? 0.5 : 0), radius: 6)
             )
             .messageActions(
                 commentId: msg.id,
@@ -882,6 +975,10 @@ private struct ThreadView: View {
     let root: StreamMsg
     let caseId: String?
     let onChange: () -> Void
+    /// الردّ المقصود بالقفز (منشن داخل خيط)
+    var focusId: String? = nil
+    @State private var highlightId: String?
+    @State private var focusHandled = false
 
     @EnvironmentObject private var sb: SB
     @State private var replies: [ThreadMsg] = []
@@ -900,6 +997,7 @@ private struct ThreadView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
                     VStack(alignment: .leading, spacing: 4) {
@@ -943,6 +1041,16 @@ private struct ThreadView: View {
                         VStack(alignment: .leading, spacing: 10) {
                             ForEach(replies) { r in
                                 replyBubble(r)
+                                    .padding(4)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .fill(Theme.gold.opacity(highlightId == r.id ? 0.16 : 0))
+                                    )
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(Theme.gold, lineWidth: highlightId == r.id ? 2 : 0)
+                                    )
+                                    .id(r.id)
                             }
                         }
                         .padding(.trailing, 10)
@@ -953,6 +1061,18 @@ private struct ThreadView: View {
                     }
                 }
                 .padding(12)
+            }
+            // القفز إلى ردّ بعينه: بعد وصول الردود، تمرير إليه وإبرازه قليلاً
+            .onChange(of: replies.count) {
+                guard let f = focusId, !focusHandled, replies.contains(where: { $0.id == f }) else { return }
+                focusHandled = true
+                Task {
+                    try? await Task.sleep(for: .milliseconds(300))
+                    withAnimation { proxy.scrollTo(f, anchor: .center); highlightId = f }
+                    try? await Task.sleep(for: .seconds(2.6))
+                    withAnimation(.easeOut(duration: 0.6)) { highlightId = nil }
+                }
+            }
             }
 
             composer

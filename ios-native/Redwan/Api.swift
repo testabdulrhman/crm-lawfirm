@@ -200,6 +200,53 @@ extension SB {
         try await rpc("case_stream", params: ["p_case_id": caseId ?? NSNull()])
     }
 
+    /// «الملفات والروابط»: رسائل بمرفق أو برابط، في نقاش واحد أو في كل ما أراه —
+    /// نفس استعلام الويب (useDiscussionMedia)، والصلاحيات تحصرها القاعدة
+    func discussionMedia(caseId: String?, all: Bool) async throws -> [MediaMsg] {
+        var q: [(String, String)] = [
+            ("select", "id,case_id,parent_id,author_id,body,kind,created_at,document:documents!case_comments_document_id_fkey(id,name,file_url,file_type,file_size)"),
+            ("deleted_at", "is.null"),
+            ("or", "(document_id.not.is.null,body.ilike.*http*,body.ilike.*www.*)"),
+            ("order", "created_at.desc"),
+            ("limit", all ? "500" : "300"),
+        ]
+        if !all { q.append(("case_id", caseId.map { "eq.\($0)" } ?? "is.null")) }
+        return try await get("case_comments", query: q)
+    }
+
+    /// الرسالة التي كُتبت في لحظة بعينها داخل نقاش — إشعار المنشن يحمل وقتها لا معرّفها
+    func messageAt(caseId: String?, at: String) async throws -> (id: String, parentId: String?)? {
+        struct Row: Codable { let id: String; let parent_id: String? }
+        let rows: [Row] = try await get("case_comments", query: [
+            ("select", "id,parent_id"),
+            ("created_at", "eq.\(Self.urlSafeStamp(at))"),
+            ("case_id", caseId.map { "eq.\($0)" } ?? "is.null"),
+            ("deleted_at", "is.null"),
+            ("limit", "1"),
+        ])
+        return rows.first.map { ($0.id, $0.parent_id) }
+    }
+
+    /// وقت آخر منشن لي في هذا النقاش — نقرة إشعار الدفع لا تحمل غير رقم النقاش
+    func latestMentionAt(caseId: String?) async throws -> String? {
+        struct Row: Codable { let created_at: String? }
+        guard let me = member?.id else { return nil }
+        let rows: [Row] = try await get("notifications", query: [
+            ("select", "created_at"),
+            ("recipient_id", "eq.\(me)"),
+            ("type", "eq.mention"),
+            ("case_id", caseId.map { "eq.\($0)" } ?? "is.null"),
+            ("order", "created_at.desc"),
+            ("limit", "1"),
+        ])
+        return rows.first?.created_at
+    }
+
+    /// «+00:00» في رابط الاستعلام يُقرأ فراغاً عند الخادم — Z تعني الشيء نفسه بلا ترميز
+    static func urlSafeStamp(_ s: String) -> String {
+        s.hasSuffix("+00:00") ? String(s.dropLast(6)) + "Z" : s
+    }
+
     /// ردود خيط واحد — مخصّبة بالتفاعلات والمحفوظات
     func thread(rootId: String) async throws -> [ThreadMsg] {
         try await rpc("case_thread", params: ["p_root": rootId])

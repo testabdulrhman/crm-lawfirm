@@ -87,6 +87,11 @@ struct DiscussionsView: View {
     /// نقاش مُسمّى جديد (للمدير) — يُفتح بعد انغلاق الورقة لا أثناءه
     @State private var showNewChannel = false
     @State private var createdChannel: MatterLite?
+    /// الرسالة المقصودة في النقاش الذي يُفتح (منشن أو «في النقاش» من الملفات والروابط)
+    @State private var pickedFocus: DiscussionFocus?
+    /// القناة العامة مفتوحةً عند رسالة (لا MatterLite لها)
+    @State private var generalFocus: DiscussionFocus?
+    @State private var showMedia = false
     @ObservedObject private var router = PushRouter.shared
 
     /// العامة مثبّتة أولاً دائماً — ثم البقية بالأحدث (ترتيب الدالة)
@@ -174,6 +179,14 @@ struct DiscussionsView: View {
                         }
                     }
                 }
+                // كل مرفق ورابط في النقاشات (مرآة الويب 2026-09-17)
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { showMedia = true } label: {
+                        Image(systemName: "paperclip")
+                            .foregroundStyle(Theme.goldDark)
+                    }
+                    .accessibilityLabel("الملفات والروابط")
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     NavigationLink {
                         BookmarksView()
@@ -203,8 +216,22 @@ struct DiscussionsView: View {
                     caseId: m.id,
                     title: m.title ?? m.office_num ?? "ملف",
                     matter: MatterDoor(caseId: m.id, officeNum: m.office_num, kind: m.kind),
-                    isChannel: m.kind == "channel"
+                    isChannel: m.kind == "channel",
+                    focus: pickedFocus
                 )
+            }
+            .navigationDestination(item: $generalFocus) { f in
+                CaseStreamView(caseId: nil, title: "عام — المكتب", focus: f)
+            }
+            .sheet(isPresented: $showMedia) {
+                DiscussionMediaSheet(caseId: nil, fromDiscussion: false) { m in
+                    // بعد انغلاق الورقة — الدفع أثناء حركة الإغلاق يضيع بصمت
+                    Task {
+                        try? await Task.sleep(for: .milliseconds(450))
+                        PushRouter.shared.pendingFocus = DiscussionFocus(messageId: m.id, parentId: m.parent_id)
+                        PushRouter.shared.route = m.case_id.map { "/discussions?case=\($0)" } ?? "/discussions"
+                    }
+                }
             }
         }
         .task {
@@ -223,16 +250,32 @@ struct DiscussionsView: View {
         .onChange(of: router.route) { _, _ in openFromPush() }
     }
 
-    /// منشن وصل إشعاره؟ افتح نقاش قضيته مباشرة (بلاغ المستخدم 2026-08-30)
+    /// منشن وصل إشعاره؟ افتح نقاش قضيته مباشرة (بلاغ المستخدم 2026-08-30)،
+    /// وعند الرسالة نفسها وخيطها إن كانت ردّاً (مرآة الويب 2026-09-17)
     private func openFromPush() {
-        guard let cid = router.discussionCaseId else { return }
+        guard let route = router.route, route.hasPrefix("/discussions") else { return }
+        let focus = router.pendingFocus
+        // «/discussions» وحده (عيد ميلاد مثلاً) يقلب التبويب فقط؛ ومع رسالة مقصودة يفتح العامة
+        guard let cid = router.discussionCaseId else {
+            router.clear()
+            if let focus { generalFocus = focus }
+            return
+        }
         router.clear()
+        pickedFocus = focus
         // النوع والرقم من الصف إن كان محمّلاً؛ وإلا تأتي الرقاقة من الجلب الاحتياطي في CaseStreamView
         let row = rows.first { $0.case_id == cid }
-        pickedMatter = MatterLite(
+        let target = MatterLite(
             id: cid, title: row?.case_title ?? "ملف",
             office_num: row?.office_num, kind: row?.kind
         )
+        // القيمة نفسها لا تُعيد الدفع — أغلق الوجهة المفتوحة ثم افتحها من جديد عند الرسالة
+        if pickedMatter == target {
+            pickedMatter = nil
+            Task { try? await Task.sleep(for: .milliseconds(450)); pickedMatter = target }
+        } else {
+            pickedMatter = target
+        }
     }
 
     private func load() async {

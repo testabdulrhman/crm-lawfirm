@@ -91,7 +91,11 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     ) async {
         let info = response.notification.request.content.userInfo
         if let route = info["route"] as? String, route.hasPrefix("/") {
-            await MainActor.run { PushRouter.shared.route = route }
+            await MainActor.run {
+                // منشن: افتح الرسالة نفسها لا النقاش وحده (آخر منشن لي فيه)
+                if route.hasPrefix("/discussions") { PushRouter.shared.pendingFocus = DiscussionFocus() }
+                PushRouter.shared.route = route
+            }
         }
     }
 }

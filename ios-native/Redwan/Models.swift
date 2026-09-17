@@ -228,6 +228,26 @@ struct ThreadMsg: Codable, Identifiable {
     let bookmarked: Bool?
 }
 
+/// رسالة بمرفق أو برابط — نافذة «الملفات والروابط»
+struct MediaMsg: Codable, Identifiable {
+    let id: String
+    let case_id: String?
+    let parent_id: String?
+    let author_id: String?
+    let body: String?
+    let kind: String?
+    let created_at: String?
+    let document: MediaDoc?
+}
+
+struct MediaDoc: Codable {
+    let id: String
+    let name: String?
+    let file_url: String?
+    let file_type: String?
+    let file_size: Int?
+}
+
 /// رسالة محفوظة — من دالة my_bookmarks()
 struct BookmarkRow: Codable, Identifiable {
     let comment_id: String

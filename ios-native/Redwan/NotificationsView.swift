@@ -169,7 +169,8 @@ struct NotificationsView: View {
                 openedTask = try? await sb.task(id: taskId)
                 openingId = nil
             } else if let caseId = n.case_id, n.type == "mention" {
-                // منشن في نقاش ملف — يقلب تبويب النقاشات ويفتح خيط الملف نفسه
+                // منشن في نقاش ملف — يقلب تبويب النقاشات ويفتح الرسالة نفسها (وخيطها إن كانت ردّاً)
+                PushRouter.shared.pendingFocus = DiscussionFocus(at: n.created_at)
                 PushRouter.shared.route = "/discussions?case=\(caseId)"
             } else if let caseId = n.case_id {
                 // تذكير جلسة / ملخّص ما قبل الجلسة / أي إشعار مربوط بملف —
@@ -183,8 +184,12 @@ struct NotificationsView: View {
             } else if (n.type ?? "").hasPrefix("appointment") {
                 // حجوزات الموقع بلا case_id ولا task_id، فكان النقر لا يفعل شيئاً
                 PushRouter.shared.route = "/appointments"
-            } else if n.type == "mention" || n.type == "birthday" {
-                // منشن في القناة العامة (بلا ملف) — تبويب النقاشات يكفي
+            } else if n.type == "mention" {
+                // منشن في القناة العامة — يفتحها عند الرسالة نفسها
+                PushRouter.shared.pendingFocus = DiscussionFocus(at: n.created_at)
+                PushRouter.shared.route = "/discussions"
+            } else if n.type == "birthday" {
+                // عيد ميلاد زميل — تُهنّئه في القناة العامة، فتبويب النقاشات يكفي
                 PushRouter.shared.route = "/discussions"
             }
             await syncBadge()
