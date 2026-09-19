@@ -1,7 +1,7 @@
 // الملاحظة الصوتية داخل فقاعة النقاش — تُسجَّل من تطبيق الآيفون وتُسمع هنا (طلب المدير 2026-09-14).
 // تُميَّز بامتدادها، ومدتها في اسمها («ملاحظة صوتية 0:42.m4a») فتظهر قبل التشغيل — بلا تعديل في القاعدة.
 import { useEffect, useRef, useState } from 'react'
-import { Loader2, Mic, Pause, Play } from 'lucide-react'
+import { Loader2, Mic, Pause, Play, Quote } from 'lucide-react'
 
 import { Ltr } from '@/components/Ltr'
 import { cn } from '@/lib/utils'
@@ -149,5 +149,36 @@ export function VoiceNotePlayer({
         onError={() => setState('error')}
       />
     </div>
+  )
+}
+
+/**
+ * نص الملاحظة الصوتية تحت مشغّلها — يكتبه آيفون المرسل بعد الإرسال (طلب المدير 2026-09-19:
+ * «عرض النص للرسالة مثل الواتس أب»). سطران مطويّان، والنقر يفتحه كاملاً.
+ */
+export function VoiceTranscript({ text, compact = false }: { text: string; compact?: boolean }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <button
+      type="button"
+      onClick={() => setOpen((o) => !o)}
+      aria-expanded={open}
+      title={open ? 'طيّ النص' : 'عرض النص كاملاً'}
+      className={cn(
+        'mt-2 flex w-full items-start gap-2 rounded-xl bg-gold/10 text-right transition-colors hover:bg-gold/15',
+        compact ? 'px-2.5 py-1.5' : 'px-3 py-2'
+      )}
+    >
+      <Quote className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gold-600 dark:text-gold-300" />
+      <span
+        className={cn(
+          'min-w-0 flex-1 whitespace-pre-wrap text-foreground/85',
+          compact ? 'text-[12.5px]' : 'text-[13px]',
+          !open && 'line-clamp-2'
+        )}
+      >
+        {text}
+      </span>
+    </button>
   )
 }

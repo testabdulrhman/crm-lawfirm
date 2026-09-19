@@ -50,7 +50,7 @@ import { matterHref, matterKindEmoji } from '@/lib/matterHref'
 import { fmtNumber } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { stamp, msgStamp, fullStamp } from './stamps'
-import { VoiceNotePlayer, isAudioName } from './VoiceNote'
+import { VoiceNotePlayer, VoiceTranscript, isAudioName } from './VoiceNote'
 import { DiscussionMediaDialog } from './DiscussionMediaDialog'
 import { URL_RE, cleanUrl, hrefOf } from './links'
 import { openExternal } from '@/lib/external'
@@ -1056,12 +1056,16 @@ function MessageBubble({
               : 'border-border/60 bg-background/60'
         )}
       >
-        {msg.body && (
+        {msg.body && !isAudioName(msg.document_name) && (
           <Body text={msg.body} className="whitespace-pre-wrap text-sm text-foreground" />
         )}
         {msg.document_name &&
           (isAudioName(msg.document_name) ? (
-            <VoiceNotePlayer name={msg.document_name} url={msg.document_url} />
+            <>
+              <VoiceNotePlayer name={msg.document_name} url={msg.document_url} />
+              {/* نص الملاحظة تحت مشغّلها — مطويّ كالواتساب */}
+              {msg.body && <VoiceTranscript text={msg.body} />}
+            </>
           ) : (
             <AttachmentChip name={msg.document_name} url={msg.document_url} />
           ))}
@@ -1526,10 +1530,15 @@ function ThreadReply({
               : 'border-border/60 bg-background/60'
         )}
       >
-        {r.body && <Body text={r.body} className="whitespace-pre-wrap text-sm text-foreground" />}
+        {r.body && !isAudioName(r.document_name) && (
+          <Body text={r.body} className="whitespace-pre-wrap text-sm text-foreground" />
+        )}
         {r.document_name &&
           (isAudioName(r.document_name) ? (
-            <VoiceNotePlayer name={r.document_name} url={r.document_url} compact />
+            <>
+              <VoiceNotePlayer name={r.document_name} url={r.document_url} compact />
+              {r.body && <VoiceTranscript text={r.body} compact />}
+            </>
           ) : (
             <AttachmentChip name={r.document_name} url={r.document_url} compact />
           ))}
