@@ -93,16 +93,28 @@ struct TasksView: View {
     }
 
     private func load(showSpinner: Bool) async {
+        let scope = mineOnly
+        let key = ScreenCache.tasksKey(mine: scope)
         if showSpinner {
-            loading = true
-            tasks = []
+            // النسخة المحفوظة لهذا النطاق تظهر فوراً؛ والدائرة لا تظهر إلا إن لم توجد
+            if let saved = ScreenCache.load([TaskRow].self, key, sb) {
+                tasks = saved
+                loading = false
+            } else {
+                loading = true
+                tasks = []
+            }
         }
         errorMessage = nil
         do {
-            tasks = try await sb.openTasks(mineOnly: mineOnly)
+            let fresh = try await sb.openTasks(mineOnly: scope)
+            guard scope == mineOnly else { return }   // بدّل النطاق أثناء الجلب
+            tasks = fresh
             loadedOnce = true
+            ScreenCache.save(fresh, key, sb)
         } catch {
-            errorMessage = error.localizedDescription
+            // الإلغاء ليس خطأً؛ والقائمة المعروضة تبقى بدل أن تمحوها رسالة خطأ
+            if let t = uiErrorText(error), tasks.isEmpty { errorMessage = t }
         }
         loading = false
     }

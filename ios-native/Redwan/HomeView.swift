@@ -39,6 +39,10 @@ struct HomeView: View {
     @State private var moodFarewell = false
     /// يُحدِّث العدّ التنازلي للموعد القادم كل دقيقة
     @State private var now = Date()
+    /// النطاق الذي تعرضه الشاشة الآن (لتظهر نسخة النطاق المحفوظة فور تبديله)
+    @State private var shownScope: String?
+    /// آخر جلب — الرجوع للتبويب يحدّث بصمت إن مضت نصف دقيقة
+    @State private var lastLoad = Date.distantPast
 
     var body: some View {
         NavigationStack {
@@ -66,6 +70,10 @@ struct HomeView: View {
                 Usage.shared.screen("الرئيسية")
                 openFromPush()
                 now = Date()
+                // عودة إلى التبويب: تحديث صامت خلف المعروض، لا دائرة تحميل
+                if overview != nil, Date().timeIntervalSince(lastLoad) > 30 {
+                    Task { await load() }
+                }
             }
             .navigationDestination(isPresented: $showPrefs) { NotificationPrefsView() }
             .navigationDestination(isPresented: $showMyPage) { MyPageView() }
@@ -730,30 +738,72 @@ struct HomeView: View {
 
     private func load() async {
         now = Date()
+        lastLoad = Date()
         // غير المدير لا يملك نطاق المكتب مهما كانت قيمة الحالة
         let effectiveScope = isDirector ? scope : "mine"
+        let key = ScreenCache.homeKey(effectiveScope)
+
+        // آخر نسخة محفوظة تظهر فوراً — ثم الجديد متى وصل (لا دائرة تحميل عند الفتح)
+        if shownScope != effectiveScope, let snap = ScreenCache.load(HomeSnapshot.self, key, sb) {
+            apply(snap)
+            shownScope = effectiveScope
+        }
+
+        // الطلبات الخمسة معاً في رحلة واحدة — كانت متتابعة فتتراكم رحلاتها إلى الخادم
+        let director = isDirector
+        async let ovR = sb.dashboard(scope: effectiveScope)
+        async let closureR = try? sb.sessionsNeedClosure(scope: effectiveScope)
+        async let doneR = try? sb.doneTodayCount(scope: effectiveScope)
+        async let notesR = try? sb.notifications(limit: 50)
+        async let hrR = Self.pendingHr(sb, director: director)
+
+        let closure = await closureR
+        let done = await doneR
+        let notes = await notesR
+        let hr = await hrR
         do {
-            overview = try await sb.dashboard(scope: effectiveScope)
+            let ov = try await ovR
+            overview = ov
+            shownScope = effectiveScope
             errorMessage = nil
-            // ثانوي — لا يُفشل الشاشة
-            needClosure = (try? await sb.sessionsNeedClosure(scope: effectiveScope)) ?? []
         } catch {
-            // الإلغاء ليس خطأً — تُعاد المحاولة صامتاً عند عودة الشاشة
-            if let t = uiErrorText(error) { errorMessage = t } else { cancelled = true }
+            // الإلغاء ليس خطأً — تُعاد المحاولة صامتاً عند عودة الشاشة؛
+            // وحين تُعرض نسخة محفوظة لا تمحوها شاشة خطأ
+            if let t = uiErrorText(error) {
+                if overview == nil { errorMessage = t }
+            } else { cancelled = true }
         }
-        if let n = try? await sb.doneTodayCount(scope: effectiveScope) {
-            withAnimation { doneToday = n }
-        }
-        // عدّاد الجرس — ثانوي، لا يفشل الشاشة. شارة الأيقونة تتبعه
-        // حتى لا يعلق رقم على الأيقونة بعد قراءة كل شيء
-        if let list = try? await sb.notifications(limit: 50) {
-            unreadCount = list.filter { $0.is_read == false }.count
+        // الثانويات لا تُفشل الشاشة؛ وما تعذّر منها يبقى على قيمته المعروضة
+        if let closure { needClosure = closure }
+        if let done { withAnimation { doneToday = done } }
+        if let notes {
+            // عدّاد الجرس — شارة الأيقونة تتبعه حتى لا يعلق رقم بعد قراءة كل شيء
+            unreadCount = notes.filter { $0.is_read == false }.count
             try? await UNUserNotificationCenter.current().setBadgeCount(unreadCount)
         }
-        // طلبات الموظفين المعلّقة — للمدير فقط، ثانوي لا يُفشل الشاشة
-        if isDirector {
-            pendingHr = (try? await sb.pendingHrCount()) ?? 0
+        if let hr { pendingHr = hr }
+
+        if let ov = overview, shownScope == effectiveScope {
+            ScreenCache.save(HomeSnapshot(
+                overview: ov, doneToday: doneToday, needClosure: needClosure,
+                unread: unreadCount, pendingHr: pendingHr
+            ), key, sb)
         }
+    }
+
+    private func apply(_ snap: HomeSnapshot) {
+        overview = snap.overview
+        doneToday = snap.doneToday
+        needClosure = snap.needClosure
+        unreadCount = snap.unread
+        pendingHr = snap.pendingHr
+        errorMessage = nil
+    }
+
+    /// طلبات الموظفين المعلّقة — للمدير فقط
+    private static func pendingHr(_ sb: SB, director: Bool) async -> Int? {
+        guard director else { return 0 }
+        return try? await sb.pendingHrCount()
     }
 }
 

@@ -142,12 +142,22 @@ struct CasesView: View {
 
     private func load() async {
         error = nil
-        do {
-            rows = try await sb.cases()
+        // آخر نسخة محفوظة (أو ما جهّزه التحميل المسبق) تظهر فوراً
+        if !loaded, let saved = ScreenCache.load([CaseRow].self, ScreenCache.casesKey, sb) {
+            rows = saved
             loaded = true
+        }
+        do {
+            let fresh = try await sb.cases()
+            rows = fresh
+            loaded = true
+            ScreenCache.save(fresh, ScreenCache.casesKey, sb)
         } catch {
-            // الإلغاء ليس خطأً — تُعاد المحاولة صامتاً عند عودة الشاشة
-            if let t = uiErrorText(error) { self.error = t } else { cancelled = true }
+            // الإلغاء ليس خطأً — تُعاد المحاولة صامتاً عند عودة الشاشة؛
+            // والقائمة المحفوظة المعروضة لا تمحوها شاشة خطأ
+            if let t = uiErrorText(error) {
+                if rows.isEmpty { self.error = t }
+            } else { cancelled = true }
         }
     }
 }

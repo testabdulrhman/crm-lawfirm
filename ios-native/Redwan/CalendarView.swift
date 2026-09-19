@@ -528,14 +528,28 @@ struct CalendarView: View {
 
     private func load() async {
         error = nil
-        do {
-            let range = gridDays(anchor)
-            guard let first = range.first, let last = range.last else { return }
-            items = try await sb.calendar(fromISO: Fmt.iso(first), toISO: Fmt.iso(last))
+        let range = gridDays(anchor)
+        guard let first = range.first, let last = range.last else { return }
+        let from = Fmt.iso(first)
+        let key = ScreenCache.calendarKey(from: from)
+        // شهر زُرتَه من قبل يظهر فوراً من نسخته المحفوظة، ثم يتحدث
+        if let saved = ScreenCache.load([CalItem].self, key, sb) {
+            items = saved
             loaded = true
+        } else if loaded {
+            items = []   // شهر جديد بلا نسخة: لا تبقى علامات الشهر السابق عليه
+        }
+        do {
+            let fresh = try await sb.calendar(fromISO: from, toISO: Fmt.iso(last))
+            guard Fmt.iso(gridDays(anchor).first ?? first) == from else { return }   // انتقل لشهر آخر أثناء الجلب
+            items = fresh
+            loaded = true
+            ScreenCache.save(fresh, key, sb)
         } catch {
             // الإلغاء ليس خطأً — تُعاد المحاولة صامتاً عند عودة الشاشة
-            if let t = uiErrorText(error) { self.error = t } else { cancelled = true }
+            if let t = uiErrorText(error) {
+                if !loaded { self.error = t }
+            } else { cancelled = true }
         }
     }
 }

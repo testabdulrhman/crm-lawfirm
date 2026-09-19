@@ -111,7 +111,7 @@ func priorityLabel(_ p: String?) -> String {
 
 // ===== التقويم — عنصر موحّد من أربعة مصادر =====
 
-enum CalKind: String, CaseIterable {
+enum CalKind: String, CaseIterable, Codable {
     case session, appointment, task, poa
 
     var label: String {
@@ -124,7 +124,7 @@ enum CalKind: String, CaseIterable {
     }
 }
 
-struct CalItem: Identifiable {
+struct CalItem: Identifiable, Codable {
     let id: String
     let kind: CalKind
     /// YYYY-MM-DD — مفتاح التجميع في الشبكة

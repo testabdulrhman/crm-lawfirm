@@ -143,6 +143,8 @@ struct MainTabs: View {
                 .tag(4)
         }
         .task { await refreshUnread() }
+        // بيانات المشاريع والمهام والنقاشات تُجهَّز مسبقاً فتفتح تبويباتها فوراً
+        .task { await Prefetch.warm(SB.shared) }
         .task {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(30))
