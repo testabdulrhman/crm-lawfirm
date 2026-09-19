@@ -300,6 +300,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = Redwan;
 				INFOPLIST_KEY_NSCameraUsageDescription = "لتصوير المستندات في المحكمة وإضافتها إلى ملف القضية";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "لتسجيل ملاحظة صوتية وإرسالها في نقاش الملف";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "لكتابة نص ملاحظتك الصوتية تحتها فيقرؤها زملاؤك دون تشغيلها";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -330,6 +331,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = Redwan;
 				INFOPLIST_KEY_NSCameraUsageDescription = "لتصوير المستندات في المحكمة وإضافتها إلى ملف القضية";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "لتسجيل ملاحظة صوتية وإرسالها في نقاش الملف";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "لكتابة نص ملاحظتك الصوتية تحتها فيقرؤها زملاؤك دون تشغيلها";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

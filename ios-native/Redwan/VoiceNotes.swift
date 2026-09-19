@@ -1,4 +1,5 @@
 import AVFoundation
+import Speech
 import SwiftUI
 
 // الملاحظات الصوتية في النقاش (طلب المدير 2026-09-14: «في المناقشات ودي يكون فيه ارسال ملاحظة صوتية»).
@@ -417,5 +418,106 @@ private struct LevelMeter: View {
         }
         .frame(height: 18)
         .animation(.easeOut(duration: 0.1), value: level)
+    }
+}
+
+// MARK: - نص الملاحظة (طلب المدير 2026-09-19: «عرض النص للرسالة مثل الواتس أب»)
+
+/// يحوّل الملاحظة إلى نص على آيفون المُرسِل **بعد** إرسالها — فلا ينتظر المرسل شيئاً —
+/// ثم يضعه في نص الرسالة نفسها، فيقرؤه الجميع في التطبيق والويب والبحث.
+/// التحويل على الجهاز متى دعمه للعربية، وإلا عبر خدمة أبل (كإملاء الكيبورد) — لا جهة أخرى.
+/// تعذّره لا يمسّ شيئاً: تبقى الرسالة صوتاً كما أُرسلت.
+enum VoiceTranscriber {
+    static func attach(messageId: String, fileURL: URL, sb: SB, onDone: @escaping @MainActor () -> Void) {
+        Task.detached(priority: .utility) {
+            defer { try? FileManager.default.removeItem(at: fileURL) }
+            guard let text = await transcribe(fileURL), !text.isEmpty else { return }
+            do {
+                try await sb.setVoiceTranscript(messageId: messageId, text: text)
+                await onDone()
+            } catch {
+                // ثانوي — الملاحظة نفسها وصلت
+            }
+        }
+    }
+
+    static func transcribe(_ url: URL) async -> String? {
+        guard await authorized(),
+              let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "ar-SA")),
+              recognizer.isAvailable
+        else { return nil }
+        // على الجهاز أولاً؛ وإن لم يكن نموذج العربية منزَّلاً عليه فعبر خدمة أبل
+        if recognizer.supportsOnDeviceRecognition,
+           let text = await run(recognizer, url: url, onDevice: true) {
+            return text
+        }
+        return await run(recognizer, url: url, onDevice: false)
+    }
+
+    private static func run(_ recognizer: SFSpeechRecognizer, url: URL, onDevice: Bool) async -> String? {
+        let request = SFSpeechURLRecognitionRequest(url: url)
+        request.shouldReportPartialResults = false
+        request.addsPunctuation = true
+        request.requiresOnDeviceRecognition = onDevice
+        request.taskHint = .dictation
+
+        return await withCheckedContinuation { (cont: CheckedContinuation<String?, Never>) in
+            var finished = false
+            recognizer.recognitionTask(with: request) { result, error in
+                guard !finished else { return }
+                if let result, result.isFinal {
+                    finished = true
+                    let text = result.bestTranscription.formattedString
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                    cont.resume(returning: text.isEmpty ? nil : text)
+                } else if error != nil {
+                    finished = true
+                    cont.resume(returning: nil)
+                }
+            }
+        }
+    }
+
+    private static func authorized() async -> Bool {
+        switch SFSpeechRecognizer.authorizationStatus() {
+        case .authorized: return true
+        case .notDetermined:
+            return await withCheckedContinuation { cont in
+                SFSpeechRecognizer.requestAuthorization { cont.resume(returning: $0 == .authorized) }
+            }
+        default: return false
+        }
+    }
+}
+
+/// نص الملاحظة تحت مشغّلها — سطران مطويّان، ولمسة تفتحه كاملاً (كالواتساب)
+struct VoiceTranscriptView: View {
+    let text: String
+    @State private var expanded = false
+
+    var body: some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.2)) { expanded.toggle() }
+        } label: {
+            HStack(alignment: .top, spacing: 6) {
+                Image(systemName: "text.quote")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Theme.goldDark)
+                    .padding(.top, 3)
+                Text(text)
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.navy.opacity(0.85))
+                    .lineLimit(expanded ? nil : 2)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(Theme.goldPale, in: RoundedRectangle(cornerRadius: 10))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("نص الملاحظة الصوتية")
+        .accessibilityValue(text)
     }
 }

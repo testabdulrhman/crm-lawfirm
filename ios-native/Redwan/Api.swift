@@ -379,12 +379,15 @@ extension SB {
         documentId: String? = nil,
         parentId: String? = nil,
         alsoToStream: Bool = false,
-        mentions: [String]? = nil
+        mentions: [String]? = nil,
+        id: String? = nil
     ) async throws {
         guard let me = member?.id else {
             throw SBError(message: "لم يُحمَّل ملفك بعد — اسحب للتحديث ثم أعد المحاولة")
         }
         var values: [String: Any] = ["author_id": me]
+        // معرّف من الجهاز حين يلزم الرجوع للرسالة بعد إرسالها (نص الملاحظة الصوتية)
+        if let id { values["id"] = id }
         values["case_id"] = caseId ?? NSNull()
         if let body, !body.isEmpty { values["body"] = body }
         if let documentId { values["document_id"] = documentId }
@@ -491,6 +494,14 @@ extension SB {
     }
 
     /// تعديل رسالتي — RLS يمنع تعديل رسائل الغير أصلاً
+    /// نص الملاحظة الصوتية — لا يُعلّمها «معدّلة»، ولا يكتب فوق نص كتبه صاحبها
+    func setVoiceTranscript(messageId: String, text: String) async throws {
+        try await patch("case_comments", query: [
+            ("id", "eq.\(messageId)"),
+            ("body", "is.null"),
+        ], values: ["body": text])
+    }
+
     func editMessage(id: String, body: String) async throws {
         try await patch("case_comments", query: [("id", "eq.\(id)")], values: [
             "body": body,

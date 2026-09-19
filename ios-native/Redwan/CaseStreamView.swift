@@ -569,12 +569,19 @@ struct CaseStreamView: View {
         }
         Usage.shared.action("ملاحظة صوتية")
         Task {
-            defer { try? FileManager.default.removeItem(at: note.url) }
             guard let data = try? Data(contentsOf: note.url) else {
+                try? FileManager.default.removeItem(at: note.url)
                 sendError = "تعذّرت قراءة التسجيل"
                 return
             }
-            await uploadData(data, fileName: VoiceNote.fileName(seconds: note.seconds), mime: "audio/mp4")
+            let id = UUID().uuidString.lowercased()
+            let sent = await uploadData(data, fileName: VoiceNote.fileName(seconds: note.seconds), mime: "audio/mp4", messageId: id)
+            // النص بعد الإرسال وفي الخلفية — والملف المؤقت يُحذف عند انتهائه
+            if sent {
+                VoiceTranscriber.attach(messageId: id, fileURL: note.url, sb: sb) { Task { await load() } }
+            } else {
+                try? FileManager.default.removeItem(at: note.url)
+            }
         }
     }
 
@@ -591,10 +598,11 @@ struct CaseStreamView: View {
         await uploadData(data, fileName: url.lastPathComponent, mime: mime)
     }
 
-    private func uploadData(_ data: Data, fileName: String, mime: String) async {
+    @discardableResult
+    private func uploadData(_ data: Data, fileName: String, mime: String, messageId: String? = nil) async -> Bool {
         guard data.count <= 15 * 1024 * 1024 else {
             sendError = "الملف أكبر من ١٥ ميغابايت"
-            return
+            return false
         }
         uploading = true
         sendError = nil
@@ -607,14 +615,18 @@ struct CaseStreamView: View {
                 caseId: caseId,
                 body: caption.isEmpty ? nil : caption,
                 documentId: docId,
-                mentions: caption.isEmpty ? nil : Mention.extract(from: caption, people: staff)
+                mentions: caption.isEmpty ? nil : Mention.extract(from: caption, people: staff),
+                id: messageId
             )
             draft = ""
             await load()
+            uploading = false
+            return true
         } catch {
             sendError = error.localizedDescription
         }
         uploading = false
+        return false
     }
 
     /// افتح الرسالة المقصودة: بالمعرّف إن عُرف، وإلا بوقت الإشعار، وإلا آخر منشن لي هنا.
@@ -776,7 +788,8 @@ private struct StreamBubble: View {
             }
 
             VStack(alignment: .leading, spacing: 8) {
-                if let body = msg.body, !body.isEmpty {
+                let voice = VoiceNote.isAudio(msg.document_name)
+                if !voice, let body = msg.body, !body.isEmpty {
                     Text(Mention.styled(body))
                         .font(.system(size: 14))
                         .foregroundStyle(Theme.navy)
@@ -785,6 +798,10 @@ private struct StreamBubble: View {
 
                 if let name = msg.document_name {
                     MessageAttachment(name: name, url: msg.document_url)
+                }
+                // الملاحظة الصوتية: نصها تحت المشغّل مطويّاً
+                if voice, let body = msg.body, !body.isEmpty {
+                    VoiceTranscriptView(text: body)
                 }
 
                 Divider().overlay(mine ? Theme.gold.opacity(0.35) : Theme.line)
@@ -1156,7 +1173,8 @@ private struct ThreadView: View {
                     }
                 }
                 VStack(alignment: .leading, spacing: 6) {
-                    if let b = r.body, !b.isEmpty {
+                    let voice = VoiceNote.isAudio(r.document_name)
+                    if !voice, let b = r.body, !b.isEmpty {
                         Text(Mention.styled(b))
                             .font(.system(size: 14))
                             .foregroundStyle(Theme.navy)
@@ -1164,6 +1182,9 @@ private struct ThreadView: View {
                     }
                     if let name = r.document_name {
                         MessageAttachment(name: name, url: r.document_url)
+                    }
+                    if voice, let b = r.body, !b.isEmpty {
+                        VoiceTranscriptView(text: b)
                     }
                 }
                 .padding(10)
@@ -1341,24 +1362,27 @@ private struct ThreadView: View {
         sending = true
         sendError = nil
         Task {
-            defer {
-                sending = false
-                try? FileManager.default.removeItem(at: note.url)
-            }
+            defer { sending = false }
             do {
                 let data = try Data(contentsOf: note.url)
                 let docId = try await sb.uploadAttachment(
                     data: data, fileName: VoiceNote.fileName(seconds: note.seconds),
                     mime: "audio/mp4", caseId: caseId
                 )
+                let id = UUID().uuidString.lowercased()
                 try await sb.postMessage(
                     caseId: caseId, body: nil, documentId: docId,
-                    parentId: root.id, alsoToStream: wasAlsoToStream
+                    parentId: root.id, alsoToStream: wasAlsoToStream, id: id
                 )
                 alsoToStream = false
                 await load()
                 onChange()
+                // النص بعد الإرسال وفي الخلفية — والملف المؤقت يُحذف عند انتهائه
+                VoiceTranscriber.attach(messageId: id, fileURL: note.url, sb: sb) {
+                    Task { await load(); onChange() }
+                }
             } catch {
+                try? FileManager.default.removeItem(at: note.url)
                 sendError = uiErrorText(error)
             }
         }
