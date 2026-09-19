@@ -248,6 +248,12 @@ struct DiscussionsView: View {
         }
         .retryIfCancelled($cancelled) { await load() }
         .onChange(of: router.route) { _, _ in openFromPush() }
+        // قُرئ نقاش: يُطفأ صفه هنا فوراً، ثم جلبٌ صامت يؤكد العدّادات وآخر رسالة
+        .onReceive(NotificationCenter.default.publisher(for: .discussionRead)) { note in
+            guard let key = note.object as? String else { return }
+            rows = rows.map { $0.id == key ? $0.markedRead() : $0 }
+            Task { await load() }
+        }
     }
 
     /// منشن وصل إشعاره؟ افتح نقاش قضيته مباشرة (بلاغ المستخدم 2026-08-30)،

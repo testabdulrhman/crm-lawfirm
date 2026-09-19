@@ -179,8 +179,22 @@ struct DiscussionRow: Codable, Identifiable {
     /// خاصة لا ملف لها، وفارغ = القناة العامة. وجهة رقاقة الملف في شريط النقاش.
     let kind: String?
 
-    var id: String { case_id ?? "general" }
+    var id: String { case_id ?? DiscussionRow.generalKey }
     var isGeneral: Bool { case_id == nil }
+
+    static let generalKey = "general"
+
+    /// الصف نفسه مقروءاً — يُطفأ محلياً لحظة القراءة قبل أن يؤكده الجلب
+    func markedRead() -> DiscussionRow {
+        DiscussionRow(case_id: case_id, case_title: case_title, office_num: office_num,
+                      last_body: last_body, last_at: last_at, last_author: last_author,
+                      has_file: has_file, unread: 0, kind: kind)
+    }
+}
+
+extension Notification.Name {
+    /// عُلِّم نقاش مقروءاً (object = معرّف الملف أو DiscussionRow.generalKey)
+    static let discussionRead = Notification.Name("discussionRead")
 }
 
 /// تفاعل إيموجي مجمّع: الرمز، العدد، وهل أنا منهم

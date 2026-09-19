@@ -31,9 +31,12 @@ struct HomeView: View {
     @State private var openingTaskId: String?
     @ObservedObject private var router = PushRouter.shared
 
-    /// المزاج يبقى على الجهاز فقط، ويُنسى مع اليوم التالي
+    /// المزاج يبقى على الجهاز فقط. يُسأل مرة في اليوم: بعد الإجابة يختفي السؤال
+    /// ولا يعود إلا صباح الغد (طلب المدير 2026-09-19)
     @AppStorage("home.mood.day") private var moodDay = ""
     @AppStorage("home.mood.value") private var moodValue = ""
+    /// لحظة الوداع بعد الاختيار: يبقى السؤال ثانيتين يعرض ردّه ثم ينطوي
+    @State private var moodFarewell = false
     /// يُحدِّث العدّ التنازلي للموعد القادم كل دقيقة
     @State private var now = Date()
 
@@ -105,8 +108,11 @@ struct HomeView: View {
                         .padding(.top, 10)
                 }
 
-                moodSection
-                    .padding(.top, 22)
+                if todayMood == nil || moodFarewell {
+                    moodSection
+                        .padding(.top, 22)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                }
 
                 statsRow(ov.stats)
                     .padding(.top, 12)
@@ -255,8 +261,14 @@ struct HomeView: View {
         ("🤩", "رائع", "طاقة ممتازة — استمتع بيومك."),
     ]
 
+    /// «يوم» السؤال يبدأ الرابعة فجراً — من أجاب ليلاً لا يُسأل ثانية بعد منتصف الليل،
+    /// ويعود السؤال مع صباح اليوم التالي
+    private var moodDayKey: String {
+        Fmt.iso(now.addingTimeInterval(-4 * 3600))
+    }
+
     private var todayMood: String? {
-        moodDay == Fmt.todayISO() && !moodValue.isEmpty ? moodValue : nil
+        moodDay == moodDayKey && !moodValue.isEmpty ? moodValue : nil
     }
 
     private var moodSection: some View {
@@ -268,13 +280,15 @@ struct HomeView: View {
                 ForEach(Self.moods, id: \.emoji) { m in
                     let selected = todayMood == m.emoji
                     Button {
+                        guard todayMood == nil else { return }
+                        moodFarewell = true
                         withAnimation(.spring(duration: 0.35)) {
-                            if selected {
-                                moodValue = ""
-                            } else {
-                                moodDay = Fmt.todayISO()
-                                moodValue = m.emoji
-                            }
+                            moodDay = moodDayKey
+                            moodValue = m.emoji
+                        }
+                        Task {
+                            try? await Task.sleep(for: .seconds(2.4))
+                            withAnimation(.easeInOut(duration: 0.45)) { moodFarewell = false }
                         }
                     } label: {
                         Text(m.emoji)

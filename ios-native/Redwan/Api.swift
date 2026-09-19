@@ -448,6 +448,11 @@ extension SB {
             ],
             onConflict: "case_id,member_id"
         )
+        // قائمة النقاشات وشارة التبويب تُطفئان «غير مقروء» فوراً — لا انتظار سحبٍ للتحديث
+        // (بلاغ المدير 2026-09-19: «ما يبين عندي اني فتحت المحادثة لين ما أسحب الشاشة»)
+        await MainActor.run {
+            NotificationCenter.default.post(name: .discussionRead, object: caseId ?? DiscussionRow.generalKey)
+        }
     }
 
     // ===== التفاعل والحفظ والتحرير =====

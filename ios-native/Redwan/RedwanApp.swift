@@ -152,6 +152,10 @@ struct MainTabs: View {
         // مسار الإشعار يقلب التبويب — والشاشة نفسها تفتح وجهتها ثم تصفّر الجسر
         .onChange(of: router.route) { _, r in switchTab(for: r) }
         .task { switchTab(for: router.route) }
+        // الشارة تنقص لحظة قراءة نقاش، لا بعد ٣٠ ثانية
+        .onReceive(NotificationCenter.default.publisher(for: .discussionRead)) { _ in
+            Task { await refreshUnread() }
+        }
     }
 
     private func refreshUnread() async {
