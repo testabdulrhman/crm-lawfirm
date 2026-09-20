@@ -20,10 +20,14 @@ const buf = fs.readFileSync(ipaPath);
 // إعادة التشغيل بعد انقطاع كانت تُنشئ سجلاً مكرراً فترفضه أبل («bundle version must be higher»)
 {
   const prev = await call('GET', `/apps/${APP}/buildUploads?limit=10`);
+  // سجل عالق في AWAITING_UPLOAD (انقطعت الشبكة قبل رفع الملف) لا يمنع محاولة جديدة بعد ١٠ دقائق
+  const stale = (u) => u.attributes?.state?.state === 'AWAITING_UPLOAD' &&
+    (process.env.FORCE_UPLOAD === '1' ||
+     Date.now() - new Date(u.attributes?.createdDate ?? 0).getTime() > 10 * 60 * 1000);
   const same = (prev.data ?? []).find((u) =>
     u.attributes?.cfBundleVersion === build &&
     u.attributes?.cfBundleShortVersionString === version &&
-    u.attributes?.state?.state !== 'FAILED');
+    u.attributes?.state?.state !== 'FAILED' && !stale(u));
   if (same) {
     console.log(`البناء ${version} (${build}) مرفوع سابقاً — الحالة: ${same.attributes.state?.state} (${same.id})`);
     process.exit(0);
