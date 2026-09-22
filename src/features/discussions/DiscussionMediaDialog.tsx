@@ -97,17 +97,17 @@ export function DiscussionMediaDialog({
   onOpenChange,
   caseId,
   title,
-  initialScope = 'here',
 }: {
   open: boolean
   onOpenChange: (v: boolean) => void
   /** النقاش المفتوح — null = «عام — المكتب»، وundefined = لا نقاش مختار (كل النقاشات وحدها) */
   caseId: string | null | undefined
   title?: string
-  initialScope?: Scope
 }) {
   const hasHere = caseId !== undefined
-  const [scope, setScope] = useState<Scope>(hasHere ? initialScope : 'all')
+  // تُفتح دائماً على النقاش المعروض، والمبدّل يوسّعها لكل النقاشات
+  // (طلب المدير 2026-09-20: «ودي يطلع مرفقات النقاش اللي ظاهر أمامنا»)
+  const [scope, setScope] = useState<Scope>(hasHere ? 'here' : 'all')
   const [tab, setTab] = useState<Tab>('files')
   const [q, setQ] = useState('')
   const [preview, setPreview] = useState<{ url: string; name: string } | null>(null)

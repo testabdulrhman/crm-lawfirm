@@ -19,8 +19,10 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 // السلوك:
 //  • وارد فقط (direction=Inbound) — يُسجل في sms_log بحالة incoming
 //    فيظهر في صفحة /inbox أسوة برسائل SMS الواردة.
-//  • رد آلي بنص قالب wa_auto_reply (يحرَّر من الإعدادات ← القوالب —
-//    نسخة الواتساب وإلا النصية) — مرة واحدة لكل رقم كل ٢٤ ساعة.
+// v8 (2026-09-21): رد آلي **متجاوب** بدل الكليشه (طلب المدير): التحية تُردّ بمثلها،
+//   وسؤال «استشارة مجانية» يُجاب بسعر الساعة (lookup_values consultation_config/hourly_fee)
+//   مع عرض الحجز، و«نعم» بعده تُرسل رابط الحجز. القالب wa_auto_reply صار مفتاح إيقاف فقط.
+//  • حتى ثلاثة ردود لكل رقم في اليوم، ولا يتكرر النص نفسه.
 //  • الرد نص حر مسموح دائماً هنا: العميل بدأ فنافذة الـ٢٤ ساعة مفتوحة.
 // =============================================================
 
@@ -80,6 +82,96 @@ function describe(messageType: string, body: string | null, mediaUrl: string | n
   };
   const l = label[messageType] ?? "رسالة";
   return mediaUrl ? `${l}: ${mediaUrl}` : l;
+}
+
+
+// ===== الرد الآلي المتجاوب (طلب المدير 2026-09-21: «ابي نصوص تفاعلية») =====
+// الرد يتبع ما كتبه الشخص: تحيةٌ تُردّ بمثلها، وشكرٌ يُقابل بدعاء، وسؤالٌ يُقابل
+// بردّ يفتح الحديث. لا كليشه ولا اسم شركة طويل — النبرة نبرة شخص يرد بنفسه.
+
+/** تطبيع عربي: همزات وتاء مربوطة وتطويل وتشكيل وعلامات — للمطابقة فقط */
+function norm(t: string): string {
+  return t
+    .replace(/[\u064B-\u0652\u0640]/g, "")
+    .replace(/[إأآٱ]/g, "ا").replace(/ى/g, "ي").replace(/ة/g, "ه")
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim().toLowerCase();
+}
+
+type Intent = "salam" | "hello" | "morning" | "evening" | "thanks" | "free_consult" | "fee" | "yes" | "content";
+
+function intentOf(raw: string): Intent {
+  const t = norm(raw);
+  const short = t.split(" ").length <= 5;
+  // سؤال الاستشارة يسبق كل شيء ولو جاء داخل كلام طويل
+  if (/استشار/.test(t)) {
+    if (/مجاني|مجانا|ببلاش|بلاش|بدون مقابل|مجانيه/.test(t)) return "free_consult";
+    if (/كم|سعر|تكلفه|تكلفة|رسوم|قيمه|اسعار/.test(t)) return "fee";
+  }
+  if (/شكر|مشكور|يعطيك العافيه|جزاك الله|تسلم/.test(t)) return "thanks";
+  if (short && /^(نعم|ايه|ايوه|اي|اكيد|تمام|زين|طيب|موافق|ابي|ابغي|ابغى|يالله|اوك|ok|yes)( .*)?$/.test(t)) return "yes";
+  if (!short) return "content";
+  if (/^(ال)?سلام عليكم|^سلام( عليكم)?$|^السلام$/.test(t)) return "salam";
+  if (/^صباح (الخير|النور|الورد)/.test(t)) return "morning";
+  if (/^مساء (الخير|النور|الورد)/.test(t)) return "evening";
+  if (/^(هلا|هلا والله|اهلا|اهلين|مرحبا|مرحبتين|هاي|السلام)/.test(t)) return "hello";
+  return "content";
+}
+
+/** الوقت بتوقيت الرياض */
+function riyadhNow(): { hour: number; weekday: number } {
+  const d = new Date(Date.now() + 3 * 3_600_000);
+  return { hour: d.getUTCHours(), weekday: d.getUTCDay() }; // 0=الأحد … 5=الجمعة 6=السبت
+}
+
+function workingNow(): boolean {
+  const { hour, weekday } = riyadhNow();
+  return weekday >= 0 && weekday <= 4 && hour >= 9 && hour < 17;
+}
+
+/** ذيل يوضّح متى يصل الرد — يتغيّر بالوقت ولا يَعِد بما لا نملك */
+function tail(): string {
+  const { weekday } = riyadhNow();
+  if (workingNow()) return "";
+  if (weekday === 5 || weekday === 6) return "\nوإن تأخر ردّي فالدوام يبدأ الأحد.";
+  return "\nوإن كانت الساعة متأخرة، فردّي يصلك أول الدوام.";
+}
+
+/** رابط حجز المواعيد العام — يختار العميل وقته بنفسه */
+const BOOKING_URL = "https://app.redwan.sa/#/book";
+
+function autoReplyFor(raw: string, fee: string, offeredBooking: boolean): string {
+  const intent = intentOf(raw);
+  // «نعم» بعد عرض الحجز = موافقة عليه؛ وبلا عرض سابق تُعامل كبداية حديث
+  if (intent === "yes") {
+    return offeredBooking
+      ? "تمام، احجز الوقت الذي يناسبك من هنا:\n" + BOOKING_URL +
+        "\nويصلك تأكيد الموعد برسالة." + tail()
+      : "تفضل، وش الموضوع؟";
+  }
+  switch (intent) {
+    case "free_consult":
+      return "السلام عليكم ورحمة الله وبركاته\n" +
+        `لا، الاستشارات عندنا مدفوعة بالساعة، وقيمة الساعة ${fee} ريال — شامل الضريبة.\n` +
+        "تبي أحجز لك موعد؟";
+    case "fee":
+      return "السلام عليكم ورحمة الله وبركاته\n" +
+        `الاستشارة عندنا بالساعة، وقيمة الساعة ${fee} ريال — شامل الضريبة.\n` +
+        "تبي أحجز لك موعد؟";
+    case "salam":
+      return "وعليكم السلام ورحمة الله وبركاته\nحياك الله، تفضل؟" + tail();
+    case "morning":
+      return "صباح النور\nحياك الله، تفضل؟" + tail();
+    case "evening":
+      return "مساء النور\nحياك الله، تفضل؟" + tail();
+    case "hello":
+      return "هلا وغلا، حياك الله\nتفضل، وش الموضوع؟" + tail();
+    case "thanks":
+      return "الله يعافيك\nوإن احتجت شيئاً آخر فأنا معك.";
+    default:
+      return "حياك الله\nوصلتني رسالتك وأنا أطّلع عليها.\nوعشان أختصر عليك: الموضوع قضية قائمة عندنا، ولا شيء جديد؟" + tail();
+  }
 }
 
 Deno.serve(async (req) => {
@@ -184,16 +276,25 @@ Deno.serve(async (req) => {
   let replied = false;
   if (phone && isCreditor === false) {
     const dayAgo = new Date(Date.now() - 24 * 3_600_000).toISOString();
+    // الرد يتبع ما كتبه الشخص، فلا يُمنع رد ثانٍ حين يتغيّر كلامه (تحية ثم موضوع).
+    // الحدّ: ثلاثة ردود في اليوم، ولا يتكرر النصّ نفسه على الرقم نفسه.
     const { data: recent } = await supabase
-      .from("sms_log").select("id").eq("phone", phone)
-      .eq("sent_by", "wa-auto-reply").gte("created_at", dayAgo).limit(1);
+      .from("sms_log").select("message").eq("phone", phone)
+      .eq("sent_by", "wa-auto-reply").gte("created_at", dayAgo).limit(5);
+    // قيمة ساعة الاستشارة تُحرَّر من الإعدادات (lookup_values) بلا تعديل في الكود
+    const fee = (await lookupValue("consultation_config", "hourly_fee")) ?? "575";
+    // هل عرضنا عليه الحجز في آخر ردودنا؟ عندها «نعم» تعني الموافقة عليه
+    const offeredBooking = (recent ?? []).some((r) =>
+      ((r.message as string) ?? "").includes("تبي أحجز لك موعد"));
+    const replyText = autoReplyFor(text, fee, offeredBooking);
+    const already = (recent ?? []).some((r) => (r.message as string) === replyText);
 
-    if (!recent || recent.length === 0) {
+    if ((recent?.length ?? 0) < 3 && !already) {
+      // القالب صار مفتاح إيقاف فقط — النص يُبنى بحسب رسالة العميل
       const { data: tpl } = await supabase
         .from("message_templates")
-        .select("body, body_whatsapp, is_active")
+        .select("is_active")
         .eq("key", "wa_auto_reply").maybeSingle();
-      const replyText = (tpl?.body_whatsapp as string) || (tpl?.body as string) || "";
 
       if (tpl?.is_active !== false && replyText.trim()) {
         let ok = false;

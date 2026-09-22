@@ -531,7 +531,6 @@ export function DiscussionsPage() {
           onOpenChange={setShowMedia}
           caseId={selected}
           title={current?.case_title ?? (selected === null ? 'عام — المكتب' : undefined)}
-          initialScope="all"
         />
       )}
 
