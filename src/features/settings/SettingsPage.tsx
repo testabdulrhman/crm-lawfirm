@@ -10,6 +10,7 @@ import {
   MessageSquareText,
   FileType2,
   UserCircle2,
+  BellRing,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -30,6 +31,7 @@ import { AccountTab } from './AccountTab'
 import { BookingTab } from './BookingTab'
 import { ContractTemplatesTab } from './ContractTemplatesTab'
 import { TrashTab } from './TrashTab'
+import { NotificationRulesTab } from './NotificationRulesTab'
 import { useIsDirector } from '@/hooks/useIsDirector'
 
 // المستوى الأول: مجموعتان — والثاني: تبويبات كل مجموعة
@@ -72,8 +74,13 @@ export function SettingsPage() {
   const [tab, setTab] = usePageState('settings:tab', 'account')
   const isDirector = useIsDirector()
   // سلة الاسترجاع للمدير وحده — الدوال الخادمية تفرض ذلك أيضاً
+  // قواعد الإشعارات وسلة الاسترجاع للمدير وحده — والقاعدة تفرض ذلك أيضاً
   const officeTabs = isDirector
-    ? [...OFFICE_TABS, { value: 'trash', label: 'سلة الاسترجاع', icon: Trash2 }]
+    ? [
+        ...OFFICE_TABS,
+        { value: 'notification-rules', label: 'قواعد الإشعارات', icon: BellRing },
+        { value: 'trash', label: 'سلة الاسترجاع', icon: Trash2 },
+      ]
     : OFFICE_TABS
   const group =
     officeTabs.some((t) => t.value === tab)
@@ -154,6 +161,10 @@ export function SettingsPage() {
 
         <TabsContent value="booking">
           <BookingTab />
+        </TabsContent>
+
+        <TabsContent value="notification-rules">
+          <NotificationRulesTab />
         </TabsContent>
 
         <TabsContent value="trash">
