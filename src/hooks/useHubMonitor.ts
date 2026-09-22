@@ -140,6 +140,41 @@ export function useHubEvent(eventId: number | null) {
   })
 }
 
+export interface TemplateRow {
+  name: string
+  language: string
+  status: 'approved' | 'pending' | 'rejected' | 'paused' | 'draft' | 'deleted'
+  category: string | null
+  can_be_sent: boolean | null
+  purpose: string | null
+  requested_by: string | null
+  allowed_systems: string[] | null
+  variables: string[]
+  body: string | null
+  rejected_reason: string | null
+  attempts: number
+  sent_30d: number
+  synced_at: string | null
+}
+
+export interface TemplatesReport {
+  generated_at: string
+  templates: TemplateRow[]
+  deleted: number
+  alerts: { at: string; template: string | null; status: string | null; category: string | null
+            reason: string | null; attempts: string | null }[]
+}
+
+export function useHubTemplates() {
+  return useQuery({
+    queryKey: ['hub', 'templates'],
+    queryFn: () => call<TemplatesReport>({ action: 'templates' }),
+    refetchInterval: 300_000,
+    staleTime: 120_000,
+    retry: false,
+  })
+}
+
 export function useHubStaff() {
   return useQuery({
     queryKey: ['hub', 'staff'],

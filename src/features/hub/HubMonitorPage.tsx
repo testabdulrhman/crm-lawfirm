@@ -5,7 +5,7 @@
 // (hub-monitor ترفض غير المدير بـ 403)، وهذا الفحص هنا لئلا يرى غيرُه صفحةً فارغة محيّرة.
 import { useState } from 'react'
 import {
-  Activity, AlertTriangle, ChevronDown, Loader2, Phone, RefreshCw, Search,
+  Activity, AlertTriangle, ChevronDown, FileText, Loader2, Phone, RefreshCw, Search,
   ShieldCheck, UserPlus, Users,
 } from 'lucide-react'
 
@@ -17,8 +17,9 @@ import { Switch } from '@/components/ui/switch'
 import { Ltr } from '@/components/Ltr'
 import { useIsDirector } from '@/hooks/useIsDirector'
 import {
-  useHubEvent, useHubPhone, useHubStaff, useHubStaffSet, useHubSummary,
-  type DayCounts, type HubSummary, type PhoneReport, type StaffRow, type TimelineItem,
+  useHubEvent, useHubPhone, useHubStaff, useHubStaffSet, useHubSummary, useHubTemplates,
+  type DayCounts, type HubSummary, type PhoneReport, type StaffRow, type TemplateRow,
+  type TimelineItem,
 } from '@/hooks/useHubMonitor'
 import { errMessage } from '@/lib/errors'
 import { cn } from '@/lib/utils'
@@ -380,6 +381,109 @@ function PhoneView({ r }: { r: PhoneReport }) {
 }
 
 // ---------- أرقام الفريق ----------
+// ---------- القوالب ----------
+// اطلاعٌ فقط: الإنشاء آليّ في الـ Hub بطلب من النظامين، لا من هنا.
+const TPL_STATUS: Record<string, { label: string; cls: string }> = {
+  approved: { label: 'معتمد', cls: 'bg-emerald-600 text-white' },
+  pending: { label: 'قيد المراجعة', cls: 'bg-amber-500 text-white' },
+  rejected: { label: 'مرفوض', cls: 'bg-destructive text-white' },
+  paused: { label: 'موقوف', cls: 'bg-muted text-foreground' },
+  draft: { label: 'مسودة', cls: 'bg-muted text-foreground' },
+}
+
+function TemplateItem({ t }: { t: TemplateRow }) {
+  const [open, setOpen] = useState(false)
+  const st = TPL_STATUS[t.status] ?? { label: t.status, cls: 'bg-muted text-foreground' }
+  return (
+    <li className="rounded-lg border border-border/60">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full flex-wrap items-center gap-2 px-3 py-2 text-start hover:bg-muted/60"
+      >
+        <Badge className={st.cls}>{st.label}</Badge>
+        <Ltr className="font-medium">{t.name}</Ltr>
+        <span className="text-xs text-muted-foreground">
+          {t.variables.length ? t.variables.join('، ') : 'بلا متغيرات'}
+        </span>
+        <span className="ms-auto flex items-center gap-2 text-xs text-muted-foreground">
+          {t.sent_30d > 0 ? <span>أُرسل <Ltr>{n(t.sent_30d)}</Ltr> (30 يوماً)</span> : null}
+          <Ltr>{t.language}</Ltr>
+          <ChevronDown className={cn('h-4 w-4 transition-transform', open && 'rotate-180')} />
+        </span>
+      </button>
+      {open ? (
+        <div className="space-y-2 border-t border-border/60 px-3 py-2 text-sm">
+          {t.purpose ? <p className="text-muted-foreground">الغرض: {t.purpose}</p> : null}
+          {t.rejected_reason ? <p className="text-destructive">سبب الرفض: {t.rejected_reason}</p> : null}
+          <p className="text-xs text-muted-foreground">
+            الفئة <Ltr>{t.category ?? '—'}</Ltr>
+            {t.requested_by ? <> · طلبه {t.requested_by === 'law' ? 'المحاماة' : t.requested_by === 'bankruptcy' ? 'الإفلاس' : t.requested_by}</> : null}
+            {t.allowed_systems?.length ? <> · متاح لـ {t.allowed_systems.map((x) => (x === 'law' ? 'المحاماة' : 'الإفلاس')).join('، ')}</> : null}
+            {t.synced_at ? <> · زُومن <Ltr>{t.synced_at}</Ltr></> : null}
+          </p>
+          {t.body ? (
+            <pre className="whitespace-pre-wrap rounded-lg bg-muted p-3 text-[13px] leading-relaxed">{t.body}</pre>
+          ) : null}
+        </div>
+      ) : null}
+    </li>
+  )
+}
+
+function TemplatesSection() {
+  const { data, isLoading, error, isFetching, refetch } = useHubTemplates()
+  return (
+    <Card>
+      <CardContent className="space-y-3 p-4">
+        <div className="flex items-center gap-2">
+          <FileText className="h-4 w-4 text-gold-600" />
+          <p className="text-sm font-semibold">قوالب الواتساب</p>
+          <span className="text-xs text-muted-foreground">اطلاع فقط — الإنشاء آليّ بطلب من الأنظمة.</span>
+          <Button variant="ghost" size="icon" className="ms-auto" title="تحديث"
+            onClick={() => refetch()} disabled={isFetching}>
+            <RefreshCw className={cn('h-4 w-4', isFetching && 'animate-spin')} />
+          </Button>
+        </div>
+
+        {isLoading ? (
+          <Loader2 className="mx-auto h-5 w-5 animate-spin text-muted-foreground" />
+        ) : error ? (
+          <p className="text-sm text-destructive">{errMessage(error)}</p>
+        ) : data ? (
+          <>
+            {data.alerts.filter((a) => a.status === 'rejected' || a.category === 'MARKETING').length ? (
+              <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm">
+                <p className="mb-1 flex items-center gap-2 font-semibold text-destructive">
+                  <AlertTriangle className="h-4 w-4" /> قوالب تحتاج قراراً
+                </p>
+                <ul className="space-y-1 text-xs">
+                  {data.alerts.filter((a) => a.status === 'rejected' || a.category === 'MARKETING').slice(0, 6).map((a, k) => (
+                    <li key={k}>
+                      <Ltr>{a.template}</Ltr> — {a.category === 'MARKETING' ? 'صُنّف تسويقياً' : 'رُفض'}
+                      {a.reason ? <> · {a.reason}</> : null}
+                      <span className="text-muted-foreground"> · <Ltr>{a.at}</Ltr></span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
+            <ul className="space-y-1">
+              {data.templates.map((t) => <TemplateItem key={`${t.name}:${t.language}`} t={t} />)}
+            </ul>
+            <p className="text-xs text-muted-foreground">
+              <Ltr>{n(data.templates.length)}</Ltr> قالباً قائماً
+              {data.deleted ? <> · <Ltr>{n(data.deleted)}</Ltr> محذوفاً</> : null}
+              {' '}· حُدّث <Ltr>{data.generated_at}</Ltr>
+            </p>
+          </>
+        ) : null}
+      </CardContent>
+    </Card>
+  )
+}
+
 function StaffSection() {
   const { data, isLoading, error } = useHubStaff()
   const setStaff = useHubStaffSet()
@@ -534,6 +638,7 @@ export function HubMonitorPage() {
           </Card>
 
           <Newcomers s={summary.data} onPick={(p) => { setQuery(p); setPhone(p) }} />
+          <TemplatesSection />
           <StaffSection />
         </>
       ) : null}

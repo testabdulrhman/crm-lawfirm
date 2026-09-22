@@ -27,7 +27,7 @@ const admin = createClient(
 );
 
 // أفعال القراءة مسموحة للمدير؛ والكتابة (staff_set) كذلك — وهي الوحيدة
-const ACTIONS = new Set(['summary', 'phone', 'event', 'staff_list', 'staff_set']);
+const ACTIONS = new Set(['summary', 'phone', 'event', 'templates', 'staff_list', 'staff_set']);
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
