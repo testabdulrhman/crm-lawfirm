@@ -10,6 +10,7 @@ import {
   Landmark,
   Loader2,
   Megaphone,
+  MessageSquarePlus,
   MessagesSquare,
   Paperclip,
   Pencil,
@@ -18,6 +19,7 @@ import {
   Send,
   Sparkles,
   Trash2,
+  User,
   Users,
   X,
 } from 'lucide-react'
@@ -38,6 +40,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Skeleton } from '@/components/ui/skeleton'
+import { UserAvatar } from '@/components/UserAvatar'
 import { QueryErrorState } from '@/components/QueryErrorState'
 import { EmptyState } from '@/components/EmptyState'
 import { FilePreviewDialog } from '@/components/FilePreviewDialog'
@@ -75,6 +78,7 @@ import {
   type ReadCount,
   type ReadPerson,
   useCreateChannel,
+  useOpenDm,
   useRenameChannel,
   useToggleReaction,
   type DiscussionRow,
@@ -348,6 +352,7 @@ export function DiscussionsPage() {
   const [showBookmarks, setShowBookmarks] = useState(false)
   const [showMedia, setShowMedia] = useState(false)
   const [showNewChannel, setShowNewChannel] = useState(false)
+  const [showNewDm, setShowNewDm] = useState(false)
   const isDirector = useIsDirector()
   const qc = useQueryClient()
 
@@ -486,6 +491,7 @@ export function DiscussionsPage() {
           onBookmarks={() => setShowBookmarks(true)}
           onMedia={() => setShowMedia(true)}
           onNewChannel={isDirector ? () => setShowNewChannel(true) : undefined}
+          onNewDm={() => setShowNewDm(true)}
         />
 
         {selected === undefined ? (
@@ -507,7 +513,7 @@ export function DiscussionsPage() {
             focusId={streamFocus}
             onFocused={() => setStreamFocus(null)}
             caseHref={
-              selected && current?.kind !== 'channel'
+              selected && current?.kind !== 'channel' && current?.kind !== 'dm'
                 ? matterHref(current?.kind ?? 'case', selected)
                 : null
             }
@@ -551,6 +557,15 @@ export function DiscussionsPage() {
           choose(id)
         }}
       />
+
+      <NewDmDialog
+        open={showNewDm}
+        onOpenChange={setShowNewDm}
+        onOpened={(id) => {
+          setShowNewDm(false)
+          choose(id)
+        }}
+      />
     </div>
   )
 }
@@ -567,6 +582,7 @@ function ChannelList({
   onBookmarks,
   onMedia,
   onNewChannel,
+  onNewDm,
 }: {
   channels: DiscussionRow[]
   loading: boolean
@@ -579,6 +595,8 @@ function ChannelList({
   onMedia: () => void
   /** للمدير فقط — غيابه يخفي الزرّ */
   onNewChannel?: () => void
+  /** محادثة مباشرة مع زميل — متاحة للجميع */
+  onNewDm: () => void
 }) {
   const [q, setQ] = useState('')
 
@@ -601,6 +619,14 @@ function ChannelList({
     <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-border/70 bg-card">
       <div className="flex items-center gap-2 border-b border-border/60 p-3">
         <h2 className="flex-1 text-[15px] font-bold text-foreground">النقاشات</h2>
+        <button
+          type="button"
+          title="محادثة مباشرة مع زميل"
+          onClick={onNewDm}
+          className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-gold"
+        >
+          <MessageSquarePlus className="h-4 w-4" />
+        </button>
         {onNewChannel && (
           <button
             type="button"
@@ -654,6 +680,7 @@ function ChannelList({
           filtered.map((c) => {
             const isGeneral = c.case_id === null
             const isChannel = c.kind === 'channel'
+            const isDm = c.kind === 'dm'
             const active = selected !== undefined && (selected ?? null) === c.case_id
             // نقاش فيه ما لم يُقرأ: يُرى دون تدقيق — شريط ذهبي وخطّ أغمق
             const unread = Number(c.unread ?? 0) > 0
@@ -682,6 +709,8 @@ function ChannelList({
                     <Megaphone className="h-4 w-4" />
                   ) : isChannel ? (
                     <Landmark className="h-4 w-4" />
+                  ) : isDm ? (
+                    <User className="h-4 w-4" />
                   ) : (
                     <span className="text-base leading-none" aria-hidden>
                       {matterKindEmoji(c.kind)}
@@ -897,6 +926,8 @@ function StreamPane({
             <Megaphone className="h-4 w-4" />
           ) : kind === 'channel' ? (
             <Landmark className="h-4 w-4" />
+          ) : kind === 'dm' ? (
+            <User className="h-4 w-4" />
           ) : (
             <MessagesSquare className="h-4 w-4" />
           )}
@@ -905,6 +936,8 @@ function StreamPane({
           <p className="truncate text-[15px] font-semibold text-foreground">{title}</p>
           {kind === 'channel' ? (
             <p className="text-xs text-muted-foreground">قناة خاصة — يراها أعضاؤها فقط</p>
+          ) : kind === 'dm' ? (
+            <p className="text-xs text-muted-foreground">محادثة مباشرة — بينكما وحدكما</p>
           ) : (
             officeNum && <p className="text-xs text-muted-foreground">{officeNum}</p>
           )}
@@ -1757,6 +1790,89 @@ function ChannelMembersDialog({
         <p className="text-xs text-muted-foreground">
           العضو يرى النقاش ورسائله وملفاته ويصله إشعار عند إضافته — ومن يُزال يختفي عنه فوراً.
         </p>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+/**
+ * محادثة مباشرة مع زميل — متاحة لكل موظف (طلب المدير 2026-09-22).
+ * اختيار واحد لا أكثر: المحادثة بين اثنين، وللأكثر «نقاش جديد».
+ */
+function NewDmDialog({
+  open,
+  onOpenChange,
+  onOpened,
+}: {
+  open: boolean
+  onOpenChange: (v: boolean) => void
+  onOpened: (id: string) => void
+}) {
+  const { teamMember } = useAuth()
+  const { data: team } = useTeamMembers()
+  const openDm = useOpenDm()
+  const [q, setQ] = useState('')
+
+  useEffect(() => {
+    if (!open) setQ('')
+  }, [open])
+
+  const eligible = (team ?? []).filter(
+    (t) => !t.is_reviewer && t.is_active !== false && t.id !== teamMember?.id
+  )
+  const needle = arNorm(q.trim())
+  const shown = needle
+    ? eligible.filter(
+        (t) => arNorm(t.name ?? '').includes(needle) || arNorm(t.short_name ?? '').includes(needle)
+      )
+    : eligible
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>محادثة مباشرة</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <p className="text-xs text-muted-foreground">
+            محادثة بينك وبين زميلك وحدكما — لا يقرؤها غيركما.
+          </p>
+          <div className="relative">
+            <Search className="absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              autoFocus
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="ابحث عن زميل…"
+              className="h-9 pr-8 text-sm"
+            />
+          </div>
+          <div className="max-h-72 space-y-0.5 overflow-y-auto rounded-lg border border-border/60 p-1">
+            {shown.length === 0 ? (
+              <p className="py-6 text-center text-xs text-muted-foreground">
+                {eligible.length === 0 ? 'لا زملاء بعد' : 'لا أحد بهذا الاسم'}
+              </p>
+            ) : (
+              shown.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  disabled={openDm.isPending}
+                  onClick={() => openDm.mutate(t.id, { onSuccess: onOpened })}
+                  className="flex w-full items-center gap-2.5 rounded-md px-2 py-2 text-right transition-colors hover:bg-muted/60 disabled:opacity-60"
+                >
+                  <UserAvatar member={t} className="h-8 w-8" fallbackClassName="text-xs" />
+                  <span className="min-w-0 flex-1 truncate text-sm text-foreground">
+                    {t.name}
+                  </span>
+                  {t.role && (
+                    <span className="shrink-0 text-xs text-muted-foreground">{t.role}</span>
+                  )}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   )

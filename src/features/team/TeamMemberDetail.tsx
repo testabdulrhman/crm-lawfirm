@@ -11,6 +11,7 @@ import {
   Paperclip,
   KeyRound,
   Loader2,
+  MessageSquarePlus,
   Phone,
   Mail,
   CalendarDays,
@@ -61,6 +62,8 @@ import { errMessage } from '@/lib/errors'
 import { toast } from '@/hooks/use-toast'
 import { useAuth } from '@/stores/auth'
 import { useIsDirector } from '@/hooks/useIsDirector'
+import { useOpenDm } from '@/hooks/useDiscussions'
+import { requestDiscussionJump } from '@/lib/discussionJump'
 import { useTeamMembers, useProvisionMember } from '@/hooks/useTeam'
 import {
   usePayrollEntries,
@@ -99,6 +102,7 @@ export function TeamMemberDetail({ id }: { id: string }) {
     allowed ? id : null
   )
   const provisionM = useProvisionMember()
+  const openDm = useOpenDm()
   const addM = useAddPayrollEntry()
   const deleteM = useDeletePayrollEntry()
 
@@ -208,6 +212,29 @@ export function TeamMemberDetail({ id }: { id: string }) {
               )}
             </div>
             <div className="flex flex-wrap gap-2">
+              {/* محادثة مباشرة معه — بينكما وحدكما (طلب المدير 2026-09-22) */}
+              {!isSelf && member.is_active && !member.is_reviewer && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={openDm.isPending}
+                  onClick={() =>
+                    openDm.mutate(member.id, {
+                      onSuccess: (id) => {
+                        requestDiscussionJump({ caseId: id })
+                        navigate('/discussions')
+                      },
+                    })
+                  }
+                >
+                  {openDm.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <MessageSquarePlus className="h-4 w-4" />
+                  )}
+                  محادثة
+                </Button>
+              )}
               {/* موظف بلا حساب دخول لا يستطيع طلب رمز أصلاً — والفشل صامت،
                   فنُظهر الحالة هنا ونتيح فتحه بضغطة */}
               {isDirector && !member.auth_id && (

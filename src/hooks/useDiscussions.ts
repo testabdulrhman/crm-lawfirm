@@ -574,6 +574,26 @@ export function useCreateChannel() {
   })
 }
 
+/**
+ * محادثة مباشرة مع زميل (طلب المدير 2026-09-22: «بارسل لرنا أو بيان أو سعود، كيف؟»).
+ *
+ * open_dm تُرجع المحادثة القائمة إن وُجدت، وإلا أنشأتها — فالضغط مرتين لا
+ * يُنشئ محادثتين. ويقرؤها **الطرفان وحدهما** ولو كان الثالث مديراً (قرار المدير).
+ */
+export function useOpenDm() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (otherId: string): Promise<string> => {
+      const { data, error } = await supabase.rpc('open_dm', { p_other: otherId })
+      if (error) throw error
+      return data as string
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['discussions'] }),
+    onError: (e) =>
+      toast({ variant: 'destructive', title: 'تعذّر فتح المحادثة', description: errMessage(e) }),
+  })
+}
+
 /** تغيير اسم نقاش مُسمّى — للمدير (بوابة channels_update_gate) */
 export function useRenameChannel(channelId: string | null) {
   const qc = useQueryClient()
