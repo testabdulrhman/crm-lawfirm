@@ -187,10 +187,8 @@ function RuleCard({
           </Field>
 
           <Field label="ساعة الإرسال" hint="بتوقيت الرياض">
-            {/* lang="en": حقل الوقت يتبع لغة الصفحة فيعرض أرقاماً هندية — والنظام أرقامه لاتينية */}
             <Input
               type="time"
-              lang="en-GB"
               value={time}
               onChange={(e) => setTime(e.target.value)}
               disabled={rule.event_type === 'manual'}
