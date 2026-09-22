@@ -176,11 +176,23 @@ struct DiscussionRow: Codable, Identifiable {
     let has_file: Bool?
     let unread: Int?
     /// نوع الملف (cases.kind) — تُرجعه case_discussions أصلاً؛ 'channel' = قناة
-    /// خاصة لا ملف لها، وفارغ = القناة العامة. وجهة رقاقة الملف في شريط النقاش.
+    /// خاصة لا ملف لها، و'dm' = محادثة مباشرة بين زميلين، وفارغ = القناة العامة.
+    /// وجهة رقاقة الملف في شريط النقاش.
     let kind: String?
+    /// المحادثة المباشرة: صورة الطرف الآخر وحرفه — تحلّ مكان الرمز العام
+    var peer_avatar_url: String? = nil
+    var peer_avatar_initial: String? = nil
 
     var id: String { case_id ?? DiscussionRow.generalKey }
     var isGeneral: Bool { case_id == nil }
+    var isDm: Bool { kind == "dm" }
+
+    /// الطرف الآخر في هيئة عضو — ليعرضه AvatarCircle نفسه بلا نسخ منطق الصورة
+    var peerMember: TeamMember {
+        TeamMember(id: case_id ?? "", name: case_title, short_name: nil,
+                   is_director: nil, avatar_initial: peer_avatar_initial,
+                   avatar_color: nil, avatar_url: peer_avatar_url)
+    }
 
     static let generalKey = "general"
 
@@ -188,7 +200,9 @@ struct DiscussionRow: Codable, Identifiable {
     func markedRead() -> DiscussionRow {
         DiscussionRow(case_id: case_id, case_title: case_title, office_num: office_num,
                       last_body: last_body, last_at: last_at, last_author: last_author,
-                      has_file: has_file, unread: 0, kind: kind)
+                      has_file: has_file, unread: 0, kind: kind,
+                      peer_avatar_url: peer_avatar_url,
+                      peer_avatar_initial: peer_avatar_initial)
     }
 }
 

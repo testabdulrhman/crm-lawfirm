@@ -339,6 +339,18 @@ extension SB {
         return id
     }
 
+    /// محادثة مباشرة مع زميل — تُرجع القائمة إن وُجدت وإلا أنشأتها (طلب المدير
+    /// 2026-09-22). يقرؤها الطرفان وحدهما، ولو كان الثالث المدير.
+    /// ⚠️ لا JSONDecoder: الدالة تُرجع uuid نصاً مجرّداً، فيُقرأ كما هو
+    func openDm(_ memberId: String) async throws -> String {
+        let body = try JSONSerialization.data(withJSONObject: ["p_other": memberId])
+        let data = try await raw(path: "rest/v1/rpc/open_dm", method: "POST", query: [], body: body)
+        let id = String(decoding: data, as: UTF8.self)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "\" \n"))
+        guard !id.isEmpty else { throw SBError(message: "تعذّر فتح المحادثة") }
+        return id
+    }
+
     func channelMemberIds(_ channelId: String) async throws -> Set<String> {
         struct R: Codable { let member_id: String }
         let rows: [R] = try await get("channel_members", query: [

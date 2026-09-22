@@ -109,6 +109,7 @@ struct MentionSuggestBar: View {
 
 /// «باب الملف» في شريط النقاش — يُبنى فقط حين يكون النقاش نقاش *ملف*:
 /// لا للقناة العامة (caseId فارغ)، ولا للقنوات الخاصة (kind == "channel")،
+/// ولا للمحادثة المباشرة (kind == "dm" — ليست ملفاً وفتحها كملف خطأ)،
 /// ولا حين جئنا من الملف نفسه (زر الرجوع هو الطريق إليه)، ولا حين النوع مجهول
 /// (فخطأ الإخفاء أهون من فتح قناة كأنها ملف). الحارس كله في مكان واحد.
 struct MatterDoor: Hashable {
@@ -117,7 +118,7 @@ struct MatterDoor: Hashable {
     let kind: String
 
     init?(caseId: String?, officeNum: String?, kind: String?, fromMatter: Bool = false) {
-        guard let caseId, !fromMatter, let kind, kind != "channel" else { return nil }
+        guard let caseId, !fromMatter, let kind, kind != "channel", kind != "dm" else { return nil }
         self.caseId = caseId
         self.officeNum = officeNum
         self.kind = kind

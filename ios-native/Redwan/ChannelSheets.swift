@@ -303,3 +303,116 @@ struct ChannelMembersSheet: View {
         }
     }
 }
+
+// MARK: - محادثة مباشرة مع زميل
+
+/// اختيار زميل لفتح محادثة معه (طلب المدير 2026-09-22: «بارسل لرنا أو بيان
+/// أو سعود، كيف؟»). المحادثة بين اثنين فالاختيار واحد لا أكثر، وللأكثر
+/// «نقاش جديد باسم وأعضاء». والقاعدة تُرجع المحادثة القائمة إن وُجدت.
+struct NewDmSheet: View {
+    let onOpened: (_ id: String, _ title: String) -> Void
+
+    @EnvironmentObject private var sb: SB
+    @Environment(\.dismiss) private var dismiss
+    @State private var staff: [TeamMember] = []
+    @State private var search = ""
+    @State private var loaded = false
+    @State private var loadError: String?
+    /// الزميل الذي تُفتح محادثته الآن — يمنع ضغطتين ويُظهر الدوران في صفّه
+    @State private var opening: String?
+    @State private var alertText: String?
+
+    private var candidates: [TeamMember] {
+        let q = search.trimmingCharacters(in: .whitespaces)
+        return eligibleMembers(staff, excluding: sb.member?.id).filter {
+            q.isEmpty || ($0.name ?? "").arContains(q) || ($0.short_name ?? "").arContains(q)
+        }
+    }
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if let loadError {
+                    ErrorBox(message: loadError) { Task { await loadStaff() } }
+                        .padding(16)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                } else if !loaded {
+                    ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if candidates.isEmpty {
+                    EmptyBox(
+                        icon: "person.2",
+                        text: search.isEmpty ? "لا زملاء بعد" : "لا أحد بهذا الاسم",
+                        subtext: search.isEmpty ? "المحادثة المباشرة تحتاج زميلاً في الفريق" : nil
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    List(candidates) { m in
+                        Button { Task { await open(m) } } label: {
+                            HStack(spacing: 10) {
+                                AvatarCircle(member: m, size: 36)
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(m.name ?? m.short_name ?? "—")
+                                        .font(.system(size: 15, weight: .medium))
+                                        .foregroundStyle(Theme.navy)
+                                        .lineLimit(1)
+                                    if m.is_director == true {
+                                        Text("مدير").font(.system(size: 11)).foregroundStyle(Theme.goldDark)
+                                    }
+                                }
+                                Spacer(minLength: 8)
+                                if opening == m.id {
+                                    ProgressView().tint(Theme.goldDark)
+                                }
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(opening != nil)
+                        .listRowBackground(Theme.card)
+                    }
+                    .listStyle(.plain)
+                    .searchable(text: $search, prompt: "ابحث عن زميل")
+                }
+            }
+            .background(Theme.ivory.ignoresSafeArea())
+            .navigationTitle("محادثة مباشرة")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("إلغاء") { dismiss() }.disabled(opening != nil)
+                }
+            }
+            .alert("تنبيه", isPresented: Binding(get: { alertText != nil }, set: { if !$0 { alertText = nil } })) {
+                Button("حسناً", role: .cancel) { alertText = nil }
+            } message: {
+                Text(alertText ?? "")
+            }
+            .task { await loadStaff() }
+        }
+        .environment(\.layoutDirection, .rightToLeft)
+    }
+
+    private func loadStaff() async {
+        loadError = nil
+        do {
+            staff = try await sb.staff()
+            loaded = true
+        } catch {
+            if let t = uiErrorText(error) { loadError = t }
+        }
+    }
+
+    private func open(_ m: TeamMember) async {
+        guard opening == nil else { return }
+        opening = m.id
+        defer { opening = nil }
+        do {
+            let id = try await sb.openDm(m.id)
+            Usage.shared.action("محادثة مباشرة")
+            onOpened(id, m.short_name ?? m.name ?? "زميل")
+            dismiss()
+        } catch {
+            if let t = uiErrorText(error) { alertText = t }
+        }
+    }
+}

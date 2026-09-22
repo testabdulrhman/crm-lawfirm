@@ -87,6 +87,9 @@ struct DiscussionsView: View {
     /// نقاش مُسمّى جديد (للمدير) — يُفتح بعد انغلاق الورقة لا أثناءه
     @State private var showNewChannel = false
     @State private var createdChannel: MatterLite?
+    /// محادثة مباشرة مع زميل — تُفتح بعد انغلاق الورقة لا أثناءه
+    @State private var showNewDm = false
+    @State private var openedDm: MatterLite?
     /// الرسالة المقصودة في النقاش الذي يُفتح (منشن أو «في النقاش» من الملفات والروابط)
     @State private var pickedFocus: DiscussionFocus?
     /// القناة العامة مفتوحةً عند رسالة (لا MatterLite لها)
@@ -155,29 +158,27 @@ struct DiscussionsView: View {
             .toolbar {
                 // نقاش جديد لملفٍ لم يبدأ نقاشه بعد (طلب المستخدم 2026-08-22)
                 ToolbarItem(placement: .topBarTrailing) {
-                    // المدير: نقاش باسم وأعضاء، أو نقاش على ملف (طلبه 2026-09-13).
-                    // غيره يبقى على نقاش الملف وحده — إدارة الأعضاء للمدير في القاعدة
-                    if sb.member?.is_director == true {
-                        Menu {
+                    // للجميع: محادثة مباشرة مع زميل، أو نقاش على ملف.
+                    // وللمدير زيادةً: نقاش مُسمّى بأعضاء (القاعدة تفرض ذلك أيضاً).
+                    Menu {
+                        // المحادثة المباشرة للجميع (طلب المدير 2026-09-22)
+                        Button { showNewDm = true } label: {
+                            Label("محادثة مباشرة", systemImage: "person.crop.circle")
+                        }
+                        Button { showNewDiscussion = true } label: {
+                            Label("نقاش على ملف", systemImage: "folder")
+                        }
+                        // النقاش المُسمّى بأعضاء للمدير — القاعدة تفرضه أيضاً
+                        if sb.member?.is_director == true {
                             Button { showNewChannel = true } label: {
                                 Label("نقاش جديد باسم وأعضاء", systemImage: "bubble.left.and.bubble.right")
                             }
-                            Button { showNewDiscussion = true } label: {
-                                Label("نقاش على ملف", systemImage: "folder")
-                            }
-                        } label: {
-                            Image(systemName: "square.and.pencil")
-                                .foregroundStyle(Theme.goldDark)
                         }
-                        .accessibilityLabel("نقاش جديد")
-                    } else {
-                        Button {
-                            showNewDiscussion = true
-                        } label: {
-                            Image(systemName: "square.and.pencil")
-                                .foregroundStyle(Theme.goldDark)
-                        }
+                    } label: {
+                        Image(systemName: "square.and.pencil")
+                            .foregroundStyle(Theme.goldDark)
                     }
+                    .accessibilityLabel("نقاش جديد")
                 }
                 // كل مرفق ورابط في النقاشات (مرآة الويب 2026-09-17)
                 ToolbarItem(placement: .topBarTrailing) {
@@ -203,6 +204,15 @@ struct DiscussionsView: View {
             }) {
                 NewChannelSheet { id, title in
                     createdChannel = MatterLite(id: id, title: title, office_num: nil, kind: "channel")
+                }
+            }
+            .sheet(isPresented: $showNewDm, onDismiss: {
+                // الانتقال بعد انغلاق الورقة: الدفع أثناء حركة الإغلاق يضيع بصمت
+                if let d = openedDm { openedDm = nil; pickedMatter = d }
+                Task { await load() }
+            }) {
+                NewDmSheet { id, name in
+                    openedDm = MatterLite(id: id, title: name, office_num: nil, kind: "dm")
                 }
             }
             .sheet(isPresented: $showNewDiscussion) {
@@ -310,17 +320,22 @@ private struct DiscussionRowView: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            Group {
-                if row.isGeneral || row.kind == "channel" {
-                    Image(systemName: row.isGeneral ? "megaphone.fill" : "building.columns.fill")
-                        .font(.system(size: 15)).foregroundStyle(Theme.gold)
-                } else {
-                    Text(matterKindEmoji(row.kind)).font(.system(size: 18))
+            // المحادثة المباشرة: صورة الزميل نفسه مكان الرمز (طلب المدير 2026-09-22)
+            if row.isDm {
+                AvatarCircle(member: row.peerMember, size: 38)
+            } else {
+                Group {
+                    if row.isGeneral || row.kind == "channel" {
+                        Image(systemName: row.isGeneral ? "megaphone.fill" : "building.columns.fill")
+                            .font(.system(size: 15)).foregroundStyle(Theme.gold)
+                    } else {
+                        Text(matterKindEmoji(row.kind)).font(.system(size: 18))
+                    }
                 }
+                .frame(width: 38, height: 38)
+                .background(row.isGeneral || row.kind == "channel" ? Theme.navy : Theme.goldPale)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
             }
-            .frame(width: 38, height: 38)
-            .background(row.isGeneral || row.kind == "channel" ? Theme.navy : Theme.goldPale)
-            .clipShape(RoundedRectangle(cornerRadius: 10))
 
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
