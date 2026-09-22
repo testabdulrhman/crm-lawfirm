@@ -1,5 +1,6 @@
 import { Link, useLocation } from 'wouter'
 import {
+  Activity,
   LayoutDashboard,
   Handshake,
   ListTodo,
@@ -123,6 +124,7 @@ const navSections: { title?: string; items: NavItem[] }[] = [
       { label: 'الإعدادات', href: '/settings', icon: Settings },
       // كل خطأ ظهر لموظف (طلب المدير 2026-09-15)
       { label: 'سجل الأخطاء', href: '/errors', icon: Bug, director: true },
+      { label: 'مراقبة الاتصالات', href: '/hub', icon: Activity, director: true },
     ],
   },
 ]
