@@ -16,7 +16,12 @@ function calendarWarn() {
   })
 }
 
-const SELECT = '*, client:contacts(id,name,phone), assignee:team_members(id,name)'
+// ⚠️ بعد appointment_members صار لـteam_members مساران من appointments (المسؤول،
+// والمشاركون) — تسمية العلاقة صراحةً تمنع لبس الضمّ PGRST201.
+const SELECT =
+  '*, client:contacts(id,name,phone),' +
+  ' assignee:team_members!appointments_assignee_id_fkey(id,name),' +
+  ' members:appointment_members(member_id)'
 
 // احتياط فقط — النص الحيّ في message_templates ويُحرَّر من الإعدادات ← قوالب الرسائل
 const DEFAULT_CONFIRMATION =

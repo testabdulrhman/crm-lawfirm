@@ -316,12 +316,22 @@ function AppointmentRow({
               <span className="flex items-center gap-1">
                 <UserCircle2 className="h-3 w-3 shrink-0" />
                 {a.assignee.name}
+                {(a.members?.length ?? 0) > 0 && (
+                  <span className="text-muted-foreground/70">
+                    +{fmtNumber(a.members!.length)}
+                  </span>
+                )}
               </span>
             ) : (
               /* بلا مسؤول = لا أحد يتابع العميل — يُقال صراحةً لا يُسكت عنه */
               <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
                 <UserX className="h-3 w-3 shrink-0" />
                 بلا مسؤول
+                {(a.members?.length ?? 0) > 0 && (
+                  <span className="text-muted-foreground">
+                    · {fmtNumber(a.members!.length)} مشارك
+                  </span>
+                )}
               </span>
             )}
             {a.reference_no && (

@@ -939,6 +939,8 @@ export interface Appointment {
   assignee_id: string | null
   client?: { id: string; name: string | null; phone: string | null } | null
   assignee?: { id: string; name: string | null } | null
+  /** المشاركون مع المسؤول — للعدّ في القائمة */
+  members?: { member_id: string }[] | null
 }
 
 export interface AppointmentInput {
