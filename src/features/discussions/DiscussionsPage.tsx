@@ -19,7 +19,6 @@ import {
   Send,
   Sparkles,
   Trash2,
-  User,
   Users,
   X,
 } from 'lucide-react'
@@ -510,6 +509,8 @@ export function DiscussionsPage() {
             officeNum={current?.office_num ?? null}
             openThread={setOpenThreadRoot}
             kind={current?.kind ?? null}
+            peerAvatarUrl={current?.peer_avatar_url ?? null}
+            peerAvatarInitial={current?.peer_avatar_initial ?? null}
             focusId={streamFocus}
             onFocused={() => setStreamFocus(null)}
             caseHref={
@@ -567,6 +568,37 @@ export function DiscussionsPage() {
         }}
       />
     </div>
+  )
+}
+
+/**
+ * صورة الطرف الآخر في المحادثة المباشرة — تحلّ مكان الرمز العام (طلب المدير
+ * 2026-09-22: «ودي تطلع صورتي… تكون مكان الرمز»). بلا صورة: حرفه على الذهبي.
+ */
+function PeerAvatar({
+  url,
+  initial,
+  name,
+  className,
+}: {
+  url?: string | null
+  initial?: string | null
+  name?: string | null
+  className?: string
+}) {
+  return (
+    <span
+      className={cn(
+        'flex items-center justify-center overflow-hidden rounded-xl bg-gold/15 text-xs font-bold text-navy dark:text-gold-200',
+        className
+      )}
+    >
+      {url ? (
+        <img src={url} alt={name ?? ''} className="h-full w-full object-cover" />
+      ) : (
+        (initial || name?.charAt(0) || '؟')
+      )}
+    </span>
   )
 }
 
@@ -697,26 +729,34 @@ function ChannelList({
                       : 'hover:bg-muted/50'
                 )}
               >
-                <span
-                  className={cn(
-                    'mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl',
-                    isGeneral || isChannel
-                      ? 'bg-navy text-gold'
-                      : 'bg-gold/15 text-gold-600 dark:text-gold-300'
-                  )}
-                >
-                  {isGeneral ? (
-                    <Megaphone className="h-4 w-4" />
-                  ) : isChannel ? (
-                    <Landmark className="h-4 w-4" />
-                  ) : isDm ? (
-                    <User className="h-4 w-4" />
-                  ) : (
-                    <span className="text-base leading-none" aria-hidden>
-                      {matterKindEmoji(c.kind)}
-                    </span>
-                  )}
-                </span>
+                {/* المحادثة المباشرة: صورة الزميل نفسه مكان الرمز (طلب المدير) */}
+                {isDm ? (
+                  <PeerAvatar
+                    url={c.peer_avatar_url}
+                    initial={c.peer_avatar_initial}
+                    name={c.case_title}
+                    className="mt-0.5 h-9 w-9 shrink-0"
+                  />
+                ) : (
+                  <span
+                    className={cn(
+                      'mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl',
+                      isGeneral || isChannel
+                        ? 'bg-navy text-gold'
+                        : 'bg-gold/15 text-gold-600 dark:text-gold-300'
+                    )}
+                  >
+                    {isGeneral ? (
+                      <Megaphone className="h-4 w-4" />
+                    ) : isChannel ? (
+                      <Landmark className="h-4 w-4" />
+                    ) : (
+                      <span className="text-base leading-none" aria-hidden>
+                        {matterKindEmoji(c.kind)}
+                      </span>
+                    )}
+                  </span>
+                )}
                 <span className="min-w-0 flex-1">
                   <span className="flex items-baseline justify-between gap-2">
                     <span
@@ -831,6 +871,8 @@ function StreamPane({
   openThread,
   caseHref = null,
   kind = null,
+  peerAvatarUrl = null,
+  peerAvatarInitial = null,
   focusId = null,
   onFocused,
 }: {
@@ -842,6 +884,9 @@ function StreamPane({
   caseHref?: string | null
   /** نوع المشروع — 'channel' = قناة خاصة بعضوية (لها زر أعضاء بدل فتح المشروع) */
   kind?: string | null
+  /** المحادثة المباشرة: صورة الطرف الآخر وحرفه */
+  peerAvatarUrl?: string | null
+  peerAvatarInitial?: string | null
   /** رسالة يُمرَّر إليها وتُبرز (وجهة إشعار) */
   focusId?: string | null
   onFocused?: () => void
@@ -914,24 +959,31 @@ function StreamPane({
   return (
     <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-border/70 bg-card">
       <div className="flex items-center gap-2 border-b border-border/60 px-4 py-3">
-        <span
-          className={cn(
-            'flex h-8 w-8 items-center justify-center rounded-lg',
-            caseId === null || kind === 'channel'
-              ? 'bg-navy text-gold'
-              : 'bg-gold/15 text-gold-600 dark:text-gold-300'
-          )}
-        >
-          {caseId === null ? (
-            <Megaphone className="h-4 w-4" />
-          ) : kind === 'channel' ? (
-            <Landmark className="h-4 w-4" />
-          ) : kind === 'dm' ? (
-            <User className="h-4 w-4" />
-          ) : (
-            <MessagesSquare className="h-4 w-4" />
-          )}
-        </span>
+        {kind === 'dm' ? (
+          <PeerAvatar
+            url={peerAvatarUrl}
+            initial={peerAvatarInitial}
+            name={title}
+            className="h-8 w-8"
+          />
+        ) : (
+          <span
+            className={cn(
+              'flex h-8 w-8 items-center justify-center rounded-lg',
+              caseId === null || kind === 'channel'
+                ? 'bg-navy text-gold'
+                : 'bg-gold/15 text-gold-600 dark:text-gold-300'
+            )}
+          >
+            {caseId === null ? (
+              <Megaphone className="h-4 w-4" />
+            ) : kind === 'channel' ? (
+              <Landmark className="h-4 w-4" />
+            ) : (
+              <MessagesSquare className="h-4 w-4" />
+            )}
+          </span>
+        )}
         <div className="min-w-0 flex-1">
           <p className="truncate text-[15px] font-semibold text-foreground">{title}</p>
           {kind === 'channel' ? (

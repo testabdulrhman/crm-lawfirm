@@ -19,7 +19,10 @@ export interface DiscussionRow {
   last_author: string | null
   has_file: boolean | null
   unread: number | null
-  kind: string | null // case | legal_service | property — وجهة زر «فتح الملف»
+  kind: string | null // case | legal_service | property | channel | dm
+  /** المحادثة المباشرة: صورة الطرف الآخر وحرفه — تحلّ مكان الرمز العام */
+  peer_avatar_url?: string | null
+  peer_avatar_initial?: string | null
 }
 
 export interface Reaction {
