@@ -935,7 +935,10 @@ export interface Appointment {
   idempotency_key: string | null
   /** الجلسة التمهيدية تتبع سجل الاستفسار — المرحلة الأولى من دورة العمل */
   request_id: string | null
+  /** الموظف المسؤول عن استقبال الموعد ومتابعته */
+  assignee_id: string | null
   client?: { id: string; name: string | null; phone: string | null } | null
+  assignee?: { id: string; name: string | null } | null
 }
 
 export interface AppointmentInput {
@@ -951,6 +954,7 @@ export interface AppointmentInput {
   meeting_method?: string | null
   created_by?: string | null
   request_id?: string | null
+  assignee_id?: string | null
 }
 
 /* ===================== العقود (engagements) ===================== */

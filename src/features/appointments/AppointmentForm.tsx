@@ -25,6 +25,7 @@ import { DualDatePicker } from '@/components/DualDatePicker'
 import { fmtNumber, fmtTime } from '@/lib/format'
 import { useAuth } from '@/stores/auth'
 import { useContacts } from '@/hooks/useContacts'
+import { useTeamMembers } from '@/hooks/useTeam'
 import {
   useAppointmentConflict,
   useCreateAppointment,
@@ -43,9 +44,14 @@ const schema = z.object({
   // طريقة الاجتماع — غيابها كان يخفي قسم رابط الاجتماع في صفحة الموعد
   // (بلاغ المستخدم 2026-08-26)
   meeting_method: z.string().optional(),
+  // الموظف المسؤول عن استقبال العميل ومتابعة موعده (طلب المدير 2026-09-22)
+  assignee_id: z.string().optional(),
   notes: z.string().optional(),
 })
 type FormValues = z.infer<typeof schema>
+
+// Radix لا يقبل قيمة فارغة لعنصر الاختيار، فنستعمل مفتاحاً صريحاً لـ«بلا مسؤول»
+const NO_ASSIGNEE = '__none__'
 
 export function AppointmentForm({
   appointment,
@@ -79,6 +85,8 @@ export function AppointmentForm({
   )
   const { teamMember } = useAuth()
   const { data: contacts } = useContacts()
+  const { data: members } = useTeamMembers()
+  const activeMembers = (members ?? []).filter((m) => m.is_active)
   const createM = useCreateAppointment()
   const updateM = useUpdateAppointment()
   const pending = createM.isPending || updateM.isPending
@@ -109,6 +117,7 @@ export function AppointmentForm({
           ? String(appointment.duration_minutes)
           : '60',
       status: appointment?.status ?? 'confirmed',
+      assignee_id: appointment?.assignee_id ?? '',
       notes: appointment?.notes ?? '',
     },
   })
@@ -142,6 +151,7 @@ export function AppointmentForm({
       duration_minutes: !isNaN(dur) ? dur : 60,
       status: values.status,
       meeting_method: t(values.meeting_method),
+      assignee_id: values.assignee_id || null,
       notes: t(values.notes),
     }
     if (isEdit && appointment) {
@@ -248,6 +258,31 @@ export function AppointmentForm({
                     {APPT_STATUS_OPTIONS.map((o) => (
                       <SelectItem key={o.value} value={o.value}>
                         {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>المسؤول عن الموعد</Label>
+            <Controller
+              control={control}
+              name="assignee_id"
+              render={({ field }) => (
+                <Select
+                  value={field.value || undefined}
+                  onValueChange={(v) => field.onChange(v === NO_ASSIGNEE ? '' : v)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="بلا مسؤول" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NO_ASSIGNEE}>بلا مسؤول</SelectItem>
+                    {activeMembers.map((m) => (
+                      <SelectItem key={m.id} value={m.id}>
+                        {m.name}
                       </SelectItem>
                     ))}
                   </SelectContent>

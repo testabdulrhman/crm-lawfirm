@@ -14,6 +14,8 @@ import {
   Video,
   MapPin,
   Hash,
+  UserCircle2,
+  UserX,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -28,6 +30,7 @@ import { cn } from '@/lib/utils'
 import { arNorm } from '@/lib/arabic'
 import { fmtNumber, fmtHijri, fmtGregorian, fmtTime, todayISO, daysLabel } from '@/lib/format'
 import { useAppointments } from '@/hooks/useAppointments'
+import { useAuth } from '@/stores/auth'
 import { usePageState } from '@/hooks/usePageState'
 import { AppointmentForm } from './AppointmentForm'
 import {
@@ -59,7 +62,10 @@ export function AppointmentsPage() {
 
   const [search, setSearch] = usePageState('appts:q', '')
   const [status, setStatus] = usePageState<string>('appts:status', 'all')
+  // فلتر المسؤول: الكل · مواعيدي · بلا مسؤول (طلب المدير 2026-09-22)
+  const [owner, setOwner] = usePageState<string>('appts:owner', 'all')
   const [dialogOpen, setDialogOpen] = useState(false)
+  const { teamMember } = useAuth()
 
   // قادم من «حجز موعد» في سجل الاستفسار — يفتح النموذج فوراً بدل أن يبحث
   // المستخدم عن الزر (والنموذج هو من يستهلك المفتاح ويربط الموعد بالطلب)
@@ -79,9 +85,11 @@ export function AppointmentsPage() {
         if (!name.includes(q)) return false
       }
       if (status !== 'all' && (a.status ?? '') !== status) return false
+      if (owner === 'mine' && a.assignee_id !== (teamMember?.id ?? '')) return false
+      if (owner === 'none' && a.assignee_id) return false
       return true
     })
-  }, [data, search, status])
+  }, [data, search, status, owner, teamMember?.id])
 
   const { upcoming, past } = useMemo(() => {
     const today = todayISO()
@@ -126,6 +134,12 @@ export function AppointmentsPage() {
       </div>
 
       <div className="flex flex-wrap gap-2">
+        <Chip active={owner === 'all'} onClick={() => setOwner('all')} label="كل المسؤولين" />
+        <Chip active={owner === 'mine'} onClick={() => setOwner('mine')} label="مواعيدي" />
+        <Chip active={owner === 'none'} onClick={() => setOwner('none')} label="بلا مسؤول" />
+      </div>
+
+      <div className="flex flex-wrap gap-2">
         <Chip active={status === 'all'} onClick={() => setStatus('all')} label="الكل" />
         {APPT_STATUS_OPTIONS.map((o) => (
           <Chip
@@ -155,6 +169,7 @@ export function AppointmentsPage() {
             onClear={() => {
               setSearch('')
               setStatus('all')
+              setOwner('all')
             }}
           />
         ) : (
@@ -295,6 +310,18 @@ function AppointmentRow({
                   <MapPin className="h-3 w-3 shrink-0" />
                 )}
                 {meetingMethodLabel(a.meeting_method)}
+              </span>
+            )}
+            {a.assignee?.name ? (
+              <span className="flex items-center gap-1">
+                <UserCircle2 className="h-3 w-3 shrink-0" />
+                {a.assignee.name}
+              </span>
+            ) : (
+              /* بلا مسؤول = لا أحد يتابع العميل — يُقال صراحةً لا يُسكت عنه */
+              <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
+                <UserX className="h-3 w-3 shrink-0" />
+                بلا مسؤول
               </span>
             )}
             {a.reference_no && (

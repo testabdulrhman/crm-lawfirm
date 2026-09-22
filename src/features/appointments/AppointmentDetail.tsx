@@ -16,6 +16,7 @@ import {
   Loader2,
   Video,
   Send,
+  UserCircle2,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -47,8 +48,10 @@ import { fmtDatePref, fmtTime, fmtDateTime, fmtNumber } from '@/lib/format'
 import { openExternal } from '@/lib/external'
 import { useAuth } from '@/stores/auth'
 import { useIsDirector } from '@/hooks/useIsDirector'
+import { useTeamMembers } from '@/hooks/useTeam'
 import {
   useAppointment,
+  useAssignAppointment,
   useUpdateAppointmentStatus,
   useDeleteAppointment,
   useSendConfirmation,
@@ -61,6 +64,9 @@ import { useCreateRequestFromAppointment } from '@/hooks/useIntakeGates'
 import { AppointmentForm } from './AppointmentForm'
 import { APPT_STATUS_OPTIONS, apptStatusLabel } from '@/lib/appointmentLabels'
 
+// Radix لا يقبل قيمة فارغة لعنصر الاختيار
+const NO_ASSIGNEE = '__none__'
+
 export function AppointmentDetail({ id }: { id: string }) {
   const [, navigate] = useLocation()
   const toRequest = useCreateRequestFromAppointment()
@@ -68,6 +74,8 @@ export function AppointmentDetail({ id }: { id: string }) {
   const isDirector = useIsDirector()
   const { data: a, isLoading, isError, error, refetch } = useAppointment(id)
   const statusM = useUpdateAppointmentStatus()
+  const assignM = useAssignAppointment()
+  const { data: members } = useTeamMembers()
   const deleteM = useDeleteAppointment()
   const confirmM = useSendConfirmation()
   const genLinkM = useGenerateMeetLink()
@@ -261,6 +269,43 @@ export function AppointmentDetail({ id }: { id: string }) {
                 <BookUser className="h-3.5 w-3.5" />
                 ملف العميل
               </Link>
+            )}
+          </div>
+
+          {/* المسؤول — يُغيَّر من هنا مباشرة لا من نموذج التعديل، لأن الإسناد
+              يحدث في لحظة اتصال العميل. ويصل المسؤولَ إشعارٌ بأنه صار مسؤولاً. */}
+          <div className="flex flex-wrap items-center gap-2 border-t pt-4 text-sm">
+            <span className="flex items-center gap-1.5 text-muted-foreground">
+              <UserCircle2 className="h-4 w-4 text-gold" />
+              المسؤول عن الموعد
+            </span>
+            <Select
+              value={a.assignee_id ?? NO_ASSIGNEE}
+              disabled={assignM.isPending}
+              onValueChange={(v) =>
+                assignM.mutate({
+                  appointment: a,
+                  assigneeId: v === NO_ASSIGNEE ? null : v,
+                  assignedBy: sentBy,
+                })
+              }
+            >
+              <SelectTrigger className="h-9 w-48">
+                <SelectValue placeholder="بلا مسؤول" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NO_ASSIGNEE}>بلا مسؤول</SelectItem>
+                {(members ?? [])
+                  .filter((m) => m.is_active)
+                  .map((m) => (
+                    <SelectItem key={m.id} value={m.id}>
+                      {m.name}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+            {assignM.isPending && (
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
             )}
           </div>
 

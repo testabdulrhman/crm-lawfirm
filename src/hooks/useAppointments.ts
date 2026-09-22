@@ -16,7 +16,7 @@ function calendarWarn() {
   })
 }
 
-const SELECT = '*, client:contacts(id,name,phone)'
+const SELECT = '*, client:contacts(id,name,phone), assignee:team_members(id,name)'
 
 // احتياط فقط — النص الحيّ في message_templates ويُحرَّر من الإعدادات ← قوالب الرسائل
 const DEFAULT_CONFIRMATION =
@@ -283,6 +283,60 @@ export function useUpdateAppointmentStatus() {
       toast({ variant: 'success', title: 'تم تحديث الحالة' })
     },
     onError: errToast('تعذّر تحديث الحالة'),
+  })
+}
+
+/**
+ * إسناد الموعد لموظف (طلب المدير 2026-09-22).
+ *
+ * الإسناد وحده لا يكفي: المسؤول يجب أن *يعرف* أنه صار مسؤولاً، فيُدرج إشعار
+ * باسمه — وإدراج notifications يدفع تلقائياً إلى الآيفون، ونوع appointment_*
+ * يفتح صفحة المواعيد ويحترم تفضيلات الإشعارات.
+ */
+export function useAssignAppointment() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      appointment,
+      assigneeId,
+      assignedBy,
+    }: {
+      appointment: Appointment
+      assigneeId: string | null
+      assignedBy?: string | null
+    }): Promise<void> => {
+      const { error } = await supabase
+        .from('appointments')
+        .update({ assignee_id: assigneeId, updated_at: new Date().toISOString() })
+        .eq('id', appointment.id)
+      if (error) throw error
+
+      // لا إشعار لمن أسند لنفسه — هو يعلم
+      if (!assigneeId || assigneeId === appointment.assignee_id) return
+      const who = assignedBy ? `${assignedBy}: ` : ''
+      const when = [fmtDual(appointment.appointment_date), fmtTime(appointment.appointment_time)]
+        .filter(Boolean)
+        .join(' — ')
+      try {
+        await supabase.from('notifications').insert({
+          recipient_id: assigneeId,
+          type: 'appointment_assigned',
+          title: 'أُسند إليك موعد',
+          message: `${who}${appointment.client_name || appointment.client?.name || 'عميل'}${when ? ` · ${when}` : ''}`,
+        })
+      } catch {
+        /* الإسناد تمّ — تعذُّر الإشعار لا يُلغيه */
+      }
+    },
+    onSuccess: (_d, vars) => {
+      invalidate(qc)
+      qc.invalidateQueries({ queryKey: ['appointment', vars.appointment.id] })
+      toast({
+        variant: 'success',
+        title: vars.assigneeId ? 'أُسند الموعد' : 'أُزيل المسؤول',
+      })
+    },
+    onError: errToast('تعذّر إسناد الموعد'),
   })
 }
 
