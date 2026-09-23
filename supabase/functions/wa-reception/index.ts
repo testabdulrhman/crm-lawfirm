@@ -141,14 +141,27 @@ function fromBrain(b: BrainOutput, conv: ConvRow, ev: HubEvent, text: string, me
   const iso = new Date().toISOString();
   const notices = { ...(conv.notices ?? {}) } as Record<string, string>;
   const data = { ...(conv.intake_data ?? {}) } as Record<string, any>;
+  // ما ليس مسألة قانونية (توظيف، تسويق، رسالة خاطئة): ردٌّ واحد يُغلق، ولا تأهيل ولا طلب للفريق
+  if (b.legal_matter === false && conv.state !== 'intake_done') {
+    if (b.action === 'reply') notices.salam_at = iso;
+    notices.closed_at = iso;
+    return {
+      reply: b.action === 'reply' ? b.reply.trim() : null,
+      patch: { notices, ...(conv.state === 'intake' ? {} : { state: 'new' as const }) },
+      notify: [],
+      route: { system: 'law', external_id: null, reason: 'default', confidence: 0.7,
+               detail: { ai: true, language: b.language, not_legal: true, ...meta } },
+    };
+  }
   const c = b.collected ?? ({} as BrainOutput['collected']);
   if (c.name) data.name = c.name.slice(0, 80);
   if (c.request_type) {
     data.request_type = c.request_type === 'consultation' ? 'consultation' : 'case';
     data.request_label = TYPE_LABEL[c.request_type] ?? TYPE_LABEL.other;
   }
+  // الطلب ما فهمه النموذج طلباً قانونياً (request_summary) — لا كل نصٍّ وارد: فرسالة توظيف
+  // أو تسويق لا تصير «تأهيلاً جارياً» يرسله الكنس للفريق طلباً ناقصاً.
   if (c.request_summary) data.first_message = c.request_summary.slice(0, 1500);
-  else if (!data.first_message && text && !isCourtesyOnly(text)) data.first_message = text.slice(0, 1500);
   if (c.parties) data.parties = c.parties.slice(0, 300);
   if (c.deadlines) { data.deadlines = c.deadlines.slice(0, 300); data.has_deadline = !/^(لا|no|none)$/i.test(c.deadlines.trim()); }
   if (c.city) data.city = c.city.slice(0, 80);
