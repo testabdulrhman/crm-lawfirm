@@ -187,8 +187,10 @@ export interface LeaveBalance {
   pending?: number
   remaining?: number
   senior_after_years?: number
-  /** الاستحقاق الشهري (2026-09-23): ٢١ ÷ ١٢ = ١٫٧٥ عن كل شهر مكتمل من سنة الخدمة */
-  accrual?: 'monthly'
+  /** الاستحقاق الشهري منذ التعيين (2026-09-23): ٢١ ÷ ١٢ = ١٫٧٥ عن كل شهر مكتمل.
+   *  ⚠️ entitlement = المستحق حتى الآن (صحيح) لأجل تطبيق الآيفون القديم؛ السنوي في annual_days */
+  accrual?: 'monthly_since_join'
+  annual_days?: number
   monthly_rate?: number
   months_accrued?: number
   /** المستحق حتى الآن، والباقي منه بالكسر — remaining صحيح لأجل تطبيق الآيفون القديم */

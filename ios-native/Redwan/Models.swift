@@ -380,6 +380,12 @@ struct LeaveBalance: Codable {
     let pending: Int?
     let remaining: Int?
     let senior_after_years: Int?
+    /// الاستحقاق الشهري منذ التعيين (2026-09-23). entitlement صار «المستحق حتى الآن»
+    /// صحيحاً لأجل النسخ القديمة، والدقيق بالكسر هنا — اختيارية فلا تكسر فكّ القاعدة الأقدم.
+    var annual_days: Int? = nil
+    var months_accrued: Int? = nil
+    var accrued: Double? = nil
+    var remaining_exact: Double? = nil
 }
 
 struct MyProfile: Codable {

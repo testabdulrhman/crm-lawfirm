@@ -259,29 +259,38 @@ struct MyPageView: View {
         .buttonStyle(.plain)
     }
 
+    /// ١٣ · ١٤٫٢٥ — بلا أصفار زائدة وبأرقام لاتينية
+    private func dayText(_ d: Double) -> String {
+        d == d.rounded() ? String(Int(d)) : String(format: "%.2f", d)
+            .replacingOccurrences(of: "0$", with: "", options: .regularExpression)
+    }
+
     // رصيد الإجازة السنوية
     private var balanceCard: some View {
         SectionCard(title: "رصيد الإجازة السنوية", icon: "sun.max.fill") {
             Group {
                 if let b = balance, b.missing_join_date != true, b.not_started != true, let ent = b.entitlement {
                     let used = b.used ?? 0
+                    // الدقيق بالكسر إن وُجد (١٣٫٢٥)، وإلا الصحيح — الرصيد يُستحق شهرياً منذ التعيين
+                    let accrued = b.accrued ?? Double(ent)
+                    let remaining = b.remaining_exact ?? Double(b.remaining ?? ent - used)
                     VStack(alignment: .leading, spacing: 10) {
                         HStack(alignment: .firstTextBaseline, spacing: 8) {
-                            Text("\(b.remaining ?? ent - used)")
+                            Text(dayText(remaining))
                                 .font(.system(size: 36, weight: .bold))
-                                .foregroundStyle((b.remaining ?? 0) < 0 ? Theme.danger : Theme.navy)
-                            Text("من أصل \(ent) يوماً")
+                                .foregroundStyle(remaining < 0 ? Theme.danger : Theme.navy)
+                            Text("متبقٍّ من \(dayText(accrued)) مستحقة حتى الآن")
                                 .font(.system(size: 14)).foregroundStyle(Theme.muted)
                         }
-                        ProgressView(value: Double(min(used, ent)), total: Double(max(ent, 1)))
+                        ProgressView(value: min(Double(used), max(accrued, 1)), total: max(accrued, 1))
                             .tint(Theme.goldDark)
                         HStack(spacing: 8) {
                             chip("استُخدم: \(used)", Theme.navy)
                             if (b.pending ?? 0) > 0 { chip("قيد الاعتماد: \(b.pending ?? 0)", Theme.goldDark) }
                         }
-                        Text("سنة الخدمة: \(Fmt.gregLong(b.service_year_start)) ← \(Fmt.gregLong(b.service_year_end)) · خدمة \(arYears(b.years_of_service ?? 0))")
+                        Text("منذ التعيين \(Fmt.gregLong(b.join_date))" + (b.months_accrued.map { " · \($0) شهراً مكتملاً" } ?? ""))
                             .font(.system(size: 12)).foregroundStyle(Theme.muted)
-                        Text("21 يوماً في السنة، و30 بعد خمس سنوات متصلة — بأيام التقويم.")
+                        Text("تُستحق شهرياً (1.75 يوم عن كل شهر) ويُرحَّل ما لم يُستخدم — 21 يوماً في السنة، و30 بعد خمس سنوات متصلة.")
                             .font(.system(size: 11)).foregroundStyle(Theme.muted)
                     }
                 } else if balance?.missing_join_date == true {

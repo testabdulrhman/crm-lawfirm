@@ -267,14 +267,20 @@ Deno.serve(async (req) => {
         decideText = b.text;
       }
 
-      const fee = isNewcomer ? await lookup('consultation_config', 'hourly_fee') : null;
-      const bookingUrl = (await lookup('office_info', 'booking_url')) ?? undefined;
+      // قراءاتٌ مستقلة تُجرى معاً لا تباعاً
+      const [fee, booking] = await Promise.all([
+        isNewcomer ? lookup('consultation_config', 'hourly_fee') : Promise.resolve(null),
+        lookup('office_info', 'booking_url'),
+      ]);
+      const bookingUrl = booking ?? undefined;
 
       // ٣) القرار على لقطةٍ بقفلٍ تفاؤلي: رسالتان متزامنتان لا تتسابقان على الحالة
       for (let attempt = 0; attempt < 4 && !out; attempt++) {
-        const conv = await loadConv(key, ev.hub_conversation_id);
-        const { count } = await supa.from('wa_reception_messages').select('id', { count: 'exact', head: true })
-          .eq('phone_e164', key).eq('direction', 'out').gte('created_at', new Date(Date.now() - 3_600_000).toISOString());
+        const [conv, { count }] = await Promise.all([
+          loadConv(key, ev.hub_conversation_id),
+          supa.from('wa_reception_messages').select('id', { count: 'exact', head: true })
+            .eq('phone_e164', key).eq('direction', 'out').gte('created_at', new Date(Date.now() - 3_600_000).toISOString()),
+        ]);
         const snap = { ...Object.fromEntries(COLS.map((c) => [c, conv[c]])), human_until: ev.human_until } as ConvSnapshot;
         const o = decide({
           now: new Date(), conv: snap, matches: ev.matches ?? [], matchSource: ev.match_source ?? 'none',
