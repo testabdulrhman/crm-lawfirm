@@ -20,7 +20,7 @@ import { isCourtesyOnly } from './arabic.ts';
 import { BrainOutput, think, vet } from './brain.ts';
 import { ConvSnapshot, decide, FlowOutput, LEAD_FOLLOWUP_DAYS, Match } from './flow.ts';
 import { isBusinessHours } from './hours.ts';
-import { REQUEST_TYPES } from './texts.ts';
+import { REQUEST_TYPES, T } from './texts.ts';
 
 const supa = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
   auth: { persistSession: false, autoRefreshToken: false },
@@ -394,8 +394,14 @@ Deno.serve(async (req) => {
           botRepliesLastHour: count ?? 0, botHourlyLimit: BOT_HOURLY(),
           consultationFee: fee, bookingUrl,
         });
+        // المجاملة الخالصة للقواعد وحدها: قاعدة الإغلاق (ردٌّ قصير أول مرة، ثم صمت) حكمٌ ثابت لا اجتهاد
+        const courtesyOnly = isCourtesyOnly(decideText);
+        if (courtesyOnly && o.reply === T.thanksReply
+            && /[A-Za-z]/.test(decideText) && !/[\u0600-\u06FF]/.test(decideText)) {
+          o.reply = "You're most welcome. We're here if you need anything else.";   // الإغلاق بلغة المرسل
+        }
         const eligible = (aiEnabledFor(ev.phone_e164) || (test && ev.ai === true))
-          && isNewcomer && !ev.human_until && decideText.trim() !== ''
+          && isNewcomer && !ev.human_until && decideText.trim() !== '' && !courtesyOnly
           && ['new', 'intake', 'intake_done'].includes(conv.state)
           && o.route.detail?.closing !== 'silent_after_close' && o.route.reason !== 'rate_limited';
         if (eligible) {
@@ -407,7 +413,7 @@ Deno.serve(async (req) => {
               fee, bookingUrl: bookingUrl ?? 'https://app.redwan.sa/#/book',
               knownName: (ev.matches ?? []).find((m) => m.system === 'law')?.name ?? null,
             });
-            const bad = vet(brain.out, fee, bookingUrl ?? 'https://app.redwan.sa/#/book');
+            const bad = vet(brain.out, fee, bookingUrl ?? 'https://app.redwan.sa/#/book', decideText);
             if (bad) throw new Error(`حاجز: ${bad}`);
             o = fromBrain(brain.out, conv, ev, decideText, media, { model: brain.model, ms: brain.ms });
           } catch (e) {

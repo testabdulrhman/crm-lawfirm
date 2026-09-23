@@ -12,7 +12,8 @@
 import Anthropic from 'npm:@anthropic-ai/sdk';
 import { HOURS_TEXT, REQUEST_TYPES } from './texts.ts';
 
-export const MODEL = 'claude-opus-5';
+// Sonnet 5 بجهدٍ منخفض يكفي للاستقبال (قرار المدير 2026-09-23)، وأسرع وأرخص من Opus
+export const MODEL = 'claude-sonnet-5';
 
 export interface BrainInput {
   history: { who: 'client' | 'office'; text: string }[];
@@ -81,17 +82,18 @@ function systemPrompt(fee: string | null, bookingUrl: string): string {
     '- الخدمات:',
     services,
     '',
-    'ما تجمعه من الكلام (ولا تسأل إلا عمّا نقص، سؤالاً واحداً في كل رسالة، وبالترتيب الأنسب للمحادثة):',
+    'ما تجمعه من الكلام (ولا تسأل إلا عمّا نقص، وسؤالاً واحداً فقط في كل رسالة — لا سؤالين — وبالترتيب الأنسب للمحادثة):',
     '- الاسم، ونوع الطلب ووصفه المختصر، والأطراف الأخرى إن وُجدت، وأي جلسة أو موعد نظامي قريب، والمدينة.',
     '- الطلب مكتمل حين تعرف: الاسم، ووصف الحاجة، والمدينة. عندها أكّد التسجيل وأن الفريق سيتواصل.',
     '- في request_type ضع «unknown» ما دام نوع الطلب غير معروف.',
     '- لا تُلحّ: إن تجاهل العميل سؤالاً فلا تكرره أكثر من مرة.',
     '',
     'أسلوبك:',
-    '- عربية فصحى مبسّطة ومهذبة، وصيغة محايدة للمخاطبة: «حياكم الله»، «طلبكم»، «نخدمكم» — لا تخمّن جنس المخاطَب ولا لقبه.',
+    '- عربية فصحى مبسّطة ومهذبة لا عامية فيها: قل «كيف نخدمكم؟» لا «كيف نقدر نخدمكم؟»، و«هل ترغبون…» لا «تبون…»، و«يمكنكم» لا «تقدرون».',
+    '- صيغة محايدة للمخاطبة: «حياكم الله»، «طلبكم»، «نخدمكم» — لا تخمّن جنس المخاطَب ولا لقبه.',
     '- لا ألقاب إطلاقاً (أستاذ، أستاذة، سيد، سيدة…): نادِ بالاسم وحده إن احتجت، ولو دلّ الاسم أو الكلام على الجنس.',
     '- رسالة قصيرة تصلح للواتساب: جملة إلى ثلاث، بلا عناوين ولا تنسيق، وبأرقام لاتينية.',
-    '- إن كتب العميل بالإنجليزية فرد بالإنجليزية، وإن كتب بالعربية فبالعربية، وإن مزج بينهما فامزج بالقدر نفسه.',
+    '- لغة الرد هي لغة **رسالته الأخيرة** لا لغة ما سبقها: إن كتبها بالإنجليزية فرد بالإنجليزية، وإن كتبها بالعربية فبالعربية ولو كانت المحادثة قبلها بالإنجليزية، وإن مزج فامزج بالقدر نفسه.',
     '- لا تبدأ بالسلام إلا في أول ردٍّ في المحادثة (وإن سلّم العميل فرُدّ سلامه مرة واحدة فقط).',
     '',
     'متى تسكت (action = silent، و reply فارغ):',
@@ -105,7 +107,7 @@ function systemPrompt(fee: string | null, bookingUrl: string): string {
     '- إن كان غاضباً، أو الأمر عاجلاً جداً، أو طلب التحدث مع إنسان: طمئنه أن الفريق سيتواصل، واجعل handoff = true.',
     '',
     'أخرج JSON وفق المخطط فقط. في collected ضع كل ما عرفته حتى الآن من المحادثة كلها (لا من هذه الرسالة وحدها)، و null لما لم يُعرف.',
-    'واكتب ما في collected بالعربية دائماً ولو كتب العميل بغيرها — فالفريق يقرؤه بالعربية — والاسم كما كتبه العميل.',
+    'واكتب ما في collected بالعربية دائماً ولو كتب العميل بغيرها — فالفريق يقرؤه بالعربية — إلا الاسم: يُنقل كما كتبه العميل حرفاً بحرف، لا يُترجم ولا يُعرَّب.',
   ].join('\n');
 }
 
@@ -143,11 +145,25 @@ export function neutralize(reply: string): string {
     .trim();
 }
 
-export function vet(o: BrainOutput, fee: string | null, bookingUrl: string): string | null {
+const ARABIC = /[\u0600-\u06FF]/g;
+const LATIN = /[A-Za-z]/g;
+
+/** لغة الرد حاجزٌ لا توصية: تتبع رسالة العميل الأخيرة */
+function languageMismatch(current: string, reply: string): boolean {
+  const ca = (current.match(ARABIC) ?? []).length, cl = (current.match(LATIN) ?? []).length;
+  const ra = (reply.match(ARABIC) ?? []).length, rl = (reply.match(LATIN) ?? []).length;
+  if (ca + cl < 3) return false;                              // إيموجي أو رقم: لا حكم
+  if (ca > 0 && cl === 0) return ra === 0;                    // كتب بالعربية ⇒ لا يُرد بلا عربية
+  if (cl > 0 && ca === 0) return rl < 6;                      // كتب بالإنجليزية ⇒ لا يُرد بلا إنجليزية
+  return false;                                               // مزيج: يُترك للنموذج
+}
+
+export function vet(o: BrainOutput, fee: string | null, bookingUrl: string, current = ''): string | null {
   if (o.action === 'silent') return null;
   o.reply = neutralize(o.reply ?? '');
   const r = (o.reply ?? '').trim();
   if (!r) return 'رد فارغ';
+  if (languageMismatch(current, r)) return 'لغة الرد تخالف لغة رسالة العميل';
   if (r.length > 700) return 'رد طويل';
   if (PROMISES.test(r)) return 'وعد بنتيجة';
   const urls = r.match(/https?:\/\/\S+/g) ?? [];
@@ -162,11 +178,9 @@ export async function think(i: BrainInput): Promise<{ out: BrainOutput; ms: numb
   const client = new Anthropic({ apiKey: Deno.env.get('ANTHROPIC_API_KEY')!, timeout: 14_000, maxRetries: 0 });
   const t0 = performance.now();
   // deno-lint-ignore no-explicit-any
-  const res: any = await client.beta.messages.create({
+  const res: any = await client.messages.create({
     model: MODEL,
     max_tokens: 2000,
-    betas: ['server-side-fallback-2026-07-01'],
-    fallbacks: 'default',
     output_config: { effort: 'low', format: { type: 'json_schema', schema: SCHEMA } },
     system: systemPrompt(i.fee, i.bookingUrl),
     messages: [{ role: 'user', content: userContent(i) }],
