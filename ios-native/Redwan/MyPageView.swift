@@ -217,7 +217,8 @@ struct MyPageView: View {
     // الرأس
     private var header: some View {
         HStack(spacing: 12) {
-            AvatarCircle(member: sb.member, size: 54)
+            // الضغط على الصورة يغيّرها (طلب المدير 2026-09-23)
+            EditableAvatar(size: 54)
             VStack(alignment: .leading, spacing: 3) {
                 Text(profile?.name ?? sb.member?.name ?? "—")
                     .font(.system(size: 18, weight: .bold)).foregroundStyle(Theme.navy)
