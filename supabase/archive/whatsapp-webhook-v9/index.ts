@@ -92,7 +92,7 @@ function describe(messageType: string, body: string | null, mediaUrl: string | n
 /** تطبيع عربي: همزات وتاء مربوطة وتطويل وتشكيل وعلامات — للمطابقة فقط */
 function norm(t: string): string {
   return t
-    .replace(/[\u064B-\u0652\u0640]/g, "")
+    .replace(/[ً-ْـ]/g, "")
     .replace(/[إأآٱ]/g, "ا").replace(/ى/g, "ي").replace(/ة/g, "ه")
     .replace(/[^\p{L}\p{N}\s]/gu, " ")
     .replace(/\s+/g, " ")
