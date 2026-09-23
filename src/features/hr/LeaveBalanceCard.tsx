@@ -1,5 +1,6 @@
 // رصيد الإجازة السنوية — في «الإجازات والاستئذان» (رصيدي) وصفحة الموظف (للمدير ولصاحبها).
-// الحساب كله في القاعدة (leave_balance): ٢١ يوماً، و٣٠ بعد خمس سنوات متصلة (م١٠٩ نظام العمل).
+// الحساب كله في القاعدة (leave_balance): ٢١ يوماً، و٣٠ بعد خمس سنوات متصلة (م١٠٩ نظام العمل)،
+// تُستحق شهرياً — ١٫٧٥ يوم عن كل شهر مكتمل من سنة الخدمة (تصحيح المدير 2026-09-23).
 import { Sun } from 'lucide-react'
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -8,11 +9,18 @@ import { fmtDatePref, fmtNumber } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useLeaveBalance } from '@/hooks/useHrRequests'
 
+/** ١٣ · ١٤٫٢٥ · ١٫٧٥ — بلا أصفار زائدة، وبأرقام النظام اللاتينية */
+const fmtDays = (n: number) =>
+  Number.isInteger(n) ? fmtNumber(n) : n.toLocaleString('en-US', { maximumFractionDigits: 2 })
+
 const yearsLabel = (n: number) =>
   n < 1 ? 'أقل من سنة' : n === 1 ? 'سنة' : n === 2 ? 'سنتان' : n <= 10 ? `${fmtNumber(n)} سنوات` : `${fmtNumber(n)} سنة`
 
 export function LeaveBalanceCard({ memberId, isSelf = true }: { memberId?: string | null; isSelf?: boolean }) {
   const { data: b, isLoading, error } = useLeaveBalance(memberId)
+  // الدقيق (بالكسر) من الحقول الجديدة؛ وإن غابت (قاعدة أقدم) فالصحيح القديم
+  const accrued = b?.accrued ?? b?.entitlement ?? 0
+  const remaining = b?.remaining_exact ?? b?.remaining ?? 0
 
   return (
     <Card>
@@ -42,19 +50,29 @@ export function LeaveBalanceCard({ memberId, isSelf = true }: { memberId?: strin
         ) : b && b.entitlement != null ? (
           <div className="space-y-3">
             <div className="flex items-baseline gap-2">
-              <span className={cn('text-4xl font-bold', (b.remaining ?? 0) < 0 ? 'text-destructive' : 'text-foreground')}>
-                {fmtNumber(b.remaining ?? 0)}
+              <span className={cn('text-4xl font-bold', remaining < 0 ? 'text-destructive' : 'text-foreground')}>
+                {fmtDays(remaining)}
               </span>
-              <span className="text-sm text-muted-foreground">من أصل {fmtNumber(b.entitlement)} يوماً</span>
+              <span className="text-sm text-muted-foreground">
+                متبقٍّ من {fmtDays(accrued)} مستحقة حتى الآن
+              </span>
             </div>
-            <div className="h-2 overflow-hidden rounded-full bg-muted">
+            {/* الشريط: ما استُحق من السنة كاملة، وداخله ما استُخدم منه */}
+            <div className="relative h-2 overflow-hidden rounded-full bg-muted">
               <div
-                className="h-full rounded-full bg-gold"
+                className="absolute inset-y-0 start-0 rounded-full bg-gold/30"
+                style={{ width: `${Math.min(100, (accrued / Math.max(1, b.entitlement)) * 100)}%` }}
+              />
+              <div
+                className="absolute inset-y-0 start-0 rounded-full bg-gold"
                 style={{ width: `${Math.min(100, ((b.used ?? 0) / Math.max(1, b.entitlement)) * 100)}%` }}
               />
             </div>
             <div className="flex flex-wrap gap-2 text-xs">
               <span className="rounded-full bg-muted px-2.5 py-1 text-foreground">استُخدم: {fmtNumber(b.used ?? 0)}</span>
+              <span className="rounded-full bg-muted px-2.5 py-1 text-foreground">
+                السنة كاملة: {fmtNumber(b.entitlement)} يوماً
+              </span>
               {(b.pending ?? 0) > 0 && (
                 <span className="rounded-full bg-gold/10 px-2.5 py-1 text-gold-600 dark:text-gold-300">
                   قيد الاعتماد: {fmtNumber(b.pending ?? 0)}
@@ -65,7 +83,11 @@ export function LeaveBalanceCard({ memberId, isSelf = true }: { memberId?: strin
               سنة الخدمة {fmtDatePref(b.service_year_start ?? null)} ← {fmtDatePref(b.service_year_end ?? null)} · خدمة{' '}
               {yearsLabel(b.years_of_service ?? 0)}
             </p>
-            <p className="text-[11px] text-muted-foreground">21 يوماً في السنة، و30 بعد خمس سنوات متصلة — بأيام التقويم.</p>
+            <p className="text-[11px] text-muted-foreground">
+              تُستحق شهرياً: {fmtDays(b.monthly_rate ?? b.entitlement / 12)} يوم عن كل شهر مكتمل
+              {b.months_accrued != null && ` (مضى ${fmtNumber(b.months_accrued)} من 12)`} — 21 يوماً في
+              السنة، و30 بعد خمس سنوات متصلة، بأيام التقويم.
+            </p>
           </div>
         ) : null}
       </CardContent>
