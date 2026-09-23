@@ -29,6 +29,49 @@ const admin = createClient(
 // أفعال القراءة مسموحة للمدير؛ والكتابة (staff_set) كذلك — وهي الوحيدة
 const ACTIONS = new Set(['summary', 'phone', 'event', 'templates', 'staff_list', 'staff_set']);
 
+// ---------- قسمان من المحاماة نفسها ----------
+// مكتب الاستقبال انتقل إلى هنا (wa-reception، 2026-09-23)، فطلباته وتأهيله المتوقف في هذه
+// القاعدة لا في الـ Hub. تُؤخذ اللوحة من الـ Hub كما هي، ويُستبدل بهذين القسمين ما هنا.
+const riyadh = (iso: string | null) => {
+  if (!iso) return '';
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Riyadh', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).formatToParts(new Date(iso)).map((x) => [x.type, x.value]));
+  return `${p.month}-${p.day} ${p.hour}:${p.minute}`;
+};
+
+async function lawSections() {
+  const since = new Date(Date.now() - 30 * 86_400_000).toISOString();
+  const { data: reqs } = await admin.from('incoming_requests')
+    .select('id, client_name, client_phone, case_type, description, created_at')
+    .eq('created_by', 'redwan-hub').gte('created_at', since)
+    .order('created_at', { ascending: false }).limit(50);
+  const bot_requests = (reqs ?? []).map((r) => ({
+    at: riyadh(r.created_at),
+    phone: r.client_phone,
+    name: r.client_name,
+    request_label: r.case_type,
+    city: /المدينة: (.+)/.exec(r.description ?? '')?.[1]?.trim() ?? null,
+    partial: /غير مكتمل/.test(r.description ?? ''),
+    status: 'delivered',          // الطلب هنا ⇒ وصل
+    request_id: r.id,
+  }));
+
+  const twoH = new Date(Date.now() - 2 * 3_600_000).toISOString();
+  const { data: convs } = await admin.from('wa_reception_conversations')
+    .select('phone_e164, intake_step, intake_data, intake_updated_at')
+    .eq('state', 'intake').lt('intake_updated_at', twoH).not('phone_e164', 'like', 'test:%')
+    .order('intake_updated_at', { ascending: true }).limit(50);
+  const stalled_intakes = (convs ?? []).map((c) => ({
+    phone: c.phone_e164,
+    step: c.intake_step,
+    name: c.intake_data?.name ?? null,
+    since: riyadh(c.intake_updated_at),
+    hours: Math.round((Date.now() - Date.parse(c.intake_updated_at)) / 3_600_000),
+  }));
+  return { bot_requests, stalled_intakes };
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   if (req.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
@@ -71,6 +114,15 @@ Deno.serve(async (req) => {
       signal: AbortSignal.timeout(25_000),
     });
     const text = await res.text();
+    if (action === 'summary' && res.ok) {
+      try {
+        const out = JSON.parse(text);
+        if (out?.data) Object.assign(out.data, await lawSections());
+        return json(out);
+      } catch (e) {
+        console.error('hub-monitor law sections', e);   // تعذّر القسمان ⇒ تبقى لوحة الـ Hub كما هي
+      }
+    }
     return new Response(text, {
       status: res.status,
       headers: { ...cors, 'Content-Type': 'application/json' },

@@ -16,7 +16,11 @@
 // =============================================================
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
-import { ConvSnapshot, decide, FlowOutput, Match } from './flow.ts';
+import { isCourtesyOnly } from './arabic.ts';
+import { BrainOutput, think, vet } from './brain.ts';
+import { ConvSnapshot, decide, FlowOutput, LEAD_FOLLOWUP_DAYS, Match } from './flow.ts';
+import { isBusinessHours } from './hours.ts';
+import { REQUEST_TYPES } from './texts.ts';
 
 const supa = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
   auth: { persistSession: false, autoRefreshToken: false },
@@ -46,7 +50,7 @@ function safeEqual(a: string, b: string): boolean {
 }
 
 interface HubEvent {
-  hub_event: string; ref: string; ts: number; test?: boolean;
+  hub_event: string; ref: string; ts: number; test?: boolean; ai?: boolean;
   text: string; media: string[]; media_label: string | null; message_type: string; received_at: string;
   phone_e164: string; phone_local: string; contact_name: string | null;
   hub_conversation_id: string; hatif_conversation_id: string | null; hatif_contact_id: string | null;
@@ -101,6 +105,94 @@ async function settleBurst(key: string, msgId: number, at: string, text: string)
     .order('created_at').limit(8);
   const joined = (ins ?? []).map((m: { body: string | null }) => (m.body ?? '').trim()).filter(Boolean).join('\n');
   return { superseded: false, text: joined.slice(0, 1500) || text };
+}
+
+// ---------- الرد الذكي (brain.ts) ----------
+// RECEPTION_AI = off | sandbox | on — وفي sandbox لا يعمل إلا لأرقام RECEPTION_AI_PHONES.
+const aiEnabledFor = (phone: string) => {
+  const mode = (Deno.env.get('RECEPTION_AI') ?? 'off').trim();
+  if (mode === 'on') return true;
+  if (mode !== 'sandbox') return false;
+  return (Deno.env.get('RECEPTION_AI_PHONES') ?? '').split(',').map((x) => x.trim()).includes(phone);
+};
+
+const TYPE_LABEL: Record<string, string> = {
+  case: REQUEST_TYPES[0].label, consultation: REQUEST_TYPES[1].label, contract: REQUEST_TYPES[2].label,
+  collection: REQUEST_TYPES[3].label, other: REQUEST_TYPES[4].label,
+};
+
+/** ما دار في المحادثة: الوارد بنصّه المجمَّع يوم قُرِّر عليه، والصادر كما أُرسل */
+async function historyOf(key: string, before: string) {
+  const { data } = await supa.from('wa_reception_messages')
+    .select('direction, body, superseded, decision, created_at')
+    .eq('phone_e164', key).lt('created_at', before).order('created_at', { ascending: false }).limit(24);
+  return (data ?? []).reverse()
+    .filter((m) => !(m.direction === 'in' && m.superseded))
+    .map((m) => ({
+      who: (m.direction === 'in' ? 'client' : 'office') as 'client' | 'office',
+      text: String((m.direction === 'in' ? m.decision?.text : null) ?? m.body ?? '').slice(0, 600),
+    }))
+    .filter((h) => h.text.trim());
+}
+
+/** قرار النموذج ⇒ مخرجٌ بصيغة flow.ts نفسها، فتمضي الآثار (الإرسال والتسجيل) كما هي */
+function fromBrain(b: BrainOutput, conv: ConvRow, ev: HubEvent, text: string, media: string[],
+  meta: Record<string, unknown>): FlowOutput {
+  const iso = new Date().toISOString();
+  const notices = { ...(conv.notices ?? {}) } as Record<string, string>;
+  const data = { ...(conv.intake_data ?? {}) } as Record<string, any>;
+  const c = b.collected ?? ({} as BrainOutput['collected']);
+  if (c.name) data.name = c.name.slice(0, 80);
+  if (c.request_type) {
+    data.request_type = c.request_type === 'consultation' ? 'consultation' : 'case';
+    data.request_label = TYPE_LABEL[c.request_type] ?? TYPE_LABEL.other;
+  }
+  if (c.request_summary) data.first_message = c.request_summary.slice(0, 1500);
+  else if (!data.first_message && text && !isCourtesyOnly(text)) data.first_message = text.slice(0, 1500);
+  if (c.parties) data.parties = c.parties.slice(0, 300);
+  if (c.deadlines) { data.deadlines = c.deadlines.slice(0, 300); data.has_deadline = !/^(لا|no|none)$/i.test(c.deadlines.trim()); }
+  if (c.city) data.city = c.city.slice(0, 80);
+  if (media.length) data.media = [...(data.media ?? []), ...media];
+  const lawMatch = (ev.matches ?? []).find((m) => m.system === 'law');
+  if (!data.law_external_id && lawMatch) data.law_external_id = lawMatch.external_id;
+
+  const patch: Partial<ConvSnapshot> = { intake_data: data as ConvSnapshot['intake_data'] };
+  const notify: FlowOutput['notify'] = [];
+  const wasDone = conv.state === 'intake_done';
+  const hasNeed = Boolean(data.request_type || data.first_message);
+  const missing = !data.name ? 'name' : !hasNeed ? 'request_type' : !data.city ? 'city' : null;
+
+  if (!wasDone && b.intake_complete && !missing) {
+    patch.state = 'intake_done';
+    patch.intake_step = null;
+    patch.intake_updated_at = iso;
+    patch.tags = [...new Set([...(conv.tags ?? []), 'طلب جديد'])];
+    notify.push({ system: 'law', kind: 'wa_new_lead', external_id: data.law_external_id ?? null,
+      payload: { ...data, source: 'واتساب', text, media, media_label: ev.media_label } });
+  } else if (!wasDone && hasNeed) {
+    patch.state = 'intake';
+    patch.intake_step = missing as ConvSnapshot['intake_step'];
+    patch.intake_updated_at = iso;
+  } else if (wasDone && text && !b.closing && !isCourtesyOnly(text)) {
+    // بعد اكتمال الطلب: كل جديدٍ ذي مضمون يصل الفريق مضافاً إلى طلبه
+    notify.push({ system: 'law', kind: 'wa_lead_message', external_id: data.law_external_id ?? null,
+      payload: { text, media, media_label: ev.media_label, name: data.name ?? null } });
+  }
+  if (b.handoff && !notify.length) {
+    notify.push({ system: 'law', kind: 'wa_lead_message', external_id: data.law_external_id ?? null,
+      payload: { text: `⚠️ يطلب موظفاً: ${text}`, media, media_label: ev.media_label, name: data.name ?? null } });
+  }
+  if (b.action === 'reply') notices.salam_at = iso;
+  if (b.closing) notices.closed_at = iso;
+  patch.notices = notices;
+
+  return {
+    reply: b.action === 'reply' ? b.reply.trim() : null,
+    patch,
+    notify,
+    route: { system: 'law', external_id: data.law_external_id ?? null, reason: 'default', confidence: 0.7,
+             detail: { ai: true, language: b.language, closing: b.closing || undefined, handoff: b.handoff || undefined, ...meta } },
+  };
 }
 
 // ---------- الآثار: الرد والتسجيل والتسليم ----------
@@ -257,6 +349,17 @@ Deno.serve(async (req) => {
     let out: FlowOutput | null = msg.decision?.out ?? null;
 
     if (!out) {
+      // من سجّل طلبه عندنا للتوّ يصير في الفهرس «صاحب طلب قائم» — وهو طلبنا نحن. فما دام
+      // تأهيله جارياً أو في مدة المتابعة، يبقى في مسار الأرقام الجديدة (قاعدة الإغلاق، والرد
+      // الذكي، وإلحاق الجديد بطلبه) ولا يُعامَل صاحبَ طلبٍ قديم يُطمأن عليه.
+      const { data: pre } = await supa.from('wa_reception_conversations')
+        .select('state, intake_updated_at').eq('phone_e164', key).maybeSingle();
+      const ownFlow = pre?.state === 'intake' || (pre?.state === 'intake_done' &&
+        Date.now() - Date.parse(pre.intake_updated_at ?? '') < LEAD_FOLLOWUP_DAYS * 86_400_000);
+      if (ownFlow) {
+        ev.matches = (ev.matches ?? []).filter((m) =>
+          !(m.system === 'law' && m.kind === 'client' && String(m.meta?.via ?? '') === 'active_request'));
+      }
       // مهلة التجميع للرقم الجديد وحده (لا دائن ولا عميل)، وما لم يتولّه موظف
       const isNewcomer = !(ev.matches ?? []).some((m) =>
         m.system === 'bankruptcy' || (m.system === 'law' && m.kind === 'client'));
@@ -275,6 +378,8 @@ Deno.serve(async (req) => {
       const bookingUrl = booking ?? undefined;
 
       // ٣) القرار على لقطةٍ بقفلٍ تفاؤلي: رسالتان متزامنتان لا تتسابقان على الحالة
+      let brain: { out: BrainOutput; ms: number; usage: unknown; model: string } | null = null;
+      let aiError: string | null = null;
       for (let attempt = 0; attempt < 4 && !out; attempt++) {
         const [conv, { count }] = await Promise.all([
           loadConv(key, ev.hub_conversation_id),
@@ -282,12 +387,35 @@ Deno.serve(async (req) => {
             .eq('phone_e164', key).eq('direction', 'out').gte('created_at', new Date(Date.now() - 3_600_000).toISOString()),
         ]);
         const snap = { ...Object.fromEntries(COLS.map((c) => [c, conv[c]])), human_until: ev.human_until } as ConvSnapshot;
-        const o = decide({
+        // القواعد أولاً: هي الحارس (تولّي موظف، الصمت بعد الإغلاق، حد الساعة) والبديل عند تعثّر النموذج
+        let o = decide({
           now: new Date(), conv: snap, matches: ev.matches ?? [], matchSource: ev.match_source ?? 'none',
           msg: { text: decideText, mediaUrl: media[0] ?? null, mediaLabel: ev.media_label },
           botRepliesLastHour: count ?? 0, botHourlyLimit: BOT_HOURLY(),
           consultationFee: fee, bookingUrl,
         });
+        const eligible = (aiEnabledFor(ev.phone_e164) || (test && ev.ai === true))
+          && isNewcomer && !ev.human_until && decideText.trim() !== ''
+          && ['new', 'intake', 'intake_done'].includes(conv.state)
+          && o.route.detail?.closing !== 'silent_after_close' && o.route.reason !== 'rate_limited';
+        if (eligible) {
+          try {
+            brain ??= await think({
+              history: await historyOf(key, msg.created_at), current: decideText,
+              collected: { ...(conv.intake_data ?? {}) } as Record<string, unknown>, greeted: Boolean(conv.notices?.salam_at),
+              intakeDone: conv.state === 'intake_done', businessHoursNow: isBusinessHours(new Date()),
+              fee, bookingUrl: bookingUrl ?? 'https://app.redwan.sa/#/book',
+              knownName: (ev.matches ?? []).find((m) => m.system === 'law')?.name ?? null,
+            });
+            const bad = vet(brain.out, fee, bookingUrl ?? 'https://app.redwan.sa/#/book');
+            if (bad) throw new Error(`حاجز: ${bad}`);
+            o = fromBrain(brain.out, conv, ev, decideText, media, { model: brain.model, ms: brain.ms });
+          } catch (e) {
+            aiError = String((e as Error).message).slice(0, 200);
+            console.error('wa-reception brain', ev.ref, aiError);   // يمضي ردّ القواعد
+            o.route.detail = { ...(o.route.detail ?? {}), ai_fallback: aiError };
+          }
+        }
         const patch = Object.fromEntries(Object.entries(o.patch).filter(([k]) => (COLS as string[]).includes(k)));
         const { data: upd } = await supa.from('wa_reception_conversations')
           .update({ ...patch, version: conv.version + 1, updated_at: new Date().toISOString() })
@@ -295,11 +423,13 @@ Deno.serve(async (req) => {
         if (upd?.length) out = o;
       }
       if (!out) throw new Error('conversation conflict: exhausted retries');
-      await supa.from('wa_reception_messages').update({ decision: { out, done: false, test } }).eq('id', msg.id);
+      msg.decision = { out, done: false, test, text: decideText,
+        ai: brain ? { ms: brain.ms, usage: brain.usage, model: brain.model } : undefined, ai_error: aiError ?? undefined };
+      await supa.from('wa_reception_messages').update({ decision: msg.decision }).eq('id', msg.id);
     }
 
     if (test) {
-      await supa.from('wa_reception_messages').update({ decision: { out, done: true, test } }).eq('id', msg.id);
+      await supa.from('wa_reception_messages').update({ decision: { ...(msg.decision ?? {}), out, done: true, test, text: msg.decision?.text } }).eq('id', msg.id);
       if (out.reply) await supa.from('wa_reception_messages').insert({ phone_e164: key, direction: 'out', body: out.reply, event_ref: `out:${ev.ref}` });
       return json({ ok: true, test: true, reply: out.reply, route: out.route, notify: out.notify.map((n) => `${n.system}:${n.kind}`), patch: out.patch });
     }
@@ -312,10 +442,14 @@ Deno.serve(async (req) => {
         { phone_e164: key, direction: 'out', body: out.reply, event_ref: `out:${ev.ref}` },
         { onConflict: 'event_ref', ignoreDuplicates: true });
     }
+    // رقم الرمل (RECEPTION_SANDBOX_PHONES): لا يُسجَّل له طلبٌ ولا إخطارٌ حقيقي — يُقيَّد المقصود وحده
+    const sandbox = (Deno.env.get('RECEPTION_SANDBOX_PHONES') ?? '').split(',').map((x) => x.trim()).includes(ev.phone_e164);
     for (const n of out.notify) {
-      effects[`${n.system}:${n.kind}`] = n.system === 'law' ? await ingest(ev, out, n) : await handoff(ev, out, n);
+      effects[`${n.system}:${n.kind}`] = sandbox ? { sandbox: true, payload: n.payload }
+        : n.system === 'law' ? await ingest(ev, out, n) : await handoff(ev, out, n);
     }
-    await supa.from('wa_reception_messages').update({ decision: { out, done: true, effects } }).eq('id', msg.id);
+    // يُضاف الأثر إلى القرار ولا يُمسح ما فيه (النص المجمَّع يقرؤه الرد الذكي تاريخاً للمحادثة)
+    await supa.from('wa_reception_messages').update({ decision: { ...(msg.decision ?? {}), out, done: true, effects } }).eq('id', msg.id);
     return json({ ok: true, reply: Boolean(out.reply), route: out.route, notify: out.notify.map((n) => `${n.system}:${n.kind}`) });
   } catch (e) {
     console.error('wa-reception', ev.ref, e);

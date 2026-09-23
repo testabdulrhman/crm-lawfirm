@@ -187,6 +187,7 @@ const COURTESY_WORDS = new Set([
   // الإنجليزية
   'thanks', 'thank', 'you', 'thx', 'ty', 'ok', 'okay', 'okey', 'k', 'good', 'great', 'nice', 'cool',
   'perfect', 'alright', 'bye', 'welcome', 'much', 'so', 'lol', 'haha',
+  'a', 'lot', 'alot', 'very', 'many', 'appreciate', 'appreciated', 'it', 'noted', 'sure', 'great', 'goodbye',
 ]);
 const EMOJI_RE = /[\p{Extended_Pictographic}\p{Emoji_Modifier}‍️❤♥]/gu;
 const LAUGH_RE = /^(ه{2,}|ها{2,}|(ha){2,}|h+)$/;
