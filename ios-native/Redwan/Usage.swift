@@ -15,6 +15,8 @@ final class Usage {
     private var activeMinutes = 0
     private var lastTick = Date()
     private var curScreen = "الرئيسية"
+    /// اسم الشاشة الظاهرة — يُرفق مع «اقترح تعديلاً» عند هزّ الجوال
+    var currentScreen: String { curScreen }
     private var screenSince = Date()
     private var inForeground = true
     private var timer: Timer?

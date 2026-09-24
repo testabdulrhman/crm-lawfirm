@@ -108,6 +108,8 @@ struct RootView: View {
             LoginView()
         } else {
             MainTabs()
+                // هزّ الجوال في أي شاشة ⇐ «اقترح تعديلاً» مع لقطتها (2026-09-24)
+                .suggestChangeOnShake()
                 .task {
                     await sb.enablePush()
                     Usage.shared.start()

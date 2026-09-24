@@ -180,6 +180,7 @@ struct MyPageView: View {
                     requestsCard
                     payrollCard
                     detailsCard
+                    suggestLink
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 10)
@@ -235,6 +236,28 @@ struct MyPageView: View {
         .background(Theme.card)
         .clipShape(RoundedRectangle(cornerRadius: 14))
         .overlay(RoundedRectangle(cornerRadius: 14).stroke(Theme.line, lineWidth: 1))
+    }
+
+    // «اقترح تعديلاً» — والطريق الأسرع هزّ الجوال في الشاشة المقصودة (2026-09-24)
+    private var suggestLink: some View {
+        NavigationLink { MyChangeRequestsView() } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "lightbulb.fill").foregroundStyle(Theme.goldDark)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("اقتراحاتي على التطبيق")
+                        .font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.navy)
+                    Text("هزّ الجوال في أي شاشة لتقترح تعديلاً عليها مع لقطتها")
+                        .font(.system(size: 12)).foregroundStyle(Theme.muted)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.left").font(.system(size: 12)).foregroundStyle(Theme.muted)
+            }
+            .padding(14)
+            .background(Theme.card)
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .overlay(RoundedRectangle(cornerRadius: 14).stroke(Theme.line, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
     }
 
     // للمدير: الطريق إلى اعتماد طلبات الفريق
