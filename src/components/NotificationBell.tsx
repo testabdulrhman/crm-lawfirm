@@ -1,19 +1,7 @@
 // جرس الإشعارات في الشريط العلوي — عدّاد غير المقروء + قائمة بضغطة تنقلك للمكان
 import { useEffect, useState } from 'react'
 import { useLocation } from 'wouter'
-import {
-  Bell,
-  AtSign,
-  ListTodo,
-  Stamp,
-  CalendarDays,
-  MessageSquare,
-  Globe,
-  Users,
-  CheckCheck,
-  Loader2,
-  type LucideIcon,
-} from 'lucide-react'
+import { Bell, CheckCheck, ChevronLeft, Loader2 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import {
@@ -31,63 +19,12 @@ import {
   setBrowserNotifEnabled,
   showNewBrowserNotifications,
 } from '@/lib/browserNotify'
-import { requestDiscussionJump } from '@/lib/discussionJump'
+import { notificationIcon, useOpenNotification } from '@/lib/notificationNav'
 import {
   useNotifications,
   useUnreadCount,
   useMarkRead,
-  type AppNotification,
 } from '@/hooks/useNotifications'
-
-// أيقونة ووجهة كل نوع
-const ICONS: Record<string, LucideIcon> = {
-  mention: AtSign,
-  task_assigned: ListTodo,
-  task_due: ListTodo,
-  task_comment: MessageSquare,
-  task_review: Stamp,
-  task_approved: ListTodo,
-  task_returned: ListTodo,
-  approval_request: Stamp,
-  approval_result: Stamp,
-  session_soon: CalendarDays,
-  incoming_message: MessageSquare,
-  incoming_request: Globe,
-  case_shared: Users,
-}
-
-/** مسار وجهة الإشعار — بلا آثار جانبية */
-function destination(n: AppNotification): string {
-  // إشعار مرتبط بمهمة يفتح غرفتها مباشرة — أدق من صفحة القضية
-  if (n.task_id) return `/tasks/${n.task_id}`
-  // منشن في نقاش: صفحة النقاشات، والرسالة نفسها يحملها جسر النقاشات عند الفتح
-  if (n.type === 'mention') return '/discussions'
-  if (n.case_id) return `/cases/${n.case_id}`
-  // طلبات الإجازة والاستئذان — صفحتها لا مهمة ولا ملف
-  if (n.type === 'hr_request' || n.type === 'hr_result') return '/hr'
-  // طلب وصل من نموذج التواصل في الموقع — الوارد لم يُحوَّل لملف بعد
-  if (n.type === 'incoming_request') return '/requests'
-  // اقتراح تعديل جديد (للمدير) أو ردّ عليه (لصاحبه)
-  if (n.type === 'change_request') return '/change-requests'
-  switch (n.type) {
-    case 'task_assigned':
-    case 'task_due':
-    case 'task_comment':
-    case 'task_review':
-    case 'task_approved':
-    case 'task_returned':
-      return '/tasks'
-    case 'approval_request':
-    case 'approval_result':
-      return '/outgoing'
-    case 'incoming_message':
-      return '/inbox'
-    case 'session_soon':
-      return '/sessions'
-    default:
-      return '/'
-  }
-}
 
 export function NotificationBell() {
   const [, navigate] = useLocation()
@@ -106,13 +43,7 @@ export function NotificationBell() {
    * نقاشها وخيطها وتُبرزها — كان يكتفي باختيار النقاش، فإن كان مفتوحاً أصلاً
    * لم يتغير شيء وبدا الضغط كأنه لا يعمل (بلاغ المدير 2026-09-15).
    */
-  const openNotification = (n: AppNotification) => {
-    if (!n.is_read) markM.mutate(n.id)
-    if (n.type === 'mention' && !n.task_id) {
-      requestDiscussionJump({ caseId: n.case_id, at: n.created_at })
-    }
-    navigate(destination(n))
-  }
+  const openNotification = useOpenNotification()
 
   // إشعار نظام من المتصفح لكل جديد — يظهر والتبويب في الخلفية فقط، ووجهته تُحسب عند الضغط
   useEffect(() => {
@@ -189,7 +120,7 @@ export function NotificationBell() {
             </div>
           ) : (
             list.map((n) => {
-              const Icon = ICONS[n.type ?? ''] ?? Bell
+              const Icon = notificationIcon(n.type)
               const unreadItem = !n.is_read
               return (
                 <button
@@ -244,6 +175,19 @@ export function NotificationBell() {
             })
           )}
         </div>
+
+        {/* كل ما وصل منذ البداية — الجرس يعرض الأحدث وحده (طلب المدير 2026-09-25) */}
+        <button
+          type="button"
+          onClick={() => {
+            setOpen(false)
+            navigate('/notifications')
+          }}
+          className="flex w-full items-center justify-center gap-1 border-t px-3 py-2.5 text-xs font-medium text-gold-600 transition-colors hover:bg-muted dark:text-gold-300"
+        >
+          عرض كل الإشعارات
+          <ChevronLeft className="h-3.5 w-3.5" />
+        </button>
       </DropdownMenuContent>
     </DropdownMenu>
   )

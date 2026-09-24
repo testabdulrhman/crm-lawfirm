@@ -1,6 +1,6 @@
 // مركز الإشعارات داخل النظام — جدول notifications (كان جاهزاً في القاعدة وغير مستخدم).
 // أي حدث يهم الموظف يُكتب هنا، ويُقرأ في جرس الشريط العلوي.
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { supabase } from '@/lib/supabase'
 import { errMessage } from '@/lib/errors'
@@ -54,6 +54,71 @@ export function useNotifications(limit = 30) {
         .limit(limit)
       if (error) throw error
       return (data ?? []) as AppNotification[]
+    },
+  })
+}
+
+/** تصنيفات صفحة «كل الإشعارات» — بادئة النوع كما في notification_category في القاعدة */
+export type NotificationFilter =
+  | 'all' | 'unread' | 'mention' | 'tasks' | 'sessions' | 'appointments' | 'hr' | 'other'
+
+const PAGE = 50
+
+/**
+ * كل ما وصل الموظف منذ البداية، صفحةً بعد صفحة (طلب المدير 2026-09-25: «ابي أفتح كل
+ * الإشعارات اللي سبق وأن وصلتني») — الجرس يعرض آخر ٣٠ فقط. لا يُحذف من الجدول شيء.
+ */
+export function useNotificationHistory(filter: NotificationFilter, search: string) {
+  const { teamMember } = useAuth()
+  const myId = teamMember?.id ?? null
+  const q = search.trim().replace(/[,()%*]/g, ' ').trim()
+
+  return useInfiniteQuery({
+    queryKey: [KEY, 'history', myId, filter, q],
+    enabled: !!myId,
+    initialPageParam: 0,
+    getNextPageParam: (last: AppNotification[], all) =>
+      last.length === PAGE ? all.length * PAGE : undefined,
+    queryFn: async ({ pageParam }): Promise<AppNotification[]> => {
+      let req = supabase
+        .from('notifications')
+        .select('*')
+        .eq('recipient_id', myId)
+        .order('created_at', { ascending: false })
+        .range(pageParam, pageParam + PAGE - 1)
+      if (filter === 'unread') req = req.eq('is_read', false)
+      else if (filter === 'mention') req = req.eq('type', 'mention')
+      else if (filter === 'tasks') req = req.or('type.like.task%,type.like.approval%')
+      else if (filter === 'sessions') req = req.like('type', 'session%')
+      else if (filter === 'appointments') req = req.like('type', 'appointment%')
+      else if (filter === 'hr') req = req.like('type', 'hr%')
+      else if (filter === 'other')
+        req = req.not('type', 'in', '(mention)')
+          .not('type', 'like', 'task%').not('type', 'like', 'approval%')
+          .not('type', 'like', 'session%').not('type', 'like', 'appointment%')
+          .not('type', 'like', 'hr%')
+      if (q) req = req.or(`title.ilike.%${q}%,message.ilike.%${q}%`)
+      const { data, error } = await req
+      if (error) throw error
+      return (data ?? []) as AppNotification[]
+    },
+  })
+}
+
+/** إجمالي ما وصلني — لعنوان الصفحة */
+export function useNotificationTotal() {
+  const { teamMember } = useAuth()
+  const myId = teamMember?.id ?? null
+  return useQuery({
+    queryKey: [KEY, 'total', myId],
+    enabled: !!myId,
+    queryFn: async (): Promise<number> => {
+      const { count, error } = await supabase
+        .from('notifications')
+        .select('id', { count: 'exact', head: true })
+        .eq('recipient_id', myId)
+      if (error) throw error
+      return count ?? 0
     },
   })
 }
