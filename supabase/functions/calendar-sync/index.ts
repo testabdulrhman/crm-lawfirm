@@ -193,6 +193,67 @@ async function deleteCalendarEvent(accessToken: string, calendarId: string, goog
   return res.ok;
 }
 
+
+/* ===================== المزامنة من الخادم =====================
+ * (بلاغ المدير 2026-09-24: «ليه ما تُضاف بالتقويم تلقائي؟») — كانت الجلسة تدخل التقويم
+ * فقط حين يُنشئها نموذج الويب، لأن المتصفح هو من ينادي هذه الدالة. أما «إغلاق الجلسة»
+ * (الجلسة التالية تُنشأ في القاعدة) والإدخال من رسائل ناجز والمساعد الذكي فلا — فكانت
+ * ٦ من ٩ جلسات قادمة خارج التقويم.
+ *
+ * الآن: ترقر في القاعدة ينادي sync-session لكل جلسة تُدرَج، وsync-missing يمسح دورياً
+ * ما فات. ولا يُنشأ حدثان لجلسة واحدة: «الحجز» ذرّي — يُكتب pending:<ms> في gcal_event_id
+ * بشرط أن يكون فارغاً، فلا يمرّ إلا منادٍ واحد، ثم يُستبدل بمعرّف الحدث (أو يُفرَّغ إن فشل).
+ */
+const PENDING_STALE_MS = 10 * 60_000;
+const SESSION_COLS = "id, case_id, session_date, session_time, title, court, preparation, closed_at, gcal_event_id";
+
+function riyadhToday(): string {
+  return new Date(Date.now() + 3 * 3_600_000).toISOString().slice(0, 10);
+}
+
+async function syncOneSession(accessToken: string, calendarId: string, sessionId: string) {
+  const sb = createClient(SUPABASE_URL, SERVICE_ROLE);
+
+  // حجزٌ عالق من محاولة انقطعت قبل عشر دقائق فأكثر يُحرَّر أولاً (بشرط قيمته نفسها)
+  const { data: cur } = await sb.from("sessions").select(SESSION_COLS).eq("id", sessionId).maybeSingle();
+  if (!cur) return { skipped: "not_found" };
+  const g = cur.gcal_event_id as string | null;
+  if (g && g.startsWith("pending:") && Date.now() - Number(g.slice(8)) > PENDING_STALE_MS) {
+    await sb.from("sessions").update({ gcal_event_id: null }).eq("id", sessionId).eq("gcal_event_id", g);
+  } else if (g) {
+    return { skipped: "already", eventId: g };
+  }
+  // الجلسات الماضية والمغلقة لا تحتاج حدثاً
+  if (cur.closed_at || !cur.session_date || cur.session_date < riyadhToday()) return { skipped: "past_or_closed" };
+
+  const mark = `pending:${Date.now()}`;
+  const { data: claimed } = await sb.from("sessions")
+    .update({ gcal_event_id: mark })
+    .eq("id", sessionId).is("gcal_event_id", null)
+    .select(SESSION_COLS).maybeSingle();
+  if (!claimed) return { skipped: "claimed_elsewhere" };
+
+  try {
+    const { data: c } = await sb.from("cases").select("title").eq("id", claimed.case_id).maybeSingle();
+    const event = await addSessionEvent(accessToken, calendarId, claimed, c?.title ?? "جلسة");
+    await sb.from("sessions").update({ gcal_event_id: event.id }).eq("id", sessionId).eq("gcal_event_id", mark);
+    return { eventId: event.id };
+  } catch (e) {
+    await sb.from("sessions").update({ gcal_event_id: null }).eq("id", sessionId).eq("gcal_event_id", mark);
+    throw e;
+  }
+}
+
+/** المسح الدوري مقصور على من يحمل السرّ الداخلي (الترقر والجدولة) — لا يستهلك حصة Google لغيرهما */
+async function hasInternalSecret(req: Request): Promise<boolean> {
+  const got = req.headers.get("x-ai-secret") ?? "";
+  if (!got) return false;
+  const sb = createClient(SUPABASE_URL, SERVICE_ROLE);
+  const { data } = await sb.from("lookup_values").select("value")
+    .eq("type", "discussion_ai_config").eq("label", "inbound_secret").maybeSingle();
+  return !!data?.value && data.value === got;
+}
+
 serve(async (req) => {
   const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -203,9 +264,9 @@ serve(async (req) => {
 
   try {
     const body = await req.json();
-    // action: config | add | add-appointment | delete
+    // action: config | add | add-appointment | delete | sync-session | sync-missing
     // للتوافق مع v1: action='add' بدون type يعامل كجلسة
-    const { action, type, session, appointment, caseTitle, googleEventId } = body;
+    const { action, type, session, appointment, caseTitle, googleEventId, session_id } = body;
     const json = (o: any, status = 200) => new Response(JSON.stringify(o), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
     const cfg = await getCalendarConfig();
@@ -230,6 +291,27 @@ serve(async (req) => {
       if (!session || !caseTitle) return json({ error: "session and caseTitle required" }, 400);
       const event = await addSessionEvent(accessToken, cfg.calendarId, session, caseTitle);
       return json({ success: true, eventId: event.id, htmlLink: event.htmlLink });
+    }
+
+    // جلسة واحدة بمعرّفها — من الترقر عند الإدراج، ومن زرّ «أضِفها» في الويب
+    if (action === "sync-session") {
+      if (!session_id) return json({ error: "session_id required" }, 400);
+      return json({ success: true, ...(await syncOneSession(accessToken, cfg.calendarId, String(session_id))) });
+    }
+
+    // كل الجلسات القادمة التي ليست في التقويم — شبكة أمان دورية لما فشل وقت إنشائه
+    if (action === "sync-missing") {
+      if (!(await hasInternalSecret(req))) return json({ error: "forbidden" }, 403);
+      const sb = createClient(SUPABASE_URL, SERVICE_ROLE);
+      const { data: rows } = await sb.from("sessions").select("id, gcal_event_id")
+        .gte("session_date", riyadhToday()).is("closed_at", null)
+        .or("gcal_event_id.is.null,gcal_event_id.like.pending:*").limit(50);
+      const results: Record<string, unknown> = {};
+      for (const r of rows ?? []) {
+        try { results[r.id] = await syncOneSession(accessToken, cfg.calendarId, r.id); }
+        catch (e) { results[r.id] = { error: (e as Error).message }; }
+      }
+      return json({ success: true, checked: rows?.length ?? 0, results });
     }
 
     if (action === "add-appointment") {

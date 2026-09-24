@@ -32,6 +32,23 @@ export async function addSessionEvent(
   }
 }
 
+/**
+ * مزامنة جلسة بمعرّفها من الخادم (2026-09-24). الخادم يحجز الصف ذرّياً قبل الإنشاء، فلا
+ * يتكرر الحدث وإن نادى الترقر والزرّ معاً. الجلسة الجديدة لا تحتاج هذا — ترقر الإدراج يكفي.
+ * يُرجع eventId أو null.
+ */
+export async function syncSessionCalendar(sessionId: string): Promise<string | null> {
+  try {
+    const { data, error } = await supabase.functions.invoke('calendar-sync', {
+      body: { action: 'sync-session', session_id: sessionId },
+    })
+    if (error || !data?.success) return null
+    return (data.eventId as string) ?? null
+  } catch {
+    return null
+  }
+}
+
 // إضافة حدث موعد → يُرجع eventId أو null.
 export async function addAppointmentEvent(
   appt: Pick<

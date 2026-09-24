@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { supabase } from '@/lib/supabase'
 import { toast } from '@/hooks/use-toast'
-import { addSessionEvent, deleteCalendarEvent } from '@/lib/calendar'
+import { deleteCalendarEvent, syncSessionCalendar } from '@/lib/calendar'
 import { normalizeSaudiPhone, fmtDatePref } from '@/lib/format'
 import type {
   CaseSession,
@@ -36,15 +36,6 @@ function invalidate(qc: ReturnType<typeof useQueryClient>, caseId: string) {
   // hearing_date في بطاقة القضية قد تتأثّر
   qc.invalidateQueries({ queryKey: ['cases'] })
   qc.invalidateQueries({ queryKey: ['case', caseId] })
-}
-
-async function getCaseTitle(caseId: string): Promise<string | null> {
-  const { data } = await supabase
-    .from('cases')
-    .select('title')
-    .eq('id', caseId)
-    .maybeSingle()
-  return (data?.title as string | undefined) ?? null
 }
 
 function calendarWarn() {
@@ -105,24 +96,16 @@ export function useAddSession(caseId: string) {
         .select('*')
         .single()
       if (error) throw error
-      const session = data as CaseSession
-
-      // مزامنة التقويم (غير قاتلة)
-      const caseTitle = await getCaseTitle(caseId)
-      const eventId = await addSessionEvent(session, caseTitle)
-      if (eventId) {
-        await supabase
-          .from('sessions')
-          .update({ gcal_event_id: eventId })
-          .eq('id', session.id)
-        return { calOk: true }
-      }
-      return { calOk: false }
+      void (data as CaseSession)
+      // التقويم يتولّاه الخادم: ترقر الإدراج ينادي calendar-sync (2026-09-24) — ومناداته من
+      // هنا أيضاً كانت ستُنشئ الحدث مرتين
+      return { calOk: true }
     },
-    onSuccess: (res) => {
+    onSuccess: () => {
       invalidate(qc, caseId)
       toast({ variant: 'success', title: 'تمت إضافة الجلسة' })
-      if (!res.calOk) calendarWarn()
+      // الحدث يُنشأ في الخلفية خلال ثوانٍ — نعيد الجلب ليظهر «في التقويم»
+      setTimeout(() => invalidate(qc, caseId), 4000)
     },
     onError: errToast('تعذّرت إضافة الجلسة'),
   })
@@ -133,17 +116,12 @@ export function useSyncSessionCalendar(caseId: string) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (session: CaseSession): Promise<void> => {
-      const caseTitle = await getCaseTitle(caseId)
-      const eventId = await addSessionEvent(session, caseTitle)
+      // الخادم يحجز الصف ويحفظ المعرّف — لا تكرار ولو ضُغط الزرّ والترقر يعمل
+      const eventId = await syncSessionCalendar(session.id)
       if (!eventId)
         throw new Error(
           'رفض تقويم Google إنشاء الحدث — تحقّق من الإعدادات ← التكاملات (تفعيل المزامنة ومعرّف التقويم).'
         )
-      const { error } = await supabase
-        .from('sessions')
-        .update({ gcal_event_id: eventId })
-        .eq('id', session.id)
-      if (error) throw error
     },
     onSuccess: () => {
       invalidate(qc, caseId)
@@ -184,15 +162,10 @@ export function useUpdateSession(caseId: string) {
         input.session_time !== old?.session_time
 
       if (dateChanged || timeChanged) {
-        // delete + add
+        // احذف الحدث القديم وأفرغ المعرّف، ثم ليُنشئ الخادم حدثاً بالموعد الجديد
         await deleteCalendarEvent(old?.gcal_event_id)
-        const merged: CaseSession = { ...(old as CaseSession), ...input } as CaseSession
-        const caseTitle = await getCaseTitle(caseId)
-        const eventId = await addSessionEvent(merged, caseTitle)
-        await supabase
-          .from('sessions')
-          .update({ gcal_event_id: eventId })
-          .eq('id', id)
+        await supabase.from('sessions').update({ gcal_event_id: null }).eq('id', id)
+        const eventId = await syncSessionCalendar(id)
         return { calWarn: !eventId }
       }
       return { calWarn: false }
@@ -305,7 +278,7 @@ export function usePostponeSession(caseId: string) {
 
       // جلسة بديلة بالتاريخ الجديد (اختياري)
       let createdNew = false
-      let calWarn = false
+      const calWarn = false
       if (newDate) {
         const { data: created, error: insErr } = await supabase
           .from('sessions')
@@ -322,17 +295,9 @@ export function usePostponeSession(caseId: string) {
           .single()
         if (insErr) throw insErr
         createdNew = true
-
-        const caseTitle = await getCaseTitle(caseId)
-        const eventId = await addSessionEvent(created as CaseSession, caseTitle)
-        if (eventId) {
-          await supabase
-            .from('sessions')
-            .update({ gcal_event_id: eventId })
-            .eq('id', (created as CaseSession).id)
-        } else {
-          calWarn = true
-        }
+        void created
+        // تقويم الجلسة البديلة يتولّاه ترقر الإدراج في الخادم
+        setTimeout(() => invalidate(qc, caseId), 4000)
       }
       return { createdNew, calWarn }
     },
