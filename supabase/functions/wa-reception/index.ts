@@ -213,12 +213,15 @@ async function sendReply(ev: HubEvent, body: string): Promise<Record<string, unk
   const res = await fetch(`${env('HUB_URL')}/functions/v1/send-message`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-hub-key': env('HUB_SEND_KEY') },
-    body: JSON.stringify({ system: 'law', phone_e164: ev.phone_e164, body, idempotency_key: `rx:${ev.ref}` }),
+    // auto_reply: الـ Hub لا يرسله إن ردّ موظفٌ على المحادثة، ولو ردّ والبوت يجهّز ردّه
+    body: JSON.stringify({ system: 'law', phone_e164: ev.phone_e164, body, idempotency_key: `rx:${ev.ref}`, auto_reply: true }),
     signal: AbortSignal.timeout(20_000),
   });
   const out = await res.json().catch(() => ({}));
-  // الموقوف (403) وقاطع الطوارئ (429) قرارٌ نهائي لا يُعاد؛ وما عداهما من فشلٍ يُعاد بإعادة الحدث
-  if (!res.ok && res.status !== 403 && res.status !== 429) {
+  // قرارٌ نهائي لا يُعاد: الموقوف (403)، وتولّي موظفٍ المحادثةَ (409 human_takeover)، وقاطع الطوارئ (429).
+  // وما عداها من فشلٍ يُعاد بإعادة الحدث.
+  const final = res.status === 403 || res.status === 429 || (res.status === 409 && out?.error === 'human_takeover');
+  if (!res.ok && !final) {
     throw new Error(`send-message ${res.status}: ${String(out?.message ?? '').slice(0, 200)}`);
   }
   return { status: res.status, ...out };
@@ -456,10 +459,14 @@ Deno.serve(async (req) => {
     // ٤) الآثار — كلها بمفاتيح منع تكرار، فإعادة الحدث لا تُكرّر رداً ولا طلباً
     const effects: Record<string, unknown> = {};
     if (out.reply) {
-      effects.send = await sendReply(ev, out.reply);
-      await supa.from('wa_reception_messages').upsert(
-        { phone_e164: key, direction: 'out', body: out.reply, event_ref: `out:${ev.ref}` },
-        { onConflict: 'event_ref', ignoreDuplicates: true });
+      const sent = await sendReply(ev, out.reply);
+      effects.send = sent;
+      // ما لم يُرسل (موقوف، أو تولّاه موظف، أو قاطع الطوارئ) لا يُكتب في المحادثة، فالرد الذكي يقرؤها تاريخاً
+      if (Number(sent.status) < 300) {
+        await supa.from('wa_reception_messages').upsert(
+          { phone_e164: key, direction: 'out', body: out.reply, event_ref: `out:${ev.ref}` },
+          { onConflict: 'event_ref', ignoreDuplicates: true });
+      }
     }
     // رقم الرمل (RECEPTION_SANDBOX_PHONES): لا يُسجَّل له طلبٌ ولا إخطارٌ حقيقي — يُقيَّد المقصود وحده
     const sandbox = (Deno.env.get('RECEPTION_SANDBOX_PHONES') ?? '').split(',').map((x) => x.trim()).includes(ev.phone_e164);
