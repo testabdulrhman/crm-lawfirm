@@ -50,6 +50,7 @@ import { pickFile } from '@/lib/files'
 import { arNorm } from '@/lib/arabic'
 import { matterHref, matterKindEmoji } from '@/lib/matterHref'
 import { fmtNumber } from '@/lib/format'
+import { toast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
 import { stamp, msgStamp, fullStamp } from './stamps'
 import { VoiceNotePlayer, VoiceTranscript, isAudioName } from './VoiceNote'
@@ -809,6 +810,9 @@ function ChannelList({
   )
 }
 
+/** حدّ الملف المُفلَت أو الملصوق — حدّ الرفع الافتراضي في مخزن Supabase */
+const MAX_DROP_BYTES = 50 * 1024 * 1024
+
 /* ===================== إرسال بلا تكرار ===================== */
 
 interface PendingSend {
@@ -946,18 +950,90 @@ function StreamPane({
   const attach = async () => {
     const file = await pickFile({ accept: '.pdf,image/*,.docx,.xlsx' })
     if (!file) return
-    const caption = draft.trim()
-    postFile.mutate({
-      caseId,
-      file,
-      caption: caption || undefined,
-      mentions: caption ? extractMentions(caption, people) : undefined,
-    })
-    setDraft('')
+    await sendFiles([file])
   }
 
+  /**
+   * إرسال ملفات مُفلَتة أو ملصوقة (طلب المدير 2026-09-24: «ودي أقدر أفلت الملفات فيه»).
+   * بالتتابع لا معاً — فتصل بترتيبها — والنص المكتوب تعليقٌ على أولها وحده.
+   */
+  const sendFiles = async (files: File[]) => {
+    const tooBig = files.filter((f) => f.size > MAX_DROP_BYTES)
+    if (tooBig.length) {
+      toast({
+        variant: 'destructive',
+        title: tooBig.length === 1 ? 'الملف أكبر من المسموح' : 'ملفات أكبر من المسموح',
+        description: `${tooBig.map((f) => f.name).join('، ')} — الحد ${fmtNumber(MAX_DROP_BYTES / 1024 / 1024)} م.ب`,
+      })
+    }
+    const ok = files.filter((f) => f.size <= MAX_DROP_BYTES)
+    if (!ok.length) return
+    const caption = draft.trim()
+    setDraft('')
+    for (const [i, file] of ok.entries()) {
+      try {
+        await postFile.mutateAsync({
+          caseId,
+          file,
+          caption: i === 0 && caption ? caption : undefined,
+          mentions: i === 0 && caption ? extractMentions(caption, people) : undefined,
+        })
+      } catch {
+        // الخطأ يعرضه الهوك نفسه — ونكمل البقية
+        if (i === 0 && caption) setDraft(caption)
+      }
+    }
+  }
+
+  // عدّاد لا منطقي: dragenter/dragleave يتكرران مع كل عنصر داخلي فيومض الغطاء بلا عدّاد
+  const dragDepth = useRef(0)
+  const [dragging, setDragging] = useState(false)
+  const hasFiles = (e: React.DragEvent) => Array.from(e.dataTransfer?.types ?? []).includes('Files')
+
   return (
-    <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-border/70 bg-card">
+    <div
+      className="relative flex h-full flex-col overflow-hidden rounded-2xl border border-border/70 bg-card"
+      onDragEnter={(e) => {
+        if (!hasFiles(e)) return
+        e.preventDefault()
+        dragDepth.current += 1
+        setDragging(true)
+      }}
+      onDragOver={(e) => {
+        if (!hasFiles(e)) return
+        e.preventDefault()
+        e.dataTransfer.dropEffect = 'copy'
+      }}
+      onDragLeave={(e) => {
+        if (!hasFiles(e)) return
+        dragDepth.current = Math.max(0, dragDepth.current - 1)
+        if (dragDepth.current === 0) setDragging(false)
+      }}
+      onDrop={(e) => {
+        if (!hasFiles(e)) return
+        e.preventDefault()
+        dragDepth.current = 0
+        setDragging(false)
+        const files = Array.from(e.dataTransfer.files ?? [])
+        if (files.length) void sendFiles(files)
+      }}
+      // لصق صورة أو ملف (لقطة شاشة مثلاً) في حقل الكتابة يرسلها كما لو أُفلتت
+      onPaste={(e) => {
+        const files = Array.from(e.clipboardData?.files ?? [])
+        if (!files.length) return
+        e.preventDefault()
+        void sendFiles(files)
+      }}
+    >
+      {dragging && (
+        <div className="pointer-events-none absolute inset-2 z-20 flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gold bg-card/90 backdrop-blur-sm">
+          <Paperclip className="h-8 w-8 text-gold" />
+          <p className="text-sm font-semibold text-foreground">أفلت الملفات هنا لإرسالها</p>
+          <p className="text-xs text-muted-foreground">
+            {draft.trim() ? 'وما كتبتَه يصير تعليقاً على أولها' : 'تُرسل في هذا النقاش بترتيبها'}
+          </p>
+        </div>
+      )}
       <div className="flex items-center gap-2 border-b border-border/60 px-4 py-3">
         {kind === 'dm' ? (
           <PeerAvatar
