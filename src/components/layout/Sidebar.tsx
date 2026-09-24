@@ -21,6 +21,7 @@ import {
   Send,
   BarChart3,
   Bug,
+  Lightbulb,
   LogOut,
   type LucideIcon,
 } from 'lucide-react'
@@ -29,6 +30,7 @@ import { cn } from '@/lib/utils'
 import { useAuth } from '@/stores/auth'
 import { useOfficeInfo } from '@/hooks/useSettings'
 import { useIsDirector } from '@/hooks/useIsDirector'
+import { useNewChangeRequestsCount } from '@/hooks/useChangeRequests'
 import { useIsCollaborator } from '@/hooks/useIsCollaborator'
 import { UserAvatar } from '@/components/UserAvatar'
 import { usePendingRequestsCount } from '@/hooks/useRequests'
@@ -59,6 +61,7 @@ interface NavItem {
     | 'my_open_tasks'
     | 'pending_hr'
     | 'unread_discussions'
+    | 'new_change_requests'
 }
 
 // أقسام التنقل: تجميع منطقي بدل قائمة طويلة مسطّحة
@@ -124,6 +127,8 @@ const navSections: { title?: string; items: NavItem[] }[] = [
       { label: 'الإعدادات', href: '/settings', icon: Settings },
       // كل خطأ ظهر لموظف (طلب المدير 2026-09-15)
       { label: 'سجل الأخطاء', href: '/errors', icon: Bug, director: true },
+      // «اقترح تعديلاً» من أي صفحة — والردود عليها (2026-09-24)
+      { label: 'اقتراحات التعديل', href: '/change-requests', icon: Lightbulb, badge: 'new_change_requests' },
       { label: 'مراقبة الاتصالات', href: '/hub', icon: Activity, director: true },
     ],
   },
@@ -145,6 +150,8 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const { data: myReviews } = useMyReviewCount()
   const { data: pendingHr } = usePendingHrCount(isDirector)
   const { data: unreadDisc } = useUnreadDiscussionsCount()
+  // الشارة للمدير وحده: ما ينتظر النظر من اقتراحات الفريق
+  const { data: newChangeReqs } = useNewChangeRequestsCount(isDirector)
 
   return (
     <aside className="pt-safe pb-safe flex h-full w-64 flex-col bg-card text-foreground">
@@ -212,7 +219,9 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                                 ? (isDirector ? (pendingHr ?? 0) : 0)
                                 : item.badge === 'unread_discussions'
                                   ? (unreadDisc ?? 0)
-                                  : 0
+                                  : item.badge === 'new_change_requests'
+                                    ? (isDirector ? (newChangeReqs ?? 0) : 0)
+                                    : 0
                 const showBadge = !!item.badge && badgeCount > 0
                 return (
                   <Link

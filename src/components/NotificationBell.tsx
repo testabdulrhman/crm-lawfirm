@@ -67,6 +67,8 @@ function destination(n: AppNotification): string {
   if (n.type === 'hr_request' || n.type === 'hr_result') return '/hr'
   // طلب وصل من نموذج التواصل في الموقع — الوارد لم يُحوَّل لملف بعد
   if (n.type === 'incoming_request') return '/requests'
+  // اقتراح تعديل جديد (للمدير) أو ردّ عليه (لصاحبه)
+  if (n.type === 'change_request') return '/change-requests'
   switch (n.type) {
     case 'task_assigned':
     case 'task_due':

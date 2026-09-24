@@ -24,6 +24,8 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { UserAvatar } from '@/components/UserAvatar'
 import { NotificationBell } from '@/components/NotificationBell'
+import { SuggestChangeButton } from '@/components/SuggestChangeButton'
+import { useIsCollaborator } from '@/hooks/useIsCollaborator'
 import { GlobalSearch } from './GlobalSearch'
 
 // تحديث قوي: مسح كاش المتصفح وجلب أحدث نسخة منشورة (بديل Ctrl+Shift+R للموظفين)
@@ -64,6 +66,7 @@ export function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
   const { theme, toggle } = useTheme()
   const { teamMember, logout } = useAuth()
   const [refreshing, setRefreshing] = useState(false)
+  const isCollaborator = useIsCollaborator()
 
   // طابق المسار الدقيق، وإلا أطول بادئة مطابقة (لمسارات التفاصيل مثل /requests/:id)
   const title =
@@ -114,6 +117,8 @@ export function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
 
       {/* يسار: الإشعارات + التحديث + الثيم + قائمة المستخدم */}
       <div className="flex items-center gap-2">
+        {/* اقترح تعديلاً على الصفحة الحالية — للفريق لا للمتعاون الخارجي */}
+        {!isCollaborator && <SuggestChangeButton />}
         <NotificationBell />
         {/* على الجوال ينتقل الزرّان إلى قائمة المستخدم لإفساح مكان للبحث */}
         <Button
