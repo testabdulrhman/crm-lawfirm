@@ -5,6 +5,7 @@ import {
   Bell,
   CalendarClock,
   CalendarDays,
+  FileBadge,
   Globe,
   Lightbulb,
   ListTodo,
@@ -39,6 +40,7 @@ const ICONS: Record<string, LucideIcon> = {
   hr_request: Sun,
   hr_result: Sun,
   change_request: Lightbulb,
+  office_doc_expiry: FileBadge,
 }
 
 export function notificationIcon(type: string | null): LucideIcon {
@@ -63,6 +65,8 @@ export function notificationDestination(n: AppNotification): string {
   if (n.type === 'incoming_request') return '/requests'
   // اقتراح تعديل جديد (للمدير) أو ردّ عليه (لصاحبه)
   if (n.type === 'change_request') return '/change-requests'
+  // مستند للمكتب يقترب انتهاؤه أو انتهى
+  if (n.type === 'office_doc_expiry') return '/office-documents'
   // حجز من الموقع، وإسناد موعد أو إشراك فيه — كوجهة إشعار الدفع
   if (n.type?.startsWith('appointment')) return '/appointments'
   switch (n.type) {

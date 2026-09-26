@@ -24,6 +24,7 @@ import {
   Lightbulb,
   LogOut,
   type LucideIcon,
+  FileBadge,
 } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
@@ -123,6 +124,7 @@ const navSections: { title?: string; items: NavItem[] }[] = [
       },
       // إجازة · استئذان · دوام عن بعد — الموظف يقدّم والمدير يعتمد
       { label: 'الإجازات والاستئذان', href: '/hr', icon: CalendarOff, badge: 'pending_hr' },
+      { label: 'مستندات المكتب', href: '/office-documents', icon: FileBadge },
       { label: 'التقارير', href: '/reports', icon: BarChart3 },
       { label: 'الإعدادات', href: '/settings', icon: Settings },
       // كل خطأ ظهر لموظف (طلب المدير 2026-09-15)
