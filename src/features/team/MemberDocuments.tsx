@@ -2,6 +2,7 @@
 // البكالوريوس والصورة الشخصية — ومعها ما شاء من مرفقات أخرى. الاكتمال يحسب البيانات والمرفقات معاً.
 import { useState } from 'react'
 import {
+  BadgeCheck,
   CheckCircle2,
   Circle,
   Eye,
@@ -59,10 +60,12 @@ export const PROFILE_FIELDS: { key: keyof TeamMember; label: string }[] = [
   { key: 'bank_iban', label: 'الآيبان' },
 ]
 
-type RequiredDoc = 'national_id' | 'degree' | 'photo'
+type RequiredDoc = 'national_id' | 'degree' | 'license' | 'photo'
 const REQUIRED: { key: RequiredDoc; label: string; icon: LucideIcon; hint: string }[] = [
   { key: 'national_id', label: 'الهوية الوطنية', icon: IdCard, hint: 'صورة أو PDF للوجهين' },
   { key: 'degree', label: 'وثيقة البكالوريوس', icon: GraduationCap, hint: 'الشهادة أو وثيقة التخرج' },
+  // أُضيف بطلب المدير 2026-09-26: «من ضمن المرفقات المطلوبة للموظف الترخيص»
+  { key: 'license', label: 'الترخيص', icon: BadgeCheck, hint: 'رخصة المحاماة أو التدريب' },
   { key: 'photo', label: 'الصورة الشخصية', icon: ImageIcon, hint: 'تظهر صورةً له في النظام كله' },
 ]
 
@@ -73,6 +76,7 @@ export function memberCompleteness(member: TeamMember, docs: MemberDocument[] | 
     national_id: has('national_id'),
     // شهادة رُفعت مع طلب التوظيف تُحتسب
     degree: has('degree') || !!member.qualification_doc_url,
+    license: has('license') || !!member.lawyer_license_url,
     photo: !!member.avatar_url,
   }
   const missingDocs = REQUIRED.filter((r) => !docState[r.key]).map((r) => r.label)
@@ -105,7 +109,7 @@ export function MemberDocumentsSection({
   const c = memberCompleteness(member, docs)
 
   const latest = (t: MemberDocType) => (docs ?? []).find((d) => d.doc_type === t)
-  const others = (docs ?? []).filter((d) => d.doc_type !== 'national_id' && d.doc_type !== 'degree')
+  const others = (docs ?? []).filter((d) => !['national_id', 'degree', 'license'].includes(d.doc_type))
 
   const open = async (d: MemberDocument) => {
     try {
@@ -206,7 +210,7 @@ export function MemberDocumentsSection({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                {(['cv', 'license', 'contract', 'other'] as MemberDocType[]).map((t) => (
+                {(['cv', 'contract', 'other'] as MemberDocType[]).map((t) => (
                   <DropdownMenuItem key={t} onSelect={() => void pickAndUpload(t)}>
                     {MEMBER_DOC_LABELS[t]}
                   </DropdownMenuItem>
@@ -216,11 +220,16 @@ export function MemberDocumentsSection({
           )}
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             {REQUIRED.map((r) => {
               const doc = r.key === 'photo' ? null : latest(r.key)
-              const legacyDegree = r.key === 'degree' && !doc ? member.qualification_doc_url : null
-              const present = r.key === 'photo' ? !!member.avatar_url : !!doc || !!legacyDegree
+              const legacyUrl =
+                !doc && r.key === 'degree'
+                  ? member.qualification_doc_url
+                  : !doc && r.key === 'license'
+                    ? member.lawyer_license_url
+                    : null
+              const present = r.key === 'photo' ? !!member.avatar_url : !!doc || !!legacyUrl
               return (
                 <div
                   key={r.key}
@@ -247,10 +256,10 @@ export function MemberDocumentsSection({
                         {r.label}
                         {present && <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />}
                       </p>
-                      <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                      <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
                         {doc
                           ? `رُفعت ${fmtDatePref(doc.created_at.slice(0, 10))}`
-                          : legacyDegree
+                          : legacyUrl
                             ? 'من طلب التوظيف'
                             : present
                               ? 'موجودة'
@@ -266,12 +275,12 @@ export function MemberDocumentsSection({
                         معاينة
                       </Button>
                     )}
-                    {legacyDegree && (
+                    {legacyUrl && (
                       <Button
                         variant="ghost"
                         size="sm"
                         className="h-8 gap-1 px-2 text-xs"
-                        onClick={() => onPreview(legacyDegree, r.label)}
+                        onClick={() => onPreview(legacyUrl, r.label)}
                       >
                         <Eye className="h-3.5 w-3.5" />
                         معاينة
@@ -324,7 +333,7 @@ export function MemberDocumentsSection({
           </div>
 
           {/* مرفقات أخرى + ما رُفع مع طلب التوظيف */}
-          {(others.length > 0 || member.cv_url || member.lawyer_license_url) && (
+          {(others.length > 0 || member.cv_url) && (
             <div className="-mx-3 divide-y divide-border/60 border-t pt-2">
               {others.map((d) => (
                 <div key={d.id} className="flex items-center gap-3 px-3 py-2.5">
@@ -355,7 +364,6 @@ export function MemberDocumentsSection({
               ))}
               {[
                 { label: 'السيرة الذاتية', url: member.cv_url },
-                { label: 'رخصة المحاماة', url: member.lawyer_license_url },
               ]
                 .filter((x) => x.url)
                 .map((x) => (

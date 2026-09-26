@@ -17,7 +17,7 @@ export const MEMBER_DOC_LABELS: Record<MemberDocType, string> = {
   national_id: 'الهوية الوطنية',
   degree: 'وثيقة البكالوريوس',
   cv: 'السيرة الذاتية',
-  license: 'رخصة المحاماة',
+  license: 'الترخيص',
   contract: 'عقد العمل',
   other: 'مرفق آخر',
 }

@@ -348,7 +348,9 @@ export function MemberStats({
         sub={
           overdue > 0
             ? overdue === 1 ? 'مهمة متأخرة' : overdue === 2 ? 'مهمتان متأخرتان' : `${fmtNumber(overdue)} متأخرة`
-            : `لا متأخرات · أنجز ${fmtNumber(work?.doneLast30 ?? 0)} خلال ٣٠ يوماً`
+            : (work?.doneLast30 ?? 0) > 0
+              ? `لا متأخرات · أنجز ${fmtNumber(work!.doneLast30)} خلال 30 يوماً`
+              : 'لا متأخرات'
         }
         subTone={overdue > 0 ? 'red' : 'green'}
         onClick={() => onTab('work')}
@@ -358,7 +360,7 @@ export function MemberStats({
         tone="blue"
         label="جلسات قادمة"
         value={fmtNumber(work?.sessions.length ?? 0)}
-        sub={next ? `الأقرب ${dueInfo(next.session_date)?.text ?? ''}` : 'خلال ٤٥ يوماً'}
+        sub={next ? `الأقرب ${dueInfo(next.session_date)?.text ?? ''}` : 'خلال 45 يوماً'}
         onClick={() => onTab('work')}
       />
       <StatTile
@@ -476,7 +478,7 @@ export function MemberWorkTab({ work, loading, firstName }: { work: MemberWork |
       <div className="space-y-4 lg:col-span-2">
         <SectionCard icon={Gavel} title="الجلسات القادمة" count={work?.sessions.length ?? 0}>
           {(work?.sessions.length ?? 0) === 0 ? (
-            <Quiet icon={CalendarClock} text="لا جلسات خلال ٤٥ يوماً" />
+            <Quiet icon={CalendarClock} text="لا جلسات خلال 45 يوماً" />
           ) : (
             <div className="-mx-3 divide-y divide-border/60">
               {work!.sessions.map((s) => {
