@@ -2,9 +2,10 @@
 // هي وحدها ما يراه الفريق (2026-09-26: لا منشور في القناة ولا إشعار — «خله كأنه بنر»)،
 // والتهنئة برسالة خاصة لصاحب اليوم.
 // الخصوصية: تعرض اليوم والشهر فقط (لا سنة ولا عمر في أي نص).
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useLocation } from 'wouter'
-import { Cake, Loader2, MessageSquareHeart } from 'lucide-react'
+import { Cake, Loader2, MessageSquareHeart, X } from 'lucide-react'
 
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/stores/auth'
@@ -26,7 +27,25 @@ function todayMMDD(): string {
   return `${mm}-${dd}`
 }
 
+/** يُغلق البنر ليومه فقط — كسؤال «كيف حالك»؛ ويعود مع المناسبة التالية */
+const dismissKey = () => `bday-dismissed:${new Date().toDateString()}`
+function isDismissed(): boolean {
+  try {
+    return localStorage.getItem(dismissKey()) === '1'
+  } catch {
+    return false
+  }
+}
+function markDismissed() {
+  try {
+    localStorage.setItem(dismissKey(), '1')
+  } catch {
+    /* التخزين محجوب — يُغلق للجلسة وحدها */
+  }
+}
+
 export function BirthdayCard() {
+  const [dismissed, setDismissed] = useState(isDismissed)
   const { teamMember } = useAuth()
   const [, navigate] = useLocation()
   const openDm = useOpenDm()
@@ -49,7 +68,12 @@ export function BirthdayCard() {
   const celebrants = (data ?? []).filter(
     (m) => m.date_of_birth?.slice(5, 10) === today
   )
-  if (celebrants.length === 0) return null
+  if (celebrants.length === 0 || dismissed) return null
+
+  const close = () => {
+    markDismissed()
+    setDismissed(true)
+  }
 
   const isMine = celebrants.some((m) => m.id === teamMember?.id)
   const names = celebrants
@@ -58,7 +82,16 @@ export function BirthdayCard() {
     .join(' و')
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-gold/40 bg-gradient-to-l from-gold/15 via-gold/5 to-transparent px-5 py-4">
+    <div className="relative flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-gold/40 bg-gradient-to-l from-gold/15 via-gold/5 to-transparent py-4 pe-12 ps-5">
+      <button
+        type="button"
+        onClick={close}
+        aria-label="إغلاق"
+        title="إغلاق"
+        className="absolute end-2 top-2 rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-gold/15 hover:text-foreground"
+      >
+        <X className="h-4 w-4" />
+      </button>
       <div className="flex items-center gap-3">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gold/20 text-xl">
           🎂
@@ -87,6 +120,7 @@ export function BirthdayCard() {
               onClick={() =>
                 openDm.mutate(m.id, {
                   onSuccess: (id) => {
+                    close() // هنّأه — انتهت مهمة البنر
                     requestDiscussionJump({ caseId: id })
                     navigate('/discussions')
                   },

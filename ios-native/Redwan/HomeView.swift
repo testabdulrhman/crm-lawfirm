@@ -38,6 +38,8 @@ struct HomeView: View {
     /// ولا يعود إلا صباح الغد (طلب المدير 2026-09-19)
     @AppStorage("home.mood.day") private var moodDay = ""
     @AppStorage("home.mood.value") private var moodValue = ""
+    /// يوم أُغلق فيه بنر عيد الميلاد — يُغلق ليومه كسؤال «كيف حالك»
+    @AppStorage("home.birthday.dismissed") private var birthdayDismissed = ""
     /// لحظة الوداع بعد الاختيار: يبقى السؤال ثانيتين يعرض ردّه ثم ينطوي
     @State private var moodFarewell = false
     /// يُحدِّث العدّ التنازلي للموعد القادم كل دقيقة
@@ -112,9 +114,10 @@ struct HomeView: View {
                     .padding(.top, 8)
 
                 // عيد ميلاد أحد الفريق — بنر لا إشعار (طلب المدير 2026-09-26)
-                if !birthdays.isEmpty {
+                if !birthdays.isEmpty && birthdayDismissed != Fmt.todayISO() {
                     birthdayBanner
                         .padding(.top, 14)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
                 }
 
                 if isDirector && scope == "all" {
@@ -345,15 +348,20 @@ struct HomeView: View {
     // MARK: - عيد الميلاد
 
     private var birthdayBanner: some View {
-        BirthdayBanner(people: birthdays, meId: sb.member?.id, greetingId: greetingId) { p in
+        BirthdayBanner(people: birthdays, meId: sb.member?.id, greetingId: greetingId, onGreet: { p in
             Task {
                 greetingId = p.id
                 defer { greetingId = nil }
                 if let id = try? await sb.openDm(p.id) {
+                    closeBirthday()   // هنّأه — انتهت مهمة البنر
                     PushRouter.shared.route = "/discussions?case=\(id)"
                 }
             }
-        }
+        }, onClose: closeBirthday)
+    }
+
+    private func closeBirthday() {
+        withAnimation(.easeInOut(duration: 0.35)) { birthdayDismissed = Fmt.todayISO() }
     }
 
     private func loadBirthdays() async {
@@ -970,6 +978,7 @@ struct BirthdayBanner: View {
     let meId: String?
     let greetingId: String?
     let onGreet: (BirthdayPerson) -> Void
+    var onClose: () -> Void = {}
 
     var body: some View {
         let mine = people.contains { $0.id == meId }
@@ -1003,11 +1012,25 @@ struct BirthdayBanner: View {
             }
         }
         .padding(14)
+        .padding(.trailing, 20)
         .background(
             LinearGradient(colors: [Theme.brandGold.opacity(0.22), Theme.brandGold.opacity(0.06)],
                            startPoint: .leading, endPoint: .trailing),
             in: RoundedRectangle(cornerRadius: 20)
         )
         .overlay(RoundedRectangle(cornerRadius: 20).stroke(Theme.brandGold.opacity(0.45), lineWidth: 1))
+        // زرّ الإغلاق في الزاوية — يختفي البنر ليومه
+        .overlay(alignment: .topTrailing) {
+            Button(action: onClose) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(Theme.muted)
+                    .frame(width: 26, height: 26)
+                    .background(Theme.card.opacity(0.85), in: Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("إغلاق")
+            .padding(6)
+        }
     }
 }
