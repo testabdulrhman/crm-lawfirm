@@ -12,10 +12,6 @@ import {
   KeyRound,
   Loader2,
   MessageSquarePlus,
-  Phone,
-  Mail,
-  CalendarDays,
-  Landmark,
   ShieldAlert,
 } from 'lucide-react'
 
@@ -51,7 +47,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { DualDatePicker } from '@/components/DualDatePicker'
 import { FilePreviewDialog } from '@/components/FilePreviewDialog'
 
@@ -79,6 +74,12 @@ import {
 import { TeamMemberForm } from './TeamMemberForm'
 import { MyDetailsDialog } from './MyDetailsDialog'
 import { LeaveBalanceCard } from '@/features/hr/LeaveBalanceCard'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { usePageState } from '@/hooks/usePageState'
+import { useMemberWork } from '@/hooks/useMemberWork'
+import { useMemberDocuments } from '@/hooks/useMemberDocuments'
+import { memberCompleteness } from './MemberDocuments'
+import { MemberHero, MemberHrList, MemberInfoTab, MemberStats, MemberWorkTab } from './MemberProfileParts'
 import type { PayrollEntry } from '@/types/db'
 
 // اسم الشهر بالعربية + السنة بأرقام لاتينية (وفق نمط النظام)
@@ -110,6 +111,10 @@ export function TeamMemberDetail({ id }: { id: string }) {
   const [editOpen, setEditOpen] = useState(false)
   const [deleteFor, setDeleteFor] = useState<PayrollEntry | null>(null)
   const [preview, setPreview] = useState<PayrollEntry | null>(null)
+  const [docPreview, setDocPreview] = useState<{ url: string; name: string } | null>(null)
+  const [tab, setTab] = usePageState<string>(`member-tab:${id}`, 'work')
+  const { data: work, isLoading: loadingWork } = useMemberWork(allowed ? member : null)
+  const { data: docs, isSuccess: docsReady } = useMemberDocuments(allowed ? member?.id : null)
 
   // آخر قيد مُختار للحذف — يبقى للعرض أثناء أنيميشن إغلاق حوار التأكيد
   const lastDeleteRef = useRef<PayrollEntry | null>(null)
@@ -177,243 +182,226 @@ export function TeamMemberDetail({ id }: { id: string }) {
     )
   }
 
+  const firstName = member.short_name || member.name.split(' ')[0]
+
   return (
-    <div className="mx-auto max-w-4xl space-y-5">
+    <div className="mx-auto max-w-5xl space-y-5">
       <Button variant="ghost" onClick={() => navigate('/team')}>
         <ArrowRight className="h-4 w-4" />
         رجوع للموظفين
       </Button>
 
-      {/* بطاقة الموظف */}
-      <Card>
-        <CardContent className="space-y-4 p-5">
-          <div className="flex flex-wrap items-center gap-4">
-            <Avatar className="h-16 w-16">
-              {member.avatar_url && (
-                <AvatarImage src={member.avatar_url} alt={member.name} />
-              )}
-              <AvatarFallback className="bg-gold/20 text-xl text-navy dark:text-gold-200">
-                {member.avatar_initial || member.name?.charAt(0) || '؟'}
-              </AvatarFallback>
-            </Avatar>
-            <div className="min-w-0 flex-1">
-              <h2 className="flex flex-wrap items-center gap-2 text-xl font-bold text-foreground">
-                {member.name}
-                {member.is_director && <Badge variant="gold">مدير</Badge>}
-                <Badge variant={member.is_active ? 'success' : 'secondary'}>
-                  {member.is_active ? 'نشط' : 'موقوف'}
-                </Badge>
-                {!member.auth_id && (
-                  <Badge variant="warning">بلا حساب دخول</Badge>
+      <MemberHero
+        member={member}
+        lastSeen={work?.lastSeen}
+        completeness={docsReady ? memberCompleteness(member, docs).pct : undefined}
+        onCompleteness={() => setTab('info')}
+        actions={
+          <>
+            {/* محادثة مباشرة معه — بينكما وحدكما (طلب المدير 2026-09-22) */}
+            {!isSelf && member.is_active && !member.is_reviewer && (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={openDm.isPending}
+                onClick={() =>
+                  openDm.mutate(member.id, {
+                    onSuccess: (id) => {
+                      requestDiscussionJump({ caseId: id })
+                      navigate('/discussions')
+                    },
+                  })
+                }
+              >
+                {openDm.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <MessageSquarePlus className="h-4 w-4" />
                 )}
-              </h2>
-              {member.role && (
-                <p className="text-sm text-muted-foreground">{member.role}</p>
-              )}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {/* محادثة مباشرة معه — بينكما وحدكما (طلب المدير 2026-09-22) */}
-              {!isSelf && member.is_active && !member.is_reviewer && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={openDm.isPending}
-                  onClick={() =>
-                    openDm.mutate(member.id, {
-                      onSuccess: (id) => {
-                        requestDiscussionJump({ caseId: id })
-                        navigate('/discussions')
-                      },
-                    })
-                  }
-                >
-                  {openDm.isPending ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <MessageSquarePlus className="h-4 w-4" />
-                  )}
-                  محادثة
-                </Button>
-              )}
-              {/* موظف بلا حساب دخول لا يستطيع طلب رمز أصلاً — والفشل صامت،
-                  فنُظهر الحالة هنا ونتيح فتحه بضغطة */}
-              {isDirector && !member.auth_id && (
-                <Button
-                  variant="gold"
-                  size="sm"
-                  onClick={() =>
-                    provisionM.mutate({ memberId: member.id, welcome: true })
-                  }
-                  disabled={provisionM.isPending || !member.email}
-                  title={
-                    member.email
-                      ? undefined
-                      : 'يحتاج بريداً إلكترونياً — عدّل بياناته أولاً'
-                  }
-                >
-                  {provisionM.isPending ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <KeyRound className="h-4 w-4" />
-                  )}
-                  فتح حساب الدخول
-                </Button>
-              )}
+                محادثة
+              </Button>
+            )}
+            {/* موظف بلا حساب دخول لا يستطيع طلب رمز أصلاً — والفشل صامت،
+                فنُظهر الحالة هنا ونتيح فتحه بضغطة */}
+            {isDirector && !member.auth_id && (
+              <Button
+                variant="gold"
+                size="sm"
+                onClick={() =>
+                  provisionM.mutate({ memberId: member.id, welcome: true })
+                }
+                disabled={provisionM.isPending || !member.email}
+                title={
+                  member.email
+                    ? undefined
+                    : 'يحتاج بريداً إلكترونياً — عدّل بياناته أولاً'
+                }
+              >
+                {provisionM.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <KeyRound className="h-4 w-4" />
+                )}
+                فتح حساب الدخول
+              </Button>
+            )}
+            {isDirector && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setEditOpen(true)}
+              >
+                <Pencil className="h-4 w-4" />
+                تعديل
+              </Button>
+            )}
+            {isSelf && !isDirector && <MyDetailsDialog member={member} />}
+          </>
+        }
+      />
+
+      <MemberStats memberId={member.id} work={work} loading={loadingWork} onTab={setTab} />
+
+      <Tabs value={tab} onValueChange={setTab} dir="rtl">
+        <TabsList className="h-11 rounded-xl p-1">
+          <TabsTrigger value="work" className="rounded-lg px-4">عمله الآن</TabsTrigger>
+          <TabsTrigger value="info" className="rounded-lg px-4">بياناته</TabsTrigger>
+          <TabsTrigger value="hr" className="rounded-lg px-4">الإجازات</TabsTrigger>
+          <TabsTrigger value="pay" className="rounded-lg px-4">المالية</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="work">
+          <MemberWorkTab work={work} loading={loadingWork} firstName={firstName} />
+        </TabsContent>
+
+        <TabsContent value="info">
+          <MemberInfoTab
+            member={member}
+            isDirector={isDirector}
+            canEdit={isDirector || isSelf}
+            onEdit={() => setEditOpen(true)}
+            onPreview={(url, name) => setDocPreview({ url, name })}
+          />
+        </TabsContent>
+
+        <TabsContent value="hr" className="space-y-4">
+          <LeaveBalanceCard memberId={member.id} isSelf={isSelf} />
+          <MemberHrList memberId={member.id} />
+        </TabsContent>
+
+        <TabsContent value="pay">
+          {/* السجل المالي */}
+          <Card>
+            <CardHeader className="flex-row flex-wrap items-center justify-between gap-2 space-y-0">
+              <CardTitle className="flex flex-wrap items-center gap-2.5 text-base font-semibold">
+                <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gold/10">
+                  <Wallet className="h-[18px] w-[18px] text-gold" />
+                </span>
+                السجل المالي
+                {(entries?.length ?? 0) > 0 && (
+                  <span className="text-sm font-normal text-muted-foreground">
+                    (صافي {todayISO().slice(0, 4)}: {fmtNumber(yearNet)} ريال)
+                  </span>
+                )}
+              </CardTitle>
               {isDirector && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setEditOpen(true)}
-                >
-                  <Pencil className="h-4 w-4" />
-                  تعديل
+                <Button variant="gold" size="sm" onClick={() => setAddOpen(true)}>
+                  <Plus className="h-4 w-4" />
+                  إضافة قيد
                 </Button>
               )}
-              {isSelf && !isDirector && <MyDetailsDialog member={member} />}
-            </div>
-          </div>
-
-          <div className="flex flex-wrap gap-x-6 gap-y-1.5 border-t pt-3 text-sm text-muted-foreground">
-            {member.phone && (
-              <span dir="ltr" className="flex items-center gap-1.5">
-                <Phone className="h-3.5 w-3.5" />
-                {member.phone}
-              </span>
-            )}
-            {member.email && (
-              <span dir="ltr" className="flex items-center gap-1.5">
-                <Mail className="h-3.5 w-3.5" />
-                {member.email}
-              </span>
-            )}
-            {member.join_date && (
-              <span className="flex items-center gap-1.5">
-                <CalendarDays className="h-3.5 w-3.5" />
-                انضم {fmtDatePref(member.join_date)}
-              </span>
-            )}
-            {member.bank_iban && (
-              <span dir="ltr" className="flex items-center gap-1.5">
-                <Landmark className="h-3.5 w-3.5" />
-                {member.bank_name ? `${member.bank_name} — ` : ''}
-                {member.bank_iban}
-              </span>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      <LeaveBalanceCard memberId={member.id} isSelf={isSelf} />
-
-      {/* السجل المالي */}
-      <Card>
-        <CardHeader className="flex-row flex-wrap items-center justify-between gap-2 space-y-0">
-          <CardTitle className="flex flex-wrap items-center gap-2.5 text-base font-semibold">
-            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gold/10">
-              <Wallet className="h-[18px] w-[18px] text-gold" />
-            </span>
-            السجل المالي
-            {(entries?.length ?? 0) > 0 && (
-              <span className="text-sm font-normal text-muted-foreground">
-                (صافي {todayISO().slice(0, 4)}: {fmtNumber(yearNet)} ريال)
-              </span>
-            )}
-          </CardTitle>
-          {isDirector && (
-            <Button variant="gold" size="sm" onClick={() => setAddOpen(true)}>
-              <Plus className="h-4 w-4" />
-              إضافة قيد
-            </Button>
-          )}
-        </CardHeader>
-        <CardContent className="space-y-5">
-          {loadingPay ? (
-            <div className="space-y-2">
-              <Skeleton className="h-14 w-full" />
-              <Skeleton className="h-14 w-full" />
-            </div>
-          ) : months.length === 0 ? (
-            <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-10 text-center">
-              <Wallet className="mb-2 h-6 w-6 text-muted-foreground" />
-              <p className="text-sm text-muted-foreground">
-                {isDirector
-                  ? 'لا قيود بعد — أضف أول راتب أو مكافأة عبر «إضافة قيد».'
-                  : 'لا قيود مسجّلة لك بعد.'}
-              </p>
-            </div>
-          ) : (
-            months.map(([ym, list]) => {
-              const net = list.reduce((s, e) => s + signedAmount(e), 0)
-              return (
-                <div key={ym}>
-                  <div className="mb-2 flex items-center justify-between">
-                    <h3 className="text-sm font-semibold text-foreground">
-                      {monthTitle(ym)}
-                    </h3>
-                    <span
-                      className={cn(
-                        'text-sm font-semibold',
-                        net >= 0 ? 'text-emerald-600' : 'text-destructive'
-                      )}
-                    >
-                      {net >= 0 ? '' : '−'}
-                      {fmtNumber(Math.abs(net))} ريال
-                    </span>
-                  </div>
-                  <div className="divide-y divide-border/60 overflow-hidden rounded-xl border">
-                    {list.map((e) => (
-                      <div key={e.id} className="flex items-center gap-3 px-4 py-2.5">
-                        <Badge variant={payTypeBadge(e.entry_type)} className="shrink-0">
-                          {payTypeLabel(e.entry_type)}
-                        </Badge>
-                        <div className="min-w-0 flex-1">
-                          <p
-                            className={cn(
-                              'text-sm font-semibold',
-                              e.entry_type === 'deduction'
-                                ? 'text-destructive'
-                                : 'text-foreground'
-                            )}
-                          >
-                            {e.entry_type === 'deduction' ? '−' : ''}
-                            {fmtNumber(Math.abs(e.amount))} ريال
-                          </p>
-                          <p className="truncate text-xs text-muted-foreground">
-                            {fmtDatePref(e.entry_date)}
-                            {e.note ? ` — ${e.note}` : ''}
-                          </p>
-                        </div>
-                        {e.file_url && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-muted-foreground"
-                            title="معاينة المرفق"
-                            onClick={() => setPreview(e)}
-                          >
-                            <Paperclip className="h-4 w-4" />
-                          </Button>
-                        )}
-                        {isDirector && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                            title="حذف القيد"
-                            onClick={() => setDeleteFor(e)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              {loadingPay ? (
+                <div className="space-y-2">
+                  <Skeleton className="h-14 w-full" />
+                  <Skeleton className="h-14 w-full" />
                 </div>
-              )
-            })
-          )}
-        </CardContent>
-      </Card>
+              ) : months.length === 0 ? (
+                <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-10 text-center">
+                  <Wallet className="mb-2 h-6 w-6 text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">
+                    {isDirector
+                      ? 'لا قيود بعد — أضف أول راتب أو مكافأة عبر «إضافة قيد».'
+                      : 'لا قيود مسجّلة لك بعد.'}
+                  </p>
+                </div>
+              ) : (
+                months.map(([ym, list]) => {
+                  const net = list.reduce((s, e) => s + signedAmount(e), 0)
+                  return (
+                    <div key={ym}>
+                      <div className="mb-2 flex items-center justify-between">
+                        <h3 className="text-sm font-semibold text-foreground">
+                          {monthTitle(ym)}
+                        </h3>
+                        <span
+                          className={cn(
+                            'text-sm font-semibold',
+                            net >= 0 ? 'text-emerald-600' : 'text-destructive'
+                          )}
+                        >
+                          {net >= 0 ? '' : '−'}
+                          {fmtNumber(Math.abs(net))} ريال
+                        </span>
+                      </div>
+                      <div className="divide-y divide-border/60 overflow-hidden rounded-xl border">
+                        {list.map((e) => (
+                          <div key={e.id} className="flex items-center gap-3 px-4 py-2.5">
+                            <Badge variant={payTypeBadge(e.entry_type)} className="shrink-0">
+                              {payTypeLabel(e.entry_type)}
+                            </Badge>
+                            <div className="min-w-0 flex-1">
+                              <p
+                                className={cn(
+                                  'text-sm font-semibold',
+                                  e.entry_type === 'deduction'
+                                    ? 'text-destructive'
+                                    : 'text-foreground'
+                                )}
+                              >
+                                {e.entry_type === 'deduction' ? '−' : ''}
+                                {fmtNumber(Math.abs(e.amount))} ريال
+                              </p>
+                              <p className="truncate text-xs text-muted-foreground">
+                                {fmtDatePref(e.entry_date)}
+                                {e.note ? ` — ${e.note}` : ''}
+                              </p>
+                            </div>
+                            {e.file_url && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-muted-foreground"
+                                title="معاينة المرفق"
+                                onClick={() => setPreview(e)}
+                              >
+                                <Paperclip className="h-4 w-4" />
+                              </Button>
+                            )}
+                            {isDirector && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                title="حذف القيد"
+                                onClick={() => setDeleteFor(e)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })
+              )}
+            </CardContent>
+          </Card>
+
+        </TabsContent>
+      </Tabs>
 
       {/* تعديل بيانات الموظف (المدير فقط) */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
@@ -439,6 +427,13 @@ export function TeamMemberDetail({ id }: { id: string }) {
           />
         </DialogContent>
       </Dialog>
+
+      <FilePreviewDialog
+        open={!!docPreview}
+        onOpenChange={(o) => !o && setDocPreview(null)}
+        fileUrl={docPreview?.url ?? null}
+        fileName={docPreview?.name ?? null}
+      />
 
       <FilePreviewDialog
         open={!!preview}
