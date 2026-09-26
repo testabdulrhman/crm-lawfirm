@@ -27,6 +27,8 @@ struct HomeView: View {
     @State private var showApprovals = false
     @State private var showNotifications = false
     @State private var showOfficeDocs = false
+    @State private var birthdays: [BirthdayPerson] = []
+    @State private var greetingId: String?
     @State private var pendingHr = 0
     @State private var openedTask: TaskRow?
     @State private var openingTaskId: String?
@@ -88,6 +90,7 @@ struct HomeView: View {
             }
         }
         .task { await load() }
+        .task { await loadBirthdays() }
         .retryIfCancelled($cancelled) { await load() }
         .task {
             while !Task.isCancelled {
@@ -107,6 +110,12 @@ struct HomeView: View {
             VStack(alignment: .leading, spacing: 0) {
                 header
                     .padding(.top, 8)
+
+                // عيد ميلاد أحد الفريق — بنر لا إشعار (طلب المدير 2026-09-26)
+                if !birthdays.isEmpty {
+                    birthdayBanner
+                        .padding(.top, 14)
+                }
 
                 if isDirector && scope == "all" {
                     Text("تعرض الآن لوحة المكتب كاملة")
@@ -331,6 +340,29 @@ struct HomeView: View {
                     .transition(.opacity)
             }
         }
+    }
+
+    // MARK: - عيد الميلاد
+
+    private var birthdayBanner: some View {
+        BirthdayBanner(people: birthdays, meId: sb.member?.id, greetingId: greetingId) { p in
+            Task {
+                greetingId = p.id
+                defer { greetingId = nil }
+                if let id = try? await sb.openDm(p.id) {
+                    PushRouter.shared.route = "/discussions?case=\(id)"
+                }
+            }
+        }
+    }
+
+    private func loadBirthdays() async {
+        let rows: [BirthdayPerson] = (try? await sb.get("team_members", query: [
+            ("select", "id,name,short_name,date_of_birth"),
+            ("is_active", "eq.true"), ("date_of_birth", "not.is.null"),
+        ])) ?? []
+        let today = String(Fmt.todayISO().dropFirst(5))   // MM-DD بتوقيت الجهاز
+        birthdays = rows.filter { ($0.date_of_birth ?? "").dropFirst(5).prefix(5) == today }
     }
 
     // MARK: - البطاقات الثلاث
@@ -921,5 +953,61 @@ private extension View {
             self.background(.ultraThinMaterial, in: Capsule())
                 .overlay(Capsule().stroke(.white.opacity(0.8), lineWidth: 1))
         }
+    }
+}
+
+/// صاحب عيد ميلاد اليوم — اليوم والشهر فقط يُعرضان، لا سنة ولا عمر
+struct BirthdayPerson: Codable, Identifiable {
+    let id: String
+    let name: String?
+    let short_name: String?
+    let date_of_birth: String?
+}
+
+/// بنر عيد الميلاد في الرئيسية — بدل الإشعار ومنشور القناة (طلب المدير 2026-09-26)
+struct BirthdayBanner: View {
+    let people: [BirthdayPerson]
+    let meId: String?
+    let greetingId: String?
+    let onGreet: (BirthdayPerson) -> Void
+
+    var body: some View {
+        let mine = people.contains { $0.id == meId }
+        let others = people.filter { $0.id != meId }
+        let names = people.map { $0.short_name ?? $0.name ?? "" }.filter { !$0.isEmpty }.joined(separator: " و")
+        HStack(spacing: 12) {
+            Text("🎂")
+                .font(.system(size: 26))
+                .frame(width: 46, height: 46)
+                .background(Theme.brandGold.opacity(0.22), in: Circle())
+            VStack(alignment: .leading, spacing: 3) {
+                Text(mine ? "كل عام وأنت بخير يا \(names)!" : "🎉 اليوم عيد ميلاد \(names)")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(Theme.navy)
+                Text(mine ? "فريق المكتب يحتفي بك اليوم — يوم سعيد!" : "كل عام وكل خير — هنّئه برسالة خاصة.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.muted)
+            }
+            Spacer(minLength: 0)
+            if !mine, let first = others.first {
+                Button { onGreet(first) } label: {
+                    Group {
+                        if greetingId == first.id { ProgressView().tint(.white) }
+                        else { Text("هنّئه").font(.system(size: 13, weight: .bold)) }
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 14).padding(.vertical, 8)
+                    .background(Theme.goldDark, in: Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(14)
+        .background(
+            LinearGradient(colors: [Theme.brandGold.opacity(0.22), Theme.brandGold.opacity(0.06)],
+                           startPoint: .leading, endPoint: .trailing),
+            in: RoundedRectangle(cornerRadius: 20)
+        )
+        .overlay(RoundedRectangle(cornerRadius: 20).stroke(Theme.brandGold.opacity(0.45), lineWidth: 1))
     }
 }

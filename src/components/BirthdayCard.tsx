@@ -1,12 +1,16 @@
 // بطاقة عيد الميلاد في لوحة التحكم — تظهر فقط يوم ميلاد أحد الفريق.
+// هي وحدها ما يراه الفريق (2026-09-26: لا منشور في القناة ولا إشعار — «خله كأنه بنر»)،
+// والتهنئة برسالة خاصة لصاحب اليوم.
 // الخصوصية: تعرض اليوم والشهر فقط (لا سنة ولا عمر في أي نص).
 import { useQuery } from '@tanstack/react-query'
 import { useLocation } from 'wouter'
-import { Cake, MessageSquareText } from 'lucide-react'
+import { Cake, Loader2, MessageSquareHeart } from 'lucide-react'
 
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/stores/auth'
 import { Button } from '@/components/ui/button'
+import { useOpenDm } from '@/hooks/useDiscussions'
+import { requestDiscussionJump } from '@/lib/discussionJump'
 
 interface BirthdayMember {
   id: string
@@ -25,6 +29,7 @@ function todayMMDD(): string {
 export function BirthdayCard() {
   const { teamMember } = useAuth()
   const [, navigate] = useLocation()
+  const openDm = useOpenDm()
 
   const { data } = useQuery({
     queryKey: ['birthdays_today'],
@@ -67,19 +72,32 @@ export function BirthdayCard() {
           <p className="text-sm text-muted-foreground">
             {isMine
               ? 'فريق المكتب يحتفي بكم اليوم — يوم سعيد!'
-              : 'كل عام وكل خير — شاركوا التهنئة في قناة عام المكتب.'}
+              : 'كل عام وكل خير — هنّئه برسالة خاصة.'}
           </p>
         </div>
       </div>
       {!isMine && (
-        <Button
-          size="sm"
-          variant="gold"
-          onClick={() => navigate('/discussions')}
-        >
-          <MessageSquareText className="h-4 w-4" />
-          إلى النقاش
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          {celebrants.map((m) => (
+            <Button
+              key={m.id}
+              size="sm"
+              variant="gold"
+              disabled={openDm.isPending}
+              onClick={() =>
+                openDm.mutate(m.id, {
+                  onSuccess: (id) => {
+                    requestDiscussionJump({ caseId: id })
+                    navigate('/discussions')
+                  },
+                })
+              }
+            >
+              {openDm.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageSquareHeart className="h-4 w-4" />}
+              {celebrants.length > 1 ? `هنّئ ${m.short_name || m.name}` : 'هنّئه'}
+            </Button>
+          ))}
+        </div>
       )}
       {isMine && <Cake className="h-6 w-6 text-gold" />}
     </div>
