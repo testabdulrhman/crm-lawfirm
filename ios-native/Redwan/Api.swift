@@ -621,7 +621,7 @@ extension SB {
 // نفس جداول الويب تحت RLS: الموظف طلباته وقيوده، والمدير الكل. الإشعارات من الترقرات.
 
 extension SB {
-    private static let HR_SELECT =
+    static let HR_SELECT =
         "id,member_id,kind,leave_type,start_date,end_date,from_time,to_time,reason,status," +
         "decision_note,decided_at,created_at," +
         "member:team_members!hr_requests_member_id_fkey(id,name,short_name,avatar_initial,avatar_color,avatar_url)"

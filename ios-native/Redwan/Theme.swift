@@ -124,13 +124,22 @@ enum Fmt {
         return String(format: "%d:%02d %@", h, m, suffix)
     }
 
-    /// المسافة من اليوم: «اليوم» · «غداً» · «بعد ن يوم» · «متأخرة ن يوم»
+    /// المسافة من اليوم: «اليوم» · «غداً» · «بعد يومين/٥ أيام/١٢ يوماً» · «متأخرة يوماً/يومين/٥ أيام»
+    /// (كانت «بعد ٢ يوم» و«متأخرة ٢ يوم» — تمييز العدد العربي كما في arDays)
     static func relDays(_ isoStr: String?) -> (text: String, overdue: Bool)? {
         guard let d = date(isoStr), let today = date(todayISO()) else { return nil }
         let days = Calendar(identifier: .gregorian).dateComponents([.day], from: today, to: d).day ?? 0
+        func count(_ n: Int, one: String) -> String {
+            switch n {
+            case 1: return one
+            case 2: return "يومين"
+            case 3...10: return "\(n) أيام"
+            default: return "\(n) يوماً"
+            }
+        }
         if days == 0 { return ("اليوم", false) }
         if days == 1 { return ("غداً", false) }
-        if days > 0 { return ("بعد \(days) يوم", false) }
-        return ("متأخرة \(-days) يوم", true)
+        if days > 0 { return ("بعد \(count(days, one: "يوم"))", false) }
+        return ("متأخرة \(count(-days, one: "يوماً"))", true)
     }
 }

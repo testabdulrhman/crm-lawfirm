@@ -163,6 +163,7 @@ struct MyPageView: View {
     @State private var confirmCancel: HrRequestRow?
     @State private var preview: PayrollRow?
     @State private var alertText: String?
+    @State private var myCompleteness: Int?
 
     private var isDirector: Bool { sb.member?.is_director == true }
 
@@ -175,11 +176,13 @@ struct MyPageView: View {
             } else {
                 VStack(spacing: 14) {
                     header
+                    myFileLink
                     if isDirector { approvalsLink }
                     balanceCard
                     requestsCard
                     payrollCard
                     detailsCard
+                    officeLinks
                     suggestLink
                 }
                 .padding(.horizontal, 12)
@@ -236,6 +239,61 @@ struct MyPageView: View {
         .background(Theme.card)
         .clipShape(RoundedRectangle(cornerRadius: 14))
         .overlay(RoundedRectangle(cornerRadius: 14).stroke(Theme.line, lineWidth: 1))
+    }
+
+    // ملفي ومرفقاتي — اكتمال الملف الشخصي (2026-09-26)
+    private var myFileLink: some View {
+        NavigationLink { MyFileView() } label: {
+            HStack(spacing: 12) {
+                if let c = myCompleteness { CompletenessRing(pct: c, size: 44) }
+                else { Image(systemName: "paperclip").foregroundStyle(Theme.goldDark).frame(width: 44, height: 44) }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("ملفي ومرفقاتي").font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.navy)
+                    Text(myCompleteness == 100 ? "ملفك مكتمل ✓" : "الهوية والبكالوريوس والترخيص والصورة — أكمل ملفك")
+                        .font(.system(size: 12)).foregroundStyle(Theme.muted).lineLimit(1)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.left").font(.system(size: 12)).foregroundStyle(Theme.muted)
+            }
+            .padding(14)
+            .background(Theme.card)
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .overlay(RoundedRectangle(cornerRadius: 14).stroke(Theme.line, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+    }
+
+    // المكتب: مستنداته للجميع، والموظفون للمدير
+    private var officeLinks: some View {
+        VStack(spacing: 0) {
+            NavigationLink { OfficeDocumentsView() } label: {
+                linkRow("doc.badge.clock", "مستندات المكتب", "التراخيص والشهادات وتواريخ انتهائها")
+            }
+            if isDirector {
+                Divider().padding(.leading, 14)
+                NavigationLink { TeamListView() } label: {
+                    linkRow("person.3.fill", "الموظفون", "صفحة كل موظف واكتمال ملفه")
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .background(Theme.card)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Theme.line, lineWidth: 1))
+    }
+
+    private func linkRow(_ icon: String, _ title: String, _ sub: String) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon).foregroundStyle(Theme.goldDark).frame(width: 24)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.navy)
+                Text(sub).font(.system(size: 12)).foregroundStyle(Theme.muted)
+            }
+            Spacer(minLength: 0)
+            Image(systemName: "chevron.left").font(.system(size: 12)).foregroundStyle(Theme.muted)
+        }
+        .padding(14)
+        .contentShape(Rectangle())
     }
 
     // «اقترح تعديلاً» — والطريق الأسرع هزّ الجوال في الشاشة المقصودة (2026-09-24)
@@ -492,6 +550,10 @@ struct MyPageView: View {
             balance = try? await b          // الرصيد ثانوي — لا يُفشل الصفحة
             payroll = (try? await pay) ?? []
             if isDirector { pendingForMe = (try? await sb.pendingHrCount()) ?? 0 }
+            // اكتمال ملفي — ثانوي لا يُفشل الصفحة
+            if let id = sb.member?.id, let m = try? await sb.memberFull(id: id) {
+                myCompleteness = memberCompleteness(m, (try? await sb.memberDocs(memberId: id)) ?? []).pct
+            }
             loaded = true
         } catch {
             if let t = uiErrorText(error) { self.error = t } else { cancelled = true }

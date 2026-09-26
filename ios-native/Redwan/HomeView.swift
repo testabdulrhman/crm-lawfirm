@@ -26,6 +26,7 @@ struct HomeView: View {
     @State private var showMyPage = false
     @State private var showApprovals = false
     @State private var showNotifications = false
+    @State private var showOfficeDocs = false
     @State private var pendingHr = 0
     @State private var openedTask: TaskRow?
     @State private var openingTaskId: String?
@@ -79,6 +80,7 @@ struct HomeView: View {
             .navigationDestination(isPresented: $showMyPage) { MyPageView() }
             .navigationDestination(isPresented: $showApprovals) { HrApprovalsView() }
             .navigationDestination(isPresented: $showNotifications) { NotificationsView() }
+            .navigationDestination(isPresented: $showOfficeDocs) { OfficeDocumentsView() }
             .navigationDestination(item: $openedTask) { TaskDetailView(task: $0) }
             .onChange(of: router.route) { _, _ in openFromPush() }
             .onChange(of: showNotifications) { _, open in
@@ -261,12 +263,11 @@ struct HomeView: View {
 
     // MARK: - كيف حالك اليوم؟
 
+    // ثلاثة خيارات بطلب المدير 2026-09-25 («ودي يكون ثلاث خيارات: فيس مبسوط، فيس مريض، فيس محبط»)
     private static let moods: [(emoji: String, label: String, reply: String)] = [
-        ("😴", "متعب", "خذها بهدوء اليوم — ابدأ بالأخف."),
-        ("🥱", "كسول", "خطوة صغيرة تكفي للبداية."),
-        ("😐", "عادي", "يوم عادي، ونمشيه بندًا بندًا."),
-        ("😊", "بخير", "جميل! يومك يبدأ بشكل طيب."),
-        ("🤩", "رائع", "طاقة ممتازة — استمتع بيومك."),
+        ("😊", "مبسوط", "جميل! يومك يبدأ بشكل طيب."),
+        ("🤒", "مريض", "سلامتك، ما تشوف شر — خذها بهدوء، وإن احتجت إجازة مرضية فقدّمها من «صفحتي»."),
+        ("😞", "محبط", "ولا يهمك — ابدأ بأخف مهمة، وكل خطوة تنجزها تُحسب لك."),
     ]
 
     /// «يوم» السؤال يبدأ الرابعة فجراً — من أجاب ليلاً لا يُسأل ثانية بعد منتصف الليل،
@@ -299,16 +300,21 @@ struct HomeView: View {
                             withAnimation(.easeInOut(duration: 0.45)) { moodFarewell = false }
                         }
                     } label: {
-                        Text(m.emoji)
-                            .font(.system(size: 24))
-                            .scaleEffect(selected ? 1.18 : 1)
-                            .opacity(todayMood == nil || selected ? 1 : 0.45)
-                            .frame(maxWidth: .infinity, minHeight: 44)
-                            .background {
-                                if selected {
-                                    Circle().fill(Theme.brandGold.opacity(0.22)).frame(width: 40, height: 40)
+                        VStack(spacing: 3) {
+                            Text(m.emoji)
+                                .font(.system(size: 26))
+                                .scaleEffect(selected ? 1.15 : 1)
+                                .background {
+                                    if selected {
+                                        Circle().fill(Theme.brandGold.opacity(0.22)).frame(width: 42, height: 42)
+                                    }
                                 }
-                            }
+                            Text(m.label)
+                                .font(.system(size: 11, weight: selected ? .semibold : .medium))
+                                .foregroundStyle(selected ? Theme.navy : Theme.muted)
+                        }
+                        .opacity(todayMood == nil || selected ? 1 : 0.45)
+                        .frame(maxWidth: .infinity, minHeight: 58)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(m.label)
@@ -615,6 +621,9 @@ struct HomeView: View {
         case "/hr/approvals":
             router.clear()
             showApprovals = true
+        case "/office-documents":
+            router.clear()
+            showOfficeDocs = true
         default:
             break
         }

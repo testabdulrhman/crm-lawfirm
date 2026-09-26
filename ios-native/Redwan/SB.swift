@@ -309,6 +309,17 @@ final class SB: ObservableObject {
         return baseURL.appendingPathComponent("storage/v1/object/public/\(bucket)/\(path)").absoluteString
     }
 
+    /// رابط موقّت لملف في مخزن خاص (staff-docs) — المخزن مغلق فلا رابط عاماً
+    func signedStorageURL(bucket: String, path: String, expiresIn: Int = 600) async throws -> String {
+        let body = try JSONSerialization.data(withJSONObject: ["expiresIn": expiresIn])
+        let data = try await raw(path: "storage/v1/object/sign/\(bucket)/\(path)", method: "POST", query: [], body: body)
+        struct R: Codable { let signedURL: String? }
+        guard let rel = try JSONDecoder().decode(R.self, from: data).signedURL else {
+            throw SBError(message: "تعذّر تجهيز رابط الملف")
+        }
+        return baseURL.absoluteString + "/storage/v1" + (rel.hasPrefix("/") ? rel : "/" + rel)
+    }
+
     func rpc<T: Decodable>(_ fn: String, params: [String: Any]) async throws -> T {
         let body = try JSONSerialization.data(withJSONObject: params)
         let data = try await raw(path: "rest/v1/rpc/\(fn)", method: "POST", query: [], body: body)
