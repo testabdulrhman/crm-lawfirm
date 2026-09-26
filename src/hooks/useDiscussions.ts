@@ -513,7 +513,7 @@ export function useChannelMembers(channelId: string | null) {
     queryFn: async (): Promise<ChannelMember[]> => {
       const { data, error } = await supabase
         .from('channel_members')
-        .select('member_id, member:team_members(id, name, short_name)')
+        .select('member_id, member:team_members!channel_members_member_id_fkey(id, name, short_name)')
         .eq('channel_id', channelId!)
       if (error) throw error
       return (data ?? []) as unknown as ChannelMember[]
