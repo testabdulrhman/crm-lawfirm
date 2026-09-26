@@ -20,8 +20,6 @@ struct CasesView: View {
     @State private var kind = "case"
     @State private var routed: CaseRoute?
     @State private var showScan = false
-    @State private var showInbox = false
-    @State private var unlinkedSms = 0
 
     /// الحالة تُطبَّق على الأنواع التي تشارك قاموس القضايا فقط — وإلا أخفى
     /// فلتر «جارية» كل الاستشارات والتوثيقات لأن حالاتها بمفردات أخرى.
@@ -93,31 +91,11 @@ struct CasesView: View {
             .navigationDestination(item: $routed) { r in
                 CaseDetailView(caseId: r.id)
             }
-            .navigationDestination(isPresented: $showInbox) { SmsInboxView() }
-            .task { unlinkedSms = (try? await SB.shared.unlinkedNajizCount()) ?? 0 }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { showScan = true } label: {
                         Image(systemName: "camera.fill").foregroundStyle(Theme.goldDark)
                     }
-                }
-                // رسائل ناجز الواردة — والرقم ما ينتظر ربطه بملف
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { showInbox = true } label: {
-                        Image(systemName: "envelope.fill")
-                            .foregroundStyle(Theme.goldDark)
-                            .overlay(alignment: .topTrailing) {
-                                if unlinkedSms > 0 {
-                                    Text("\(min(unlinkedSms, 99))")
-                                        .font(.system(size: 9, weight: .bold))
-                                        .foregroundStyle(.white)
-                                        .padding(.horizontal, 4).padding(.vertical, 1)
-                                        .background(Theme.danger, in: Capsule())
-                                        .offset(x: 9, y: -8)
-                                }
-                            }
-                    }
-                    .accessibilityLabel("الرسائل الواردة")
                 }
                 // الحالة قائمةٌ في الشريط لا شريطاً مقسّماً ثانياً — توفّر صفاً
                 // كاملاً من الارتفاع، وتظهر فقط للأنواع التي لها هذا القاموس.

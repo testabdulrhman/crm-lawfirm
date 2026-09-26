@@ -234,8 +234,6 @@ struct CaseDetailView: View {
                     InfoRow("تاريخ الإغلاق", c?.close_date.map { Fmt.gregLong($0) })
                 }
             }
-            // رسائل ناجز المربوطة بالملف (2026-09-26)
-            CaseSmsCard(caseId: caseId)
             InfoCard(title: "الفريق", icon: "person.3.fill") {
                 VStack(alignment: .leading, spacing: 10) {
                     if members.isEmpty {
