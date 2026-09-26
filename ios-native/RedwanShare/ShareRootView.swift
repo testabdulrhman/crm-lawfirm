@@ -26,6 +26,8 @@ struct ShareRootView: View {
     @State private var sending = false
     @State private var progress = ""
     @State private var errorMsg: String?
+    /// البحث عن نقاش بعينه (طلب المدير 2026-09-26: «ما يظهر اني اقدر أبحث عن مناقشة محددة»)
+    @State private var query = ""
 
     enum Phase { case loading, needLogin, ready, done }
 
@@ -105,12 +107,40 @@ struct ShareRootView: View {
 
             Divider()
 
+            // البحث عن النقاش — بالعنوان أو رقم الملف أو اسم الزميل
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 14))
+                    .foregroundStyle(ShareTheme.muted)
+                TextField("ابحث عن نقاش أو ملف أو زميل…", text: $query)
+                    .font(.system(size: 14))
+                    .autocorrectionDisabled()
+                if !query.isEmpty {
+                    Button { query = "" } label: {
+                        Image(systemName: "xmark.circle.fill").foregroundStyle(ShareTheme.muted)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(10)
+            .background(Color.white)
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .padding(.horizontal, 12)
+            .padding(.top, 10)
+
             // اختيار النقاش
             List {
-                Section("أرسل إلى") {
-                    row(nil, title: "عام — المكتب", icon: "megaphone.fill")
-                    ForEach(channels.filter { $0.case_id != nil }) { ch in
-                        row(ch, title: ch.case_title ?? "ملف", icon: "building.columns.fill")
+                Section(query.isEmpty ? "أرسل إلى" : "النتائج (\(filtered.count + (generalMatches ? 1 : 0)))") {
+                    if generalMatches {
+                        row(nil, title: "عام — المكتب", icon: "megaphone.fill")
+                    }
+                    ForEach(filtered) { ch in
+                        row(ch, title: ch.case_title ?? "نقاش", icon: icon(ch.kind))
+                    }
+                    if !query.isEmpty && filtered.isEmpty && !generalMatches {
+                        Text("لا نقاش يطابق «\(query)»")
+                            .font(.system(size: 13))
+                            .foregroundStyle(ShareTheme.muted)
                     }
                 }
             }
@@ -145,6 +175,32 @@ struct ShareRootView: View {
             .disabled(sending || selected == nil)
             .opacity(sending ? 0.7 : 1)
             .padding(12)
+        }
+    }
+
+    private var filtered: [ShareChannel] {
+        let all = channels.filter { $0.case_id != nil }
+        let q = query.trimmingCharacters(in: .whitespaces)
+        guard !q.isEmpty else { return all }
+        let nq = q.shareNorm
+        return all.filter {
+            ($0.case_title ?? "").shareNorm.contains(nq) || ($0.office_num ?? "").shareNorm.contains(nq)
+        }
+    }
+
+    private var generalMatches: Bool {
+        let q = query.trimmingCharacters(in: .whitespaces)
+        return q.isEmpty || "عام — المكتب".shareNorm.contains(q.shareNorm)
+    }
+
+    private func icon(_ kind: String?) -> String {
+        switch kind {
+        case "dm": return "person.fill"
+        case "channel": return "number"
+        case "legal_service": return "doc.text.fill"
+        case "property": return "house.fill"
+        case "bankruptcy": return "banknote.fill"
+        default: return "building.columns.fill"
         }
     }
 
@@ -235,5 +291,29 @@ struct ShareRootView: View {
             }
             sending = false
         }
+    }
+}
+
+private extension String {
+    /// تطبيع عربي للبحث — نسخة من arNorm في التطبيق (هدف الامتداد لا يراه):
+    /// الهمزات والتاء المربوطة والألف المقصورة، وإسقاط التشكيل والتطويل
+    var shareNorm: String {
+        var s = precomposedStringWithCanonicalMapping.lowercased()
+        s.unicodeScalars.removeAll { v in
+            (0x064B...0x0652).contains(v.value) || v.value == 0x0670 || v.value == 0x0640
+        }
+        let map: [Character: Character] = [
+            "\u{0623}": "ا", "\u{0625}": "ا", "\u{0622}": "ا", "\u{0671}": "ا",
+            "\u{0629}": "ه", "\u{0649}": "ي",
+        ]
+        // لوحة المفاتيح العربية تكتب «٢٦٠١١» والمخزّن «26011» — الأرقام الهندية والفارسية لاتينية (2026-09-26)
+        return String(s.map { c -> Character in
+            if let m = map[c] { return m }
+            if let v = c.unicodeScalars.first?.value, c.unicodeScalars.count == 1,
+               (0x0660...0x0669).contains(v) || (0x06F0...0x06F9).contains(v) {
+                return Character(String((v - (v >= 0x06F0 ? 0x06F0 : 0x0660))))
+            }
+            return c
+        })
     }
 }

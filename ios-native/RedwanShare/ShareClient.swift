@@ -14,6 +14,8 @@ struct ShareChannel: Codable, Identifiable {
     let case_id: String?
     let case_title: String?
     let office_num: String?
+    /// case · bankruptcy · legal_service · property · dm · channel — لأيقونة الصف والبحث
+    var kind: String? = nil
     var id: String { case_id ?? "general" }
 }
 

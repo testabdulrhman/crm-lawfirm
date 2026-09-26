@@ -17,7 +17,15 @@ extension String {
             "\u{0629}": "ه",
             "\u{0649}": "ي",
         ]
-        return String(s.map { map[$0] ?? $0 })
+        // لوحة المفاتيح العربية تكتب «٢٦٠١١» والمخزّن «26011» — الأرقام الهندية والفارسية لاتينية (2026-09-26)
+        return String(s.map { c -> Character in
+            if let m = map[c] { return m }
+            if let v = c.unicodeScalars.first?.value, c.unicodeScalars.count == 1,
+               (0x0660...0x0669).contains(v) || (0x06F0...0x06F9).contains(v) {
+                return Character(String((v - (v >= 0x06F0 ? 0x06F0 : 0x0660))))
+            }
+            return c
+        })
     }
 
     /// بحث غير حساس للهمزات/التاء المربوطة — needle يُطبَّع داخلياً

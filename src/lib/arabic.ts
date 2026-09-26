@@ -9,6 +9,9 @@ const HAMZA = /[أإآٱ]/g // أ إ آ ٱ
 const TAA = /ة/g // ة
 const ALIF_MAQSURA = /ى/g // ى
 const DIACRITICS = /[ً-ْٰـ]/g // تشكيل + خنجرية + تطويل
+// لوحة المفاتيح العربية تكتب «٢٦٠١١» والمخزّن «26011» — تُوحَّد الأرقام الهندية والفارسية (2026-09-26)
+const EAST_DIGITS = /[٠-٩۰-۹]/g
+const digitLatin = (d: string): string => String((d.charCodeAt(0) - 0x0660) % 0x90 % 10)
 
 /** توحيد الهمزات والتاء المربوطة والألف المقصورة + إسقاط التشكيل والتطويل */
 export const arNorm = (s: string): string =>
@@ -19,6 +22,7 @@ export const arNorm = (s: string): string =>
     .replace(HAMZA, 'ا') // ا
     .replace(TAA, 'ه') // ه
     .replace(ALIF_MAQSURA, 'ي') // ي
+    .replace(EAST_DIGITS, digitLatin)
 
 /**
  * بحث غير حساس للهمزات/التاء المربوطة/حالة الأحرف.
