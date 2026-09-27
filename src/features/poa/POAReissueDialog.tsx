@@ -44,9 +44,9 @@ function previewText(name: string, poaNumber: string, expiry: string): string {
 /** «1448/03/15هـ» — التاريخ الهجري بصيغة القالب */
 function hijriForTemplate(iso: string | null): string {
   if (!iso) return '—'
-  const h = fmtHijri(iso) // «15/03/1448 هـ» أو ما يعادلها
-  const m = h.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/)
-  return m ? `${m[3]}/${m[2].padStart(2, '0')}/${m[1].padStart(2, '0')}هـ` : h
+  const h = fmtHijri(iso) // «1448/03/15 هـ»
+  const m = h.match(/(\d{4})\/(\d{1,2})\/(\d{1,2})/)
+  return m ? `${m[1]}/${m[2].padStart(2, '0')}/${m[3].padStart(2, '0')}هـ` : h
 }
 
 export function POAReissueDialog({

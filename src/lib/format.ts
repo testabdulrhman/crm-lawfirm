@@ -4,7 +4,6 @@ import { getDateDisplay } from '@/stores/prefs'
 
 // locale عربي مع نظام أرقام لاتيني
 const NUM_LOCALE = 'ar-SA-u-nu-latn'
-const DATE_LOCALE = 'ar-SA-u-nu-latn-ca-gregory'
 
 // احتياط: لو أنتجت البيئة أرقاماً هندية رغم الـ locale، نُجبر اللاتينية يدوياً.
 const ARABIC_INDIC = /[٠-٩۰-۹]/
@@ -40,35 +39,25 @@ export const fmtCurrency = (n: number | null | undefined): string =>
         n
       )
 
-// التواريخ: أرقام لاتينية بصيغة يوم/شهر/سنة — بلا أسماء أشهر
-// (طلب المستخدم 2026-08-25: «ما ابي يذكر اسم الشهر ابيه ارقام مثل 23/07/2026»)
+// التواريخ: أرقام لاتينية بلا أسماء أشهر (طلب المستخدم 2026-08-25: «ابيه ارقام»)، بترتيب
+// سنة/شهر/يوم (قرار المدير 2026-09-27: «yyyy/mm/dd») — فيُقرأ في الواجهة العربية من اليمين:
+// اليوم ثم الشهر ثم السنة، كتواريخ ناجز «1448/04/11 هـ».
 const pad2 = (n: number) => String(n).padStart(2, '0')
 
 export const fmtDate = (d: string | Date | null | undefined): string => {
   if (!d) return '—'
   const date = typeof d === 'string' ? new Date(d) : d
   if (isNaN(date.getTime())) return '—'
-  // نبنيها من المكوّنات المحلية — أدقّ من Intl هنا وتضمن ترتيب DD/MM/YYYY
-  return `${pad2(date.getDate())}/${pad2(date.getMonth() + 1)}/${date.getFullYear()}`
+  // نبنيها من المكوّنات المحلية — أدقّ من Intl هنا وتضمن الترتيب
+  return `${date.getFullYear()}/${pad2(date.getMonth() + 1)}/${pad2(date.getDate())}`
 }
 
 export const fmtDateTime = (d: string | Date | null | undefined): string => {
   if (!d) return '—'
   const date = typeof d === 'string' ? new Date(d) : d
   if (isNaN(date.getTime())) return '—'
-  return safeFormat(
-    () =>
-      new Intl.DateTimeFormat(DATE_LOCALE, {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-      })
-        .format(date)
-        .replace(/\u200f/g, ''),
-    date.toISOString()
-  )
+  // التاريخ بصيغة fmtDate نفسها، ثم الوقت بتوقيت الجهاز «10:30 ص»
+  return `${fmtDate(date)}، ${fmtTime(`${pad2(date.getHours())}:${pad2(date.getMinutes())}`)}`
 }
 
 // قيمة تاريخ لحقول التاريخ بصيغة YYYY-MM-DD (أرقام لاتينية)
@@ -89,7 +78,15 @@ export const localISO = (d: Date): string => {
 
 const HIJRI_LOCALE = 'ar-SA-u-ca-islamic-umalqura-nu-latn'
 
-// هجري بأرقام لاتينية بصيغة يوم/شهر/سنة + لاحقة «هـ»
+/** مكوّنات الهجري (أم القرى) مرتّبة سنة/شهر/يوم — من formatToParts لا من نص Intl المرتّب محلياً */
+const hijriYMD = (date: Date): string => {
+  const parts = new Intl.DateTimeFormat(HIJRI_LOCALE, { year: 'numeric', month: '2-digit', day: '2-digit' })
+    .formatToParts(date)
+  const get = (t: string) => (parts.find((p) => p.type === t)?.value ?? '').replace(/\D/g, '')
+  return `${get('year')}/${get('month').padStart(2, '0')}/${get('day').padStart(2, '0')}`
+}
+
+// هجري بأرقام لاتينية بصيغة سنة/شهر/يوم + لاحقة «هـ»
 export const fmtHijri = (d: string | Date | null | undefined): string => {
   if (!d) return '—'
   const date = typeof d === 'string' ? new Date(d) : d
@@ -98,15 +95,7 @@ export const fmtHijri = (d: string | Date | null | undefined): string => {
     () =>
       // ⚠️ Intl يضيف «هـ» بنفسه في أغلب المتصفحات — ننزعها ثم نضيفها مرة واحدة
       // (تفادياً لـ«1448 هـ هـ»، ولضمان وجودها لو لم يضفها المتصفح)
-      new Intl.DateTimeFormat(HIJRI_LOCALE, {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-      })
-        .format(date)
-        // Intl يحشر علامات اتجاه (U+200F) بين الأرقام — تُربك العرض
-        .replace(/\u200f/g, '')
-        .replace(/\s*هـ\s*$/, '') + ' هـ',
+      hijriYMD(date) + ' هـ',
     date.toISOString()
   )
 }
