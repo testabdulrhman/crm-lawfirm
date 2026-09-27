@@ -12,6 +12,7 @@ import { Sidebar } from './Sidebar'
 import { TopBar } from './TopBar'
 import { MobileTabBar } from './MobileTabBar'
 import { AiAssistant } from '@/components/AiAssistant'
+import { BirthdayFab } from '@/components/BirthdayCard'
 import { useIsCollaborator } from '@/hooks/useIsCollaborator'
 
 export function AppLayout({ children }: { children: ReactNode }) {
@@ -118,6 +119,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
       {/* المساعد الذكي — زر عائم؛ يُخفى عن المتعاون لأنه مساعد على مستوى المكتب */}
       {!isCollaborator && <AiAssistant />}
+      {/* يوم ميلاد الموظف: احتفالية أول دخول + زرّ يعيدها (2026-09-27) */}
+      {!native && <BirthdayFab aboveAssistant={!isCollaborator} />}
     </div>
   )
 }

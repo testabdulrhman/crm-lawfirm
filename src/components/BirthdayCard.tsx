@@ -2,16 +2,17 @@
 // هي وحدها ما يراه الفريق (2026-09-26: لا منشور في القناة ولا إشعار — «خله كأنه بنر»)،
 // والتهنئة برسالة خاصة لصاحب اليوم.
 // الخصوصية: تعرض اليوم والشهر فقط (لا سنة ولا عمر في أي نص).
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useLocation } from 'wouter'
-import { Cake, Loader2, MessageSquareHeart, X } from 'lucide-react'
+import { Cake, Loader2, MessageSquareHeart, PartyPopper, X } from 'lucide-react'
 
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/stores/auth'
 import { Button } from '@/components/ui/button'
 import { useOpenDm } from '@/hooks/useDiscussions'
 import { requestDiscussionJump } from '@/lib/discussionJump'
+import { celebrate, celebrateOncePerDay } from '@/lib/celebrate'
 
 interface BirthdayMember {
   id: string
@@ -25,6 +26,28 @@ function todayMMDD(): string {
   const mm = String(d.getMonth() + 1).padStart(2, '0')
   const dd = String(d.getDate()).padStart(2, '0')
   return `${mm}-${dd}`
+}
+
+/** من ميلاده اليوم — مشترك بين البطاقة والزرّ العائم (نفس مفتاح الاستعلام) */
+function useTodayCelebrants() {
+  const { teamMember } = useAuth()
+  const { data } = useQuery({
+    queryKey: ['birthdays_today'],
+    staleTime: 60 * 60 * 1000,
+    queryFn: async (): Promise<BirthdayMember[]> => {
+      const { data, error } = await supabase
+        .from('team_members')
+        .select('id, name, short_name, date_of_birth')
+        .eq('is_active', true)
+        .not('date_of_birth', 'is', null)
+      if (error) throw error
+      return (data ?? []) as BirthdayMember[]
+    },
+  })
+
+  const today = todayMMDD()
+  const celebrants = (data ?? []).filter((m) => m.date_of_birth?.slice(5, 10) === today)
+  return { celebrants, isMine: celebrants.some((m) => m.id === teamMember?.id) }
 }
 
 /** يُغلق البنر ليومه فقط — كسؤال «كيف حالك»؛ ويعود مع المناسبة التالية */
@@ -50,24 +73,8 @@ export function BirthdayCard() {
   const [, navigate] = useLocation()
   const openDm = useOpenDm()
 
-  const { data } = useQuery({
-    queryKey: ['birthdays_today'],
-    staleTime: 60 * 60 * 1000,
-    queryFn: async (): Promise<BirthdayMember[]> => {
-      const { data, error } = await supabase
-        .from('team_members')
-        .select('id, name, short_name, date_of_birth')
-        .eq('is_active', true)
-        .not('date_of_birth', 'is', null)
-      if (error) throw error
-      return (data ?? []) as BirthdayMember[]
-    },
-  })
+  const { celebrants } = useTodayCelebrants()
 
-  const today = todayMMDD()
-  const celebrants = (data ?? []).filter(
-    (m) => m.date_of_birth?.slice(5, 10) === today
-  )
   if (celebrants.length === 0 || dismissed) return null
 
   const close = () => {
@@ -135,5 +142,30 @@ export function BirthdayCard() {
       )}
       {isMine && <Cake className="h-6 w-6 text-gold" />}
     </div>
+  )
+}
+
+/**
+ * زرّ عائم لصاحب اليوم وحده، في كل صفحة طوال يومه (طلب المدير 2026-09-27):
+ * الاحتفالية تنطلق تلقائياً أول ما يفتح النظام في يومه، ومن الزرّ يعيدها متى شاء.
+ */
+export function BirthdayFab({ aboveAssistant }: { aboveAssistant: boolean }) {
+  const { isMine } = useTodayCelebrants()
+  useEffect(() => {
+    if (isMine) celebrateOncePerDay('birthday')
+  }, [isMine])
+  if (!isMine) return null
+  return (
+    <button
+      type="button"
+      onClick={() => void celebrate()}
+      title="احتفل مرة أخرى 🎉"
+      aria-label="احتفل مرة أخرى"
+      className={`fixed left-5 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-gold-300 to-gold-500 text-navy shadow-lg ring-4 ring-gold/20 transition-transform hover:scale-110 active:scale-95 ${
+        aboveAssistant ? 'bottom-24' : 'bottom-5'
+      }`}
+    >
+      <PartyPopper className="h-5 w-5" />
+    </button>
   )
 }
