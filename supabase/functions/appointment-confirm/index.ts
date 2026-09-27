@@ -8,10 +8,16 @@
 // حضوري  → رابط موقع المكتب من office_info.location_url
 // عن بُعد → «يصلكم رابط الاجتماع قبل الموعد» (يُجهَّز لاحقاً ويُرسل مستقلاً)
 //
+// عن بُعد يُرسل **واتساباً** بقالب appointment_confirm_remote المعتمد (قرار المدير 2026-09-27:
+// «واتساب بدل SMS») عبر whatsapp-send ← الـHub — يصل خارج نافذة الـ٢٤ ساعة. وإن فشل لأي سبب
+// ترتدّ الرسالة إلى SMS كما كانت، فلا يبقى موكّل بلا تأكيد.
+//
 // الحماية: verify_jwt. المشغّل يستدعيها بمفتاح service_role من داخل القاعدة.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
+/** قالب واتساب معتمد في الـHub لتأكيد الموعد عن بُعد (٤ متغيّرات) */
+const WA_REMOTE_TEMPLATE = "appointment_confirm_remote";
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
 
@@ -134,6 +140,48 @@ Deno.serve(async (req) => {
 
   let ok = false;
   let reason = "";
+
+  // ===== عن بُعد: واتساب بالقالب أولاً =====
+  if (kind === "confirm" && isRemote) {
+    try {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/whatsapp-send`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${SERVICE_ROLE}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          phone,
+          recipient_name: name,
+          template: {
+            name: WA_REMOTE_TEMPLATE,
+            lang: "ar",
+            // مرحباً {{1}} · التاريخ {{2}} · الوقت {{3}} · الرقم المرجعي {{4}}
+            params: [
+              name,
+              dualDate(String(a.appointment_date)),
+              arabicTime(String(a.appointment_time ?? "09:00")),
+              a.reference_no || "—",
+            ],
+          },
+          idempotency_key: `appt-confirm:${id}`,
+        }),
+      });
+      const d = await res.json().catch(() => null);
+      const waOk = res.ok && !d?.error && d?.status !== "failed";
+      if (waOk) {
+        // whatsapp-send يسجّل في sms_log بنفسه — نختم الموعد ونكتفي
+        try {
+          await admin.from("appointments").update({ confirmation_sent_at: new Date().toISOString() }).eq("id", id);
+        } catch (_) { /* الختم ثانوي */ }
+        return json({ ok: true, kind, method: a.meeting_method, channel: "whatsapp" });
+      }
+      reason = `واتساب: ${d?.detail || d?.error || `HTTP ${res.status}`} — أُرسلت SMS بدلاً منه`;
+    } catch (e) {
+      reason = `واتساب: ${String((e as Error)?.message || e)} — أُرسلت SMS بدلاً منه`;
+    }
+  }
+
+  // ===== SMS: الحضوري ورابط الاجتماع، واحتياط الواتساب =====
+  const waNote = reason;
+  reason = "";
   try {
     const res = await fetch(`${SUPABASE_URL}/functions/v1/swift-endpoint`, {
       method: "POST",
@@ -165,5 +213,8 @@ Deno.serve(async (req) => {
     try { await admin.from("appointments").update(stamp).eq("id", id); } catch (_) { /* الختم ثانوي */ }
   }
 
-  return json({ ok, kind, method: a.meeting_method, reason: ok ? undefined : reason });
+  return json({
+    ok, kind, method: a.meeting_method, channel: "sms",
+    reason: ok ? (waNote || undefined) : [waNote, reason].filter(Boolean).join(" · "),
+  });
 });
