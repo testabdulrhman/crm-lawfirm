@@ -98,7 +98,9 @@ export function CaseForm({
 }) {
   const isPage = variant === 'page'
   // اختيار «إفلاس» في قضية جديدة يحوّلها إجراء إفلاس (المدير 2026-09-27: «هذي إفلاس ومع ذلك مسجله
-  // في القضايا» — إجراءات سُجّلت قضايا بنوع «إفلاس» فظهرت في القضايا لا في المشاريع)
+  // في القضايا» — إجراءات سُجّلت قضايا بنوع «إفلاس» فظهرت في القضايا لا في المشاريع).
+  // الفرق عنده: «إجراء إفلاس» = إجراء يديره المكتب؛ أما طلب يُعدّ لعميل (كطلب إعادة تنظيم مالي)
+  // فقضية نوعها «إفلاس» — ولذا يبقى زرّ التراجع ظاهراً.
   const [newKind, setNewKind] = useState<'case' | 'bankruptcy'>(kind ?? 'case')
   const [switchedToBankruptcy, setSwitchedToBankruptcy] = useState(false)
   const [keepAsCase, setKeepAsCase] = useState(false)
@@ -295,7 +297,7 @@ export function CaseForm({
       )}
       {switchedToBankruptcy && isBankruptcy && (
         <p className="rounded-lg bg-violet-500/10 px-2.5 py-2 text-xs leading-relaxed text-violet-800 dark:text-violet-200">
-          صار <b>إجراء إفلاس</b> — يظهر في «المشاريع» لا في القضايا. اختر نوع الإجراء.{' '}
+          صار <b>إجراء إفلاس يديره المكتب</b> — يظهر في «المشاريع» لا في القضايا. اختر نوع الإجراء.{' '}
           <button
             type="button"
             className="font-medium underline underline-offset-2"
@@ -306,7 +308,7 @@ export function CaseForm({
               setValue('type', 'إفلاس')
             }}
           >
-            بل قضية متعلقة بإفلاس
+            بل قضية أو طلب لعميل
           </button>
         </p>
       )}
