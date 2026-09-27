@@ -429,6 +429,11 @@ struct CaseStreamView: View {
             }
             MentionSuggestBar(staff: staff, draft: $draft)
 
+            // صورة منسوخة من تطبيق آخر ← لصقها بضغطة (2026-09-27)
+            PasteImageChip(disabled: uploading) { jpeg in
+                Task { await uploadData(jpeg, fileName: "صورة ملصقة.jpg", mime: "image/jpeg") }
+            }
+
             // ترتيب الواتساب حرفياً (طلب المستخدم 2026-08-22): الإرسال يمين
             // و«+» يسار يجمع كل الإضافات — حتى لا يحس الموظف بفرق.
             // في RTL أول عنصر بالكود يقع يميناً.
