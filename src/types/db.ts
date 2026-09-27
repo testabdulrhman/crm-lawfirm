@@ -767,6 +767,9 @@ export interface PowerOfAttorney {
   deleted_at: string | null
   deleted_by: string | null
   created_at: string | null
+  /** آخر طلب إعادة إصدار أُرسل للموكّل واتساباً (2026-09-27) */
+  reissue_requested_at?: string | null
+  reissue_requested_by?: string | null
   // علاقة القضية (FK موجود). لا embed لجهة الاتصال (لا FK) — نعتمد client_id/client_name.
   case?: {
     id: string

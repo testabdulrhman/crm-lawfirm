@@ -11,6 +11,7 @@ import {
   Scale,
   AlertTriangle,
   Loader2,
+  MessageCircle,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -39,7 +40,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { FilePreviewDialog } from '@/components/FilePreviewDialog'
 
-import { fmtDatePref } from '@/lib/format'
+import { fmtDatePref, fmtDateTime } from '@/lib/format'
 import { uploadFile } from '@/lib/files'
 import { toast } from '@/hooks/use-toast'
 import { useAuth } from '@/stores/auth'
@@ -59,7 +60,9 @@ import {
   isExpiringSoon,
   isActuallyExpired,
   expirySoonText,
+  daysUntilExpiry,
 } from '@/lib/poaLabels'
+import { POAReissueDialog } from './POAReissueDialog'
 import { errMessage } from '@/lib/errors'
 
 export function POADetail({ id }: { id: string }) {
@@ -73,6 +76,7 @@ export function POADetail({ id }: { id: string }) {
   const [editOpen, setEditOpen] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [reissueOpen, setReissueOpen] = useState(false)
   const { confirm, dialog: confirmDialog } = useConfirm()
 
   // رفع/استبدال مستند الوكالة بالإفلات
@@ -134,6 +138,9 @@ export function POADetail({ id }: { id: string }) {
 
   const soon = isExpiringSoon(poa)
   const overdue = isActuallyExpired(poa)
+  // طلب إعادة الإصدار: منتهية أو تنتهي خلال ٦٠ يوماً (2026-09-27)
+  const daysLeft = daysUntilExpiry(poa.expiry_date)
+  const canRequestReissue = poa.status === 'expired' || (daysLeft != null && daysLeft <= 60)
 
   return (
     <div className="mx-auto max-w-4xl space-y-5">
@@ -165,6 +172,11 @@ export function POADetail({ id }: { id: string }) {
                   {poa.poa_number || 'وكالة'}
                 </h2>
               </div>
+              {poa.reissue_requested_at && (
+                <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-400">
+                  أُرسل للموكّل طلب إعادة الإصدار {fmtDateTime(poa.reissue_requested_at)}
+                </p>
+              )}
               <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                 <Badge variant={poaStatusBadge(poa.status)}>
                   {poaStatusLabel(poa.status)}
@@ -184,7 +196,17 @@ export function POADetail({ id }: { id: string }) {
               </div>
             </div>
             {/* مبدّل الحالة */}
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              {canRequestReissue && (
+                <Button
+                  size="sm"
+                  className="gap-1.5 bg-emerald-600 text-white hover:bg-emerald-700"
+                  onClick={() => setReissueOpen(true)}
+                >
+                  <MessageCircle className="h-4 w-4" />
+                  {poa.reissue_requested_at ? 'إعادة طلب الإصدار' : 'طلب إصدار وكالة من الموكّل'}
+                </Button>
+              )}
               {statusM.isPending && (
                 <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
               )}
@@ -286,6 +308,8 @@ export function POADetail({ id }: { id: string }) {
           <POAForm poa={poa} onDone={() => setEditOpen(false)} />
         </DialogContent>
       </Dialog>
+
+      <POAReissueDialog poa={poa} open={reissueOpen} onOpenChange={setReissueOpen} />
 
       <FilePreviewDialog
         open={previewOpen}
