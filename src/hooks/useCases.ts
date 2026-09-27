@@ -84,9 +84,13 @@ export function useCreateCase() {
       if (readErr) throw readErr
       return data as unknown as Case
     },
-    onSuccess: () => {
+    onSuccess: (created) => {
       qc.invalidateQueries({ queryKey: LIST_KEY })
-      toast({ variant: 'success', title: 'تمت إضافة القضية' })
+      qc.invalidateQueries({ queryKey: ['matters'] })
+      toast({
+        variant: 'success',
+        title: created?.kind === 'bankruptcy' ? 'تمت إضافة إجراء الإفلاس' : 'تمت إضافة القضية',
+      })
     },
     onError: errToast('تعذّرت إضافة القضية'),
   })

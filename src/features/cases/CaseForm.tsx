@@ -85,7 +85,8 @@ export function CaseForm({
   kind,
 }: {
   caseItem?: Case | null
-  onDone: () => void
+  /** يُمرَّر نوع الملف المُنشأ — قد يتحوّل أثناء التعبئة من قضية إلى إجراء إفلاس */
+  onDone: (createdKind?: 'case' | 'bankruptcy') => void
   /** 'page' يعرض شريط حفظ ثابت + منطقة إسقاط مستند */
   variant?: 'dialog' | 'page'
   /**
@@ -96,7 +97,12 @@ export function CaseForm({
   kind?: 'case' | 'bankruptcy'
 }) {
   const isPage = variant === 'page'
-  const matterKind = caseItem?.kind ?? kind ?? 'case'
+  // اختيار «إفلاس» في قضية جديدة يحوّلها إجراء إفلاس (المدير 2026-09-27: «هذي إفلاس ومع ذلك مسجله
+  // في القضايا» — إجراءات سُجّلت قضايا بنوع «إفلاس» فظهرت في القضايا لا في المشاريع)
+  const [newKind, setNewKind] = useState<'case' | 'bankruptcy'>(kind ?? 'case')
+  const [switchedToBankruptcy, setSwitchedToBankruptcy] = useState(false)
+  const [keepAsCase, setKeepAsCase] = useState(false)
+  const matterKind = caseItem?.kind ?? newKind
   const isBankruptcy = matterKind === 'bankruptcy'
   const { teamMember } = useAuth()
   // مستند أُسقط قبل الحفظ: يُرفع أول مستند للقضية بعد نجاح الإنشاء
@@ -221,7 +227,7 @@ export function CaseForm({
         }
       }
     }
-    onDone()
+    onDone(isEdit ? undefined : matterKind === 'bankruptcy' ? 'bankruptcy' : 'case')
   }
 
   /* ===================== الحقول ===================== */
@@ -229,7 +235,7 @@ export function CaseForm({
   const titleField = (
     <div className="space-y-1.5">
       <Label htmlFor="title">
-        عنوان القضية <span className="text-destructive">*</span>
+        {isBankruptcy ? 'عنوان الإجراء' : 'عنوان القضية'} <span className="text-destructive">*</span>
       </Label>
       <Input id="title" {...register('title')} />
       {errors.title && (
@@ -256,7 +262,20 @@ export function CaseForm({
         control={control}
         name="type"
         render={({ field }) => (
-          <Select value={field.value || undefined} onValueChange={field.onChange}>
+          <Select
+            // يُعاد تركيبه مع تبدّل القائمة فيرجع «اختر النوع» بدل حقل فارغ
+            key={matterKind}
+            value={field.value || undefined}
+            onValueChange={(v) => {
+              if (!isEdit && !isBankruptcy && !keepAsCase && v === 'إفلاس') {
+                setNewKind('bankruptcy')
+                setSwitchedToBankruptcy(true)
+                field.onChange('')
+                return
+              }
+              field.onChange(v)
+            }}
+          >
             <SelectTrigger>
               <SelectValue placeholder="اختر النوع" />
             </SelectTrigger>
@@ -273,6 +292,23 @@ export function CaseForm({
       />
       {typeValue === OTHER && (
         <Input placeholder="اكتب النوع" className="mt-2" {...register('typeOther')} />
+      )}
+      {switchedToBankruptcy && isBankruptcy && (
+        <p className="rounded-lg bg-violet-500/10 px-2.5 py-2 text-xs leading-relaxed text-violet-800 dark:text-violet-200">
+          صار <b>إجراء إفلاس</b> — يظهر في «المشاريع» لا في القضايا. اختر نوع الإجراء.{' '}
+          <button
+            type="button"
+            className="font-medium underline underline-offset-2"
+            onClick={() => {
+              setNewKind('case')
+              setSwitchedToBankruptcy(false)
+              setKeepAsCase(true)
+              setValue('type', 'إفلاس')
+            }}
+          >
+            بل قضية متعلقة بإفلاس
+          </button>
+        </p>
       )}
     </div>
   )
@@ -419,9 +455,9 @@ export function CaseForm({
     <>
       <Button type="submit" variant="gold" disabled={pending}>
         {pending && <Loader2 className="h-4 w-4 animate-spin" />}
-        {isEdit ? 'حفظ التعديلات' : 'حفظ القضية'}
+        {isEdit ? 'حفظ التعديلات' : isBankruptcy ? 'حفظ الإجراء' : 'حفظ القضية'}
       </Button>
-      <Button type="button" variant="outline" onClick={onDone}>
+      <Button type="button" variant="outline" onClick={() => onDone()}>
         إلغاء
       </Button>
     </>
@@ -435,7 +471,7 @@ export function CaseForm({
         {/* شريط ثابت: الحفظ في متناول اليد مهما طال التمرير */}
         <div className="sticky top-0 z-20 -mx-1 mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/70 bg-card/95 px-4 py-3 backdrop-blur">
           <h2 className="text-lg font-bold text-foreground">
-            {isEdit ? 'تعديل قضية' : 'قضية جديدة'}
+            {isEdit ? (isBankruptcy ? 'تعديل إجراء إفلاس' : 'تعديل قضية') : isBankruptcy ? 'إجراء إفلاس جديد' : 'قضية جديدة'}
           </h2>
           <div className="flex gap-2">{actions}</div>
         </div>
@@ -447,7 +483,7 @@ export function CaseForm({
   return (
     <form onSubmit={handleSubmit(onSubmit)}>
       <DialogHeader>
-        <DialogTitle>{isEdit ? 'تعديل قضية' : 'قضية جديدة'}</DialogTitle>
+        <DialogTitle>{isEdit ? (isBankruptcy ? 'تعديل إجراء إفلاس' : 'تعديل قضية') : isBankruptcy ? 'إجراء إفلاس جديد' : 'قضية جديدة'}</DialogTitle>
       </DialogHeader>
 
       <div className="my-4 max-h-[62vh] overflow-y-auto pl-1 pr-1">{body}</div>

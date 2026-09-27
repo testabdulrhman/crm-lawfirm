@@ -22,7 +22,7 @@ export default function CaseNewPage() {
       <CaseForm
         variant="page"
         kind={kind}
-        onDone={() => navigate(kind === 'bankruptcy' ? '/matters' : '/cases')}
+        onDone={(created) => navigate((created ?? kind) === 'bankruptcy' ? '/matters' : '/cases')}
       />
     </div>
   )
