@@ -63,18 +63,25 @@ export function useCreateCase() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (input: CaseInput): Promise<Case> => {
-      const payload: CaseInput = {
+      // المعرّف من المتصفح، والإدراج بلا إرجاع ثم القراءة في طلب مستقل: بوابة الرؤية تُقيَّم
+      // بلقطة ما قبل الإدراج فتردّ الإرجاع لغير المدير (perm_case_select)، أما الطلب التالي
+      // فيرى الملف — بالإسناد أو بفريق الملف الذي يُضاف له منشئه (case_creator_access)
+      const id = crypto.randomUUID()
+      const payload: CaseInput & { id: string } = {
         status: 'jarri',
         progress: 0,
         open_date: input.open_date || todayISO(),
         ...input,
+        id,
       }
-      const { data, error } = await supabase
-        .from('cases')
-        .insert(payload)
-        .select(SELECT)
-        .single()
+      const { error } = await supabase.from('cases').insert(payload)
       if (error) throw error
+      const { data, error: readErr } = await supabase
+        .from('cases')
+        .select(SELECT)
+        .eq('id', id)
+        .single()
+      if (readErr) throw readErr
       return data as unknown as Case
     },
     onSuccess: () => {
