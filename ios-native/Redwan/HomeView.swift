@@ -40,6 +40,9 @@ struct HomeView: View {
     @AppStorage("home.mood.value") private var moodValue = ""
     /// يوم أُغلق فيه بنر عيد الميلاد — يُغلق ليومه كسؤال «كيف حالك»
     @AppStorage("home.birthday.dismissed") private var birthdayDismissed = ""
+    /// يوم انطلقت فيه احتفالية الميلاد تلقائياً — مرة في اليوم، والزرّ العائم يعيدها
+    @AppStorage("home.birthday.celebrated") private var birthdayCelebrated = ""
+    @State private var celebrateTick = 0
     /// لحظة الوداع بعد الاختيار: يبقى السؤال ثانيتين يعرض ردّه ثم ينطوي
     @State private var moodFarewell = false
     /// يُحدِّث العدّ التنازلي للموعد القادم كل دقيقة
@@ -69,6 +72,33 @@ struct HomeView: View {
                     }
                 }
                 StatusBarFade()
+                // احتفالية يوم الميلاد فوق كل شيء، ولا تعترض اللمس
+                CelebrationView(trigger: celebrateTick)
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
+            }
+            // زرّ عائم لصاحب اليوم وحده — يعيد الاحتفالية متى شاء (طلب المدير 2026-09-27)
+            .overlay(alignment: .bottomLeading) {
+                if isMyBirthday {
+                    Button { celebrateTick += 1 } label: {
+                        Image(systemName: "party.popper.fill")
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundStyle(Theme.navy)
+                            .frame(width: 52, height: 52)
+                            .background(
+                                LinearGradient(colors: [Color(hex: 0xE6D29B), Color(hex: 0xC9A982)],
+                                               startPoint: .topLeading, endPoint: .bottomTrailing),
+                                in: Circle()
+                            )
+                            .overlay(Circle().stroke(Color.white.opacity(0.7), lineWidth: 2))
+                            .shadow(color: .black.opacity(0.18), radius: 8, y: 4)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("احتفل مرة أخرى")
+                    .padding(.leading, 18)
+                    .padding(.bottom, 18)
+                    .transition(.scale.combined(with: .opacity))
+                }
             }
             .toolbar(.hidden, for: .navigationBar)
             .onAppear {
@@ -371,6 +401,17 @@ struct HomeView: View {
         ])) ?? []
         let today = String(Fmt.todayISO().dropFirst(5))   // MM-DD بتوقيت الجهاز
         birthdays = rows.filter { ($0.date_of_birth ?? "").dropFirst(5).prefix(5) == today }
+        // أول دخول لصاحب اليوم في يومه — تنطلق الاحتفالية تلقائياً مرة واحدة
+        if isMyBirthday && birthdayCelebrated != Fmt.todayISO() {
+            birthdayCelebrated = Fmt.todayISO()
+            try? await Task.sleep(for: .milliseconds(700))
+            celebrateTick += 1
+        }
+    }
+
+    private var isMyBirthday: Bool {
+        guard let me = sb.member?.id else { return false }
+        return birthdays.contains { $0.id == me }
     }
 
     // MARK: - البطاقات الثلاث
