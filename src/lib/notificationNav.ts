@@ -14,6 +14,7 @@ import {
   Sun,
   Users,
   type LucideIcon,
+  IdCard,
 } from 'lucide-react'
 
 import { requestDiscussionJump } from '@/lib/discussionJump'
@@ -41,6 +42,7 @@ const ICONS: Record<string, LucideIcon> = {
   hr_result: Sun,
   change_request: Lightbulb,
   office_doc_expiry: FileBadge,
+  member_doc: IdCard,
 }
 
 export function notificationIcon(type: string | null): LucideIcon {
@@ -67,6 +69,8 @@ export function notificationDestination(n: AppNotification): string {
   if (n.type === 'change_request') return '/change-requests'
   // مستند للمكتب يقترب انتهاؤه أو انتهى
   if (n.type === 'office_doc_expiry') return '/office-documents'
+  // هوية موظف خالفت المسجّل أو بدت لغيره — يحسمها المدير في صفحة الفريق
+  if (n.type === 'member_doc') return '/team'
   // حجز من الموقع، وإسناد موعد أو إشراك فيه — كوجهة إشعار الدفع
   if (n.type?.startsWith('appointment')) return '/appointments'
   switch (n.type) {

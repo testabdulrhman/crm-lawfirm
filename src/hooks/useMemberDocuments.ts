@@ -87,7 +87,19 @@ export function useUploadMemberDoc() {
       }
     },
     onSuccess: (_d, v) => {
-      toast({ title: `رُفع ${MEMBER_DOC_LABELS[v.docType]}` })
+      if (v.docType === 'national_id') {
+        // الخادم يقرأ البطاقة ويملأ رقم الهوية وتاريخ الميلاد إن كانا فارغين (member-doc-extract)،
+        // فتُحدَّث بيانات الموظف بعد ثوانٍ ريثما تُقرأ
+        toast({
+          title: 'رُفعت الهوية الوطنية',
+          description: 'سيُقرأ منها رقم الهوية وتاريخ الميلاد تلقائياً خلال ثوانٍ.',
+        })
+        for (const ms of [15_000, 35_000]) {
+          window.setTimeout(() => void qc.invalidateQueries({ queryKey: ['team_members'] }), ms)
+        }
+      } else {
+        toast({ title: `رُفع ${MEMBER_DOC_LABELS[v.docType]}` })
+      }
       return qc.invalidateQueries({ queryKey: [KEY, v.memberId] })
     },
     onError: (e) => toast({ variant: 'destructive', title: 'تعذّر رفع المرفق', description: errMessage(e) }),
