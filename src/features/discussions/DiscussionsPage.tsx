@@ -1230,9 +1230,16 @@ function MessageBubble({
             <AttachmentChip name={msg.document_name} url={msg.document_url} />
           ))}
 
+        {/* «ردّ في خيط» تحت كل رسالة كان يزحم الشاشة (مراجعة 2026-09-28): بلا ردود يظهر عند مرور
+            المؤشر أو التركيز فقط، ودائماً على شاشات اللمس؛ وعدد الردود يبقى ظاهراً */}
         <button
           onClick={onOpenThread}
-          className="mt-2 flex w-full items-center gap-1.5 border-t border-border/40 pt-2 text-right text-xs transition-colors hover:text-gold"
+          className={cn(
+            'mt-2 w-full items-center gap-1.5 border-t border-border/40 pt-2 text-right text-xs transition-colors hover:text-gold',
+            (msg.reply_count ?? 0) > 0
+              ? 'flex'
+              : 'hidden focus-visible:flex group-focus-within:flex group-hover:flex [@media(hover:none)]:flex'
+          )}
         >
           {(msg.reply_count ?? 0) > 0 ? (
             <>

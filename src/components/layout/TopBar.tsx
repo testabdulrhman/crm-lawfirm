@@ -68,28 +68,10 @@ export function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
   const [refreshing, setRefreshing] = useState(false)
   const isCollaborator = useIsCollaborator()
 
-  // طابق المسار الدقيق، وإلا أطول بادئة مطابقة (لمسارات التفاصيل مثل /requests/:id)
+  // طابق المسار الدقيق، وإلا القسم الأول منه (/cases/:id ← /cases). صفحة بلا عنوان كانت تظهر
+  // «لوحة التحكم» — النقاشات والمشاريع والتقويم مثلاً (مراجعة 2026-09-28)
   const title =
-    ROUTE_TITLES[location] ??
-    (location.startsWith('/requests') ? ROUTE_TITLES['/requests'] : undefined) ??
-    (location.startsWith('/staff-applications')
-      ? ROUTE_TITLES['/staff-applications']
-      : undefined) ??
-    (location.startsWith('/contacts') ? ROUTE_TITLES['/contacts'] : undefined) ??
-    (location.startsWith('/cases') ? ROUTE_TITLES['/cases'] : undefined) ??
-    (location.startsWith('/tasks') ? ROUTE_TITLES['/tasks'] : undefined) ??
-    (location.startsWith('/engagements') ? ROUTE_TITLES['/engagements'] : undefined) ??
-    (location.startsWith('/poa') ? ROUTE_TITLES['/poa'] : undefined) ??
-    (location.startsWith('/legal-services')
-      ? ROUTE_TITLES['/legal-services']
-      : undefined) ??
-    (location.startsWith('/property') ? ROUTE_TITLES['/property'] : undefined) ??
-    (location.startsWith('/appointments')
-      ? ROUTE_TITLES['/appointments']
-      : undefined) ??
-    (location.startsWith('/outgoing') ? ROUTE_TITLES['/outgoing'] : undefined) ??
-    (location.startsWith('/team') ? ROUTE_TITLES['/team'] : undefined) ??
-    'لوحة التحكم'
+    ROUTE_TITLES[location] ?? ROUTE_TITLES[`/${location.split(/[/?]/)[1] ?? ''}`] ?? 'لوحة التحكم'
 
   return (
     <header className="pt-safe pl-safe pr-safe sticky top-0 z-30 flex min-h-16 items-center justify-between gap-4 bg-background/90 px-4 backdrop-blur md:px-6">

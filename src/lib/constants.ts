@@ -26,4 +26,10 @@ export const ROUTE_TITLES: Record<string, string> = {
   '/requests': 'الطلبات الواردة',
   '/staff-applications': 'طلبات التوظيف',
   '/settings': 'الإعدادات',
+  '/discussions': 'النقاشات',
+  '/matters': 'المشاريع',
+  '/calendar': 'التقويم',
+  '/hr': 'الإجازات والاستئذان',
+  '/errors': 'سجل الأخطاء',
+  '/hub': 'مراقبة الاتصالات',
 }
