@@ -104,13 +104,53 @@ export function buildSteps(
 export function CaseJourney({
   caseData,
   counts,
+  compact,
 }: {
   caseData: Case
   counts: { sessions: number; rulings: number }
+  /** سطر رفيع داخل ترويسة الملف (مراجعة 2026-09-28) بدل بطاقة مستقلة */
+  compact?: boolean
 }) {
   const steps = buildSteps(caseData, counts)
   // المرحلة الحالية = أول غير مكتملة (وإن اكتملت كلها فلا حالية)
   const currentIdx = steps.findIndex((s) => !s.done)
+
+  if (compact) {
+    return (
+      <ol
+        className="flex flex-wrap items-center gap-x-2 gap-y-1.5"
+        aria-label={caseData.kind === 'bankruptcy' ? 'سير الإجراء' : 'مسار القضية'}
+      >
+        {steps.map((s, i) => {
+          const isCurrent = i === currentIdx
+          return (
+            <li key={s.key} className="flex items-center gap-2" title={s.hint || undefined}>
+              <span className="flex items-center gap-1 text-[12px]">
+                <span
+                  className={cn(
+                    'grid h-4 w-4 place-items-center rounded-full',
+                    s.done
+                      ? 'bg-gold text-navy'
+                      : isCurrent
+                        ? 'border-2 border-gold'
+                        : 'border border-border'
+                  )}
+                >
+                  {s.done && <Check className="h-2.5 w-2.5" />}
+                </span>
+                <span className={cn(s.done || isCurrent ? 'text-foreground' : 'text-muted-foreground', isCurrent && 'font-semibold')}>
+                  {s.label}
+                </span>
+              </span>
+              {i < steps.length - 1 && (
+                <span aria-hidden className={cn('h-px w-5', s.done ? 'bg-gold' : 'bg-border')} />
+              )}
+            </li>
+          )
+        })}
+      </ol>
+    )
+  }
 
   return (
     <div className="rounded-2xl border border-border/70 bg-card p-4 shadow-sm">
