@@ -67,7 +67,8 @@ import { isNative, tapFeedback } from '@/lib/push'
 import { useAuth } from '@/stores/auth'
 import { useIsDirector } from '@/hooks/useIsDirector'
 import { useTeamMembers } from '@/hooks/useTeam'
-import { useRemoveTask } from '@/hooks/useTasks'
+import { useRemoveTask, useToggleTaskDone } from '@/hooks/useTasks'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   taskPriorityBadge,
   taskPriorityLabel,
@@ -110,6 +111,14 @@ export function TaskRoomPage({ id }: { id: string }) {
   const { data: members } = useTeamMembers()
 
   const removeM = useRemoveTask()
+  // «أنجزت» من داخل المهمة (طلب المدير 2026-09-29: «ودي أقدر أأشر عليها اني انجزتها، مو لازم اطلع»)
+  const doneM = useToggleTaskDone()
+  const qc = useQueryClient()
+  const setDone = (v: boolean) =>
+    doneM.mutate(
+      { id, done: v },
+      { onSuccess: () => void qc.invalidateQueries({ queryKey: ['task-room', id] }) }
+    )
 
   const [editOpen, setEditOpen] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -203,7 +212,26 @@ export function TaskRoomPage({ id }: { id: string }) {
       <Card>
         <CardContent className="space-y-4 p-5">
           <div className="space-y-1.5">
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-start gap-2">
+              {/* الإنجاز من هنا — إلا أثناء الاعتماد فقراره للمعتمِد */}
+              {!inReview && (
+                <Button
+                  size="sm"
+                  variant={done ? 'outline' : 'gold'}
+                  className="order-last ms-auto shrink-0"
+                  disabled={doneM.isPending}
+                  onClick={() => setDone(!done)}
+                >
+                  {doneM.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : done ? (
+                    <Undo2 className="h-4 w-4" />
+                  ) : (
+                    <CheckCircle2 className="h-4 w-4" />
+                  )}
+                  {done ? 'إرجاع للعمل' : 'أنجزت'}
+                </Button>
+              )}
               {task.is_urgent && !done && (
                 <Flame className="h-4 w-4 shrink-0 text-destructive" />
               )}
