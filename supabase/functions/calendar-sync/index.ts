@@ -254,6 +254,37 @@ async function hasInternalSecret(req: Request): Promise<boolean> {
   return !!data?.value && data.value === got;
 }
 
+function jwtRole(t: string): string | null {
+  try {
+    const p = t.split(".")[1];
+    return JSON.parse(atob(p.replace(/-/g, "+").replace(/_/g, "/"))).role ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * من يحق له استدعاء الدالة (ثغرة سُدّت 2026-09-29: كانت تُضيف وتحذف في تقويم المكتب لأي متصل بالمفتاح
+ * العام بلا دخول). المسموح أربعة: الترقر والجدولة بالسرّ الداخلي، ودالة الحجز بمفتاح الخادم، وموظف
+ * نشط بجلسته من الويب أو الآيفون — لا حساب مراجعة أبل ولا زائر.
+ */
+async function isAllowedCaller(req: Request): Promise<boolean> {
+  if (await hasInternalSecret(req)) return true;
+  const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
+  if (!token) return false;
+  // البوابة (verify_jwt) تحققت من التوقيع؛ ومفتاح الخادم الجديد ليس JWT فيُطابق نصاً
+  if (token === SERVICE_ROLE || jwtRole(token) === "service_role") return true;
+  const sb = createClient(SUPABASE_URL, SERVICE_ROLE);
+  const { data: u } = await sb.auth.getUser(token);
+  if (!u?.user) return false;
+  const { data: me } = await sb
+    .from("team_members")
+    .select("is_active, is_reviewer")
+    .eq("auth_id", u.user.id)
+    .maybeSingle();
+  return !!me && me.is_active !== false && !me.is_reviewer;
+}
+
 serve(async (req) => {
   const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -268,6 +299,7 @@ serve(async (req) => {
     // للتوافق مع v1: action='add' بدون type يعامل كجلسة
     const { action, type, session, appointment, caseTitle, googleEventId, session_id } = body;
     const json = (o: any, status = 200) => new Response(JSON.stringify(o), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    if (!(await isAllowedCaller(req))) return json({ error: "غير مصرّح — سجّل الدخول أولاً" }, 401);
 
     const cfg = await getCalendarConfig();
 
