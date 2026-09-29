@@ -21,6 +21,7 @@ import {
   Trash2,
   Users,
   X,
+  MessageSquareReply,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -1203,7 +1204,7 @@ function MessageBubble({
         {mine && msg.kind === 'user' && receipt && (
           <ReadTicks count={receipt} onClick={() => setReceiptsOpen(true)} />
         )}
-        <MessageActions msg={msg} caseId={caseId} mine={mine} />
+        <MessageActions msg={msg} caseId={caseId} mine={mine} onReply={onOpenThread} />
       </div>
 
       <div
@@ -1236,15 +1237,15 @@ function MessageBubble({
             </div>
           ))}
 
-        {/* «ردّ في خيط» تحت كل رسالة كان يزحم الشاشة (مراجعة 2026-09-28): بلا ردود يظهر عند مرور
-            المؤشر أو التركيز فقط، ودائماً على شاشات اللمس؛ وعدد الردود يبقى ظاهراً */}
+        {/* «ردّ في خيط» صار أيقونة في شريط الأزرار (بظهوره عند المرور كان يمدّ الرسالة — «ودي اشيل
+            التوسع»). السطر يبقى لعدد الردود حين توجد، وعلى شاشات اللمس وحدها بلا ردود (لا مرور فيها) */}
         <button
           onClick={onOpenThread}
           className={cn(
             'mt-2 w-full items-center gap-1.5 border-t border-border/40 pt-2 text-right text-xs transition-colors hover:text-gold',
             (msg.reply_count ?? 0) > 0
               ? 'flex'
-              : 'hidden focus-visible:flex group-focus-within:flex group-hover:flex [@media(hover:none)]:flex'
+              : 'hidden [@media(hover:none)]:flex'
           )}
         >
           {(msg.reply_count ?? 0) > 0 ? (
@@ -1378,6 +1379,7 @@ function MessageActions({
   msg,
   caseId,
   mine,
+  onReply,
 }: {
   msg: {
     id: string
@@ -1388,6 +1390,8 @@ function MessageActions({
   }
   caseId: string | null
   mine: boolean
+  /** «ردّ في خيط» في شريط الأزرار — بدل سطر تحت الرسالة يمدّها عند المرور (طلب المدير 2026-09-29) */
+  onReply?: () => void
 }) {
   const react = useToggleReaction()
   const bookmark = useToggleBookmark()
@@ -1399,6 +1403,17 @@ function MessageActions({
 
   return (
     <span className="mr-auto flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+      {onReply && (
+        <button
+          type="button"
+          title="ردّ في خيط"
+          aria-label="ردّ في خيط"
+          onClick={onReply}
+          className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-gold"
+        >
+          <MessageSquareReply className="h-3.5 w-3.5" />
+        </button>
+      )}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
