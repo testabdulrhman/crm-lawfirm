@@ -52,6 +52,7 @@ import { matterHref, matterKindEmoji } from '@/lib/matterHref'
 import { fmtNumber } from '@/lib/format'
 import { toast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
+import { SignAttachmentButton } from './SignAttachment'
 import { stamp, msgStamp, fullStamp } from './stamps'
 import { VoiceNotePlayer, VoiceTranscript, isAudioName } from './VoiceNote'
 import { DiscussionMediaDialog } from './DiscussionMediaDialog'
@@ -1227,7 +1228,12 @@ function MessageBubble({
               {msg.body && <VoiceTranscript text={msg.body} />}
             </>
           ) : (
-            <AttachmentChip name={msg.document_name} url={msg.document_url} />
+            <div className="flex items-start gap-2">
+              <div className="min-w-0 flex-1">
+                <AttachmentChip name={msg.document_name} url={msg.document_url} />
+              </div>
+              <SignAttachmentButton name={msg.document_name} url={msg.document_url} caseId={caseId} parentId={msg.id} />
+            </div>
           ))}
 
         {/* «ردّ في خيط» تحت كل رسالة كان يزحم الشاشة (مراجعة 2026-09-28): بلا ردود يظهر عند مرور
@@ -1619,6 +1625,7 @@ function ThreadPane({
               <ThreadReply
                 key={r.id}
                 r={r}
+                rootId={root.id}
                 caseId={caseId}
                 mine={r.author_id === teamMember?.id}
                 flash={r.id === flashId}
@@ -1657,11 +1664,14 @@ function ThreadPane({
 
 function ThreadReply({
   r,
+  rootId,
   caseId,
   mine,
   flash = false,
 }: {
   r: ThreadMsg
+  /** رأس الخيط — النسخة الموقّعة تُرسل ردّاً تحته */
+  rootId: string
   caseId: string | null
   mine: boolean
   /** وميض الوصول إليه من إشعار */
@@ -1707,7 +1717,16 @@ function ThreadReply({
               {r.body && <VoiceTranscript text={r.body} compact />}
             </>
           ) : (
-            <AttachmentChip name={r.document_name} url={r.document_url} compact />
+            <div className="flex flex-wrap items-center gap-2">
+              <AttachmentChip name={r.document_name} url={r.document_url} compact />
+              <SignAttachmentButton
+                name={r.document_name}
+                url={r.document_url}
+                caseId={caseId}
+                parentId={rootId}
+                compact
+              />
+            </div>
           ))}
       </div>
       <ReactionChips msg={r} caseId={caseId} />

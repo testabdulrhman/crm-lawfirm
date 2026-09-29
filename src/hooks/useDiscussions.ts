@@ -365,6 +365,9 @@ export function usePostAttachment() {
       file: File
       caption?: string
       mentions?: string[]
+      /** ردّ في خيط رسالة (كالنسخة الموقّعة تحت الملف الأصلي) — ويظهر في النقاش أيضاً */
+      parentId?: string | null
+      description?: string
     }) => {
       if (!teamMember?.id) throw new Error('لم يُحمَّل ملفك بعد — أعد تحميل الصفحة')
       const folder = input.caseId
@@ -384,7 +387,7 @@ export function usePostAttachment() {
           file_type: input.file.type || null,
           file_size: input.file.size,
           uploaded_by_name: teamMember.name ?? null,
-          description: 'أُرسل في النقاش',
+          description: input.description ?? 'أُرسل في النقاش',
         })
         .select('id')
         .single()
@@ -396,11 +399,13 @@ export function usePostAttachment() {
         body: input.caption || null,
         document_id: doc.id,
         ...(input.mentions?.length ? { mentions: input.mentions } : {}),
+        ...(input.parentId ? { parent_id: input.parentId, also_to_stream: true } : {}),
       })
       if (error) throw error
     },
     onSuccess: (_d, vars) => {
       invalidate(qc, vars.caseId)
+      if (vars.parentId) qc.invalidateQueries({ queryKey: ['disc_thread', vars.parentId] })
       toast({ variant: 'success', title: 'أُرسل المرفق وحُفظ في المستندات' })
     },
     onError: (e) =>
