@@ -10,7 +10,13 @@ const clip = (s: string | null | undefined, n = 60) => {
   return t.length > n ? t.slice(0, n - 1) + '…' : t;
 };
 
+export const CAREERS_DEFAULT = 'https://redwan.sa/careers';
+
 export const T = {
+  /** طالب وظيفة — نصّ المدير بحرفه («دائماً ارد على الناس كذا»، 2026-09-30)؛ بلا تأهيل ولا طلب للفريق */
+  jobSeeker: (url: string) =>
+    `أود أن أشكركم على اهتمامكم بالانضمام إلى فريق عملنا.\nونفيدكم بأن التقديم عبر الرابط التالي:\n${url}\n\nمع خالص التقدير`,
+
   legalGuard: 'هذا يحدده المحامي بعد الاطلاع على ملفك.',
 
   oohLine: `سنرد عليكم مع بداية الدوام (${HOURS_TEXT}).`,

@@ -16,7 +16,7 @@
 // =============================================================
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
-import { isCourtesyOnly } from './arabic.ts';
+import { isCourtesyOnly, isJobSeeking } from './arabic.ts';
 import { BrainOutput, think, vet } from './brain.ts';
 import { ConvSnapshot, decide, FlowOutput, LEAD_FOLLOWUP_DAYS, Match } from './flow.ts';
 import { isBusinessHours } from './hours.ts';
@@ -387,9 +387,10 @@ Deno.serve(async (req) => {
       }
 
       // قراءاتٌ مستقلة تُجرى معاً لا تباعاً
-      const [fee, booking] = await Promise.all([
+      const [fee, booking, careers] = await Promise.all([
         isNewcomer ? lookup('consultation_config', 'hourly_fee') : Promise.resolve(null),
         lookup('office_info', 'booking_url'),
+        lookup('office_info', 'careers_url'),   // اختياري؛ الافتراضي redwan.sa/careers
       ]);
       const bookingUrl = booking ?? undefined;
 
@@ -408,7 +409,7 @@ Deno.serve(async (req) => {
           now: new Date(), conv: snap, matches: ev.matches ?? [], matchSource: ev.match_source ?? 'none',
           msg: { text: decideText, mediaUrl: media[0] ?? null, mediaLabel: ev.media_label },
           botRepliesLastHour: count ?? 0, botHourlyLimit: BOT_HOURLY(),
-          consultationFee: fee, bookingUrl,
+          consultationFee: fee, bookingUrl, careersUrl: careers ?? undefined,
         });
         // المجاملة الخالصة للقواعد وحدها: قاعدة الإغلاق (ردٌّ قصير أول مرة، ثم صمت) حكمٌ ثابت لا اجتهاد
         const courtesyOnly = isCourtesyOnly(decideText);
@@ -416,8 +417,10 @@ Deno.serve(async (req) => {
             && /[A-Za-z]/.test(decideText) && !/[\u0600-\u06FF]/.test(decideText)) {
           o.reply = "You're most welcome. We're here if you need anything else.";   // الإغلاق بلغة المرسل
         }
+        // طالب الوظيفة ردّه نصّ المدير الثابت برابط المنصة — لا يُعطى للنموذج (وحاجزه يرفض غير رابط الحجز)
         const eligible = (aiEnabledFor(ev.phone_e164) || (test && ev.ai === true))
           && isNewcomer && !ev.human_until && decideText.trim() !== '' && !courtesyOnly
+          && !(conv.state === 'new' && isJobSeeking(decideText))
           && ['new', 'intake', 'intake_done'].includes(conv.state)
           && o.route.detail?.closing !== 'silent_after_close' && o.route.reason !== 'rate_limited';
         if (eligible) {

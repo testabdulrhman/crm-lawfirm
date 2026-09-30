@@ -10,7 +10,7 @@ import {
   parseOptionNumber, parseSystemChoice,
 } from './arabic.ts';
 import { isBusinessHours } from './hours.ts';
-import { INTAKE_QUESTIONS, INTAKE_STEPS, IntakeStep, REQUEST_TYPES, T } from './texts.ts';
+import { CAREERS_DEFAULT, INTAKE_QUESTIONS, INTAKE_STEPS, IntakeStep, REQUEST_TYPES, T } from './texts.ts';
 
 export type System = 'law' | 'bankruptcy';
 export type ConvState = 'new' | 'awaiting_system' | 'bound' | 'intake' | 'intake_done';
@@ -79,6 +79,8 @@ export interface FlowInput {
   /** من lookup_values في crm-lawfirm — لا يُثبَّت في الـ Hub */
   consultationFee?: string | null;
   bookingUrl?: string;
+  /** منصة التوظيف — لطالب الوظيفة بدل التأهيل */
+  careersUrl?: string;
 }
 
 export type NotifyKind =
@@ -329,6 +331,11 @@ export function decide(input: FlowInput): FlowOutput {
       case 'evening': return salamSaid ? null : { reply: T.greetEvening, offeredBooking: false };
       case 'hello':   return salamSaid ? null : { reply: T.greetHello, offeredBooking: false };
       case 'thanks':  return { reply: closingReply(), offeredBooking: false };
+      case 'job':
+        // ترحيب ورابط المنصة، ويُغلق الحديث؛ لا تأهيل ولا طلب للفريق القانوني
+        patch.tags = [...new Set([...(conv.tags ?? []), 'طالب وظيفة'])];
+        notices.closed_at = iso(now);
+        return { reply: withSalam(T.jobSeeker(input.careersUrl || CAREERS_DEFAULT)), offeredBooking: false };
       default:
         // إيموجي أو مجاملةٌ أخرى ⇒ إغلاق؛ ووصفُ مشكلة ⇒ التأهيل
         return courtesy ? { reply: closingReply(), offeredBooking: false } : null;
