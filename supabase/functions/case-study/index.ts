@@ -21,7 +21,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
-const FALLBACK_MODEL = "claude-opus-5";
+const FALLBACK_MODEL = "claude-opus-5-5";
 const FIRM_NAME = "شركة عبدالرحمن بن رضوان المشيقح للمحاماة وإدارة إجراءات الإفلاس";
 
 const admin = createClient(
