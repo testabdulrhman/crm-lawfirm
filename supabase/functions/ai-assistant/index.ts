@@ -20,6 +20,33 @@ const admin = createClient(
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
 );
 
+/**
+ * من المتصل؟ (ثغرة سُدّت 2026-10-01: كانت الدالة تقبل المفتاح العام بلا دخول وتأخذ اسم الموظف من
+ * الطلب، وأدواتها تعمل بمفتاح الخادم — إنشاء ملفات وإرسال SMS وقراءة القضايا لأي أحد.)
+ * الآن: موظف نشط بجلسته، لا حساب مراجعة ولا متعاون خارجي (الأدوات تتجاوز حواجزهما). والاسم من القاعدة.
+ */
+interface Caller { id: string; name: string }
+async function resolveCaller(req: Request): Promise<Caller | null> {
+  const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
+  if (!token) return null;
+  const { data: u } = await admin.auth.getUser(token);
+  if (!u?.user) return null;
+  const { data: me } = await admin
+    .from("team_members")
+    .select("id, name, is_active, is_reviewer, member_type")
+    .eq("auth_id", u.user.id)
+    .maybeSingle();
+  if (!me || me.is_active === false || me.is_reviewer || me.member_type === "collaborator") return null;
+  return { id: me.id, name: me.name ?? "موظف" };
+}
+
+/** سجل المساعد (ai_assistant_runs) — للمدير وحده؛ فشل التسجيل لا يُفشل الرد */
+async function logRun(row: Record<string, unknown>) {
+  try {
+    await admin.from("ai_assistant_runs").insert(row);
+  } catch (_) { /* ثانوي */ }
+}
+
 // اسم النموذج من إعدادات القاعدة (قابل للتغيير دون إعادة نشر)
 async function getAssistantModel(): Promise<string> {
   try {
@@ -697,8 +724,10 @@ function stripMarkdown(raw: string): string {
   return out.join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
-async function runAgent(payload: any): Promise<Response> {
-  const userName = String(payload?.user_name || "موظف");
+async function runAgent(payload: any, caller: Caller): Promise<Response> {
+  // الاسم من القاعدة لا من الطلب — لا يُنتحل
+  const userName = caller.name;
+  const startedAt = Date.now();
   const attachment = payload?.attachment ?? null;
   const history = Array.isArray(payload?.messages) ? payload.messages : [];
   const messages: any[] = history.slice(-12).map((m: any) => ({ role: m.role === "assistant" ? "assistant" : "user", content: String(m.content ?? "") }));
@@ -722,7 +751,14 @@ async function runAgent(payload: any): Promise<Response> {
       body: JSON.stringify({ model, max_tokens: 4000, system: `${AGENT_SYSTEM}\nالموظف الحالي: ${userName}. تاريخ اليوم: ${isoToday()}.${attachNote}`, tools: AGENT_TOOLS, messages }),
     });
     const data = await aiRes.json();
-    if (!aiRes.ok) return json({ error: "خطأ من مزوّد الذكاء الاصطناعي", detail: data?.error?.message }, 502);
+    if (!aiRes.ok) {
+      await logRun({
+        member_id: caller.id, user_name: userName, request: lastUserText(history), model,
+        tools: toolLog.map((t) => t.replace(/✗$/, "")), failed_tools: toolLog.filter((t) => t.endsWith("✗")).map((t) => t.slice(0, -1)),
+        actions, finished: false, ms: Date.now() - startedAt, error: `مزوّد الذكاء: ${data?.error?.message ?? aiRes.status}`,
+      });
+      return json({ error: "خطأ من مزوّد الذكاء الاصطناعي", detail: data?.error?.message }, 502);
+    }
 
     const content = data.content || [];
     const toolUses = content.filter((b: any) => b.type === "tool_use");
@@ -760,12 +796,25 @@ async function runAgent(payload: any): Promise<Response> {
     text = actions.length ? `نُفِّذ:\n${actions.map((a) => `• ${a}`).join("\n")}` : "لم يُنفَّذ أي إجراء.";
   } else if (!actions.length) {
     // ادّعاء إنجاز بلا أي فعل في هذا الرد ⇒ تنبيه صريح للموظف
-    const lastUser = String(history[history.length - 1]?.content ?? "");
+    const lastUser = lastUserText(history);
     const askedToDo = /(سجل|سجّل|أنشئ|انشئ|أضف|اضف|اسند|أسند|احجز|افتح|أرسل|ارسل|حدّث|حدث|غيّر|غير)/.test(lastUser);
     const claimsDone = /(^|\s)(تم|تمّ|تمت|تمّت|سجّلت|سجلت|أنشأت|انشأت|أضفت|اضفت|أسندت|اسندت|حجزت|أرسلت|ارسلت|فتحت)/.test(text);
     if (askedToDo && claimsDone) text += "\n\n⚠️ تنبيه من النظام: لم يُنفَّذ أي إجراء فعلياً في هذا الرد — تحقّق قبل الاعتماد عليه.";
   }
+  await logRun({
+    member_id: caller.id, user_name: userName, request: lastUserText(history), reply: text.slice(0, 4000), model,
+    tools: toolLog.map((t) => t.replace(/✗$/, "")), failed_tools: toolLog.filter((t) => t.endsWith("✗")).map((t) => t.slice(0, -1)),
+    actions, finished, ms: Date.now() - startedAt,
+  });
   return json({ success: true, text, actions, suggestions });
+}
+
+/** نص آخر رسالة للموظف (للسجل) — بحد معقول */
+function lastUserText(history: any[]): string {
+  for (let i = history.length - 1; i >= 0; i--) {
+    if (history[i]?.role !== "assistant") return String(history[i]?.content ?? "").slice(0, 4000);
+  }
+  return "";
 }
 
 /* ===================== المهام النصية ===================== */
@@ -827,12 +876,15 @@ Deno.serve(async (req) => {
     return json({ error: "مفتاح Anthropic غير مُعدّ.", missing_key: true }, 500);
   }
 
+  const caller = await resolveCaller(req);
+  if (!caller) return json({ error: "غير مصرّح — سجّل الدخول أولاً" }, 401);
+
   try {
     const body = await req.json();
     const { task, payload } = body ?? {};
     if (!task) return json({ error: "task مطلوب" }, 400);
 
-    if (task === "agent") return await runAgent(payload ?? {});
+    if (task === "agent") return await runAgent(payload ?? {}, caller);
 
     const p = payload ?? {};
     let doc: Doc | null = null;

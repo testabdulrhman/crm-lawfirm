@@ -27,6 +27,7 @@ import {
   type LucideIcon,
   FileBadge,
   ChevronDown,
+  Sparkles,
   Pin,
   PinOff,
 } from 'lucide-react'
@@ -165,6 +166,8 @@ const navSections: { title?: string; items: NavItem[] }[] = [
       { label: 'الإعدادات', href: '/settings', icon: Settings },
       // كل خطأ ظهر لموظف (طلب المدير 2026-09-15)
       { label: 'سجل الأخطاء', href: '/errors', icon: Bug, director: true },
+      // ما طُلب من المساعد وما نفّذه فعلاً (2026-10-01)
+      { label: 'سجل المساعد الذكي', href: '/assistant-log', icon: Sparkles, director: true },
       // «اقترح تعديلاً» من أي صفحة — والردود عليها (2026-09-24)
       { label: 'اقتراحات التعديل', href: '/change-requests', icon: Lightbulb, badge: 'new_change_requests' },
       { label: 'مراقبة الاتصالات', href: '/hub', icon: Activity, director: true },

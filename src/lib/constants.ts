@@ -31,5 +31,6 @@ export const ROUTE_TITLES: Record<string, string> = {
   '/calendar': 'التقويم',
   '/hr': 'الإجازات والاستئذان',
   '/errors': 'سجل الأخطاء',
+  '/assistant-log': 'سجل المساعد الذكي',
   '/hub': 'مراقبة الاتصالات',
 }

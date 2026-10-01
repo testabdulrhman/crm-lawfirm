@@ -45,6 +45,7 @@ import { OutgoingLettersPage } from '@/features/outgoing/OutgoingLettersPage'
 import { OutgoingLetterDetail } from '@/features/outgoing/OutgoingLetterDetail'
 import { ReportsPage } from '@/features/reports/ReportsPage'
 import { ErrorLogPage } from '@/features/settings/ErrorLogPage'
+import { AssistantLogPage } from '@/features/settings/AssistantLogPage'
 import { ChangeRequestsPage } from '@/features/change-requests/ChangeRequestsPage'
 import { NotificationsPage } from '@/features/notifications/NotificationsPage'
 import { OfficeDocumentsPage } from '@/features/office-docs/OfficeDocumentsPage'
@@ -126,6 +127,7 @@ function ProtectedRoutes() {
         <Route path="/outgoing" component={OutgoingLettersPage} />
         <Route path="/reports" component={ReportsPage} />
         <Route path="/errors" component={ErrorLogPage} />
+        <Route path="/assistant-log" component={AssistantLogPage} />
         <Route path="/change-requests" component={ChangeRequestsPage} />
         <Route path="/notifications" component={NotificationsPage} />
         <Route path="/office-documents" component={OfficeDocumentsPage} />
