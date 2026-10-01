@@ -105,9 +105,9 @@ export function PropertyTransferDetail({ id }: { id: string }) {
   return (
     <div className="mx-auto max-w-4xl space-y-5">
       <div className="flex items-center justify-between gap-2">
-        <Button variant="ghost" onClick={() => navigate('/property')}>
+        <Button variant="ghost" onClick={() => navigate('/matters')}>
           <ArrowRight className="h-4 w-4" />
-          رجوع للتوثيق العقاري
+          رجوع للمشاريع
         </Button>
         <div className="flex items-center gap-1">
           <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>

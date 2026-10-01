@@ -112,8 +112,8 @@ export function CaseDetail({ id }: { id: string }) {
         title="تعذّر تحميل القضية"
         error={error}
         onRetry={() => refetch()}
-        backTo="/cases"
-        backLabel="رجوع للقضايا"
+        backTo="/matters"
+        backLabel="رجوع للمشاريع"
       />
     )
   }
@@ -122,9 +122,10 @@ export function CaseDetail({ id }: { id: string }) {
 
   return (
     <div className="mx-auto max-w-6xl space-y-4">
-      <Button variant="ghost" onClick={() => navigate('/cases')}>
+      {/* الرجوع إلى «المشاريع» لا قائمة القضايا (طلب المدير 2026-10-01) — منها يُفتح كل ملف */}
+      <Button variant="ghost" onClick={() => navigate('/matters')}>
         <ArrowRight className="h-4 w-4" />
-        رجوع للقضايا
+        رجوع للمشاريع
       </Button>
 
       {/* ترويسة واحدة: البيانات مرة واحدة، والمسار سطراً رفيعاً، والباقي تحت «كل البيانات» */}

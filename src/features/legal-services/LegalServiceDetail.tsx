@@ -104,9 +104,9 @@ export function LegalServiceDetail({ id }: { id: string }) {
   return (
     <div className="mx-auto max-w-4xl space-y-5">
       <div className="flex items-center justify-between gap-2">
-        <Button variant="ghost" onClick={() => navigate('/legal-services')}>
+        <Button variant="ghost" onClick={() => navigate('/matters')}>
           <ArrowRight className="h-4 w-4" />
-          رجوع للخدمات
+          رجوع للمشاريع
         </Button>
         {isDirector && (
           <Button
