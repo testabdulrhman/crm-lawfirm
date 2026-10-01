@@ -707,12 +707,15 @@ async function runAgent(payload: any): Promise<Response> {
   const model = await getAssistantModel();
   const actions: string[] = [];
   let finalText = "";
+  // هل انتهى النموذج فعلاً، أم نفدت الجولات وهو في منتصف أدواته؟
+  let finished = false;
+  const toolLog: string[] = [];
 
   const attachNote = attachment?.url
     ? `\nأرفق الموظف ملفاً في رسالته الأخيرة اسمه: «${attachment.name}». إن طلب حفظه فاستخدم أداة save_attachment بعد تحديد القضية (اسأله عن رقمها إن لم يذكره).`
     : "";
 
-  for (let iter = 0; iter < 8; iter++) {
+  for (let iter = 0; iter < 12; iter++) {
     const aiRes = await fetch(ANTHROPIC_URL, {
       method: "POST",
       headers: { "x-api-key": ANTHROPIC_API_KEY!, "anthropic-version": "2023-06-01", "content-type": "application/json" },
@@ -725,19 +728,44 @@ async function runAgent(payload: any): Promise<Response> {
     const toolUses = content.filter((b: any) => b.type === "tool_use");
     finalText = content.filter((b: any) => b.type === "text").map((b: any) => b.text).join("\n").trim();
 
-    if (data.stop_reason !== "tool_use" || toolUses.length === 0) break;
+    if (data.stop_reason !== "tool_use" || toolUses.length === 0) {
+      finished = true;
+      break;
+    }
 
     messages.push({ role: "assistant", content });
     const results: any[] = [];
     for (const tu of toolUses) {
       const out = await runAgentTool(tu.name, tu.input ?? {}, userName, actions, attachment);
+      toolLog.push(`${tu.name}${/"error"|"ok":\s*false/.test(out) ? "✗" : ""}`);
       results.push({ type: "tool_result", tool_use_id: tu.id, content: out });
     }
     messages.push({ role: "user", content: results });
   }
 
-  const { text, suggestions } = splitSuggestions(finalText);
-  return json({ success: true, text: stripMarkdown(text) || "تم.", actions, suggestions });
+  // أثر في سجل الدالة لكل طلب: ما استُدعي وما فشل — بلا محتوى الرسائل
+  console.log("ai-assistant", JSON.stringify({ finished, tools: toolLog, actions: actions.length }));
+
+  // ⚠️ لا «تم» بلا فعل (بلاغ المدير 2026-10-01: «ورد علي تم، ولا حصلت القضية»). كان الاحتياطي «تم.»
+  // يُرسَل حين يفرغ نص النموذج — ومنه حين تنفد الجولات قبل إكمال طلب متعدد الخطوات.
+  const { text: rawText, suggestions } = splitSuggestions(finalText);
+  let text = stripMarkdown(rawText);
+  if (!finished) {
+    text =
+      (actions.length
+        ? `أنجزت جزءاً من الطلب فقط ثم توقفت قبل إكماله:\n${actions.map((a) => `• ${a}`).join("\n")}\n`
+        : "توقفت قبل إكمال الطلب، ولم يُنفَّذ أي إجراء.\n") +
+      "أعد إرسال المتبقي أو جزّئه لخطوات أقصر.";
+  } else if (!text) {
+    text = actions.length ? `نُفِّذ:\n${actions.map((a) => `• ${a}`).join("\n")}` : "لم يُنفَّذ أي إجراء.";
+  } else if (!actions.length) {
+    // ادّعاء إنجاز بلا أي فعل في هذا الرد ⇒ تنبيه صريح للموظف
+    const lastUser = String(history[history.length - 1]?.content ?? "");
+    const askedToDo = /(سجل|سجّل|أنشئ|انشئ|أضف|اضف|اسند|أسند|احجز|افتح|أرسل|ارسل|حدّث|حدث|غيّر|غير)/.test(lastUser);
+    const claimsDone = /(^|\s)(تم|تمّ|تمت|تمّت|سجّلت|سجلت|أنشأت|انشأت|أضفت|اضفت|أسندت|اسندت|حجزت|أرسلت|ارسلت|فتحت)/.test(text);
+    if (askedToDo && claimsDone) text += "\n\n⚠️ تنبيه من النظام: لم يُنفَّذ أي إجراء فعلياً في هذا الرد — تحقّق قبل الاعتماد عليه.";
+  }
+  return json({ success: true, text, actions, suggestions });
 }
 
 /* ===================== المهام النصية ===================== */
