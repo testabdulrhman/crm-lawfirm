@@ -8,11 +8,13 @@
 
 /* Begin PBXBuildFile section */
 		BB000013 /* RedwanShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = BB000005 /* RedwanShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		CC000013 /* RedwanWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = CC000005 /* RedwanWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		AA000005 /* Redwan.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Redwan.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		BB000005 /* RedwanShare.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = RedwanShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		CC000005 /* RedwanWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = RedwanWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -22,6 +24,13 @@
 				Info.plist,
 			);
 			target = BB000006 /* RedwanShare */;
+		};
+		CC000014 /* Exceptions for "RedwanWidget" folder in "RedwanWidget" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = CC000006 /* RedwanWidget */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
@@ -37,6 +46,14 @@
 				BB000014 /* Exceptions for "RedwanShare" folder in "RedwanShare" target */,
 			);
 			path = RedwanShare;
+			sourceTree = "<group>";
+		};
+		CC000001 /* RedwanWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				CC000014 /* Exceptions for "RedwanWidget" folder in "RedwanWidget" target */,
+			);
+			path = RedwanWidget;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -56,6 +73,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		CC000002 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -66,6 +90,7 @@
 			dstSubfolderSpec = 13;
 			files = (
 				BB000013 /* RedwanShare.appex in Embed Foundation Extensions */,
+				CC000013 /* RedwanWidget.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -78,6 +103,7 @@
 			children = (
 				AA000001 /* Redwan */,
 				BB000001 /* RedwanShare */,
+				CC000001 /* RedwanWidget */,
 				AA000004 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -87,6 +113,7 @@
 			children = (
 				AA000005 /* Redwan.app */,
 				BB000005 /* RedwanShare.appex */,
+				CC000005 /* RedwanWidget.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -107,6 +134,7 @@
 			);
 			dependencies = (
 				BB000011 /* PBXTargetDependency */,
+				CC000011 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				AA000001 /* Redwan */,
@@ -140,6 +168,28 @@
 			productReference = BB000005 /* RedwanShare.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		CC000006 /* RedwanWidget */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CC000007 /* Build configuration list for PBXNativeTarget "RedwanWidget" */;
+			buildPhases = (
+				CC000008 /* Sources */,
+				CC000002 /* Frameworks */,
+				CC000009 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				CC000001 /* RedwanWidget */,
+			);
+			name = RedwanWidget;
+			packageProductDependencies = (
+			);
+			productName = RedwanWidget;
+			productReference = CC000005 /* RedwanWidget.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -154,6 +204,9 @@
 						CreatedOnToolsVersion = 16.0;
 					};
 					BB000006 = {
+						CreatedOnToolsVersion = 16.0;
+					};
+					CC000006 = {
 						CreatedOnToolsVersion = 16.0;
 					};
 				};
@@ -175,6 +228,7 @@
 			targets = (
 				AA000006 /* Redwan */,
 				BB000006 /* RedwanShare */,
+				CC000006 /* RedwanWidget */,
 			);
 		};
 /* End PBXProject section */
@@ -194,6 +248,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		CC000009 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXContainerItemProxy section */
@@ -204,6 +265,13 @@
 			remoteGlobalIDString = BB000006;
 			remoteInfo = RedwanShare;
 		};
+		CC000010 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = AA00000A /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = CC000006;
+			remoteInfo = RedwanWidget;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXTargetDependency section */
@@ -211,6 +279,11 @@
 			isa = PBXTargetDependency;
 			target = BB000006 /* RedwanShare */;
 			targetProxy = BB000010 /* PBXContainerItemProxy */;
+		};
+		CC000011 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = CC000006 /* RedwanWidget */;
+			targetProxy = CC000010 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -223,6 +296,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		BB000008 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CC000008 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -399,6 +479,56 @@
 			};
 			name = Release;
 		};
+		CC00000E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = RedwanWidget/RedwanWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 34;
+				DEVELOPMENT_TEAM = 89HBK8SMZU;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = RedwanWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Redwan;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0.24;
+				PRODUCT_BUNDLE_IDENTIFIER = sa.redwan.app.widget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		CC00000F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = RedwanWidget/RedwanWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 34;
+				DEVELOPMENT_TEAM = 89HBK8SMZU;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = RedwanWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Redwan;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0.24;
+				PRODUCT_BUNDLE_IDENTIFIER = sa.redwan.app.widget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -425,6 +555,15 @@
 			buildConfigurations = (
 				BB00000E /* Debug */,
 				BB00000F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		CC000007 /* Build configuration list for PBXNativeTarget "RedwanWidget" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CC00000E /* Debug */,
+				CC00000F /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

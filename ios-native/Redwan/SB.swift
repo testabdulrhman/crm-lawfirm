@@ -2,6 +2,7 @@ import Foundation
 import Security
 import UIKit
 import UserNotifications
+import WidgetKit
 
 // عميل Supabase خفيف بلا اعتماديات خارجية — REST مباشرة عبر URLSession.
 //
@@ -78,6 +79,7 @@ final class SB: ObservableObject {
         let s = Session(accessToken: at, refreshToken: rt, userId: uid)
         session = s
         Keychain.save(s)
+        WidgetCenter.shared.reloadAllTimelines()   // أداة «يومي» تقرأ الجلسة الجديدة
         await loadMember()
     }
 
@@ -85,6 +87,7 @@ final class SB: ObservableObject {
         session = nil
         member = nil
         Keychain.clear()
+        WidgetCenter.shared.reloadAllTimelines()   // الأداة تعرض «سجّل الدخول» لا بيانات من خرج
         // نقاشات الحساب المحفوظة على الجهاز تُمسح مع الخروج — لا يرثها من يدخل بعده
         DiscussionCache.clearAll()
     }
@@ -152,6 +155,7 @@ final class SB: ObservableObject {
         let s = Session(accessToken: at, refreshToken: rt, userId: uid)
         session = s
         Keychain.save(s)
+        WidgetCenter.shared.reloadAllTimelines()   // أداة «يومي» تقرأ الجلسة الجديدة
         await loadMember()
     }
 
@@ -194,6 +198,12 @@ final class SB: ObservableObject {
 
     private func performRefresh() async -> RefreshOutcome {
         guard let s = session else { return .rejected }
+        // أداة «يومي» وامتداد المشاركة يجدّدان الجلسة في الكيتشين المشترك، وSupabase يدوّر رمز التجديد —
+        // فإن سبقنا أحدهما فرمزنا في الذاكرة صار قديماً، وتجديده يُرفض فيُطرد المستخدم. نتبنّى الأحدث.
+        if let k = Keychain.load(), k.userId == s.userId, k.refreshToken != s.refreshToken {
+            session = k
+            return .ok
+        }
         var comps = URLComponents(
             url: baseURL.appendingPathComponent("auth/v1/token"),
             resolvingAgainstBaseURL: false

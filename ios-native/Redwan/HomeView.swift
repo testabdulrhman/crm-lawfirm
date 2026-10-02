@@ -1,4 +1,5 @@
 import SwiftUI
+import WidgetKit
 import UserNotifications
 
 // تبويب «الرئيسية» — تصميم المدير «liquid-glass-home» (Figma، 2026-09-17):
@@ -874,6 +875,8 @@ struct HomeView: View {
         if let hr { pendingHr = hr }
 
         if let ov = overview, shownScope == effectiveScope {
+            // أداة «يومي» تتبع ما تراه هنا (تجلب بنفسها؛ هذا يقدّم موعدها لا أكثر)
+            WidgetCenter.shared.reloadTimelines(ofKind: "MyDay")
             ScreenCache.save(HomeSnapshot(
                 overview: ov, doneToday: doneToday, needClosure: needClosure,
                 unread: unreadCount, pendingHr: pendingHr
