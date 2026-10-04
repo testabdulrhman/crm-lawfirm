@@ -361,6 +361,16 @@ Deno.serve(async (req) => {
       if (msg.superseded || msg.decision?.done) return json({ ok: true, duplicate: true });
     }
 
+    // ⏸ إيقاف الردود الآلية بأمر المدير (2026-10-04: «ودي أوقف الرد عبر الذكاء الاصطناعي الآن لحين
+    // إشعار آخر») — lookup wa_reception_config/replies = off. الوارد يُسجَّل كما هو، ولا يُرسَل أي ردّ
+    // (لا ذكاء ولا قواعد). ورسالة الدائن تبقى تُمرَّر لنظام الإفلاس — ردّه هو لا ردّنا.
+    const paused = !test && (await lookup('wa_reception_config', 'replies')) === 'off';
+    const creditor = (ev.matches ?? []).some((m) => m.system === 'bankruptcy');
+    if (paused && !creditor && !msg.decision?.out) {
+      await supa.from('wa_reception_messages').update({ decision: { done: true, paused: true } }).eq('id', msg.id);
+      return json({ ok: true, paused: true });
+    }
+
     // ٢) قرارٌ محفوظ من محاولة سابقة لم تكتمل آثارها ⇒ تُكمَل الآثار ولا يُعاد القرار
     let out: FlowOutput | null = msg.decision?.out ?? null;
 
@@ -461,7 +471,8 @@ Deno.serve(async (req) => {
 
     // ٤) الآثار — كلها بمفاتيح منع تكرار، فإعادة الحدث لا تُكرّر رداً ولا طلباً
     const effects: Record<string, unknown> = {};
-    if (out.reply) {
+    if (out.reply && paused) effects.send = { skipped: 'paused' };
+    else if (out.reply) {
       const sent = await sendReply(ev, out.reply);
       effects.send = sent;
       // ما لم يُرسل (موقوف، أو تولّاه موظف، أو قاطع الطوارئ) لا يُكتب في المحادثة، فالرد الذكي يقرؤها تاريخاً
