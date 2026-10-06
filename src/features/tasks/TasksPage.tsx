@@ -41,7 +41,7 @@ import { cn } from '@/lib/utils'
 import { arNorm } from '@/lib/arabic'
 import { fmtNumber, fmtDatePref } from '@/lib/format'
 import { useAuth } from '@/stores/auth'
-import { useIsDirector } from '@/hooks/useIsDirector'
+import { useCanViewOffice } from '@/hooks/useIsDirector'
 import { useTeamMembers } from '@/hooks/useTeam'
 import { usePageState } from '@/hooks/usePageState'
 import { taskPriorityBadge, taskPriorityLabel } from '@/lib/caseLabels'
@@ -63,7 +63,8 @@ const ALL_MEMBERS = '__all__'
 const ORDER: BucketKey[] = ['review', 'overdue', 'today', 'week', 'later', 'someday']
 
 export function TasksPage() {
-  const isDirector = useIsDirector()
+  // «مهام الفريق» للمدير ولمن يطّلع على كل شغل المكتب
+  const isDirector = useCanViewOffice()
   const [scope, setScope] = usePageState<'mine' | 'all'>('tasks:scope', 'mine')
   const [assignee, setAssignee] = usePageState('tasks:assignee', ALL_MEMBERS)
   const [search, setSearch] = usePageState('tasks:q', '')

@@ -7,7 +7,7 @@ import { useLocation } from 'wouter'
 import { CalendarClock, CalendarRange, Flame, RefreshCw, Sun } from 'lucide-react'
 
 import { useAuth } from '@/stores/auth'
-import { useIsDirector } from '@/hooks/useIsDirector'
+import { useCanViewOffice, useIsDirector } from '@/hooks/useIsDirector'
 import { usePageState } from '@/hooks/usePageState'
 import { cn } from '@/lib/utils'
 import { fmtDatePref, fmtNumber, todayISO } from '@/lib/format'
@@ -30,12 +30,14 @@ import {
 export default function Dashboard() {
   const { teamMember } = useAuth()
   const isDirector = useIsDirector()
+  // «لوحة المكتب» للمدير ولمن يطّلع على كل شغل المكتب
+  const canViewOffice = useCanViewOffice()
   const [, navigate] = useLocation()
 
   // تبويبات نمط كليو: لوحتي · لوحة المكتب (للمدير) · آخر النشاط
   const [tab, setTab] = usePageState<'mine' | 'all' | 'feed'>('dashboard.tab', 'mine')
   const scope: DashboardScope = tab === 'all' ? 'all' : 'mine'
-  const effectiveScope: DashboardScope = isDirector ? scope : 'mine'
+  const effectiveScope: DashboardScope = canViewOffice ? scope : 'mine'
   const isAll = effectiveScope === 'all'
   const isFeed = tab === 'feed'
 
@@ -110,7 +112,7 @@ export default function Dashboard() {
           <div className="flex items-center gap-2">
             <div className="inline-flex rounded-full bg-white/10 p-1 text-sm backdrop-blur-sm">
               <ScopeBtn active={tab === 'mine'} onClick={() => setTab('mine')} label="لوحتي" />
-              {isDirector && (
+              {canViewOffice && (
                 <ScopeBtn active={tab === 'all'} onClick={() => setTab('all')} label="لوحة المكتب" />
               )}
               <ScopeBtn active={tab === 'feed'} onClick={() => setTab('feed')} label="آخر النشاط" />
