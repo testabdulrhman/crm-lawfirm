@@ -1120,7 +1120,7 @@ function StreamPane({
         />
       )}
 
-      <div ref={listRef} className="flex-1 space-y-3 overflow-y-auto p-4">
+      <div ref={listRef} className="flex-1 space-y-2 overflow-y-auto p-4">
         {error ? (
           <QueryErrorState error={error} onRetry={() => refetch()} />
         ) : isLoading ? (
@@ -1135,11 +1135,12 @@ function StreamPane({
           />
         ) : (
           // الصور المتتالية من الكاتب نفسه ألبوم واحد (كالواتساب) — وترسو القفزة على أي صورة فيه
-          groupImageRows(msgs).map(({ head: m, extras }) => (
+          groupImageRows(msgs).map(({ head: m, extras }, i, rows) => (
             <MessageBubble
               key={m.id}
               msg={m}
               albumExtras={extras}
+              continued={isContinuation(rows[i - 1]?.head, m)}
               caseId={caseId}
               mine={m.author_id === teamMember?.id}
               onOpenThread={() => openThread(m)}
@@ -1166,9 +1167,20 @@ function StreamPane({
 
 /* ===================== فقاعة رسالة ===================== */
 
+/**
+ * رسالة تتابع ما قبلها من الكاتب نفسه خلال ٥ دقائق — فلا يتكرر الاسم فوقها، وتلتصق بها كالواتساب
+ * (طلب المدير 2026-10-06: ترتيب النقاشات مثل الواتساب — رسائلي يساراً ورسائل الزملاء يميناً)
+ */
+function isContinuation(prev: StreamMsg | undefined, m: StreamMsg): boolean {
+  if (!prev || prev.kind === 'system' || m.kind === 'system') return false
+  if (prev.author_id !== m.author_id || prev.kind !== m.kind) return false
+  return Math.abs(Date.parse(m.created_at ?? '') - Date.parse(prev.created_at ?? '')) <= 5 * 60_000
+}
+
 function MessageBubble({
   msg,
   albumExtras = [],
+  continued = false,
   caseId,
   mine,
   onOpenThread,
@@ -1178,6 +1190,8 @@ function MessageBubble({
   msg: StreamMsg
   /** صور متتالية من الكاتب نفسه تُعرض مع صورة هذه الرسالة ألبوماً واحداً */
   albumExtras?: StreamMsg[]
+  /** تتابع رسالة الكاتب نفسه السابقة — بلا اسم، وأقرب إليها */
+  continued?: boolean
   caseId: string | null
   mine: boolean
   onOpenThread: () => void
@@ -1198,32 +1212,43 @@ function MessageBubble({
     )
   }
 
+  // ترتيب الواتساب: رسائلي يساراً (بداية السطر في الواجهة العربية يمين) ورسائل الزملاء والذكاء يميناً
   return (
-    <div className="group" data-msg-id={msg.id}>
-      <div className="mb-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-        {isAI && <Sparkles className="h-3 w-3 text-gold" />}
-        <span className={cn('font-medium', isAI && 'text-gold-600 dark:text-gold-300')}>
-          {isAI ? 'الذكاء' : msg.author_name ?? '—'}
-        </span>
-        <span className="opacity-80" title={fullStamp(msg.created_at)}>{msgStamp(msg.created_at)}</span>
-        {msg.edited_at && <span className="text-[10px] opacity-70">(معدّلة)</span>}
-        {mine && msg.kind === 'user' && receipt && (
-          <ReadTicks count={receipt} onClick={() => setReceiptsOpen(true)} />
+    <div
+      className={cn('group flex', mine ? 'justify-end' : 'justify-start', continued ? '-mt-1.5' : 'mt-1')}
+      data-msg-id={msg.id}
+    >
+      <div className={cn('relative flex min-w-[180px] max-w-[78%] flex-col', mine ? 'items-end' : 'items-start')}>
+        {!mine && !continued && (
+          <div className="mb-0.5 flex items-center gap-1.5 px-1 text-[11px] text-muted-foreground">
+            {isAI && <Sparkles className="h-3 w-3 text-gold" />}
+            <span className={cn('font-medium', isAI && 'text-gold-600 dark:text-gold-300')}>
+              {isAI ? 'الذكاء' : msg.author_name ?? '—'}
+            </span>
+          </div>
         )}
-        <MessageActions msg={msg} caseId={caseId} mine={mine} onReply={onOpenThread} />
-      </div>
 
-      <div
-        className={cn(
-          'rounded-2xl border p-3 transition-shadow duration-700',
-          flash && 'ring-2 ring-gold ring-offset-2 ring-offset-card',
-          mine
-            ? 'border-transparent bg-gold/15'
-            : isAI
-              ? 'border-gold/40 bg-gold/5'
-              : 'border-border/60 bg-background/60'
-        )}
-      >
+        <div
+          className={cn(
+            'relative w-full rounded-2xl border px-3 pb-1.5 pt-2.5 transition-shadow duration-700',
+            flash && 'ring-2 ring-gold ring-offset-2 ring-offset-card',
+            mine
+              ? cn('border-transparent bg-gold/20', !continued && 'rounded-tl-md')
+              : isAI
+                ? cn('border-gold/40 bg-gold/5', !continued && 'rounded-tr-md')
+                : cn('border-border/60 bg-card', !continued && 'rounded-tr-md')
+          )}
+        >
+          {/* شريط الأزرار يطفو فوق الفقاعة عند المرور — لا يمدّها */}
+          <div
+            className={cn(
+              'absolute -top-3.5 z-10 rounded-full border border-border/60 bg-card px-0.5 shadow-sm opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100',
+              mine ? 'right-2' : 'left-2'
+            )}
+          >
+            <MessageActions msg={msg} caseId={caseId} mine={mine} onReply={onOpenThread} />
+          </div>
+
         {msg.body && !isAudioName(msg.document_name) && (
           <Body text={msg.body} className="whitespace-pre-wrap text-sm text-foreground" />
         )}
@@ -1246,6 +1271,15 @@ function MessageBubble({
               <SignAttachmentButton name={msg.document_name} url={msg.document_url} caseId={caseId} parentId={msg.id} />
             </div>
           ))}
+
+          {/* الوقت داخل الفقاعة أسفلها، وعلامات القراءة لرسائلي — كالواتساب */}
+          <div className="mt-1 flex items-center justify-end gap-1 text-[10px] text-muted-foreground">
+            {msg.edited_at && <span className="opacity-70">(معدّلة)</span>}
+            <span title={fullStamp(msg.created_at)}>{msgStamp(msg.created_at)}</span>
+            {mine && msg.kind === 'user' && receipt && (
+              <ReadTicks count={receipt} onClick={() => setReceiptsOpen(true)} />
+            )}
+          </div>
 
         {/* «ردّ في خيط» صار أيقونة في شريط الأزرار (بظهوره عند المرور كان يمدّ الرسالة — «ودي اشيل
             التوسع»). السطر يبقى لعدد الردود حين توجد، وعلى شاشات اللمس وحدها بلا ردود (لا مرور فيها) */}
@@ -1275,9 +1309,10 @@ function MessageBubble({
             <span className="text-muted-foreground">ردّ في خيط</span>
           )}
         </button>
-      </div>
+        </div>
 
-      <ReactionChips msg={msg} caseId={caseId} />
+        <ReactionChips msg={msg} caseId={caseId} />
+      </div>
       {receiptsOpen && (
         <ReadReceiptsDialog commentId={msg.id} body={msg.body} onClose={() => setReceiptsOpen(false)} />
       )}
