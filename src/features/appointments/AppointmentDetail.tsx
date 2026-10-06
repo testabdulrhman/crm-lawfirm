@@ -60,6 +60,8 @@ import {
 import { useCreateRequestFromAppointment } from '@/hooks/useIntakeGates'
 import { AppointmentForm } from './AppointmentForm'
 import { AppointmentPeople } from './AppointmentPeople'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { supabase } from '@/lib/supabase'
 import { APPT_STATUS_OPTIONS, apptStatusLabel } from '@/lib/appointmentLabels'
 
 export function AppointmentDetail({ id }: { id: string }) {
@@ -69,6 +71,7 @@ export function AppointmentDetail({ id }: { id: string }) {
   const isDirector = useIsDirector()
   const { data: a, isLoading, isError, error, refetch } = useAppointment(id)
   const statusM = useUpdateAppointmentStatus()
+  const qc = useQueryClient()
   const deleteM = useDeleteAppointment()
   const confirmM = useSendConfirmation()
   const genLinkM = useGenerateMeetLink()
@@ -226,7 +229,12 @@ export function AppointmentDetail({ id }: { id: string }) {
               <Select
                 value={a.status ?? 'confirmed'}
                 disabled={statusM.isPending}
-                onValueChange={(v) => statusM.mutate({ id: a.id, status: v })}
+                onValueChange={(v) =>
+                  statusM.mutate(
+                    { id: a.id, status: v },
+                    { onSuccess: () => void qc.invalidateQueries({ queryKey: ['appt_status_log', a.id] }) }
+                  )
+                }
               >
                 <SelectTrigger className="h-9 w-28">
                   <SelectValue>{apptStatusLabel(a.status)}</SelectValue>
@@ -275,6 +283,7 @@ export function AppointmentDetail({ id }: { id: string }) {
           {a.created_by && (
             <p className="text-xs text-muted-foreground">أنشأه: {a.created_by}</p>
           )}
+          <StatusHistory appointmentId={a.id} />
         </CardContent>
       </Card>
 
@@ -470,6 +479,39 @@ function SmsRow({
         {pending && <Loader2 className="h-4 w-4 animate-spin" />}
         {sentAt ? 'إعادة الإرسال' : 'إرسال'}
       </Button>
+    </div>
+  )
+}
+
+/**
+ * من غيّر حالة الموعد ومتى (طلب المدير 2026-10-06: «كيف أعرف من اللي ألغاه؟») — من appointment_status_log
+ * الذي يملؤه ترقر القاعدة لكل تغيير، من الويب أو الآيفون أو الخادم.
+ */
+function StatusHistory({ appointmentId }: { appointmentId: string }) {
+  const { data } = useQuery({
+    queryKey: ['appt_status_log', appointmentId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('appointment_status_log')
+        .select('id, to_status, member_name, created_at')
+        .eq('appointment_id', appointmentId)
+        .order('created_at', { ascending: false })
+        .limit(10)
+      if (error) throw error
+      return (data ?? []) as { id: string; to_status: string | null; member_name: string | null; created_at: string }[]
+    },
+  })
+  if (!data?.length) return null
+  return (
+    <div className="space-y-1 border-t pt-3">
+      <p className="text-xs font-semibold text-muted-foreground">سجل الحالة</p>
+      {data.map((r) => (
+        <p key={r.id} className="text-xs text-muted-foreground">
+          <span className="font-medium text-foreground">{apptStatusLabel(r.to_status)}</span>
+          {' — '}
+          {r.member_name ?? 'النظام'} · {fmtDateTime(r.created_at)}
+        </p>
+      ))}
     </div>
   )
 }
