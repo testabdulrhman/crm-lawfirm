@@ -243,7 +243,8 @@ struct CaseStreamView: View {
                                 )
                                 .padding(.top, 30)
                             }
-                            ForEach(StreamRow.group(msgs)) { row in
+                            let rows = StreamRow.group(msgs)
+                            ForEach(Array(rows.enumerated()), id: \.element.id) { i, row in
                                 let m = row.head
                                 StreamBubble(
                                     msg: m, caseId: caseId,
@@ -252,7 +253,8 @@ struct CaseStreamView: View {
                                     onEdit: { editing = m; editDraft = m.body ?? "" },
                                     receipt: receipts[row.extras.last?.id ?? m.id] ?? receipts[m.id],
                                     highlighted: highlightId == m.id || row.extras.contains { $0.id == highlightId },
-                                    albumExtras: row.extras
+                                    albumExtras: row.extras,
+                                    continued: i > 0 && StreamRow.continues(rows[i - 1].head, m)
                                 )
                                 .id(m.id)
                             }
@@ -749,6 +751,8 @@ private struct StreamBubble: View {
     var highlighted: Bool = false
     /// صور متتالية من الكاتب نفسه تُعرض مع صورة هذه الرسالة ألبوماً واحداً
     var albumExtras: [StreamMsg] = []
+    /// تتابع رسالة الكاتب نفسه السابقة خلال ٥ دقائق — بلا اسم، وأقرب إليها
+    var continued: Bool = false
 
     @State private var openThread = false
     @State private var showReceipts = false
@@ -772,32 +776,28 @@ private struct StreamBubble: View {
         }
     }
 
+    // ترتيب الواتساب (طلب المدير 2026-10-06، كالويب 4a0f7d2): رسائلي يساراً بالذهبي، والزملاء والذكاء يميناً،
+    // والاسم فوق رسائل الزملاء مرة لكل تتابع، والوقت وعلامات القراءة داخل الفقاعة أسفلها.
+    // (الواجهة من اليمين لليسار: أول عنصر في HStack يمين، فالمسافة أولاً تدفع فقاعتي يساراً)
     private var bubble: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            HStack(spacing: 5) {
-                if isAI {
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 10))
-                        .foregroundStyle(Theme.goldDark)
+        HStack(alignment: .bottom, spacing: 0) {
+            if mine { Spacer(minLength: 44) }
+            VStack(alignment: mine ? .trailing : .leading, spacing: 3) {
+                if !mine && !continued {
+                    HStack(spacing: 5) {
+                        if isAI {
+                            Image(systemName: "sparkles")
+                                .font(.system(size: 10))
+                                .foregroundStyle(Theme.goldDark)
+                        }
+                        Text(isAI ? "الذكاء" : (msg.author_name ?? "—"))
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(isAI ? Theme.goldDark : Theme.muted)
+                    }
+                    .padding(.horizontal, 4)
                 }
-                Text(isAI ? "الذكاء" : (msg.author_name ?? "—"))
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(isAI ? Theme.goldDark : Theme.muted)
-                Text(msgStamp(msg.created_at))
-                    .font(.system(size: 10))
-                    .foregroundStyle(Theme.muted.opacity(0.8))
-                if msg.edited_at != nil {
-                    Text("(معدّلة)")
-                        .font(.system(size: 9))
-                        .foregroundStyle(Theme.muted.opacity(0.7))
-                }
-                if mine, msg.kind == "user", let r = receipt {
-                    Button { showReceipts = true } label: { ReadTicks(count: r) }
-                        .buttonStyle(.plain)
-                }
-            }
 
-            VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 6) {
                 let voice = VoiceNote.isAudio(msg.document_name)
                 if !voice, let body = msg.body, !body.isEmpty {
                     Text(Mention.styled(body))
@@ -818,58 +818,86 @@ private struct StreamBubble: View {
                     VoiceTranscriptView(text: body)
                 }
 
-                Divider().overlay(mine ? Theme.gold.opacity(0.35) : Theme.line)
-                Button {
-                    openThread = true
-                } label: {
-                    HStack(spacing: 6) {
-                        if let n = msg.reply_count, n > 0 {
-                            Text(repliesLabel(n))
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(Theme.blue)
-                            if let last = msg.last_reply_at {
-                                Text("آخرها \(shortStamp(last))")
-                                    .font(.system(size: 10))
+                    // الوقت و«معدّلة» وعلامات القراءة — أسفل الفقاعة كالواتساب
+                    HStack(spacing: 4) {
+                        Spacer(minLength: 0)
+                        if msg.edited_at != nil {
+                            Text("(معدّلة)")
+                                .font(.system(size: 9))
+                                .foregroundStyle(Theme.muted.opacity(0.7))
+                        }
+                        Text(msgStamp(msg.created_at))
+                            .font(.system(size: 10))
+                            .foregroundStyle(Theme.muted.opacity(0.85))
+                        if mine, msg.kind == "user", let r = receipt {
+                            Button { showReceipts = true } label: { ReadTicks(count: r) }
+                                .buttonStyle(.plain)
+                        }
+                    }
+
+                // الخيط: سطره لمن له ردود وحدها (كان تحت كل رسالة فيثقلها)؛ وبلا ردود تفتحه لمسة على الفقاعة
+                if let n = msg.reply_count, n > 0 {
+                    Divider().overlay(mine ? Theme.gold.opacity(0.35) : Theme.line)
+                    Button {
+                        openThread = true
+                    } label: {
+                        HStack(spacing: 6) {
+                            if let n = msg.reply_count, n > 0 {
+                                Text(repliesLabel(n))
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundStyle(Theme.blue)
+                                if let last = msg.last_reply_at {
+                                    Text("آخرها \(shortStamp(last))")
+                                        .font(.system(size: 10))
+                                        .foregroundStyle(Theme.muted)
+                                }
+                            } else {
+                                Text("ردّ في خيط")
+                                    .font(.system(size: 12))
                                     .foregroundStyle(Theme.muted)
                             }
-                        } else {
-                            Text("ردّ في خيط")
-                                .font(.system(size: 12))
-                                .foregroundStyle(Theme.muted)
+                            Spacer(minLength: 0)
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 10))
+                                .foregroundStyle(Theme.muted.opacity(0.6))
                         }
-                        Spacer(minLength: 0)
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 10))
-                            .foregroundStyle(Theme.muted.opacity(0.6))
                     }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
-            }
-            .padding(11)
-            .background(mine ? Theme.gold.opacity(0.16) : (isAI ? Theme.goldPale : Theme.card))
-            .clipShape(RoundedRectangle(cornerRadius: 14))
-            .overlay(
-                RoundedRectangle(cornerRadius: 14)
-                    .stroke(mine ? .clear : (isAI ? Theme.gold.opacity(0.4) : Theme.line), lineWidth: 1)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 14)
-                    .stroke(Theme.gold, lineWidth: highlighted ? 2.5 : 0)
-                    .shadow(color: Theme.gold.opacity(highlighted ? 0.5 : 0), radius: 6)
-            )
-            .messageActions(
-                commentId: msg.id,
-                messageBody: msg.body,
-                reactions: msg.reactions ?? [],
-                bookmarked: msg.bookmarked ?? false,
-                mine: mine,
-                createdAt: msg.created_at,
-                onChange: onChange,
-                onEdit: mine ? onEdit : nil
-            )
+                }
+                .padding(.horizontal, 11)
+                .padding(.top, 9)
+                .padding(.bottom, 7)
+                .contentShape(Rectangle())
+                .onTapGesture { openThread = true }
+                .background(mine ? Theme.gold.opacity(0.2) : (isAI ? Theme.goldPale : Theme.card))
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(mine ? .clear : (isAI ? Theme.gold.opacity(0.4) : Theme.line), lineWidth: 1)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(Theme.gold, lineWidth: highlighted ? 2.5 : 0)
+                        .shadow(color: Theme.gold.opacity(highlighted ? 0.5 : 0), radius: 6)
+                )
+                .messageActions(
+                    commentId: msg.id,
+                    messageBody: msg.body,
+                    reactions: msg.reactions ?? [],
+                    bookmarked: msg.bookmarked ?? false,
+                    mine: mine,
+                    createdAt: msg.created_at,
+                    onChange: onChange,
+                    onEdit: mine ? onEdit : nil
+                )
 
-            ReactionsBar(commentId: msg.id, reactions: msg.reactions ?? [], onChange: onChange)
+                ReactionsBar(commentId: msg.id, reactions: msg.reactions ?? [], onChange: onChange)
+            }
+            .frame(maxWidth: 300, alignment: mine ? .trailing : .leading)
+            if !mine { Spacer(minLength: 44) }
         }
+        .padding(.top, continued ? -6 : 0)
         .navigationDestination(isPresented: $openThread) {
             ThreadView(root: msg, caseId: caseId, onChange: onChange)
         }
@@ -1439,6 +1467,13 @@ struct StreamRow: Identifiable {
 
     /// وقت الرسالة كاملاً (Theme.date يقرأ اليوم وحده) — بمحلّل التطبيق نفسه لطوابع Postgres
     private static func instant(_ iso: String?) -> Date? { ISO8601DateFormatter.parse(iso) }
+
+    /// رسالة تتابع ما قبلها من الكاتب نفسه خلال ٥ دقائق — فلا يتكرر الاسم فوقها
+    static func continues(_ prev: StreamMsg, _ m: StreamMsg) -> Bool {
+        guard prev.kind != "system", m.kind != "system", prev.author_id == m.author_id, prev.kind == m.kind,
+              let a = instant(prev.created_at), let b = instant(m.created_at) else { return false }
+        return abs(b.timeIntervalSince(a)) <= 300
+    }
 
     /// الصور المتتالية من الكاتب نفسه بفارق ٣ دقائق فأقل بين كل صورة والتي قبلها تُجمع في صف واحد
     static func group(_ msgs: [StreamMsg]) -> [StreamRow] {
