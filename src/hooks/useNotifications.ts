@@ -15,6 +15,8 @@ export interface AppNotification {
   recipient_id: string | null
   case_id: string | null
   task_id: string | null
+  /** رسالة عميل على الواتساب: رقم المحادثة */
+  wa_phone?: string | null
   is_read: boolean | null
   created_at: string
 }
@@ -34,6 +36,7 @@ export const NOTIFICATION_TYPES = {
   approval_result: 'نتيجة اعتماد',
   session_soon: 'جلسة قريبة',
   incoming_message: 'رسالة واردة',
+  wa_client: 'رسالة عميل — واتساب',
 } as const
 
 export function useNotifications(limit = 30) {

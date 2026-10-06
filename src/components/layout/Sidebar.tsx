@@ -18,6 +18,7 @@ import {
   CalendarOff,
   CalendarRange,
   MessagesSquare,
+  MessageCircle,
   FolderOpen,
   Send,
   BarChart3,
@@ -48,6 +49,7 @@ import { useMyOpenTasksCount } from '@/hooks/useTasks'
 import { useMyReviewCount } from '@/hooks/useTaskRoom'
 import { usePendingHrCount } from '@/hooks/useHrRequests'
 import { useUnreadDiscussionsCount } from '@/hooks/useDiscussions'
+import { useUnreadClientChatsCount } from '@/hooks/useClientChats'
 import { fmtNumber } from '@/lib/format'
 
 interface NavItem {
@@ -69,6 +71,7 @@ interface NavItem {
     | 'my_open_tasks'
     | 'pending_hr'
     | 'unread_discussions'
+    | 'unread_client_chats'
     | 'new_change_requests'
 }
 
@@ -108,6 +111,8 @@ const navSections: { title?: string; items: NavItem[] }[] = [
       { label: 'لوحة التحكم', href: '/', icon: LayoutDashboard, collab: true, primary: true },
       { label: 'التقويم', href: '/calendar', icon: CalendarRange, collab: true, primary: true },
       { label: 'النقاشات', href: '/discussions', icon: MessagesSquare, badge: 'unread_discussions', collab: true, primary: true },
+      // محادثات الواتساب مع العملاء — منفصلة عن النقاشات: ما يُكتب هنا يصل للعميل (2026-10-06)
+      { label: 'العملاء', href: '/clients', icon: MessageCircle, badge: 'unread_client_chats', primary: true },
     ],
   },
   {
@@ -191,6 +196,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const { data: myReviews } = useMyReviewCount()
   const { data: pendingHr } = usePendingHrCount(isDirector)
   const { data: unreadDisc } = useUnreadDiscussionsCount()
+  const unreadClients = useUnreadClientChatsCount()
   // الشارة للمدير وحده: ما ينتظر النظر من اقتراحات الفريق
   const { data: newChangeReqs } = useNewChangeRequestsCount(isDirector)
 
@@ -231,6 +237,8 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                   ? (isDirector ? (pendingHr ?? 0) : 0)
                   : item.badge === 'unread_discussions'
                     ? (unreadDisc ?? 0)
+                    : item.badge === 'unread_client_chats'
+                    ? unreadClients
                     : item.badge === 'new_change_requests'
                       ? (isDirector ? (newChangeReqs ?? 0) : 0)
                       : 0

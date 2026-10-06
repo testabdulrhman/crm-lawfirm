@@ -32,6 +32,7 @@ import CaseNewPage from '@/features/cases/CaseNewPage'
 import { CalendarPage } from '@/features/calendar/CalendarPage'
 import { MattersPage } from '@/features/matters/MattersPage'
 import { DiscussionsPage } from '@/features/discussions/DiscussionsPage'
+import { ClientChatsPage } from '@/features/clients/ClientChatsPage'
 import { SessionsPage } from '@/features/sessions/SessionsPage'
 import { POAsPage } from '@/features/poa/POAsPage'
 import { POADetail } from '@/features/poa/POADetail'
@@ -91,6 +92,7 @@ function ProtectedRoutes() {
         <Route path="/calendar" component={CalendarPage} />
         <Route path="/matters" component={MattersPage} />
         <Route path="/discussions" component={DiscussionsPage} />
+        <Route path="/clients" component={ClientChatsPage} />
         <Route path="/cases/new" component={CaseNewPage} />
         <Route path="/cases/:id">
           {(params) => <CaseDetail id={params.id} />}

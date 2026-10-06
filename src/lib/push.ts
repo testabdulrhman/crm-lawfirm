@@ -6,6 +6,7 @@
 import { Capacitor } from '@capacitor/core'
 
 import { supabase } from '@/lib/supabase'
+import { requestClientChat } from '@/hooks/useClientChats'
 import { requestDiscussionJump } from '@/lib/discussionJump'
 
 export const isNative = () => Capacitor.isNativePlatform()
@@ -106,6 +107,12 @@ export function resolvePushRoute(route: string): string {
   if (m) {
     requestDiscussionJump({ caseId: m[1] })
     return '/discussions'
+  }
+  // رسالة عميل على الواتساب ← محادثته في «العملاء»
+  const w = route.match(/^\/clients\?phone=(\d+)$/)
+  if (w) {
+    requestClientChat(w[1])
+    return '/clients'
   }
   return route
 }

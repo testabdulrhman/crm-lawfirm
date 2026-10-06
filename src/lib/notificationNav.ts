@@ -10,6 +10,7 @@ import {
   Lightbulb,
   ListTodo,
   MessageSquare,
+  MessageCircle,
   Stamp,
   Sun,
   Users,
@@ -18,6 +19,7 @@ import {
 } from 'lucide-react'
 
 import { requestDiscussionJump } from '@/lib/discussionJump'
+import { requestClientChat } from '@/hooks/useClientChats'
 import { useMarkRead, type AppNotification } from '@/hooks/useNotifications'
 
 const ICONS: Record<string, LucideIcon> = {
@@ -43,6 +45,7 @@ const ICONS: Record<string, LucideIcon> = {
   change_request: Lightbulb,
   office_doc_expiry: FileBadge,
   member_doc: IdCard,
+  wa_client: MessageCircle,
 }
 
 export function notificationIcon(type: string | null): LucideIcon {
@@ -60,6 +63,8 @@ export function notificationDestination(n: AppNotification): string {
   if (n.task_id) return `/tasks/${n.task_id}`
   // منشن في نقاش: صفحة النقاشات، والرسالة نفسها يحملها جسر النقاشات عند الفتح
   if (n.type === 'mention') return '/discussions'
+  // رسالة عميل على الواتساب — صندوق «العملاء» لا صفحة الملف
+  if (n.type === 'wa_client') return '/clients'
   if (n.case_id) return `/cases/${n.case_id}`
   // طلبات الإجازة والاستئذان — صفحتها لا مهمة ولا ملف
   if (n.type === 'hr_request' || n.type === 'hr_result') return '/hr'
@@ -105,6 +110,7 @@ export function useOpenNotification() {
     if (n.type === 'mention' && !n.task_id) {
       requestDiscussionJump({ caseId: n.case_id, at: n.created_at })
     }
+    if (n.type === 'wa_client' && n.wa_phone) requestClientChat(n.wa_phone)
     navigate(notificationDestination(n))
   }
 }

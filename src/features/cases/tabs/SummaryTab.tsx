@@ -9,6 +9,7 @@ import { useCaseStudy } from '@/hooks/useCaseStudy'
 import type { Case } from '@/types/db'
 import { CasePeopleCard } from '../CasePeopleCard'
 import { CasePOAsCard } from '../CasePOAsCard'
+import { CaseClientChatCard } from '../CaseClientChatCard'
 import { MatterStory } from '../MatterStory'
 import { PartiesTab } from './PartiesTab'
 
@@ -74,6 +75,7 @@ export function SummaryTab({ caseData: c, onOpenStudy }: { caseData: Case; onOpe
       </div>
 
       <div className="space-y-4 lg:sticky lg:top-4">
+        <CaseClientChatCard caseId={c.id} />
         <CasePeopleCard caseData={c} />
         <CasePOAsCard caseData={c} />
       </div>
