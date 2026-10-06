@@ -253,6 +253,9 @@ struct MessageAttachment: View {
     var body: some View {
         if VoiceNote.isAudio(name) {
             VoiceNoteView(name: name, url: url)
+        } else if ImageFile.isImage(name) {
+            // الصورة تُعرض صورةً لا شريحة ملف (2026-10-06)
+            ImageAlbumView(items: [AlbumItem(id: url ?? name, name: name, url: url)])
         } else {
             AttachmentChip(name: name, url: url)
         }

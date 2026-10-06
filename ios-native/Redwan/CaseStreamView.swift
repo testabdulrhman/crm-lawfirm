@@ -243,14 +243,16 @@ struct CaseStreamView: View {
                                 )
                                 .padding(.top, 30)
                             }
-                            ForEach(msgs) { m in
+                            ForEach(StreamRow.group(msgs)) { row in
+                                let m = row.head
                                 StreamBubble(
                                     msg: m, caseId: caseId,
                                     mine: m.author_id == sb.member?.id,
                                     onChange: { Task { await load() } },
                                     onEdit: { editing = m; editDraft = m.body ?? "" },
-                                    receipt: receipts[m.id],
-                                    highlighted: highlightId == m.id
+                                    receipt: receipts[row.extras.last?.id ?? m.id] ?? receipts[m.id],
+                                    highlighted: highlightId == m.id || row.extras.contains { $0.id == highlightId },
+                                    albumExtras: row.extras
                                 )
                                 .id(m.id)
                             }
@@ -745,6 +747,8 @@ private struct StreamBubble: View {
     var receipt: ReadCount? = nil
     /// الرسالة المقصودة بالقفز — حدّ ذهبي مؤقت
     var highlighted: Bool = false
+    /// صور متتالية من الكاتب نفسه تُعرض مع صورة هذه الرسالة ألبوماً واحداً
+    var albumExtras: [StreamMsg] = []
 
     @State private var openThread = false
     @State private var showReceipts = false
@@ -802,7 +806,11 @@ private struct StreamBubble: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
-                if let name = msg.document_name {
+                if !albumExtras.isEmpty {
+                    ImageAlbumView(items: ([msg] + albumExtras).map {
+                        AlbumItem(id: $0.id, name: $0.document_name ?? "صورة", url: $0.document_url)
+                    })
+                } else if let name = msg.document_name {
                     MessageAttachment(name: name, url: msg.document_url)
                 }
                 // الملاحظة الصوتية: نصها تحت المشغّل مطويّاً
@@ -1410,5 +1418,40 @@ private struct ThreadView: View {
             guard let t = uiErrorText(error) else { return }
             if loaded { stale = true } else { self.error = t }
         }
+    }
+}
+
+
+// MARK: - تجميع الصور المتتالية (ألبوم كالواتساب — اقتراح المدير 2026-10-06)
+
+struct StreamRow: Identifiable {
+    let head: StreamMsg
+    var extras: [StreamMsg]
+    var id: String { head.id }
+
+    /// صورة بلا تعليق ولا ردود — هي وحدها تدخل الألبوم
+    private static func isLoneImage(_ m: StreamMsg) -> Bool {
+        (m.kind ?? "user") == "user"
+            && ImageFile.isImage(m.document_name)
+            && (m.body ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && (m.reply_count ?? 0) == 0
+    }
+
+    /// وقت الرسالة كاملاً (Theme.date يقرأ اليوم وحده) — بمحلّل التطبيق نفسه لطوابع Postgres
+    private static func instant(_ iso: String?) -> Date? { ISO8601DateFormatter.parse(iso) }
+
+    /// الصور المتتالية من الكاتب نفسه بفارق ٣ دقائق فأقل بين كل صورة والتي قبلها تُجمع في صف واحد
+    static func group(_ msgs: [StreamMsg]) -> [StreamRow] {
+        var out: [StreamRow] = []
+        for m in msgs {
+            if let last = out.last, isLoneImage(last.head), isLoneImage(m), m.author_id == last.head.author_id,
+               let prev = instant((last.extras.last ?? last.head).created_at),
+               let cur = instant(m.created_at), abs(cur.timeIntervalSince(prev)) <= 180 {
+                out[out.count - 1].extras.append(m)
+            } else {
+                out.append(StreamRow(head: m, extras: []))
+            }
+        }
+        return out
     }
 }

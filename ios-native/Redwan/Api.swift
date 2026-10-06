@@ -1,4 +1,5 @@
 import Foundation
+import UserNotifications
 
 // طبقة البيانات كاملة هنا — الشاشات لا تعرف PostgREST ولا أسماء الجداول.
 // نفس استعلامات الويب المجرَّبة تحت RLS حرفياً (useDashboard/useTasks/useCalendar).
@@ -467,6 +468,17 @@ extension SB {
         // (بلاغ المدير 2026-09-19: «ما يبين عندي اني فتحت المحادثة لين ما أسحب الشاشة»)
         await MainActor.run {
             NotificationCenter.default.post(name: .discussionRead, object: caseId ?? DiscussionRow.generalKey)
+        }
+        // إشعارات هذا النقاش تُزال من قائمة إشعارات الجهاز أيضاً — فُتح النقاش فلا معنى لبقائها
+        // (طلب المدير 2026-10-06؛ والجرس داخل التطبيق يصفّره ترقر case_reads في القاعدة)
+        if let cid = caseId {
+            let center = UNUserNotificationCenter.current()
+            let delivered = await center.deliveredNotifications()
+            let ids = delivered.filter { n in
+                let route = n.request.content.userInfo["route"] as? String ?? ""
+                return route.contains("case=\(cid)") || route.hasSuffix("/cases/\(cid)")
+            }.map(\.request.identifier)
+            if !ids.isEmpty { center.removeDeliveredNotifications(withIdentifiers: ids) }
         }
     }
 

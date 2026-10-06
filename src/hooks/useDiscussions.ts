@@ -238,7 +238,12 @@ export function useMarkRead() {
       )
       if (error) throw error
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['discussions'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['discussions'] })
+      // ترقر القاعدة يعلّم منشنات هذا النقاش مقروءة بقراءته — فالجرس يُحدَّث فوراً لا بعد دقيقة
+      // (طلب المدير 2026-10-06: «أدخل على المناقشة بدون ما اضغط على التنبيه، مفروض انه يروح التنبيه»)
+      qc.invalidateQueries({ queryKey: ['notifications'] })
+    },
   })
 }
 
