@@ -54,6 +54,7 @@ import { fmtNumber } from '@/lib/format'
 import { toast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
 import { SignAttachmentButton } from './SignAttachment'
+import { ImageAlbum, groupImageRows, isImageName } from './ImageAlbum'
 import { stamp, msgStamp, fullStamp } from './stamps'
 import { VoiceNotePlayer, VoiceTranscript, isAudioName } from './VoiceNote'
 import { DiscussionMediaDialog } from './DiscussionMediaDialog'
@@ -1133,15 +1134,17 @@ function StreamPane({
             description="اكتب أول رسالة — تبقى هنا مربوطة بمكانها إلى الأبد"
           />
         ) : (
-          msgs.map((m) => (
+          // الصور المتتالية من الكاتب نفسه ألبوم واحد (كالواتساب) — وترسو القفزة على أي صورة فيه
+          groupImageRows(msgs).map(({ head: m, extras }) => (
             <MessageBubble
               key={m.id}
               msg={m}
+              albumExtras={extras}
               caseId={caseId}
               mine={m.author_id === teamMember?.id}
               onOpenThread={() => openThread(m)}
-              receipt={readCounts?.[m.id]}
-              flash={m.id === flashId}
+              receipt={readCounts?.[extras[extras.length - 1]?.id ?? m.id] ?? readCounts?.[m.id]}
+              flash={m.id === flashId || extras.some((x) => x.id === flashId)}
             />
           ))
         )}
@@ -1165,6 +1168,7 @@ function StreamPane({
 
 function MessageBubble({
   msg,
+  albumExtras = [],
   caseId,
   mine,
   onOpenThread,
@@ -1172,6 +1176,8 @@ function MessageBubble({
   flash = false,
 }: {
   msg: StreamMsg
+  /** صور متتالية من الكاتب نفسه تُعرض مع صورة هذه الرسالة ألبوماً واحداً */
+  albumExtras?: StreamMsg[]
   caseId: string | null
   mine: boolean
   onOpenThread: () => void
@@ -1228,6 +1234,10 @@ function MessageBubble({
               {/* نص الملاحظة تحت مشغّلها — مطويّ كالواتساب */}
               {msg.body && <VoiceTranscript text={msg.body} />}
             </>
+          ) : isImageName(msg.document_name) ? (
+            <ImageAlbum
+              images={[msg, ...albumExtras].map((x) => ({ id: x.id, name: x.document_name ?? 'صورة', url: x.document_url }))}
+            />
           ) : (
             <div className="flex items-start gap-2">
               <div className="min-w-0 flex-1">
@@ -1731,6 +1741,8 @@ function ThreadReply({
               <VoiceNotePlayer name={r.document_name} url={r.document_url} compact />
               {r.body && <VoiceTranscript text={r.body} compact />}
             </>
+          ) : isImageName(r.document_name) ? (
+            <ImageAlbum images={[{ id: r.id, name: r.document_name, url: r.document_url }]} compact />
           ) : (
             <div className="flex flex-wrap items-center gap-2">
               <AttachmentChip name={r.document_name} url={r.document_url} compact />
