@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { BANKRUPTCY_RING } from '@/components/MatterKindIcon'
 import { useLocation } from 'wouter'
 import {
   BookOpen,
@@ -65,7 +66,8 @@ const KINDS: Record<
   case: { label: 'قضية', icon: Scale, chip: 'bg-navy/10 text-navy dark:bg-navy-100/10 dark:text-navy-100' },
   legal_service: { label: 'استشارة / لائحة', icon: BookOpen, chip: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' },
   property: { label: 'توثيق عقاري', icon: Landmark, chip: 'bg-amber-500/10 text-amber-700 dark:text-amber-300' },
-  bankruptcy: { label: 'إجراء إفلاس', icon: Building2, chip: 'bg-violet-500/10 text-violet-700 dark:text-violet-300' },
+  // أخضر لجنة الإفلاس (2026-10-07) — والحلقة حول الرمز من BANKRUPTCY_RING
+  bankruptcy: { label: 'إجراء إفلاس', icon: Building2, chip: 'bg-[#14A99B]/10 text-[#0D7F97] dark:text-[#5fd3c8]' },
 }
 
 // حالات كل نوع — صف الفرز الثاني يظهر عند اختيار تصنيف بعينه
@@ -280,7 +282,7 @@ export function MattersPage() {
                 <span
                   className={cn(
                     'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-xl',
-                    meta.chip
+                    m.kind === 'bankruptcy' ? BANKRUPTCY_RING : meta.chip
                   )}
                   aria-label={meta.label}
                 >
@@ -349,7 +351,7 @@ export function MattersPage() {
                   }}
                   className="flex items-center gap-3 rounded-xl border border-border/70 p-3.5 text-right transition-all hover:border-gold/60 hover:bg-gold/5"
                 >
-                  <span className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-xl', KINDS[k].chip)}>
+                  <span className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-xl', k === 'bankruptcy' ? BANKRUPTCY_RING : KINDS[k].chip)}>
                     {matterKindEmoji(k)}
                   </span>
                   <span className="min-w-0">

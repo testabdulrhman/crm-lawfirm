@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
+import { BANKRUPTCY_RING } from '@/components/MatterKindIcon'
 import { useLocation } from 'wouter'
 import { useQueryClient } from '@tanstack/react-query'
 import {
@@ -747,7 +748,9 @@ function ChannelList({
                       'mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl',
                       isGeneral || isChannel
                         ? 'bg-navy text-gold'
-                        : 'bg-gold/15 text-gold-600 dark:text-gold-300'
+                        : c.kind === 'bankruptcy'
+                          ? BANKRUPTCY_RING
+                          : 'bg-gold/15 text-gold-600 dark:text-gold-300'
                     )}
                   >
                     {isGeneral ? (

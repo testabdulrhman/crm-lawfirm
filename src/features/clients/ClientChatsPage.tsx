@@ -3,6 +3,7 @@
 //   الأخضر يصل للعميل (هنا وحده) · الذهبي للفريق (النقاشات) — ولا يُرسل للعميل شيء من نقاش.
 // الجسر بزرّ «ناقش مع الفريق»: رسالة العميل تُقتبس في نقاش ملفه ويتشاور الفريق هناك.
 // يرى المحادثة مسؤول ملفها وفريقه، والمدير وراكان يرون الكل؛ و«غير المصنّف» لهما وحدهما وهما يربطانه.
+import { MatterKindIcon } from '@/components/MatterKindIcon'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation } from 'wouter'
 import {
@@ -44,7 +45,7 @@ import {
 import { requestDiscussionJump } from '@/lib/discussionJump'
 import { errMessage } from '@/lib/errors'
 import { fmtDate } from '@/lib/format'
-import { matterHref, matterKindEmoji } from '@/lib/matterHref'
+import { matterHref } from '@/lib/matterHref'
 import { cn } from '@/lib/utils'
 
 const riyadhTime = (iso: string | null) =>
@@ -213,7 +214,7 @@ function ThreadRow({ t, active, onClick }: { t: ClientThread; active: boolean; o
         <span className="mt-1 flex">
           {t.case_id ? (
             <span className="rounded-full bg-gold/15 px-2 py-px text-[10px] font-medium text-gold-700 dark:text-gold-300">
-              {matterKindEmoji(t.matter?.kind)} <Ltr>{t.matter?.office_num ?? 'ملف'}</Ltr>
+              <MatterKindIcon kind={t.matter?.kind} /> <Ltr>{t.matter?.office_num ?? 'ملف'}</Ltr>
             </span>
           ) : (
             <span className="rounded-full bg-muted px-2 py-px text-[10px] text-muted-foreground">غير مصنّف</span>
@@ -578,7 +579,7 @@ function LinkDialog({ thread, onClose }: { thread: ClientThread; onClose: () => 
                   m.id === thread.case_id ? 'border-gold bg-gold/10' : 'border-border/60'
                 )}
               >
-                <span>{matterKindEmoji(m.kind)}</span>
+                <span><MatterKindIcon kind={m.kind} /></span>
                 <Ltr className="shrink-0 text-xs font-medium">{m.office_num ?? '—'}</Ltr>
                 <span className="min-w-0 flex-1 truncate">{m.title ?? 'بلا عنوان'}</span>
                 {m.contact?.name && <span className="shrink-0 text-xs text-muted-foreground">{m.contact.name}</span>}

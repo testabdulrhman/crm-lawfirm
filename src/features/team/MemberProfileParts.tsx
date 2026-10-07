@@ -1,5 +1,6 @@
 // أجزاء صفحة الموظف (تجديد 2026-09-26 — «ودي صفحة الموظف تكون أفضل من كذا بكثير»):
 // ترويسة بهوية المكتب، وصفّ أرقام يلخّص حاله، ثم تبويبات: عمله الآن · بياناته · إجازاته · المالية.
+import { MatterKindIcon } from '@/components/MatterKindIcon'
 import type { ReactNode } from 'react'
 import { useLocation } from 'wouter'
 import {
@@ -29,7 +30,7 @@ import { Ltr } from '@/components/Ltr'
 import { toast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
 import { arPlural, daysLabel, fmtDatePref, fmtNumber, fmtTime, todayISO } from '@/lib/format'
-import { matterHref, matterKindEmoji } from '@/lib/matterHref'
+import { matterHref } from '@/lib/matterHref'
 import { caseStatusBadge, caseStatusLabel } from '@/lib/caseLabels'
 import {
   hrDays,
@@ -458,7 +459,7 @@ export function MemberWorkTab({ work, loading, firstName }: { work: MemberWork |
                     </p>
                     {t.case && (
                       <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                        {matterKindEmoji(t.case.kind)} {t.case.office_num && <Ltr>{t.case.office_num}</Ltr>} {t.case.title}
+                        <MatterKindIcon kind={t.case.kind} /> {t.case.office_num && <Ltr>{t.case.office_num}</Ltr>} {t.case.title}
                       </p>
                     )}
                   </div>
@@ -525,7 +526,7 @@ export function MemberWorkTab({ work, loading, firstName }: { work: MemberWork |
             <div className="-mx-3 max-h-[420px] divide-y divide-border/60 overflow-y-auto">
               {work!.matters.map((m) => (
                 <button key={m.id} type="button" className={rowCls} onClick={() => navigate(matterHref(m.kind, m.id))}>
-                  <span className="text-lg leading-none">{matterKindEmoji(m.kind)}</span>
+                  <MatterKindIcon kind={m.kind} className="text-lg leading-none" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-foreground">{m.title || 'ملف بلا عنوان'}</p>
                     <p className="mt-0.5 truncate text-xs text-muted-foreground">

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { MatterKindIcon } from '@/components/MatterKindIcon'
 import { Link, useLocation } from 'wouter'
 import { ArrowRight, ChevronDown, Handshake, Pencil, Scale } from 'lucide-react'
 
@@ -38,7 +39,6 @@ import {
   caseTypeLabel,
 } from '@/lib/caseLabels'
 import { CaseForm } from './CaseForm'
-import { matterKindEmoji } from '@/lib/matterHref'
 import { SummaryTab } from './tabs/SummaryTab'
 import { StudyTab } from './tabs/StudyTab'
 import { SessionsTab } from './tabs/SessionsTab'
@@ -135,7 +135,7 @@ export function CaseDetail({ id }: { id: string }) {
             <div className="flex items-center gap-2">
               <Scale className="h-5 w-5 shrink-0 text-gold" />
               <h2 className="text-2xl font-bold tracking-tight text-foreground">
-                <span className="me-2" aria-hidden>{matterKindEmoji(c.kind)}</span>
+                <MatterKindIcon kind={c.kind} className="me-2" />
                 {c.title}
               </h2>
             </div>

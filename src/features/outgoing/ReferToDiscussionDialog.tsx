@@ -1,6 +1,7 @@
 // «أحِل للنقاش» — خطاب صادر يُرسَل لنقاش مشروع (طلب المدير 2026-10-07: «ودي إذا وقعت في الصادر مثلاً أقدر
 // أحيل الملف للنقاش في مشروع، وأكيد بيكون موجود في مستندات المشروع»). يُرسل الملف (الموقّع إن وُقّع) مرفقاً
 // في نقاش المشروع المختار — فيُحفظ في مستنداته أيضاً — ويُربط الخطاب بالمشروع إن لم يكن مربوطاً.
+import { MatterKindIcon } from '@/components/MatterKindIcon'
 import { useState } from 'react'
 import { useLocation } from 'wouter'
 import { Loader2, MessagesSquare, Search } from 'lucide-react'
@@ -12,7 +13,6 @@ import { Ltr } from '@/components/Ltr'
 import { usePostAttachment } from '@/hooks/useDiscussions'
 import { useLinkableMatters } from '@/hooks/useClientChats'
 import { requestDiscussionJump } from '@/lib/discussionJump'
-import { matterKindEmoji } from '@/lib/matterHref'
 import { supabase } from '@/lib/supabase'
 import { errMessage } from '@/lib/errors'
 import { toast } from '@/hooks/use-toast'
@@ -92,7 +92,7 @@ export function ReferToDiscussionDialog({
                   picked === m.id ? 'border-gold bg-gold/10' : 'border-border/60'
                 )}
               >
-                <span>{matterKindEmoji(m.kind)}</span>
+                <span><MatterKindIcon kind={m.kind} /></span>
                 <Ltr className="shrink-0 text-xs font-medium">{m.office_num ?? '—'}</Ltr>
                 <span className="min-w-0 flex-1 truncate">{m.title ?? 'بلا عنوان'}</span>
                 {m.id === l.case_id && <span className="shrink-0 text-[11px] text-gold-700">مشروع الخطاب</span>}
