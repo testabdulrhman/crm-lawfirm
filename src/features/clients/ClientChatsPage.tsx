@@ -26,7 +26,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { EmptyState } from '@/components/EmptyState'
 import { Ltr } from '@/components/Ltr'
 import { toast } from '@/hooks/use-toast'
-import { useIsDirector } from '@/hooks/useIsDirector'
+import { useCanViewOffice } from '@/hooks/useIsDirector'
 import { usePostMessage } from '@/hooks/useDiscussions'
 import {
   CLIENT_CHAT_EVENT,
@@ -69,7 +69,7 @@ type Filter = 'all' | 'unread' | 'unlinked'
 
 export function ClientChatsPage() {
   const { data: threads, isLoading, error, refetch } = useClientThreads()
-  const viewer = useIsDirector() // المدير أو من له الاطلاع على كل شيء
+  const viewer = useCanViewOffice() // المدير أو من له الاطلاع على كل شيء (راكان)
   const [selected, setSelected] = useState<string | null>(() => takeClientChat())
   const [filter, setFilter] = useState<Filter>('all')
   const [q, setQ] = useState('')
