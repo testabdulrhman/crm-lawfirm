@@ -12,6 +12,7 @@
 // الدالة تقرأ ولا تكتب في القاعدة — الواجهة تعرض النتيجة للمراجعة قبل الحفظ،
 // فالاستخراج الآلي يخطئ ولا يصح أن يفتح قضية دون إقرار موظف.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { HIJRI_RULE, pickDate } from "../_shared/hijri.ts";
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
@@ -120,7 +121,7 @@ const USER = `استخرج بيانات القضية من المستند الم�
 
 قواعد ملزِمة:
 - لا تخترع بياناً غير مذكور. ما لا تجده = null.
-- حوّل أي تاريخ هجري إلى ميلادي بصيغة YYYY-MM-DD.
+${HIJRI_RULE}
 - client_name = **موكّلنا**: الطرف الذي تمثّله شركة المحاماة. إن لم يتّضح من
   المستند أيّ الطرفين موكّلنا، اتركه null ولا تخمّن.
   **لا تضع اسم شركة المحاماة نفسها موكّلاً أبداً.**
@@ -144,8 +145,10 @@ const USER = `استخرج بيانات القضية من المستند الم�
   "court": "اسم المحكمة أو null",
   "court_division": "الدائرة أو null",
   "court_num": "رقم الدعوى أو null",
-  "filing_date": "YYYY-MM-DD تاريخ القيد أو null",
-  "next_session_date": "YYYY-MM-DD موعد الجلسة القادمة إن ذُكر أو null",
+  "filing_date": "YYYY-MM-DD تاريخ القيد إن ورد ميلادياً أو null",
+  "filing_date_hijri": "تاريخ القيد الهجري كما ورد أو null",
+  "next_session_date": "YYYY-MM-DD موعد الجلسة القادمة إن ورد ميلادياً أو null",
+  "next_session_date_hijri": "موعد الجلسة القادمة الهجري كما ورد أو null",
   "subject": "ملخّص الموضوع والطلبات",
   "hijri_note": "التواريخ الهجرية كما وردت أو null"
 }`;
@@ -276,8 +279,9 @@ Deno.serve(async (req) => {
       parsed: {
         ...parsed,
         type,
-        filing_date: date(parsed.filing_date),
-        next_session_date: date(parsed.next_session_date),
+        // بأم القرى من الهجري المقروء — لا من تحويل النموذج (2026-10-07)
+        filing_date: pickDate(date(parsed.filing_date), parsed.filing_date_hijri),
+        next_session_date: pickDate(date(parsed.next_session_date), parsed.next_session_date_hijri),
       },
       usage: data.usage,
       stop_reason: data.stop_reason,

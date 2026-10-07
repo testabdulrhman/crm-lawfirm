@@ -7,6 +7,7 @@
 // الدالة تقرأ فقط ولا تكتب في القاعدة — الواجهة تعرض النتيجة للمراجعة قبل الحفظ،
 // لأن الاستخراج الآلي يخطئ ولا يصح أن يُنشئ التزامات دون إقرار موظف.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { HIJRI_RULE, pickDate } from "../_shared/hijri.ts";
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
@@ -104,7 +105,7 @@ const USER = `استخرج بيانات هذا العقد من الملف الم
 
 قواعد ملزِمة:
 - لا تخترع بنداً غير مذكور. ما لا تجده = null (وللقوائم = []).
-- حوّل أي تاريخ هجري إلى ميلادي بصيغة YYYY-MM-DD.
+${HIJRI_RULE}
 - المبالغ أرقاماً بلا فواصل ولا كلمة «ريال».
 - في obligations ضع الالتزامات ذات **تاريخ محدّد** فقط (دفعة مستحقة، تجديد،
   مهلة إشعار، تسليم، انتهاء سريان). لا تضع التزامات عامة بلا تاريخ.
@@ -120,8 +121,11 @@ const USER = `استخرج بيانات هذا العقد من الملف الم
   "type": "تصنيف موجز أو null",
   "client_name": "اسم الموكّل أو null",
   "signed_date": "YYYY-MM-DD أو null",
+  "signed_date_hijri": "كما ورد أو null",
   "start_date": "YYYY-MM-DD أو null",
+  "start_date_hijri": "كما ورد أو null",
   "end_date": "YYYY-MM-DD أو null",
+  "end_date_hijri": "كما ورد أو null",
   "fees_total": رقم أو null,
   "payment_terms": "طريقة/جدولة الدفع أو null",
   "scope": "نطاق العمل أو null",
@@ -131,7 +135,8 @@ const USER = `استخرج بيانات هذا العقد من الملف الم
   "obligations": [
     {
       "title": "وصف الالتزام موجزاً",
-      "due_date": "YYYY-MM-DD",
+      "due_date": "YYYY-MM-DD أو null",
+      "due_date_hijri": "كما ورد أو null",
       "type": "payment | renewal | notice | delivery | expiry | other",
       "notes": "تفصيل أو رقم البند أو null"
     }
@@ -227,6 +232,13 @@ Deno.serve(async (req) => {
       );
     }
 
+    // التواريخ بأم القرى من الهجري المقروء — لا من تحويل النموذج (2026-10-07)
+    parsed.signed_date = pickDate(parsed.signed_date, parsed.signed_date_hijri);
+    parsed.start_date = pickDate(parsed.start_date, parsed.start_date_hijri);
+    parsed.end_date = pickDate(parsed.end_date, parsed.end_date_hijri);
+    if (Array.isArray(parsed.obligations)) {
+      parsed.obligations = parsed.obligations.map((o: any) => ({ ...o, due_date: pickDate(o?.due_date, o?.due_date_hijri) }));
+    }
     // تنظيف: الالتزامات بلا عنوان أو بلا تاريخ صالح لا تُعرض
     const obligations = Array.isArray(parsed.obligations)
       ? parsed.obligations.filter(

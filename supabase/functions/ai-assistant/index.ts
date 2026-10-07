@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { pickDate } from "../_shared/hijri.ts";
 
 // =============================================================
 // ai-assistant — البوابة الموحّدة للذكاء الاصطناعي (Claude API)
@@ -256,18 +257,19 @@ const AGENT_TOOLS = [
   },
   {
     name: "create_session",
-    description: "إنشاء جلسة جديدة في قضية. استخدمها عندما يطلب الموظف تسجيل جلسة أو موعد جلسة وصله من ناجز أو المحكمة. التاريخ ميلادي YYYY-MM-DD — إن أعطاك الموظف تاريخاً هجرياً فحوّله أولاً واذكر التحويل في ردّك. تُنشأ الجلسة بحالة «قادمة» وتُزامَن مع تقويم Google تلقائياً من النظام.",
+    description: "إنشاء جلسة جديدة في قضية. استخدمها عندما يطلب الموظف تسجيل جلسة أو موعد جلسة وصله من ناجز أو المحكمة. إن كان التاريخ هجرياً (كإشعارات ناجز غالباً) فمرّره في session_date_hijri كما ورد ولا تحوّله بنفسك — يحوّله النظام بتقويم أم القرى ويعيد لك الميلادي؛ وإن كان ميلادياً ففي session_date. تُنشأ الجلسة بحالة «قادمة» وتُزامَن مع تقويم Google تلقائياً من النظام.",
     input_schema: {
       type: "object",
       properties: {
         case_office_num: { type: "string", description: "رقم مكتب القضية مثل CASE26039" },
-        session_date: { type: "string", description: "تاريخ الجلسة ميلادي YYYY-MM-DD" },
+        session_date: { type: "string", description: "تاريخ الجلسة ميلادي YYYY-MM-DD (إن ورد ميلادياً)" },
+        session_date_hijri: { type: "string", description: "تاريخ الجلسة الهجري كما ورد مثل 1448/04/23 (لا تحوّله)" },
         session_time: { type: "string", description: "وقت الجلسة HH:MM بنظام 24 ساعة (اختياري)" },
         title: { type: "string", description: "عنوان الجلسة (اختياري — يُولَّد من رقمها)" },
         court: { type: "string", description: "اسم المحكمة (اختياري — يُؤخذ من القضية)" },
         preparation: { type: "string", description: "ما يجب تحضيره قبلها (اختياري)" },
       },
-      required: ["case_office_num", "session_date"],
+      required: ["case_office_num"],
     },
   },
   {
@@ -568,9 +570,10 @@ async function runAgentTool(name: string, input: any, userName: string, actions:
       const caseRow = cs?.[0];
       if (!caseRow) return JSON.stringify({ ok: false, error: `لم أجد قضية برقم ${officeNum}` });
 
-      const date = String(input.session_date ?? "").trim();
+      // الهجري يُحوَّل هنا بأم القرى — النموذج يخطئ في التحويل بيوم (2026-10-07)
+      const date = pickDate(String(input.session_date ?? "").trim(), input.session_date_hijri) ?? "";
       if (!/^\d{4}-\d{2}-\d{2}$/.test(date))
-        return JSON.stringify({ ok: false, error: "تاريخ الجلسة يجب أن يكون ميلادياً بصيغة YYYY-MM-DD" });
+        return JSON.stringify({ ok: false, error: "لم يُفهم تاريخ الجلسة — مرّر الهجري في session_date_hijri (مثل 1448/04/23) أو الميلادي YYYY-MM-DD" });
       const rawTime = String(input.session_time ?? "").trim();
       const time = /^\d{1,2}:\d{2}/.test(rawTime) ? rawTime.slice(0, 5).padStart(5, "0") : null;
 
@@ -663,7 +666,7 @@ const AGENT_SYSTEM = `أنت المساعد الذكي لنظام ${FIRM_NAME}. 
 - إذا طلب الموظف صراحةً إرسال رسالة (مثل «أرسل له…») فأرسلها مباشرة بعد إيجاد الرقم الصحيح. إن كان الطلب غامضاً اعرض مسودة الرسالة واطلب تأكيداً.
 - المرفقات: إن أرفق الموظف ملفاً وطلب حفظه في قضية، استخدم save_attachment. إن ذكر أنه «ضبط جلسة» أو «محضر» فاجعل target=session_minutes، وإلا case_document. إن لم يذكر القضية فاسأله عن رقمها أو ابحث بـ search_cases إن ذكر اسماً. بعد الحفظ اذكر ملخّص ما استُخرج من المحضر (outcome) في سطرين، وإن رجع extract_note فاذكر سببه بصراحة في سطر واحد.
 - رسائل العملاء: عربية فصحى رسمية موجزة، تُختم بالاسم الرسمي الكامل: «${FIRM_NAME}» (لا تختصره أبداً).
-- الجلسات: إن وصل الموظف إشعار جلسة من ناجز أو المحكمة وطلب تسجيله، استخدم create_session. التواريخ في إشعارات ناجز هجرية غالباً — حوّلها إلى ميلادي واذكر التحويل صراحةً في ردّك ليتحقق منه الموظف.\n- إن تعدّدت النتائج المطابقة فاسأل أيّها المقصود قبل أي إجراء.
+- الجلسات: إن وصل الموظف إشعار جلسة من ناجز أو المحكمة وطلب تسجيله، استخدم create_session. التواريخ في إشعارات ناجز هجرية غالباً — مرّرها في session_date_hijri كما وردت ولا تحوّلها بنفسك، واذكر في ردّك الميلادي الذي أعاده النظام ليتحقق منه الموظف.\n- إن تعدّدت النتائج المطابقة فاسأل أيّها المقصود قبل أي إجراء.
 - بعد التنفيذ اذكر بوضوح ما فعلته (لمن أُرسل، وما نص الرسالة).
 ${EXTRA_SYSTEM_RULES}
 
@@ -831,7 +834,7 @@ function buildPrompt(task: string, payload: any): { system: string; user: string
     case "extract_ruling":
       return {
         system: "أنت مساعد قانوني لشركة محاماة سعودية، دقيق في قراءة الأحكام والصكوك. استخرج بيانات الحكم من المستند المرفق حرفيّاً دون تخمين. أجب بالعربية فقط وبصيغة JSON دون أي نص إضافي.",
-        user: `استخرج بيانات هذا الحكم القضائي / الصك من المستند المرفق أدناه.\nإن كان التاريخ هجريّاً فحوّله إلى ميلادي بصيغة YYYY-MM-DD قدر الإمكان، وأبقِ الهجري كما هو في حقل منفصل.\nاترك أي قيمة لا تجدها = null.\n\nأرجِع JSON بالحقول التالية:\n{\n  \"title\": \"عنوان مختصر للحكم\",\n  \"ruling_number\": \"رقم الحكم/الصك كما هو\",\n  \"ruling_date\": \"تاريخ الحكم ميلادي YYYY-MM-DD\",\n  \"ruling_date_hijri\": \"تاريخ الحكم الهجري كما هو مكتوب\",\n  \"court_name\": \"اسم المحكمة المُصدِرة\",\n  \"result\": \"منطوق / نتيجة الحكم\",\n  \"summary\": \"ملخّص موجز للوقائع والأسباب\"\n}`,
+        user: `استخرج بيانات هذا الحكم القضائي / الصك من المستند المرفق أدناه.\nإن كان التاريخ هجريّاً فانقله كما هو في ruling_date_hijri ولا تحوّله بنفسك (يحوّله النظام بتقويم أم القرى)، واترك ruling_date = null؛ وإن كان ميلادياً فضعه في ruling_date.\nاترك أي قيمة لا تجدها = null.\n\nأرجِع JSON بالحقول التالية:\n{\n  \"title\": \"عنوان مختصر للحكم\",\n  \"ruling_number\": \"رقم الحكم/الصك كما هو\",\n  \"ruling_date\": \"تاريخ الحكم ميلادي YYYY-MM-DD\",\n  \"ruling_date_hijri\": \"تاريخ الحكم الهجري كما هو مكتوب\",\n  \"court_name\": \"اسم المحكمة المُصدِرة\",\n  \"result\": \"منطوق / نتيجة الحكم\",\n  \"summary\": \"ملخّص موجز للوقائع والأسباب\"\n}`,
         maxTokens: 8000,
       };
 
