@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { supabase, DOCS_BUCKET } from '@/lib/supabase'
@@ -159,11 +160,64 @@ export function useDiscussions() {
   })
 }
 
+/* ============ النقاش لحظي (Realtime) ============ */
+// طلب المدير 2026-10-07: «ليه التأخير، كيف أخليه مثل الواتس أب لحظي». كان المجرى يُسأل كل ١٥ ثانية؛
+// صار الخادم يدفع كل تغيير في الرسائل والتفاعلات (postgres_changes بصلاحيات الجدول نفسها لكل مشترك)،
+// فتُعاد الجلبات المعنية فوراً. السؤال الدوري باقٍ احتياطاً: سريع إن انقطع البث، وبطيء وهو متصل.
+let liveConnected = false
+const liveListeners = new Set<(v: boolean) => void>()
+const setLive = (v: boolean) => {
+  liveConnected = v
+  liveListeners.forEach((f) => f(v))
+}
+function useLiveConnected(): boolean {
+  const [v, setV] = useState(liveConnected)
+  useEffect(() => {
+    liveListeners.add(setV)
+    return () => {
+      liveListeners.delete(setV)
+    }
+  }, [])
+  return v
+}
+
+/** يُركَّب مرة في هيكل التطبيق: اشتراك واحد يحدّث المجرى والخيط والقائمة وشارة غير المقروء */
+export function useDiscussionsLive() {
+  const qc = useQueryClient()
+  const myId = useAuth((s) => s.teamMember?.id)
+  useEffect(() => {
+    if (!myId) return
+    const ch = supabase
+      .channel(`disc-live-${myId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'case_comments' }, (p) => {
+        const row = (p.new && Object.keys(p.new).length ? p.new : p.old) as {
+          case_id?: string | null
+          parent_id?: string | null
+        }
+        qc.invalidateQueries({ queryKey: ['disc_stream', row.case_id ?? null] })
+        if (row.parent_id) qc.invalidateQueries({ queryKey: ['disc_thread', row.parent_id] })
+        qc.invalidateQueries({ queryKey: ['discussions'] })
+        qc.invalidateQueries({ queryKey: ['disc_media'] })
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'case_comment_reactions' }, () => {
+        qc.invalidateQueries({ queryKey: ['disc_stream'] })
+        qc.invalidateQueries({ queryKey: ['disc_thread'] })
+      })
+      .subscribe((status) => setLive(status === 'SUBSCRIBED'))
+    return () => {
+      setLive(false)
+      supabase.removeChannel(ch)
+    }
+  }, [myId, qc])
+}
+
 export function useStream(caseId: string | null, enabled: boolean) {
+  const live = useLiveConnected()
   return useQuery({
     queryKey: ['disc_stream', caseId],
     enabled,
-    refetchInterval: 15_000, // يلتقط ردود الذكاء والزملاء
+    // البث يدفع الجديد لحظياً؛ السؤال الدوري احتياط لانقطاعه
+    refetchInterval: live ? 60_000 : 5_000,
     queryFn: async (): Promise<StreamMsg[]> => {
       const { data, error } = await supabase.rpc('case_stream', { p_case_id: caseId })
       if (error) throw error
@@ -173,10 +227,11 @@ export function useStream(caseId: string | null, enabled: boolean) {
 }
 
 export function useThread(rootId: string | null) {
+  const live = useLiveConnected()
   return useQuery({
     queryKey: ['disc_thread', rootId],
     enabled: !!rootId,
-    refetchInterval: 15_000,
+    refetchInterval: live ? 60_000 : 5_000,
     queryFn: async (): Promise<ThreadMsg[]> => {
       const { data, error } = await supabase.rpc('case_thread', { p_root: rootId })
       if (error) throw error

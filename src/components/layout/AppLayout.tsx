@@ -9,6 +9,7 @@ import { startUsageTracking } from '@/lib/usageTracker'
 import { registerPush, isNative } from '@/lib/push'
 import { useSwipeBack, usePullToRefresh } from '@/hooks/useNativeGestures'
 import { Sidebar } from './Sidebar'
+import { useDiscussionsLive } from '@/hooks/useDiscussions'
 import { TopBar } from './TopBar'
 import { MobileTabBar } from './MobileTabBar'
 import { AiAssistant } from '@/components/AiAssistant'
@@ -20,6 +21,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false)
   const { teamMember } = useAuth()
   const [location, navigate] = useLocation()
+  // النقاش لحظي في كل الصفحات: المجرى والخيط وشارة غير المقروء (2026-10-07)
+  useDiscussionsLive()
 
   // داخل التطبيق: شريط تبويبات سفلي بدل الدرج، وإيماءات iOS
   const native = isNative()
