@@ -374,7 +374,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Redwan/Redwan.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 37;
+				CURRENT_PROJECT_VERSION = 38;
 				DEVELOPMENT_TEAM = 89HBK8SMZU;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Redwan;
@@ -405,7 +405,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Redwan/Redwan.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 37;
+				CURRENT_PROJECT_VERSION = 38;
 				DEVELOPMENT_TEAM = 89HBK8SMZU;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Redwan;
@@ -434,7 +434,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = RedwanShare/RedwanShare.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 37;
+				CURRENT_PROJECT_VERSION = 38;
 				DEVELOPMENT_TEAM = 89HBK8SMZU;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = RedwanShare/Info.plist;
@@ -459,7 +459,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = RedwanShare/RedwanShare.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 37;
+				CURRENT_PROJECT_VERSION = 38;
 				DEVELOPMENT_TEAM = 89HBK8SMZU;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = RedwanShare/Info.plist;
@@ -484,7 +484,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = RedwanWidget/RedwanWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 37;
+				CURRENT_PROJECT_VERSION = 38;
 				DEVELOPMENT_TEAM = 89HBK8SMZU;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = RedwanWidget/Info.plist;
@@ -509,7 +509,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = RedwanWidget/RedwanWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 37;
+				CURRENT_PROJECT_VERSION = 38;
 				DEVELOPMENT_TEAM = 89HBK8SMZU;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = RedwanWidget/Info.plist;

@@ -385,9 +385,13 @@ final class SB: ObservableObject {
         }
 
         guard (200..<300).contains(code) else {
-            struct PgErr: Codable { let message: String? }
-            let m = (try? JSONDecoder().decode(PgErr.self, from: data))?.message
-            throw SBError(message: m ?? "خطأ من الخادم (\(code))")
+            struct PgErr: Codable { let message: String?; let code: String? }
+            let e = try? JSONDecoder().decode(PgErr.self, from: data)
+            // رفض الصلاحية من القاعدة (RLS) — بالعربي لا نص القاعدة الإنجليزي (مرآة الويب 2026-10-07)
+            if e?.code == "42501" {
+                throw SBError(message: "ليست لديك صلاحية لهذا الإجراء في هذا الملف — إن كنت تحتاجها فاطلبها من المدير [42501]")
+            }
+            throw SBError(message: e?.message ?? "خطأ من الخادم (\(code))")
         }
         return data
     }
