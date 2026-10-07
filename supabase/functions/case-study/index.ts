@@ -110,7 +110,8 @@ async function logFailure(caseId: string, message: string): Promise<void> {
 async function streamStudy(
   model: string,
   content: unknown,
-  tool: unknown
+  tool: unknown,
+  forceTool = true
 ): Promise<{ parsed: any; stopReason: string | null }> {
   const res = await fetch(ANTHROPIC_URL, {
     method: "POST",
@@ -121,12 +122,17 @@ async function streamStudy(
       stream: true,
       system: STUDY_SYSTEM,
       tools: [tool],
-      tool_choice: { type: "tool", name: "save_study" },
+      // الإجبار على الأداة لا تدعمه كل النماذج (Opus 5.5 يرفضه بـ400 — سجل الأخطاء 2026-10-07)؛
+      // فإن رُفض يُعاد الطلب اختيارياً، والتعليمات تشترط التسليم عبر الأداة
+      tool_choice: forceTool ? { type: "tool", name: "save_study" } : { type: "auto" },
       messages: [{ role: "user", content }],
     }),
   });
   if (!res.ok || !res.body) {
     const t = await res.text().catch(() => "");
+    if (forceTool && res.status === 400 && t.includes("tool_choice")) {
+      return streamStudy(model, content, tool, false);
+    }
     throw new Error(`مزوّد الذكاء (${res.status}): ${t.slice(0, 300)}`);
   }
 
