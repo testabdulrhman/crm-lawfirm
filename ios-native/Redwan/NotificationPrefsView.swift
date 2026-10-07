@@ -25,7 +25,8 @@ private let CATEGORIES: [PrefCategory] = [
     .init(id: "deadlines", label: "المهل النظامية", detail: "سلّم التنبيه ١٤/٧/٣/١ يوم", icon: "hourglass"),
     .init(id: "appointments", label: "المواعيد", detail: "حجز موعد جديد من رابط الحجز", icon: "calendar.badge.clock"),
     .init(id: "birthdays", label: "أعياد الميلاد", detail: "احتفال الفريق بيوم ميلاد زميل", icon: "gift"),
-    .init(id: "inbox", label: "الرسائل الواردة", detail: "رسائل العملاء الواردة", icon: "envelope"),
+    .init(id: "clients", label: "رسائل العملاء — واتساب", detail: "رسالة من عميل في ملفاتك على الواتساب", icon: "message"),
+    .init(id: "inbox", label: "الرسائل الواردة", detail: "رسائل الجوال الواردة (ناجز وغيرها)", icon: "envelope"),
     .init(id: "hr", label: "الإجازات والاستئذان", detail: "طلبات الفريق وقرارات المدير عليها", icon: "calendar.badge.minus"),
 ]
 

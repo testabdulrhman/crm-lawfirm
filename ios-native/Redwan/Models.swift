@@ -14,6 +14,8 @@ struct TeamMember: Codable, Identifiable, Equatable {
     let avatar_color: String?
     /// صورة الموظف من الويب — تُعرض بدل حرف الاسم متى وُجدت
     var avatar_url: String? = nil
+    /// يطّلع على كل شغل المكتب (المساعد الإداري — 2026-10-06): يرى «غير المصنّف» في «العملاء» ويربطه
+    var can_view_all: Bool? = nil
 }
 
 struct CaseRef: Codable, Equatable, Hashable { let title: String? }

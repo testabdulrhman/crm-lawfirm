@@ -170,7 +170,7 @@ struct MainTabs: View {
     private func switchTab(for route: String?) {
         guard let r = route else { return }
         if r.hasPrefix("/tasks/") { tab = 2 }
-        else if r.hasPrefix("/discussions") { tab = 4 }
+        else if r.hasPrefix("/discussions") || r.hasPrefix("/clients") { tab = 4 }   // العملاء مفتاحٌ داخل النقاشات
         else if r.hasPrefix("/cases/") { tab = 1 }
         else if r.hasPrefix("/appointments") { tab = 3 }   // التقويم يحمل قائمة المواعيد
         else if r == "/me" || r.hasPrefix("/hr") || r == "/office-documents" { tab = 0 }  // صفحتي والاعتمادات ومستندات المكتب من الرئيسية

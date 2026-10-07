@@ -18,7 +18,7 @@ private let stampF: DateFormatter = {
 
 /// طابع مختصر بأسلوب الواتساب: الساعة لليوم، «أمس»، ثم اسم اليوم، ثم التاريخ
 func shortStamp(_ iso: String?) -> String {
-    guard let iso, let d = ISO8601DateFormatter.flexible.date(from: iso) else { return "" }
+    guard let d = ISO8601DateFormatter.parse(iso) else { return "" }
     let cal = Calendar(identifier: .gregorian)
     if cal.isDateInToday(d) {
         stampF.dateFormat = "h:mm a"
@@ -96,6 +96,27 @@ struct DiscussionsView: View {
     @State private var generalFocus: DiscussionFocus?
     @State private var showMedia = false
     @ObservedObject private var router = PushRouter.shared
+    /// ٠ = الفريق (النقاشات) · ١ = العملاء (الواتساب) — قرار المدير 2026-10-07: «داخل النقاشات»
+    @State private var segment = 0
+    /// محادثة عميل تُفتح من إشعار
+    @State private var clientPhone: String?
+    @State private var clientUnread = 0
+
+    private var segmentBar: some View {
+        Picker("", selection: $segment) {
+            Text("الفريق").tag(0)
+            Text(clientUnread > 0 ? "العملاء · \(clientUnread)" : "العملاء").tag(1)
+        }
+        .pickerStyle(.segmented)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(Theme.ivory)
+    }
+
+    private func refreshClientUnread() async {
+        let rows = (try? await sb.clientThreads()) ?? []
+        clientUnread = rows.filter { $0.unread == true }.count
+    }
 
     /// العامة مثبّتة أولاً دائماً — ثم البقية بالأحدث (ترتيب الدالة)
     private var filtered: [DiscussionRow] {
@@ -113,6 +134,12 @@ struct DiscussionsView: View {
 
     var body: some View {
         NavigationStack {
+            VStack(spacing: 0) {
+            segmentBar
+            if segment == 1 {
+                // محادثات الواتساب مع العملاء — بالأخضر، وما يُكتب فيها يصل للعميل (2026-10-07)
+                ClientThreadsList(openPhone: $clientPhone)
+            } else {
             Group {
                 if let error {
                     ErrorBox(message: error) { Task { await load() } }
@@ -151,11 +178,14 @@ struct DiscussionsView: View {
                     }
                 }
             }
+            }
+            }
             .background(Theme.ivory.ignoresSafeArea())
             .navigationTitle("النقاشات")
             .onAppear { Usage.shared.screen("النقاشات") }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                if segment == 0 {
                 // نقاش جديد لملفٍ لم يبدأ نقاشه بعد (طلب المستخدم 2026-08-22)
                 ToolbarItem(placement: .topBarTrailing) {
                     // للجميع: محادثة مباشرة مع زميل، أو نقاش على ملف.
@@ -195,6 +225,7 @@ struct DiscussionsView: View {
                         Image(systemName: "bookmark")
                             .foregroundStyle(Theme.goldDark)
                     }
+                }
                 }
             }
             .sheet(isPresented: $showNewChannel, onDismiss: {
@@ -258,6 +289,15 @@ struct DiscussionsView: View {
         }
         .retryIfCancelled($cancelled) { await load() }
         .onChange(of: router.route) { _, _ in openFromPush() }
+        .task {
+            while !Task.isCancelled {
+                await refreshClientUnread()
+                try? await Task.sleep(for: .seconds(30))
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .clientChatRead)) { _ in
+            Task { await refreshClientUnread() }
+        }
         // قُرئ نقاش: يُطفأ صفه هنا فوراً، ثم جلبٌ صامت يؤكد العدّادات وآخر رسالة
         .onReceive(NotificationCenter.default.publisher(for: .discussionRead)) { note in
             guard let key = note.object as? String else { return }
@@ -269,7 +309,15 @@ struct DiscussionsView: View {
     /// منشن وصل إشعاره؟ افتح نقاش قضيته مباشرة (بلاغ المستخدم 2026-08-30)،
     /// وعند الرسالة نفسها وخيطها إن كانت ردّاً (مرآة الويب 2026-09-17)
     private func openFromPush() {
+        // رسالة عميل على الواتساب ← مفتاح «العملاء» ومحادثته
+        if let route = router.route, route.hasPrefix("/clients") {
+            router.clear()
+            segment = 1
+            clientPhone = route.components(separatedBy: "phone=").dropFirst().first
+            return
+        }
         guard let route = router.route, route.hasPrefix("/discussions") else { return }
+        segment = 0
         let focus = router.pendingFocus
         // «/discussions» وحده (عيد ميلاد مثلاً) يقلب التبويب فقط؛ ومع رسالة مقصودة يفتح العامة
         guard let cid = router.discussionCaseId else {
