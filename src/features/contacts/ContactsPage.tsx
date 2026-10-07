@@ -155,14 +155,14 @@ export function ContactsPage() {
     <div className="mx-auto max-w-6xl space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-2xl font-bold tracking-tight text-foreground">
-          جهات الاتصال{' '}
+          العملاء{' '}
           <span className="text-base font-normal text-muted-foreground">
             ({fmtNumber(data?.length ?? 0)})
           </span>
         </h2>
         <Button variant="gold" onClick={() => setDialogOpen(true)}>
           <Plus className="h-4 w-4" />
-          جهة اتصال
+          عميل جديد
         </Button>
       </div>
 
@@ -242,7 +242,7 @@ export function ContactsPage() {
         </div>
       ) : isError ? (
         <QueryErrorState
-          title="تعذّر تحميل جهات الاتصال"
+          title="تعذّر تحميل العملاء"
           error={error}
           onRetry={() => refetch()}
         />
@@ -251,8 +251,8 @@ export function ContactsPage() {
           <EmptyState
             icon={BookUser}
             title="لا توجد جهات اتصال بعد"
-            description="أضف أول جهة اتصال لبناء دفتر التواصل."
-            actionLabel="جهة اتصال جديدة"
+            description="أضف أول عميل لبناء سجل العملاء."
+            actionLabel="عميل جديد"
             onAction={() => setDialogOpen(true)}
           />
         ) : (

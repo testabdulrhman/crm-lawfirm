@@ -175,7 +175,7 @@ export function AppointmentForm({
       <div className="my-4 space-y-3">
         {/* العميل */}
         <div className="space-y-1.5 rounded-lg border border-dashed p-3">
-          <Label>العميل (من جهات الاتصال — اختياري)</Label>
+          <Label>العميل (اختياري)</Label>
           <ContactPicker
             contacts={contacts ?? []}
             value={clientId}

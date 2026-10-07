@@ -68,6 +68,9 @@ import { fmtDatePref, fmtNumber, todayISO, daysLabel, fmtCurrency } from '@/lib/
 import { pickFile } from '@/lib/files'
 import { openExternal } from '@/lib/external'
 import { useAuth } from '@/stores/auth'
+import { supabase } from '@/lib/supabase'
+import { toast } from '@/hooks/use-toast'
+import { errMessage } from '@/lib/errors'
 import { useIsDirector } from '@/hooks/useIsDirector'
 import { useTeamMembers } from '@/hooks/useTeam'
 import { useCreateCase } from '@/hooks/useCases'
@@ -609,11 +612,49 @@ function DecisionCard({
 
   const pendingStatus = decideM.isPending ? decideM.variables?.status : null
 
-  const reallyConvert = (bypassReason?: string) => {
+  // الطلب بلا عميل مسجّل (وارد الواتساب والمكالمات لا يُنشئ «متصلاً» منذ 2026-10-07 — الرقم في الـHub):
+  // يُنشأ العميل عند التحويل لملف من اسم الطلب وجواله، ويُربط به الطلب. ويُعاد استعمال عميلٍ بالجوال نفسه.
+  const ensureClient = async (): Promise<string | null> => {
+    if (r.client_id) return r.client_id
+    const phone = (r.client_phone ?? '').replace(/\D/g, '')
+    if (phone.length >= 9) {
+      const { data: same } = await supabase
+        .from('contacts')
+        .select('id')
+        .or(`phone.ilike.%${phone.slice(-9)},phone2.ilike.%${phone.slice(-9)}`)
+        .limit(1)
+      if (same?.[0]?.id) return same[0].id as string
+    }
+    if (!r.client_name?.trim()) return null
+    const { data, error } = await supabase
+      .from('contacts')
+      .insert({
+        name: r.client_name.trim(),
+        phone: r.client_phone || null,
+        email: r.client_email || null,
+        type: 'client',
+        category: 'client',
+        entity_type: 'فرد',
+        source: r.source === 'واتساب' ? 'whatsapp' : 'manual',
+      })
+      .select('id')
+      .single()
+    if (error) throw error
+    return data.id as string
+  }
+
+  const reallyConvert = async (bypassReason?: string) => {
+    let clientId: string | null = null
+    try {
+      clientId = await ensureClient()
+    } catch (e) {
+      toast({ variant: 'destructive', title: 'تعذّر تسجيل العميل', description: errMessage(e) })
+      return
+    }
     createCaseM
       .mutateAsync({
         title: r.client_name,
-        contact_id: r.client_id ?? null,
+        contact_id: clientId,
         subject: r.description ?? null,
         open_date: todayISO(),
         // نوع القضية المسجَّل على الطلب ينتقل للملف — فلا يُصنَّف مرتين
@@ -628,6 +669,7 @@ function DecisionCard({
           input: {
             converted_to_type: 'case',
             converted_to_id: c.id,
+            ...(clientId && !r.client_id ? { client_id: clientId } : {}),
             converted_at: new Date().toISOString(),
             ...(bypassReason
               ? { conversion_bypass_reason: bypassReason }

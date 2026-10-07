@@ -14,7 +14,7 @@ export interface ThankYouResult {
   sms: boolean
 }
 
-// اسم جهة الاتصال حسب الرقم. الجوالات مخزّنة بصيغ مختلفة (05… / 5…)،
+// اسم العميل حسب الرقم. الجوالات مخزّنة بصيغ مختلفة (05… / 5…)،
 // فآخر ٩ أرقام هي المفتاح الموثوق للمطابقة.
 async function lookupName(intl: string): Promise<string | null> {
   const tail = intl.slice(-9) // أرقام فقط — آمن داخل الفلتر

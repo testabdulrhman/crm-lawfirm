@@ -34,7 +34,7 @@ import { poaStatusLabel, poaStatusBadge } from '@/lib/poaLabels'
 
 const GROUPS: { kind: SearchKind; label: string; icon: typeof Scale }[] = [
   { kind: 'case', label: 'القضايا', icon: Scale },
-  { kind: 'contact', label: 'جهات الاتصال', icon: User },
+  { kind: 'contact', label: 'العملاء', icon: User },
   { kind: 'poa', label: 'الوكالات', icon: FileSignature },
   { kind: 'discussion', label: 'النقاشات', icon: MessagesSquare },
 ]
@@ -48,7 +48,7 @@ const NAV_ACTIONS: { label: string; href: string; icon: LucideIcon }[] = [
   { label: 'الوكالات', href: '/poa', icon: FileSignature },
   { label: 'الاستشارات واللوائح', href: '/legal-services', icon: BookOpen },
   { label: 'الصادر', href: '/outgoing', icon: Send },
-  { label: 'جهات الاتصال', href: '/contacts', icon: User },
+  { label: 'العملاء', href: '/contacts', icon: User },
   { label: 'الموظفون', href: '/team', icon: Users },
   { label: 'التقارير', href: '/reports', icon: BarChart3 },
   { label: 'الإعدادات', href: '/settings', icon: Settings },

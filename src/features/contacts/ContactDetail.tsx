@@ -85,11 +85,11 @@ export function ContactDetail({ id }: { id: string }) {
   if (isError || !c) {
     return (
       <QueryErrorState
-        title="تعذّر تحميل جهة الاتصال"
+        title="تعذّر تحميل العميل"
         error={error}
         onRetry={() => refetch()}
         backTo="/contacts"
-        backLabel="رجوع لجهات الاتصال"
+        backLabel="رجوع للعملاء"
       />
     )
   }
@@ -98,7 +98,7 @@ export function ContactDetail({ id }: { id: string }) {
     <div className="mx-auto max-w-4xl space-y-5">
       <Button variant="ghost" onClick={() => navigate('/contacts')}>
         <ArrowRight className="h-4 w-4" />
-        رجوع لجهات الاتصال
+        رجوع للعملاء
       </Button>
 
       {/* الرأس */}
@@ -183,7 +183,7 @@ export function ContactDetail({ id }: { id: string }) {
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>تأكيد حذف جهة الاتصال</AlertDialogTitle>
+            <AlertDialogTitle>تأكيد حذف العميل</AlertDialogTitle>
             <AlertDialogDescription>
               {total > 0 ? (
                 <>

@@ -22,13 +22,13 @@ import { cn } from '@/lib/utils'
 import type { Contact } from '@/types/db'
 
 /**
- * إنشاء جهة اتصال دون مغادرة النموذج.
+ * إنشاء عميل دون مغادرة النموذج.
  *
  * الغرض: ألّا تصطدم بجدار «لا نتائج» وأنت في منتصف فتح قضية أو حجز موعد،
- * فتضطر لترك ما تكتب والذهاب إلى صفحة جهات الاتصال ثم العودة.
+ * فتضطر لترك ما تكتب والذهاب إلى صفحة العملاء ثم العودة.
  *
  * الحد الأدنى فقط — اسم وجوال ونوع الكيان. البقية تُستكمل لاحقاً من ملف
- * جهة الاتصال، تماماً كما يفعل زر «+ New contact» في كليو.
+ * العميل، تماماً كما يفعل زر «+ New contact» في كليو.
  */
 export function QuickContactDialog({
   open,
@@ -71,7 +71,7 @@ export function QuickContactDialog({
     setBusy(true)
     try {
       // إدراج مباشر لا عبر useCreateContact: فذلك الخطّاف يُطلق إشعار خطأ
-      // عاماً («تعذّرت إضافة جهة الاتصال») قبل أن نصل إلى معالجة التكرار
+      // عاماً («تعذّرت إضافة العميل») قبل أن نصل إلى معالجة التكرار
       // أدناه، فيرى المستخدم رسالتين متناقضتين.
       const { data, error } = await supabase
         .from('contacts')
@@ -89,7 +89,7 @@ export function QuickContactDialog({
 
       qc.invalidateQueries({ queryKey: ['contacts'] })
       qc.invalidateQueries({ queryKey: ['contact_work_links'] })
-      toast({ variant: 'success', title: 'تمت إضافة جهة الاتصال' })
+      toast({ variant: 'success', title: 'تمت إضافة العميل' })
       onCreated(data as Contact)
       onOpenChange(false)
     } catch (e) {
@@ -113,13 +113,13 @@ export function QuickContactDialog({
         }
         toast({
           variant: 'destructive',
-          title: 'هذا الجوال مسجّل لجهة اتصال أخرى',
+          title: 'هذا الجوال مسجّل لعميل آخر',
           description: 'ابحث عنه بالرقم، أو أدخِل رقماً مختلفاً.',
         })
       } else {
         toast({
           variant: 'destructive',
-          title: 'تعذّرت إضافة جهة الاتصال',
+          title: 'تعذّرت إضافة العميل',
           description: errMessage(e),
         })
       }
@@ -134,10 +134,10 @@ export function QuickContactDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <UserPlus className="h-5 w-5 text-gold" />
-            جهة اتصال جديدة
+            عميل جديد
           </DialogTitle>
           <DialogDescription>
-            الحد الأدنى الآن — أكمل بقية البيانات لاحقاً من ملف جهة الاتصال.
+            الحد الأدنى الآن — أكمل بقية البيانات لاحقاً من ملف العميل.
           </DialogDescription>
         </DialogHeader>
 

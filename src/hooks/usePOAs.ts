@@ -9,7 +9,7 @@ import { errMessage } from '@/lib/errors'
 
 const LIST_KEY = ['poas'] as const
 
-// لا embed لجهة الاتصال (لا FK)؛ فقط القضية (FK موجود).
+// لا embed لالعميل (لا FK)؛ فقط القضية (FK موجود).
 const SELECT = '*, case:cases(id,title,office_num,status)'
 
 function errToast(title: string) {

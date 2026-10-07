@@ -200,7 +200,7 @@ export function ReportsPage() {
           <StatCard label="إجمالي القضايا" value={data.cases_total} icon={Briefcase} tone="navy" />
           <StatCard label="القضايا الجارية" value={data.cases_active} icon={FolderClock} tone="green" />
           <StatCard label="القضايا المنتهية" value={data.cases_closed} icon={FolderCheck} tone="gray" />
-          <StatCard label="جهات الاتصال" value={data.contacts_total} icon={BookUser} tone="gold" />
+          <StatCard label="العملاء" value={data.contacts_total} icon={BookUser} tone="gold" />
           <StatCard label="الوكالات السارية" value={data.active_poas} icon={FileSignature} tone="navy" />
           <StatCard label="المهام المفتوحة" value={data.open_tasks} icon={ListTodo} tone="blue" />
           <StatCard label="الجلسات القادمة" value={data.upcoming_sessions} icon={CalendarDays} tone="gold" />
@@ -250,7 +250,7 @@ export function ReportsPage() {
           )}
         </ChartCard>
 
-        <ChartCard title="جهات الاتصال حسب التصنيف">
+        <ChartCard title="العملاء حسب التصنيف">
           {data ? (
             <DonutChart
               data={(data.contacts_by_category ?? []).map((d) => ({

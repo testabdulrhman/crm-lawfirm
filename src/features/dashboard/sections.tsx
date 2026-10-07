@@ -660,7 +660,7 @@ export function OfficeCard({
       preview: stats.cases_total > 0 ? `من ${fmtNumber(stats.cases_total)} قضية` : null,
       href: '/cases',
     },
-    { icon: BookUser, label: 'جهات الاتصال', value: stats.contacts, href: '/contacts' },
+    { icon: BookUser, label: 'العملاء', value: stats.contacts, href: '/contacts' },
     { icon: Users, label: 'الموظفون', value: stats.staff_active, href: '/team' },
   ]
 

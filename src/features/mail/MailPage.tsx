@@ -349,7 +349,7 @@ function ComposeForm({
     setText(t.body_email || t.body || '')
   }
 
-  // جهات الاتصال التي لديها بريد فقط — اختيارها يعبّئ حقل «إلى»
+  // العملاء التي لديها بريد فقط — اختيارها يعبّئ حقل «إلى»
   const withEmail = useMemo(
     () => (contacts ?? []).filter((c) => c.email && c.email.includes('@')),
     [contacts]
@@ -389,7 +389,7 @@ function ComposeForm({
       </DialogHeader>
       <div className="space-y-3">
         <div className="space-y-1.5">
-          <Label>جهة اتصال (اختياري — يعبّئ البريد)</Label>
+          <Label>عميل (اختياري — يعبّئ البريد)</Label>
           <ContactPicker
             contacts={withEmail}
             placeholder="ابحث بالاسم أو الجوال أو البريد…"

@@ -6,12 +6,12 @@ import { QuickContactDialog } from '@/components/QuickContactDialog'
 import { arNorm } from '@/lib/arabic'
 import type { Contact } from '@/types/db'
 
-// منتقي جهة اتصال بحثي خفيف (يصلح لـ 777 جهة). يُرجع الجهة كاملة عند الاختيار.
+// منتقي عميل بحثي خفيف (يصلح لـ 777 جهة). يُرجع الجهة كاملة عند الاختيار.
 export function ContactPicker({
   contacts,
   value,
   onSelect,
-  placeholder = 'ابحث عن جهة اتصال بالاسم أو الجوال…',
+  placeholder = 'ابحث عن عميل بالاسم أو الجوال…',
   allowCreate = true,
   createCategory = 'client',
 }: {
@@ -144,8 +144,8 @@ export function ContactPicker({
               <UserPlus className="h-3.5 w-3.5 shrink-0" />
               <span className="truncate">
                 {query.trim()
-                  ? `إضافة «${query.trim()}» جهة اتصال جديدة`
-                  : 'إضافة جهة اتصال جديدة'}
+                  ? `إضافة «${query.trim()}» عميلاً جديداً`
+                  : 'إضافة عميل جديد'}
               </span>
             </button>
           )}

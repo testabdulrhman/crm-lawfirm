@@ -199,7 +199,7 @@ export function LegalServiceForm({
 
         {/* الموكّل */}
         <div className="space-y-1.5 rounded-lg border border-dashed p-3">
-          <Label>الموكّل (من جهات الاتصال — اختياري)</Label>
+          <Label>الموكّل (من العملاء — اختياري)</Label>
           <ContactPicker
             contacts={contacts ?? []}
             value={clientId}

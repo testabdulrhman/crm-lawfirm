@@ -139,7 +139,7 @@ export function POAForm({
 
         {/* الموكّل */}
         <div className="space-y-1.5 rounded-lg border border-dashed p-3">
-          <Label>الموكّل (اختر من جهات الاتصال — اختياري)</Label>
+          <Label>الموكّل (اختر من العملاء — اختياري)</Label>
           <ContactPicker
             contacts={contacts ?? []}
             value={clientId}

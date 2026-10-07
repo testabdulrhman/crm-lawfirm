@@ -261,7 +261,7 @@ function PartyCard({
                   className="inline-flex items-center gap-1 rounded-full bg-gold/15 px-2 py-0.5 text-xs text-gold-700 hover:underline dark:text-gold-300"
                 >
                   <BookUser className="h-3 w-3" />
-                  من جهات الاتصال
+                  من العملاء
                 </Link>
               )}
             </div>
@@ -371,7 +371,7 @@ function PartyForm({
     },
   })
 
-  // عند اختيار جهة اتصال: عبّئ الحقول (تبقى قابلة للتعديل) واضبط contact_id
+  // عند اختيار عميل: عبّئ الحقول (تبقى قابلة للتعديل) واضبط contact_id
   const onPickContact = (c: Contact | null) => {
     setContactId(c?.id ?? null)
     if (c) {
@@ -409,15 +409,15 @@ function PartyForm({
       </DialogHeader>
 
       <div className="my-4 space-y-3">
-        {/* اختيار من جهات الاتصال (اختياري) — يعبّئ الحقول تلقائياً */}
+        {/* اختيار من العملاء (اختياري) — يعبّئ الحقول تلقائياً */}
         <div className="space-y-1.5 rounded-lg border border-dashed p-3">
-          <Label>اختر من جهات الاتصال (اختياري)</Label>
+          <Label>اختر من العملاء (اختياري)</Label>
           <ContactPicker
             contacts={contacts ?? []}
             value={contactId}
             onSelect={onPickContact}
             // منتقٍ مساعد لا سجلّ موكّلين: الطرف قد يكون خصماً، والإدخال
-            // اليدوي متاح أدناه — فإنشاء جهة اتصال هنا يلوّث القائمة.
+            // اليدوي متاح أدناه — فإنشاء عميل هنا يلوّث القائمة.
             allowCreate={false}
           />
           <p className="text-xs text-muted-foreground">

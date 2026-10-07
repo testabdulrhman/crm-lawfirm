@@ -112,7 +112,7 @@ const navSections: { title?: string; items: NavItem[] }[] = [
       { label: 'التقويم', href: '/calendar', icon: CalendarRange, collab: true, primary: true },
       { label: 'النقاشات', href: '/discussions', icon: MessagesSquare, badge: 'unread_discussions', collab: true, primary: true },
       // محادثات الواتساب مع العملاء — منفصلة عن النقاشات: ما يُكتب هنا يصل للعميل (2026-10-06)
-      { label: 'العملاء', href: '/clients', icon: MessageCircle, badge: 'unread_client_chats', primary: true },
+      { label: 'واتساب', href: '/clients', icon: MessageCircle, badge: 'unread_client_chats', primary: true },
     ],
   },
   {
@@ -143,7 +143,7 @@ const navSections: { title?: string; items: NavItem[] }[] = [
   {
     title: 'التواصل',
     items: [
-      { label: 'جهات الاتصال', href: '/contacts', icon: BookUser },
+      { label: 'العملاء', href: '/contacts', icon: BookUser },
       { label: 'الرسائل', href: '/inbox', icon: MessageSquare },
       { label: 'البريد', href: '/mail', icon: Mail },
       {

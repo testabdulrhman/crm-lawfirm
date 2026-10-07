@@ -1,4 +1,4 @@
-// تسميات وألوان جهات الاتصال (عربية)
+// تسميات وألوان العملاء (عربية)
 import type { BadgeProps } from '@/components/ui/badge'
 import type { ContactCategory } from '@/types/db'
 
@@ -14,8 +14,9 @@ export const CATEGORY_BADGE: Record<ContactCategory, BadgeProps['variant']> = {
   service: 'gold', // جهة خدمة = ذهبي
 }
 
+// «متصل» لا يُختار بعد اليوم: المتصلون في الـHub (2026-10-07)؛ تبقى تسميته لما قد يرد من قديم
 export const CATEGORY_OPTIONS: { value: ContactCategory; label: string }[] = (
-  Object.keys(CATEGORY_LABELS) as ContactCategory[]
+  (Object.keys(CATEGORY_LABELS) as ContactCategory[]).filter((c) => c !== 'caller')
 ).map((value) => ({ value, label: CATEGORY_LABELS[value] }))
 
 export const categoryLabel = (c: string | null | undefined): string =>

@@ -3,7 +3,7 @@
 // يصل خارج نافذة الـ٢٤ ساعة. والوكالة لا تُجدَّد بل يُعاد إصدارها (اصطلاح النظام).
 //
 // المستلم: أغلب الوكالات بلا client_id (اسم نصي فقط)، فيُستنتج بالترتيب: جهة الوكالة ← موكّل
-// ملفها ← تطابق وحيد للاسم في جهات الاتصال؛ وإلا يختاره الموظف، ويُحفظ الربط على الوكالة.
+// ملفها ← تطابق وحيد للاسم في العملاء؛ وإلا يختاره الموظف، ويُحفظ الربط على الوكالة.
 import { useEffect, useMemo, useState } from 'react'
 import { Loader2, MessageCircle, Send } from 'lucide-react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -82,7 +82,7 @@ export function POAReissueDialog({
     const own = byId(poa.client_id)
     if (own) {
       setContact(own)
-      setHow('جهة الاتصال المسجّلة على الوكالة')
+      setHow('العميل المسجّل على الوكالة')
       return
     }
     const fromCase = byId(caseContactId)
@@ -96,7 +96,7 @@ export function POAReissueDialog({
       const hits = contacts.filter((c) => arNorm(c.name ?? '').trim() === name)
       if (hits.length === 1) {
         setContact(hits[0])
-        setHow('تطابق اسم الموكّل في جهات الاتصال')
+        setHow('تطابق اسم الموكّل في العملاء')
       }
     }
   }, [open, contacts, caseContactId, poa.client_id, poa.client_name, contact])
@@ -179,7 +179,7 @@ export function POAReissueDialog({
                 setContact(c)
                 setHow(c ? 'اختيار يدوي — يُربط بالوكالة بعد الإرسال' : null)
               }}
-              placeholder="اختر الموكّل من جهات الاتصال…"
+              placeholder="اختر الموكّل من العملاء…"
             />
             {contact && (
               <p className="text-xs text-muted-foreground">

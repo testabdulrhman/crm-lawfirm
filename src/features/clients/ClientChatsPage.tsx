@@ -112,8 +112,8 @@ export function ClientChatsPage() {
                 <MessageCircle className="h-4 w-4" />
               </span>
               <div className="min-w-0">
-                <p className="text-sm font-semibold">العملاء</p>
-                <p className="text-[11px] text-muted-foreground">محادثات الواتساب — تصل للعميل</p>
+                <p className="text-sm font-semibold">واتساب</p>
+                <p className="text-[11px] text-muted-foreground">محادثات العملاء — تصل للعميل</p>
               </div>
             </div>
             <div className="relative">

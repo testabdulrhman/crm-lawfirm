@@ -388,7 +388,7 @@ function ConflictDialog({
                 <div className="flex gap-2 rounded-xl bg-muted/60 p-3 text-xs text-muted-foreground">
                   <Info className="mt-0.5 h-4 w-4 shrink-0" />
                   <p>
-                    فُحص في {fmtNumber(coverage.contacts)} جهة اتصال،{' '}
+                    فُحص في {fmtNumber(coverage.contacts)} عميل،{' '}
                     {fmtNumber(coverage.cases)} عنوان ملف،{' '}
                     {fmtNumber(coverage.case_parties)} طرف مسجّل،{' '}
                     {fmtNumber(coverage.team_members)} من الفريق.

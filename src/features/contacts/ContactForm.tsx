@@ -52,7 +52,7 @@ type FormValues = z.infer<typeof schema>
 function toDefaults(c?: Contact | null): FormValues {
   return {
     name: c?.name ?? '',
-    category: c?.category ?? 'caller',
+    category: c?.category ?? 'client',
     entity_type: c?.entity_type ?? 'فرد',
     phone: c?.phone ?? '',
     phone2: c?.phone2 ?? '',
@@ -148,7 +148,7 @@ export function ContactForm({
   return (
     <form onSubmit={handleSubmit(onSubmit)}>
       <DialogHeader>
-        <DialogTitle>{isEdit ? 'تعديل جهة اتصال' : 'جهة اتصال جديدة'}</DialogTitle>
+        <DialogTitle>{isEdit ? 'تعديل عميل' : 'عميل جديد'}</DialogTitle>
       </DialogHeader>
 
       <div className="my-4 max-h-[60vh] overflow-y-auto pl-1 pr-1">

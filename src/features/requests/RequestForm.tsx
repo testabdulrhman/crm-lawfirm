@@ -32,7 +32,7 @@ import type { Contact, IncomingRequest, IncomingRequestInput } from '@/types/db'
 const NONE = '__none__'
 
 const schema = z.object({
-  client_name: z.string().min(1, 'اختر العميل من جهات الاتصال أو أضفه جديداً'),
+  client_name: z.string().min(1, 'اختر العميل من القائمة أو أضفه جديداً'),
   client_phone: z.string().optional(),
   client_email: z.string().optional(),
   request_type: z.string().min(1, 'نوع الطلب مطلوب'),
@@ -100,7 +100,7 @@ export function RequestForm({
     defaultValues: toDefaults(request),
   })
 
-  // طلب قديم مسجل بالاسم الحر بلا جهة اتصال — نعرضه بدل إخفائه
+  // طلب قديم مسجل بالاسم الحر بلا عميل — نعرضه بدل إخفائه
   const watchedClientId = watch('client_id')
   const legacyName =
     isEdit && (!watchedClientId || watchedClientId === NONE)
@@ -147,8 +147,8 @@ export function RequestForm({
 
       <div className="my-4 max-h-[60vh] space-y-3 overflow-y-auto pl-1 pr-1">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {/* العميل من سجل جهات الاتصال — الأساس لا الاستثناء: الجديد
-              يُنشأ جهة اتصال من داخل المنتقي فيبقى في سجل المكتب الموحد */}
+          {/* العميل من سجل العملاء — الأساس لا الاستثناء: الجديد
+              يُنشأ عميلاً من داخل المنتقي فيبقى في سجل المكتب الموحد */}
           <div className="space-y-1.5 sm:col-span-2">
             <Label>العميل *</Label>
             <Controller
@@ -169,7 +169,7 @@ export function RequestForm({
             />
             {legacyName && (
               <p className="text-xs text-muted-foreground">
-                الطلب مسجل باسم «{legacyName}» بلا جهة اتصال — اختر جهة لربطه
+                الطلب مسجل باسم «{legacyName}» بلا عميل — اختر عميلاً لربطه
                 (أو اتركه كما هو).
               </p>
             )}

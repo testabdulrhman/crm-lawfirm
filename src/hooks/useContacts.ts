@@ -140,9 +140,9 @@ export function useCreateContact() {
     },
     onSuccess: () => {
       invalidateLists(qc)
-      toast({ variant: 'success', title: 'تمت إضافة جهة الاتصال' })
+      toast({ variant: 'success', title: 'تمت إضافة العميل' })
     },
-    onError: errToast('تعذّرت إضافة جهة الاتصال'),
+    onError: errToast('تعذّرت إضافة العميل'),
   })
 }
 
@@ -167,9 +167,9 @@ export function useUpdateContact() {
     },
     onSuccess: () => {
       invalidateLists(qc)
-      toast({ variant: 'success', title: 'تم تحديث جهة الاتصال' })
+      toast({ variant: 'success', title: 'تم تحديث العميل' })
     },
-    onError: errToast('تعذّر تحديث جهة الاتصال'),
+    onError: errToast('تعذّر تحديث العميل'),
   })
 }
 
@@ -183,8 +183,8 @@ export function useDeleteContact() {
     },
     onSuccess: () => {
       invalidateLists(qc)
-      toast({ variant: 'success', title: 'تم حذف جهة الاتصال' })
+      toast({ variant: 'success', title: 'تم حذف العميل' })
     },
-    onError: errToast('تعذّر حذف جهة الاتصال'),
+    onError: errToast('تعذّر حذف العميل'),
   })
 }

@@ -182,7 +182,7 @@ export function PropertyTransferForm({
             contacts={contacts ?? []}
             value={sellerId}
             onSelect={fillSeller}
-            placeholder="اختر البائع من جهات الاتصال…"
+            placeholder="اختر البائع من العملاء…"
           />
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <div className="space-y-1.5">
@@ -217,7 +217,7 @@ export function PropertyTransferForm({
             contacts={contacts ?? []}
             value={buyerId}
             onSelect={fillBuyer}
-            placeholder="اختر المشتري من جهات الاتصال…"
+            placeholder="اختر المشتري من العملاء…"
           />
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <div className="space-y-1.5">

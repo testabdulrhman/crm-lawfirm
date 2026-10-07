@@ -18,7 +18,7 @@ export type SmsCategory =
 
 export interface IncomingSms {
   id: string
-  recipient_name: string | null // اسم المرسل (أو اسم جهة الاتصال المطابقة)
+  recipient_name: string | null // اسم المرسل (أو اسم العميل المطابقة)
   phone: string | null
   message: string | null
   created_at: string

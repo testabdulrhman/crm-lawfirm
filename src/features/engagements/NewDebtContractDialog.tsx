@@ -146,7 +146,7 @@ export function NewDebtContractDialog({ onDone }: { onDone: () => void }) {
 
       <div className="my-4 max-h-[62vh] space-y-3 overflow-y-auto pl-1 pr-1">
         <div className="space-y-1.5">
-          <Label>الموكّل (اختيار من جهات الاتصال يعبئ الاسم والجوال والبريد)</Label>
+          <Label>الموكّل (اختيار من العملاء يعبئ الاسم والجوال والبريد)</Label>
           <ContactPicker
             contacts={contacts ?? []}
             value={clientId}

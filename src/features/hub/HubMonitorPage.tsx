@@ -285,7 +285,7 @@ function PhoneView({ r }: { r: PhoneReport }) {
       <div className="flex flex-wrap items-center gap-2">
         {r.staff ? <Badge className="bg-navy text-white">موظف: {r.staff.name}{r.staff.active ? '' : ' (موقوف)'}</Badge> : null}
         {r.flags?.law_client ? <Badge variant="secondary">عميل المكتب</Badge> : null}
-        {r.flags?.law && !r.flags?.law_client ? <Badge variant="outline">جهة اتصال بالمكتب</Badge> : null}
+        {r.flags?.law && !r.flags?.law_client ? <Badge variant="outline">مسجّل بالمكتب</Badge> : null}
         {r.flags?.bankruptcy ? <Badge variant="secondary">دائن في الإفلاس</Badge> : null}
         {r.conversation?.state ? <Badge variant="outline">المحادثة: {r.conversation.state}</Badge> : null}
         {r.conversation?.assigned_system ? (
