@@ -45,8 +45,7 @@ import {
 } from '@/lib/contactLabels'
 import type { Contact, ContactWorkLinks } from '@/types/db'
 
-// فرز «الارتباط» (مرتبطة بعمل / غير مرتبطة) أُزيل 2026-10-07 بطلب المدير: «ما احتاجه الآن، لأنها الحين صارت
-// قائمة عملاء» — كان يفصل الموكّلين عن المتصلين قبل نقل المتصلين إلى الـHub.
+type LinkFilter = 'all' | 'linked' | 'unlinked'
 const PAGE = 50
 
 // خيارات الفرز
@@ -88,6 +87,7 @@ export function ContactsPage() {
   const [search, setSearch] = usePageState('contacts:q', '')
   const [category, setCategory] = usePageState<string>('contacts:category', 'all')
   const [entity, setEntity] = usePageState<string>('contacts:entity', 'all')
+  const [linkFilter, setLinkFilter] = usePageState<LinkFilter>('contacts:link', 'all')
   const [source, setSource] = usePageState<string>('contacts:source', 'all')
   const [sort, setSort] = usePageState<string>('contacts:sort', 'newest')
   const [visible, setVisible] = usePageState('contacts:visible', PAGE)
@@ -105,9 +105,14 @@ export function ContactsPage() {
       if (category !== 'all' && (c.category ?? '') !== category) return false
       if (entity !== 'all' && (c.entity_type ?? '') !== entity) return false
       if (source !== 'all' && (c.source ?? 'manual') !== source) return false
+      if (linkFilter !== 'all') {
+        const total = workLinks?.get(c.id)?.total_links ?? 0
+        if (linkFilter === 'linked' && total === 0) return false
+        if (linkFilter === 'unlinked' && total > 0) return false
+      }
       return true
     })
-  }, [data, search, category, entity, source])
+  }, [data, search, category, entity, source, linkFilter, workLinks])
 
   // الفرز حسب اختيار المستخدم (القائمة أصلاً من الأحدث للأقدم)
   const sorted = useMemo(() => {
@@ -141,6 +146,7 @@ export function ContactsPage() {
     setSearch('')
     setCategory('all')
     setEntity('all')
+    setLinkFilter('all')
     setSource('all')
     resetPage()
   }
@@ -183,6 +189,11 @@ export function ContactsPage() {
               {o.label}
             </Chip>
           ))}
+        </FilterRow>
+        <FilterRow label="الارتباط">
+          <Chip active={linkFilter === 'all'} onClick={() => { setLinkFilter('all'); resetPage() }}>الكل</Chip>
+          <Chip active={linkFilter === 'linked'} onClick={() => { setLinkFilter('linked'); resetPage() }}>مرتبطة بعمل</Chip>
+          <Chip active={linkFilter === 'unlinked'} onClick={() => { setLinkFilter('unlinked'); resetPage() }}>غير مرتبطة</Chip>
         </FilterRow>
         <FilterRow label="النوع">
           <Chip active={entity === 'all'} onClick={() => { setEntity('all'); resetPage() }}>الكل</Chip>
