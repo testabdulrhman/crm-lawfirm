@@ -383,6 +383,13 @@ private struct DiscussionRowView: View {
             if row.isDm {
                 AvatarCircle(member: row.peerMember, size: 38)
             } else {
+                if row.kind == "bankruptcy" {
+                    // إجراء الإفلاس: دائرة بحلقة خضراء بلون لجنة الإفلاس (2026-10-07)
+                    Text(matterKindEmoji(row.kind)).font(.system(size: 17))
+                        .frame(width: 38, height: 38)
+                        .background(BankruptcyBrand.pale, in: Circle())
+                        .overlay(Circle().stroke(BankruptcyBrand.green, lineWidth: 2.5))
+                } else {
                 Group {
                     if row.isGeneral || row.kind == "channel" {
                         Image(systemName: row.isGeneral ? "megaphone.fill" : "building.columns.fill")
@@ -394,6 +401,7 @@ private struct DiscussionRowView: View {
                 .frame(width: 38, height: 38)
                 .background(row.isGeneral || row.kind == "channel" ? Theme.navy : Theme.goldPale)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
+                }
             }
 
             VStack(alignment: .leading, spacing: 3) {

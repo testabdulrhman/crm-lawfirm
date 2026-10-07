@@ -347,13 +347,13 @@ struct NewDmSheet: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     List {
-                    // «ملاحظاتي»: راسل نفسك — محفوظاتك الخاصة (طلب المدير 2026-10-07)
+                    // راسل نفسك — محفوظاتك الخاصة باسمك (طلب المدير 2026-10-07)
                     if search.isEmpty, let me = sb.member {
-                        Button { Task { await open(me, title: "ملاحظاتي") } } label: {
+                        Button { Task { await open(me) } } label: {
                             HStack(spacing: 10) {
                                 AvatarCircle(member: me, size: 36)
                                 VStack(alignment: .leading, spacing: 1) {
-                                    Text("ملاحظاتي")
+                                    Text("\(me.short_name ?? me.name ?? "أنت") (أنت)")
                                         .font(.system(size: 15, weight: .semibold))
                                         .foregroundStyle(Theme.navy)
                                     Text("راسل نفسك — ملاحظات وملفات لا يراها غيرك")

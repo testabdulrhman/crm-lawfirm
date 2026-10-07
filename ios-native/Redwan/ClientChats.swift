@@ -279,7 +279,7 @@ private struct ClientThreadRow: View {
                     }
                 }
                 if let n = t.matter?.office_num, t.case_id != nil {
-                    Text("\(matterKindEmoji(t.matter?.kind)) \(n)")
+                    HStack(spacing: 4) { MatterKindMark(kind: t.matter?.kind, size: 10); Text(n) }
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(Theme.goldDark)
                         .padding(.horizontal, 7).padding(.vertical, 2)

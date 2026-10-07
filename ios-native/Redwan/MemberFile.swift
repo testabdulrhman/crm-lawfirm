@@ -901,7 +901,7 @@ struct MemberProfileView: View {
                     ForEach(matters) { mt in
                         Button { openedCase = mt.id } label: {
                             HStack(spacing: 8) {
-                                Text(matterKindEmoji(mt.kind))
+                                MatterKindMark(kind: mt.kind, size: 16)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(mt.title ?? "ملف").font(.system(size: 14, weight: .medium)).foregroundStyle(Theme.navy).lineLimit(1)
                                     if let n = mt.office_num {

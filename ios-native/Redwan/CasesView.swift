@@ -169,7 +169,7 @@ struct CaseRowView: View {
         HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text(matterKindEmoji(row.kind)).font(.system(size: 14))
+                    MatterKindMark(kind: row.kind, size: 14)
                     Text(row.title ?? "ملف")
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(Theme.navy)
