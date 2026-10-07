@@ -10,6 +10,7 @@
 // =============================================================
 
 import Anthropic from 'npm:@anthropic-ai/sdk';
+import { cachedText, logCacheUsage } from '../_shared/prompt-cache.ts';
 import { HOURS_TEXT, REQUEST_TYPES } from './texts.ts';
 
 // Sonnet 5 بجهدٍ منخفض يكفي للاستقبال (قرار المدير 2026-09-23)، وأسرع وأرخص من Opus
@@ -225,11 +226,15 @@ export async function think(i: BrainInput): Promise<{ out: BrainOutput; ms: numb
     model: MODEL,
     max_tokens: 2000,
     output_config: { effort: 'low', format: { type: 'json_schema', schema: SCHEMA } },
-    system: systemPrompt(i.fee, i.bookingUrl),
+    // التخزين المؤقت: التعليمات (~٢٤٠٠ توكن) ثابتة بين العملاء (السعر ورابط الحجز قيم إعدادات نادرة التغيّر)،
+    // وكل ما يتغيّر (الدوام، التاريخ، المحادثة) في رسالة المستخدم أصلاً. والوارد يتباعد عادةً بين ٥ دقائق
+    // وساعة، فمدة الساعة.
+    system: [cachedText(systemPrompt(i.fee, i.bookingUrl), '1h')],
     messages: [{ role: 'user', content: userContent(i) }],
   // deno-lint-ignore no-explicit-any
   } as any);
   const ms = Math.round(performance.now() - t0);
+  logCacheUsage('wa-reception', res.usage);
   if (res.stop_reason === 'refusal') throw new Error(`refusal: ${res.stop_details?.category ?? ''}`);
   if (res.stop_reason === 'max_tokens') throw new Error('max_tokens');
   const text = (res.content ?? []).filter((b: { type: string }) => b.type === 'text')
