@@ -319,9 +319,18 @@ struct CaseStreamView: View {
         }
         // متابعة حيّة ما دامت الشاشة ظاهرة والتطبيق في المقدّمة (اقتراح المدير 2026-10-07: «ودي المحادثة
         // تنزل مباشرة بدون ما أعمل تحديث للصفحة»): بصمة خفيفة كل ٤ ثوانٍ، والجلب الكامل حين تتغيّر فقط
+        // البث المباشر: رسالة أو تعديل أو تفاعل في هذا النقاش ⇒ جلبٌ فوري
+        .onReceive(NotificationCenter.default.publisher(for: .discussionChanged)) { note in
+            guard loaded, let c = note.object as? DiscussionChange else { return }
+            let mine = c.table == "case_comment_reactions"
+                ? msgs.contains { $0.id == c.commentId }
+                : c.caseId == caseId
+            if mine { Task { await load() } }
+        }
         .task(id: "live|\(caseId ?? "general")") {
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(4))
+                // البث المباشر متصل ⇒ السؤال احتياطٌ بطيء؛ منقطع ⇒ كل ٤ ثوانٍ حتى يعود
+                try? await Task.sleep(for: .seconds(LiveDiscussions.shared.connected ? 30 : 4))
                 guard loaded, scenePhase == .active else { continue }
                 guard let stamp = try? await sb.discussionStamp(caseId: caseId) else { continue }
                 if liveStamp == nil { liveStamp = stamp; continue }
@@ -1168,9 +1177,17 @@ private struct ThreadView: View {
         .navigationBarTitleDisplayMode(.inline)
         // متابعة حيّة ما دامت الشاشة ظاهرة والتطبيق في المقدّمة (اقتراح المدير 2026-10-07: «ودي المحادثة
         // تنزل مباشرة بدون ما أعمل تحديث للصفحة»): بصمة خفيفة كل ٤ ثوانٍ، والجلب الكامل حين تتغيّر فقط
+        // البث المباشر: ردٌّ في هذا الخيط أو تعديل أو تفاعل ⇒ جلبٌ فوري
+        .onReceive(NotificationCenter.default.publisher(for: .discussionChanged)) { note in
+            guard loaded, let c = note.object as? DiscussionChange else { return }
+            if c.parentId == root.id || c.commentId == root.id || replies.contains(where: { $0.id == c.commentId }) {
+                Task { await load() }
+            }
+        }
         .task(id: "live|\(root.id)") {
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(4))
+                // البث المباشر متصل ⇒ السؤال احتياطٌ بطيء؛ منقطع ⇒ كل ٤ ثوانٍ حتى يعود
+                try? await Task.sleep(for: .seconds(LiveDiscussions.shared.connected ? 30 : 4))
                 guard loaded, scenePhase == .active else { continue }
                 guard let stamp = try? await sb.discussionStamp(caseId: nil, parentId: root.id) else { continue }
                 if liveStamp == nil { liveStamp = stamp; continue }

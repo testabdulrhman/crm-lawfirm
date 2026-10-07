@@ -19,8 +19,8 @@ struct SBError: LocalizedError {
 final class SB: ObservableObject {
     static let shared = SB()
 
-    private let baseURL = URL(string: "https://zwaahunavepleczuamuy.supabase.co")!
-    private let anonKey =
+    let baseURL = URL(string: "https://zwaahunavepleczuamuy.supabase.co")!
+    let anonKey =
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp3YWFodW5hdmVwbGVjenVhbXV5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyOTY1ODUsImV4cCI6MjA4OTg3MjU4NX0.kXByPtJOV-TN7G2f8jcr0DwAX4ldtSu576Rpitwls7M"
 
     struct Session: Codable {

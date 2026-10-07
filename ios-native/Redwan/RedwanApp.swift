@@ -120,6 +120,8 @@ struct RootView: View {
 
 struct MainTabs: View {
     @ObservedObject private var router = PushRouter.shared
+    @EnvironmentObject private var sb: SB
+    @Environment(\.scenePhase) private var scenePhase
     @State private var tab = 0
     /// مجموع غير المقروء في النقاشات — شارة التبويب. يُحدَّث عند الظهور
     /// وكل ٣٠ ثانية، وهو نفس ما يحسبه case_discussions لكل موظف بحسابه.
@@ -158,6 +160,20 @@ struct MainTabs: View {
         .task { switchTab(for: router.route) }
         // الشارة تنقص لحظة قراءة نقاش، لا بعد ٣٠ ثانية
         .onReceive(NotificationCenter.default.publisher(for: .discussionRead)) { _ in
+            Task { await refreshUnread() }
+        }
+        // النقاش لحظي: اتصال دائم بالخادم ما دام التطبيق في المقدّمة (2026-10-07)
+        .task { if let t = sb.session?.accessToken { LiveDiscussions.shared.start(token: t) } }
+        .onChange(of: sb.session?.accessToken) { _, t in
+            if let t { LiveDiscussions.shared.start(token: t) } else { LiveDiscussions.shared.stop() }
+        }
+        .onChange(of: scenePhase) { _, p in
+            if p == .active, let t = sb.session?.accessToken { LiveDiscussions.shared.start(token: t) }
+            if p == .background { LiveDiscussions.shared.stop() }
+        }
+        .onDisappear { LiveDiscussions.shared.stop() }
+        // رسالة جديدة في أي نقاش ⇒ شارة التبويب فوراً
+        .onReceive(NotificationCenter.default.publisher(for: .discussionChanged)) { _ in
             Task { await refreshUnread() }
         }
         .onReceive(NotificationCenter.default.publisher(for: .clientChatRead)) { _ in

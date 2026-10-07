@@ -101,6 +101,7 @@ struct DiscussionsView: View {
     /// محادثة عميل تُفتح من إشعار
     @State private var clientPhone: String?
     @State private var clientUnread = 0
+    @State private var listRefresh: Task<Void, Never>?
 
     private var segmentBar: some View {
         Picker("", selection: $segment) {
@@ -289,6 +290,16 @@ struct DiscussionsView: View {
         }
         .retryIfCancelled($cancelled) { await load() }
         .onChange(of: router.route) { _, _ in openFromPush() }
+        // البث المباشر: رسالة في أي نقاش ⇒ القائمة وعدّاداتها فوراً (بتجميع نصف ثانية للدفعات)
+        .onReceive(NotificationCenter.default.publisher(for: .discussionChanged)) { note in
+            guard (note.object as? DiscussionChange)?.table == "case_comments" else { return }
+            listRefresh?.cancel()
+            listRefresh = Task {
+                try? await Task.sleep(for: .milliseconds(500))
+                guard !Task.isCancelled else { return }
+                await load()
+            }
+        }
         .task {
             while !Task.isCancelled {
                 await refreshClientUnread()
