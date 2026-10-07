@@ -95,26 +95,98 @@ const SYSTEM =
   "استخرج ما تمّ في الجلسة من المحضر المرفق حرفيّاً دون تخمين. " +
   "أجب بالعربية فقط وبصيغة JSON خام دون أي نص أو شرح أو سياج قبله أو بعده.";
 
-const USER = `استخرج بيانات هذه الجلسة من محضر الجلسة المرفق أدناه.
-استخرج رقم هذه الجلسة إن ذُكر كعدد صحيح.
-اجعل outcome ملخّصاً دقيقاً موجزاً لما تمّ (لا يتجاوز 120 كلمة).
-حدّد الخطوة القادمة من واقع المحضر:
-- إن أُجّلت الجلسة لتاريخ لاحق ← next_action="next_session" مع التاريخ.
-- إن حُجزت القضية للحكم ← next_action="await_ruling" مع تاريخ النطق.
-- إن صدر حكم نهائي ← next_action="case_closed".
-- غير ذلك ← next_action="none".
-حوّل أي تاريخ هجري إلى ميلادي YYYY-MM-DD. اترك أي قيمة لا تجدها = null.
+// ⚠️ 2026-10-07 (طلب المدير: «اشوف الملخص مرة قصير إذا سجل المحضر»): كان outcome «ملخّصاً موجزاً لا يتجاوز
+// 120 كلمة» فجاء متوسطه ٤٦ كلمة وضاع فيه ما قدّمه كل طرف وما قررته الدائرة والمطلوب منا. صار المحضر يُفكَّك
+// أقساماً بلا سقف (outcome يُركَّب منها هنا)، وملخّص قصير منفصل للتقرير والقوائم، و«المطلوب منا» قائمة بمواعيدها
+// تصير مهام. (الحضور مستبعد بقرار المدير: «مالها داعي».)
+function userPrompt(ctx: { client?: string | null; matter?: string | null }) {
+  const who = ctx.client
+    ? `موكّلنا (طرفنا) هو: «${ctx.client}»${ctx.matter ? ` في «${ctx.matter}»` : ""}. «طرفنا» = موكّلنا ووكيله (المكتب)، و«الخصم» = الطرف الآخر.`
+    : `«طرفنا» = الطرف الذي يمثّله المكتب (الوكيل الحاضر عن موكّلنا)، و«الخصم» = الطرف الآخر.`;
+  return `استخرج بيانات هذه الجلسة من محضر الجلسة المرفق أدناه. ${who}
+
+القواعد:
+- انقل ما ورد في المحضر كاملاً وبدقة ولا تختصر مضمونه — كل طلب أو دفع أو مستند أو قرار يُذكر. لا تضف شيئاً ليس في المحضر.
+- كل قسم نقاط قصيرة واضحة (كل نقطة جملة)، بلا مقدمات. القسم الذي لا يرد له شيء في المحضر = [].
+- لا تذكر الحضور والغياب.
+- «المطلوب منا»: كل ما كلّفت به الدائرةُ طرفَنا أو يلزمنا فعله قبل الموعد القادم (تقديم مذكرة، إحضار مستند، رد على طلب، سداد…)، مع موعده إن ذُكر أو كان هو موعد الجلسة القادمة.
+- التواريخ: انقل التاريخ الهجري كما ورد في حقل *_hijri (مثل 1448/04/23) ولا تحوّله بنفسك — يحوّله النظام بتقويم أم القرى. وإن ورد التاريخ ميلادياً فضعه في الحقل الميلادي YYYY-MM-DD. اترك أي قيمة لا تجدها = null.
+- حدّد الخطوة القادمة: أُجّلت لتاريخ ← next_session، حُجزت للحكم ← await_ruling، صدر حكم نهائي ← case_closed، غير ذلك ← none.
 
 أرجِع JSON:
 {
   "session_number": رقم الجلسة عدداً أو null,
-  "outcome": "ملخّص دقيق لما تمّ في الجلسة",
+  "summary": "ما انتهت إليه الجلسة في جملة أو جملتين لا تتجاوزان 40 كلمة — للعرض السريع وتقرير العميل، بلا أسماء الخصوم الكاملة ولا أرقام المواد",
+  "our_submissions": ["ما قدّمه طرفنا أو طلبه أو دفع به"],
+  "opponent_submissions": ["ما قدّمه الخصم أو طلبه أو دفع به"],
+  "court_decisions": ["ما قررته الدائرة أو طلبته أو أمرت به"],
+  "our_obligations": [{"task": "المطلوب منا بصيغة أمر قصيرة", "due_date": "YYYY-MM-DD أو null", "due_date_hijri": "كما ورد أو null"}],
+  "postponement_reason": "سبب التأجيل كما ورد أو null",
   "next_action": "none | next_session | await_ruling | case_closed",
   "next_session_date": "YYYY-MM-DD أو null",
+  "next_session_date_hijri": "كما ورد أو null",
   "next_session_time": "HH:MM أو null",
   "ruling_due_date": "YYYY-MM-DD أو null",
+  "ruling_due_date_hijri": "كما ورد أو null",
   "hijri_note": "التواريخ الهجرية كما وردت أو null"
 }`;
+}
+
+/**
+ * هجري كما قرأه النموذج («1448/04/23 هـ»، «٢٣/٠٤/١٤٤٨») ← ميلادي بتقويم أم القرى. النموذج يقرأ الهجري
+ * صحيحاً ويخطئ في تحويله بيوم (بلاغ المدير 2026-10-07 في الصك)، فالتحويل هنا لا عنده. null = لا يُفهم.
+ */
+function hijriTextToISO(text: unknown): string | null {
+  if (!text) return null;
+  const latin = String(text).replace(/[٠-٩]/g, (c) => String("٠١٢٣٤٥٦٧٨٩".indexOf(c)));
+  const n = (latin.match(/\d+/g) ?? []).map(Number);
+  if (n.length < 3) return null;
+  let y: number, m: number, d: number;
+  if (n[0] >= 1300 && n[0] <= 1600) [y, m, d] = [n[0], n[1], n[2]];
+  else if (n[2] >= 1300 && n[2] <= 1600) [d, m, y] = [n[0], n[1], n[2]];
+  else return null;
+  if (m < 1 || m > 12 || d < 1 || d > 30) return null;
+  const fmt = new Intl.DateTimeFormat("en-u-ca-islamic-umalqura-nu-latn", { year: "numeric", month: "numeric", day: "numeric", timeZone: "UTC" });
+  const approx = Date.UTC(622, 6, 16) + ((y - 1) * 354.367 + (m - 1) * 29.53 + (d - 1)) * 864e5;
+  for (let off = -45; off <= 45; off++) {
+    const t = new Date(approx + off * 864e5);
+    const p = Object.fromEntries(fmt.formatToParts(t).map((x) => [x.type, x.value]));
+    if (Number(p.year) === y && Number(p.month) === m && Number(p.day) === d) return t.toISOString().slice(0, 10);
+  }
+  return null;
+}
+
+/** الميلادي: من الهجري المقروء إن وُجد، وإلا ميلادي المحضر نفسه */
+const pickDate = (greg: unknown, hijri: unknown): string | null =>
+  hijriTextToISO(hijri) ?? (/^\d{4}-\d{2}-\d{2}$/.test(String(greg ?? "")) ? String(greg) : null);
+
+const list = (v: unknown): string[] =>
+  Array.isArray(v) ? v.map((x) => String(x ?? "").trim()).filter(Boolean) : [];
+
+const ymd = (d: string) => d.replaceAll("-", "/");
+
+/** نتيجة الجلسة كاملةً بأقسامها — ما يُحفظ في sessions.outcome ويظهر في الملف */
+function composeOutcome(p: any): string {
+  const parts: string[] = [];
+  const sec = (title: string, items: string[]) => {
+    if (items.length) parts.push(`${title}:\n${items.map((x) => `• ${x}`).join("\n")}`);
+  };
+  sec("ما قدّمه طرفنا", list(p.our_submissions));
+  sec("ما قدّمه الخصم", list(p.opponent_submissions));
+  sec("قرار الدائرة", list(p.court_decisions));
+  const obligations = (Array.isArray(p.our_obligations) ? p.our_obligations : [])
+    .map((o: any) => {
+      const t = String(o?.task ?? "").trim();
+      if (!t) return "";
+      const d = /^\d{4}-\d{2}-\d{2}$/.test(String(o?.due_date ?? "")) ? ` (بحلول ${ymd(o.due_date)})` : "";
+      return t + d;
+    })
+    .filter(Boolean);
+  sec("المطلوب منا", obligations);
+  const reason = String(p.postponement_reason ?? "").trim();
+  if (reason && reason !== "null") parts.push(`سبب التأجيل: ${reason}`);
+  return parts.join("\n\n");
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -129,6 +201,10 @@ Deno.serve(async (req) => {
   }
 
   const docUrl = String(body?.doc_url ?? "").trim();
+  const ctx = {
+    client: body?.client_name ? String(body.client_name).slice(0, 200) : null,
+    matter: body?.case_title ? String(body.case_title).slice(0, 200) : null,
+  };
   if (!docUrl) return json({ error: "لم يُحدَّد ملف المحضر" }, 400);
 
   const doc = await fetchDoc(docUrl);
@@ -156,7 +232,7 @@ Deno.serve(async (req) => {
         model,
         max_tokens: MAX_TOKENS,
         system: SYSTEM,
-        messages: [{ role: "user", content: [block, { type: "text", text: USER }] }],
+        messages: [{ role: "user", content: [block, { type: "text", text: userPrompt(ctx) }] }],
       }),
     });
 
@@ -187,6 +263,22 @@ Deno.serve(async (req) => {
       );
     }
 
+    // التواريخ بأم القرى من الهجري المقروء (لا من تحويل النموذج)
+    parsed.next_session_date = pickDate(parsed.next_session_date, parsed.next_session_date_hijri);
+    parsed.ruling_due_date = pickDate(parsed.ruling_due_date, parsed.ruling_due_date_hijri);
+    if (Array.isArray(parsed.our_obligations)) {
+      parsed.our_obligations = parsed.our_obligations.map((o: any) => ({ ...o, due_date: pickDate(o?.due_date, o?.due_date_hijri) }));
+    }
+    // outcome = الأقسام كاملة (يُحفظ في الجلسة)، وsummary للتقرير والقوائم. وإن لم تأتِ أقسام فالملخّص وحده.
+    const full = composeOutcome(parsed);
+    const summary = String(parsed.summary ?? "").trim();
+    parsed.outcome = full ? (summary ? `${summary}\n\n${full}` : full) : summary;
+    parsed.our_obligations = (Array.isArray(parsed.our_obligations) ? parsed.our_obligations : [])
+      .map((o: any) => ({
+        task: String(o?.task ?? "").trim(),
+        due_date: /^\d{4}-\d{2}-\d{2}$/.test(String(o?.due_date ?? "")) ? o.due_date : null,
+      }))
+      .filter((o: any) => o.task);
     return json({ success: true, parsed, usage: data.usage, stop_reason: data.stop_reason });
   } catch (e) {
     return json({ error: `تعذّر تحليل المحضر: ${String((e as Error)?.message || e)}` }, 500);

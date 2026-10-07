@@ -484,6 +484,8 @@ export interface CaseSession {
   status: string | null
   preparation: string | null
   outcome: string | null
+  /** ملخّص قصير للتقرير والقوائم (2026-10-07) — null للجلسات السابقة */
+  outcome_short?: string | null
   minutes_url: string | null
   gcal_event_id: string | null // للتكامل لاحقاً — لا تلمسه
   created_at: string | null

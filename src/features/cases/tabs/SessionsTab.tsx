@@ -76,6 +76,8 @@ import { pickFile, uploadFile } from '@/lib/files'
 import { getTemplate, fillTemplate } from '@/lib/templates'
 import { useExtractSessionMinutes } from '@/hooks/useAiAnalysis'
 import { toast } from '@/hooks/use-toast'
+import { supabase } from '@/lib/supabase'
+import { errMessage } from '@/lib/errors'
 import {
   useCaseSessions,
   useAddSession,
@@ -886,6 +888,10 @@ function CloseSessionDialog({
   const hasPhone = !!(clientPhone && clientPhone.trim())
 
   const [outcome, setOutcome] = useState('')
+  // ملخّص قصير للتقرير والقوائم، والمطلوب منا مهامّ (قراءة المحضر الكاملة — 2026-10-07)
+  const [outcomeShort, setOutcomeShort] = useState('')
+  const [obligations, setObligations] = useState<{ task: string; due: string; on: boolean }[]>([])
+  const { teamMember } = useAuth()
   const [sessionNum, setSessionNum] = useState('')
   const [file, setFile] = useState<File | null>(null)
   const [uploadedUrl, setUploadedUrl] = useState<string | null>(null)
@@ -906,6 +912,8 @@ function CloseSessionDialog({
   useEffect(() => {
     if (!session) return
     setOutcome(session.outcome ?? '')
+    setOutcomeShort(session.outcome_short ?? '')
+    setObligations([])
     setSessionNum(
       session.session_number != null ? String(session.session_number) : ''
     )
@@ -929,7 +937,8 @@ function CloseSessionDialog({
   const defaultReport = fillTemplate(tpl, {
     client_name: clientName ?? 'عميلنا',
     case_title: caseTitle ?? '',
-    outcome: outcome.trim(),
+    // التقرير للعميل بالملخّص القصير — لا بأقسام المحضر (ما قدّمه الخصم ونحوه للفريق)
+    outcome: outcomeShort.trim() || outcome.trim(),
   })
   const reportValue = reportTouched ? reportMsg : defaultReport
 
@@ -972,7 +981,7 @@ function CloseSessionDialog({
     // الهوك يُظهر سبب الفشل في toast — نلتقط الرمي حتى لا يبقى وعد مرفوض معلّقاً
     let parsed
     try {
-      parsed = await extractM.mutateAsync(url)
+      parsed = await extractM.mutateAsync({ docUrl: url, clientName, caseTitle })
     } catch {
       return
     }
@@ -981,6 +990,12 @@ function CloseSessionDialog({
     if (parsed.outcome && parsed.outcome.trim() !== '') {
       setOutcome(parsed.outcome.trim())
     }
+    if (parsed.summary && parsed.summary.trim() !== '') setOutcomeShort(parsed.summary.trim())
+    setObligations(
+      (parsed.our_obligations ?? [])
+        .filter((o) => o.task?.trim())
+        .map((o) => ({ task: o.task.trim(), due: isISO(o.due_date) ? o.due_date!.trim() : '', on: true }))
+    )
     if (parsed.session_number != null && Number.isFinite(parsed.session_number)) {
       setSessionNum(String(parsed.session_number))
     }
@@ -1033,6 +1048,40 @@ function CloseSessionDialog({
         rulingDueDate: next === 'await_ruling' ? rulingDate || null : null,
       })
 
+      // 2ب) الملخّص القصير، والمطلوب منا مهامّ لمسؤول الملف (مفتاح مشتق يمنع تكرارها عند إعادة الحفظ)
+      const short = outcomeShort.trim()
+      if (short !== (session.outcome_short ?? '')) {
+        await supabase.from('sessions').update({ outcome_short: short || null }).eq('id', session.id)
+      }
+      const chosen = obligations.filter((o) => o.on && o.task.trim())
+      let tasksMade = 0
+      if (chosen.length) {
+        const { data: kase } = await supabase.from('cases').select('assignee_id').eq('id', caseId).maybeSingle()
+        const soon = (d: string) => !!d && Date.parse(d) - Date.now() < 7 * 864e5
+        const { data: made, error: taskErr } = await supabase
+          .from('tasks')
+          .upsert(
+            chosen.map((o, i) => ({
+              case_id: caseId,
+              title: o.task.trim(),
+              assignee_id: kase?.assignee_id ?? teamMember?.id ?? null,
+              due_date: o.due || null,
+              status: 'todo',
+              priority: soon(o.due) ? 'high' : 'med',
+              created_by: teamMember?.id ?? null,
+              description: `من محضر الجلسة${session.session_number ? ` رقم ${session.session_number}` : ''}${session.session_date ? ` (${session.session_date})` : ''}`,
+              derived_key: `minutes:${session.id}:${i}`,
+            })),
+            { onConflict: 'derived_key', ignoreDuplicates: true }
+          )
+          .select('id')
+        if (taskErr) {
+          toast({ variant: 'destructive', title: 'لم تُنشأ مهام «المطلوب منا»', description: errMessage(taskErr) })
+        } else {
+          tasksMade = made?.length ?? 0
+        }
+      }
+
       // 3) إرسال التقرير المختار
       const phone = res.client_phone || clientPhone || ''
       const channels: string[] = []
@@ -1079,6 +1128,7 @@ function CloseSessionDialog({
       if (next === 'next_session') extra = ' · أُنشئت الجلسة القادمة'
       else if (next === 'await_ruling') extra = ' · سُجّل موعد استلام الحكم'
       else if (next === 'case_closed') extra = ' · أُقفلت القضية'
+      if (tasksMade) extra += ` · ${tasksMade === 1 ? 'مهمة' : `${tasksMade} مهام`} من «المطلوب منا»`
       const sent =
         channels.length > 0
           ? ` · أُرسل التقرير (${channels
@@ -1154,12 +1204,64 @@ function CloseSessionDialog({
             <Label htmlFor="close_outcome">محضر / نتيجة الجلسة *</Label>
             <Textarea
               id="close_outcome"
-              rows={4}
+              rows={outcome.length > 300 ? 12 : 4}
               value={outcome}
               onChange={(e) => setOutcome(e.target.value)}
               placeholder="اكتب ما تمّ في الجلسة…"
             />
           </div>
+
+          {/* الملخّص القصير — هو ما يصل العميل في التقرير ويظهر في القوائم */}
+          <div className="space-y-1.5">
+            <Label htmlFor="close_short">
+              الملخّص القصير{' '}
+              <span className="font-normal text-muted-foreground">(للتقرير والقوائم — اختياري)</span>
+            </Label>
+            <Textarea
+              id="close_short"
+              rows={2}
+              value={outcomeShort}
+              onChange={(e) => setOutcomeShort(e.target.value)}
+              placeholder="جملة أو جملتان لما انتهت إليه الجلسة"
+            />
+          </div>
+
+          {/* المطلوب منا ← مهامّ بمواعيدها لمسؤول الملف */}
+          {obligations.length > 0 && (
+            <div className="space-y-2 rounded-lg border border-amber-300/60 bg-amber-50/60 p-3 dark:border-amber-900/50 dark:bg-amber-950/20">
+              <p className="text-sm font-semibold text-foreground">المطلوب منا — تُنشأ مهامّ لمسؤول الملف</p>
+              {obligations.map((o, i) => (
+                <div key={i} className="flex flex-wrap items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={o.on}
+                    onChange={(e) =>
+                      setObligations((arr) => arr.map((x, j) => (j === i ? { ...x, on: e.target.checked } : x)))
+                    }
+                    className="h-4 w-4 accent-amber-600"
+                    aria-label="أنشئ مهمة"
+                  />
+                  <Input
+                    value={o.task}
+                    onChange={(e) =>
+                      setObligations((arr) => arr.map((x, j) => (j === i ? { ...x, task: e.target.value } : x)))
+                    }
+                    className="h-8 min-w-0 flex-1 text-sm"
+                  />
+                  <Input
+                    type="date"
+                    dir="ltr"
+                    value={o.due}
+                    onChange={(e) =>
+                      setObligations((arr) => arr.map((x, j) => (j === i ? { ...x, due: e.target.value } : x)))
+                    }
+                    className="h-8 w-[9.5rem] text-sm"
+                    aria-label="الموعد"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* 2) مرفق المحضر */}
           <div className="space-y-1.5">

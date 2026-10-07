@@ -150,6 +150,10 @@ export interface SessionMinutesExtraction {
   next_session_time: string | null // HH:MM
   ruling_due_date: string | null // ميلادي YYYY-MM-DD
   hijri_note: string | null
+  /** جملة أو جملتان لما انتهت إليه الجلسة — للتقرير والقوائم (2026-10-07) */
+  summary?: string | null
+  /** المطلوب منا وموعده (ميلادي محوَّل بأم القرى في الخادم) — يصير مهامّ */
+  our_obligations?: { task: string; due_date: string | null }[]
 }
 
 // يقرأ محضر جلسة (PDF أو صورة) عبر رابطه ويُرجع ما تمّ + الخطوة القادمة.
@@ -159,9 +163,13 @@ export interface SessionMinutesExtraction {
 //    وتصمت الشاشة. المستقلة سقفها أوسع وتُرجع سبب الفشل صراحةً.
 export function useExtractSessionMinutes() {
   return useMutation({
-    mutationFn: async (docUrl: string): Promise<SessionMinutesExtraction> => {
+    mutationFn: async (
+      args: string | { docUrl: string; clientName?: string | null; caseTitle?: string | null }
+    ): Promise<SessionMinutesExtraction> => {
+      // الموكّل والملف يعرّفان النموذج بـ«طرفنا» فيفصل ما قدّمناه عمّا قدّمه الخصم
+      const a = typeof args === 'string' ? { docUrl: args } : args
       const { data, error } = await supabase.functions.invoke('extract-minutes', {
-        body: { doc_url: docUrl },
+        body: { doc_url: a.docUrl, client_name: a.clientName ?? null, case_title: a.caseTitle ?? null },
       })
       // أخطاء الدالة (422/400) تصل هنا كـ FunctionsHttpError بلا نصّها،
       // فنقرأ الرد الأصلي لنُظهر السبب الحقيقي للموظف.
