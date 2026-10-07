@@ -10,6 +10,7 @@ import { pickDate } from "../_shared/hijri.ts";
 // =============================================================
 
 import { EXTRA_TOOLS, runExtraTool, EXTRA_SYSTEM_RULES } from "../_shared/agent-tools.ts";
+import { cachedText, ephemeral, logCacheUsage } from "../_shared/prompt-cache.ts";
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
@@ -751,9 +752,17 @@ async function runAgent(payload: any, caller: Caller): Promise<Response> {
     const aiRes = await fetch(ANTHROPIC_URL, {
       method: "POST",
       headers: { "x-api-key": ANTHROPIC_API_KEY!, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-      body: JSON.stringify({ model, max_tokens: 4000, system: `${AGENT_SYSTEM}\nالموظف الحالي: ${userName}. تاريخ اليوم: ${isoToday()}.${attachNote}`, tools: AGENT_TOOLS, messages }),
+      // التخزين المؤقت: الأدوات (~٤٣٠٠ توكن) والتعليمات الثابتة (~١٤٠٠) تتكرر في كل جولة وكل طلب، فنقطة تخزين
+      // على آخر الثابت؛ واسم الموظف والتاريخ والمرفق — وكانت ملصقة بآخر التعليمات فتبطل التخزين بين الموظفين
+      // والأيام — في كتلة بعدها بالنص نفسه. والنقطة التلقائية أعلى الطلب تخزّن ذيل الجولات المتنامي.
+      body: JSON.stringify({
+        model, max_tokens: 4000, cache_control: ephemeral(),
+        system: [cachedText(AGENT_SYSTEM), { type: "text", text: `\nالموظف الحالي: ${userName}. تاريخ اليوم: ${isoToday()}.${attachNote}` }],
+        tools: AGENT_TOOLS, messages,
+      }),
     });
     const data = await aiRes.json();
+    logCacheUsage("ai-assistant", data?.usage);
     if (!aiRes.ok) {
       await logRun({
         member_id: caller.id, user_name: userName, request: lastUserText(history), model,
