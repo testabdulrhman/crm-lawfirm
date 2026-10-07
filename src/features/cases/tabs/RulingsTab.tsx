@@ -50,6 +50,7 @@ import { cn } from '@/lib/utils'
 import { fmtDatePref, todayISO } from '@/lib/format'
 import { pickFile, uploadFile } from '@/lib/files'
 import { useAuth } from '@/stores/auth'
+import { hijriTextToISO } from '@/lib/hijri'
 import { useExtractRuling } from '@/hooks/useAiAnalysis'
 import {
   useCaseRulings,
@@ -423,8 +424,12 @@ function RulingForm({
     set('court_name', parsed.court_name)
     set('result', parsed.result)
     set('summary', parsed.summary)
-    // التاريخ: نقبل صيغة YYYY-MM-DD فقط (التقويم المزدوج يخزّن ميلادي)
-    if (parsed.ruling_date && /^\d{4}-\d{2}-\d{2}$/.test(parsed.ruling_date.trim())) {
+    // التاريخ: الهجري المقروء يُحوَّل هنا بأم القرى (النموذج يخطئ في التحويل بيوم — 2026-10-07)،
+    // وميلادي النموذج احتياطٌ لصكٍّ ميلادي التاريخ أصلاً. التقويم المزدوج يخزّن ميلادي.
+    const fromHijri = hijriTextToISO(parsed.ruling_date_hijri)
+    if (fromHijri) {
+      setValue('ruling_date', fromHijri)
+    } else if (parsed.ruling_date && /^\d{4}-\d{2}-\d{2}$/.test(parsed.ruling_date.trim())) {
       setValue('ruling_date', parsed.ruling_date.trim())
     }
     setHijriHint(parsed.ruling_date_hijri ?? null)

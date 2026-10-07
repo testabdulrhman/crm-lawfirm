@@ -81,3 +81,25 @@ export function hijriMonthLength(hy: number, hm: number): number {
   const next = hijriToGregorian(nextY, nextM, 1)
   return Math.round((next.getTime() - start.getTime()) / 86400000)
 }
+
+/**
+ * تاريخ هجري كما قرأه النموذج من مستند («1448/04/23 هـ»، «٢٣/٠٤/١٤٤٨هـ»، «1448-4-23») ← ميلادي ISO
+ * بتقويم أم القرى. النموذج يقرأ الهجري صحيحاً لكنه يخطئ في تحويله بيوم (بلاغ المدير 2026-10-07:
+ * صك 1448/04/23 حُوِّل إلى 2026/10/05 والصحيح 2026/10/04) — فالتحويل هنا لا عنده. null = لا يُفهم.
+ */
+export function hijriTextToISO(text: string | null | undefined): string | null {
+  if (!text) return null
+  const latin = text.replace(/[٠-٩]/g, (c) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(c))).replace(/[۰-۹]/g, (c) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(c)))
+  const nums = latin.match(/\d+/g)?.map(Number) ?? []
+  if (nums.length < 3) return null
+  // السنة هي العدد الرباعي (1300–1600)، ويكون أول الثلاثة أو آخرها
+  let y: number, m: number, d: number
+  if (nums[0] >= 1300 && nums[0] <= 1600) [y, m, d] = [nums[0], nums[1], nums[2]]
+  else if (nums[2] >= 1300 && nums[2] <= 1600) [d, m, y] = [nums[0], nums[1], nums[2]]
+  else return null
+  if (m < 1 || m > 12 || d < 1 || d > 30) return null
+  const g = hijriToGregorian(y, m, d)
+  const back = gregorianToHijri(g)
+  if (back.y !== y || back.m !== m || back.d !== d) return null // يوم ٣٠ في شهر من ٢٩ مثلاً
+  return dateToISO(g)
+}
