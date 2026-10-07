@@ -18,6 +18,7 @@
 //   • تقليص سياق السوابق (٢٥ → ١٢ وملخّصات أقصر) لتخفيف زمن القراءة
 //   • تسجيل الفشل في error_logs ليظهر سببه للمحامي بدل «استغرق وقتاً أطول»
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { cachedText, logCacheUsage } from "../_shared/prompt-cache.ts";
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
@@ -120,7 +121,9 @@ async function streamStudy(
       model,
       max_tokens: 32000,
       stream: true,
-      system: STUDY_SYSTEM,
+      // التخزين المؤقت: أداة save_study (~١٩٠٠ توكن) والتعليمات (~٣٧٠) ثابتة بين الدراسات (فوق حد ٥١٢ لـ
+      // Opus 5.5)، فنقطة تخزين على آخر الثابت؛ ومحتوى الملف ومستنداته بعدها في messages
+      system: [cachedText(STUDY_SYSTEM)],
       tools: [tool],
       // الإجبار على الأداة لا تدعمه كل النماذج (Opus 5.5 يرفضه بـ400 — سجل الأخطاء 2026-10-07)؛
       // فإن رُفض يُعاد الطلب اختيارياً، والتعليمات تشترط التسليم عبر الأداة
@@ -159,6 +162,7 @@ async function streamStudy(
       switch (ev.type) {
         case "message_start":
           inTokens = ev.message?.usage?.input_tokens ?? 0;
+          logCacheUsage("case-study", ev.message?.usage);
           break;
         case "content_block_start":
           if (ev.content_block?.type === "tool_use") inTool = true;
