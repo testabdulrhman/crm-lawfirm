@@ -163,6 +163,9 @@ struct MatterFileChip: View {
 }
 
 struct CaseStreamView: View {
+    @Environment(\.scenePhase) private var scenePhase
+    /// بصمة آخر نشاط رآها الشاشة — المتابعة الحيّة تجلب حين تتغيّر
+    @State private var liveStamp: String?
     let caseId: String?
     let title: String
     /// باب الملف إن عرفه المنادي (صف النقاشات / المنتقي / إشعار المنشن).
@@ -313,6 +316,21 @@ struct CaseStreamView: View {
                     .accessibilityLabel("أعضاء النقاش")
                 }
             }
+        }
+        // متابعة حيّة ما دامت الشاشة ظاهرة والتطبيق في المقدّمة (اقتراح المدير 2026-10-07: «ودي المحادثة
+        // تنزل مباشرة بدون ما أعمل تحديث للصفحة»): بصمة خفيفة كل ٤ ثوانٍ، والجلب الكامل حين تتغيّر فقط
+        .task(id: "live|\(caseId ?? "general")") {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(4))
+                guard loaded, scenePhase == .active else { continue }
+                guard let stamp = try? await sb.discussionStamp(caseId: caseId) else { continue }
+                if liveStamp == nil { liveStamp = stamp; continue }
+                if stamp != liveStamp { liveStamp = stamp; await load() }
+            }
+        }
+        // العودة للتطبيق من الخلفية: ما فات يُجلب فوراً
+        .onChange(of: scenePhase) { _, p in
+            if p == .active, loaded { Task { await load() } }
         }
         .task {
             // آخر نسخة محفوظة تظهر فوراً — ثم الجديد متى وصل (طلب المدير 2026-09-14)
@@ -1032,6 +1050,8 @@ private struct EditMessageSheet: View {
 
 private struct ThreadView: View {
     let root: StreamMsg
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var liveStamp: String?
     let caseId: String?
     let onChange: () -> Void
     /// الردّ المقصود بالقفز (منشن داخل خيط)
@@ -1146,6 +1166,21 @@ private struct ThreadView: View {
             VoicePlayer.shared.stop()
         }
         .navigationBarTitleDisplayMode(.inline)
+        // متابعة حيّة ما دامت الشاشة ظاهرة والتطبيق في المقدّمة (اقتراح المدير 2026-10-07: «ودي المحادثة
+        // تنزل مباشرة بدون ما أعمل تحديث للصفحة»): بصمة خفيفة كل ٤ ثوانٍ، والجلب الكامل حين تتغيّر فقط
+        .task(id: "live|\(root.id)") {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(4))
+                guard loaded, scenePhase == .active else { continue }
+                guard let stamp = try? await sb.discussionStamp(caseId: nil, parentId: root.id) else { continue }
+                if liveStamp == nil { liveStamp = stamp; continue }
+                if stamp != liveStamp { liveStamp = stamp; await load() }
+            }
+        }
+        // العودة للتطبيق من الخلفية: ما فات يُجلب فوراً
+        .onChange(of: scenePhase) { _, p in
+            if p == .active, loaded { Task { await load() } }
+        }
         .task {
             if !loaded, let c = DiscussionCache.load(
                 [ThreadMsg].self, key: DiscussionCache.threadKey(root.id), account: DiscussionCache.account(sb)

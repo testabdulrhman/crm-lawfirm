@@ -196,6 +196,21 @@ extension SB {
         try await rpc("case_discussions", params: [:])
     }
 
+    /// بصمة آخر نشاط في نقاش (أو خيط): أحدث رسالة وأحدث تعديل — طلب خفيف تتابع به الشاشة المفتوحة الجديد
+    /// كل بضع ثوانٍ فتجلب المجرى كاملاً حين تتغيّر فقط (اقتراح المدير 2026-10-07: «في داخل النقاش ودي
+    /// المحادثة تنزل مباشرة بدون ما أعمل تحديث للصفحة»).
+    func discussionStamp(caseId: String?, parentId: String? = nil) async throws -> String {
+        struct Row: Codable { let id: String; let created_at: String?; let edited_at: String?; let deleted_at: String? }
+        var q: [(String, String)] = [("select", "id,created_at,edited_at,deleted_at")]
+        if let parentId { q.append(("parent_id", "eq.\(parentId)")) }
+        else { q.append(("case_id", caseId.map { "eq.\($0)" } ?? "is.null")) }
+        let base = q
+        async let newest: [Row] = get("case_comments", query: base + [("order", "created_at.desc"), ("limit", "1")])
+        async let touched: [Row] = get("case_comments", query: base + [("order", "edited_at.desc.nullslast"), ("limit", "1")])
+        let n = try await newest.first, t = try await touched.first
+        return [n?.id, n?.created_at, t?.id, t?.edited_at, t?.deleted_at].map { $0 ?? "" }.joined(separator: "|")
+    }
+
     /// مجرى قناة: قضية، أو العامة حين caseId فارغ
     func stream(caseId: String?) async throws -> [StreamMsg] {
         try await rpc("case_stream", params: ["p_case_id": caseId ?? NSNull()])
