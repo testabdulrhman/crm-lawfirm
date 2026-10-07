@@ -20,6 +20,7 @@
 //   المسافة القديم كان يُسند مهاماً لموظف short_name له null.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { EXTRA_TOOLS, runExtraTool, EXTRA_SYSTEM_RULES } from "../_shared/agent-tools.ts";
+import { ephemeral, logCacheUsage, withCachedLastTool } from "../_shared/prompt-cache.ts";
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
@@ -183,13 +184,17 @@ async function callClaudeWithMoveTool(
         "anthropic-version": "2023-06-01",
         "content-type": "application/json",
       },
+      // التخزين المؤقت: الأدوات (~٢٤٠٠ توكن) ثابتة في كل جولة وكل منشن، فنقطة تخزين على آخرها (نسخةً — فـ
+      // EXTRA_TOOLS مشتركة مع المساعد العائم)؛ وsystem بعدها تحمل تاريخ اليوم فتتغيّر يومياً وتبقى ثابتة داخل
+      // الحلقة؛ والنقطة التلقائية أعلى الطلب تخزّن ذيل الجولات المتنامي.
       body: JSON.stringify({
-        model, max_tokens: 1500, system,
-        tools: [MOVE_TOOL, ...EXTRA_TOOLS],
+        model, max_tokens: 1500, system, cache_control: ephemeral(),
+        tools: withCachedLastTool([MOVE_TOOL, ...EXTRA_TOOLS] as Record<string, unknown>[]),
         messages,
       }),
     });
     const data = await res.json();
+    logCacheUsage("discussion-ai", data?.usage);
     if (!res.ok) throw new Error(data?.error?.message ?? `Anthropic ${res.status}`);
 
     const chunk = (data.content || [])
