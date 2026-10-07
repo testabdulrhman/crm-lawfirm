@@ -8,6 +8,7 @@ import {
   FileBadge,
   Globe,
   Lightbulb,
+  PenLine,
   ListTodo,
   MessageSquare,
   MessageCircle,
@@ -33,6 +34,7 @@ const ICONS: Record<string, LucideIcon> = {
   task: ListTodo,
   approval_request: Stamp,
   approval_result: Stamp,
+  approval_sign: PenLine,
   session_soon: CalendarDays,
   session_reminder: CalendarDays,
   session_auto: CalendarDays,
@@ -63,6 +65,8 @@ export function notificationDestination(n: AppNotification): string {
   if (n.task_id) return `/tasks/${n.task_id}`
   // منشن في نقاش: صفحة النقاشات، والرسالة نفسها يحملها جسر النقاشات عند الفتح
   if (n.type === 'mention') return '/discussions'
+  // طلب توقيع من النقاش — يُفتح النقاش عند رسالة الملف (وقت الإشعار = وقت الرسالة)
+  if (n.type === 'approval_sign') return '/discussions'
   // رسالة عميل على الواتساب — صندوق «العملاء» لا صفحة الملف
   if (n.type === 'wa_client') return '/clients'
   if (n.case_id) return `/cases/${n.case_id}`
@@ -107,7 +111,7 @@ export function useOpenNotification() {
   const markM = useMarkRead()
   return (n: AppNotification) => {
     if (!n.is_read) markM.mutate(n.id)
-    if (n.type === 'mention' && !n.task_id) {
+    if ((n.type === 'mention' || n.type === 'approval_sign') && !n.task_id) {
       requestDiscussionJump({ caseId: n.case_id, at: n.created_at })
     }
     if (n.type === 'wa_client' && n.wa_phone) requestClientChat(n.wa_phone)

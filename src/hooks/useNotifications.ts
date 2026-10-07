@@ -34,6 +34,7 @@ export const NOTIFICATION_TYPES = {
   task_returned: 'أُرجعت المهمة',
   approval_request: 'طلب اعتماد',
   approval_result: 'نتيجة اعتماد',
+  approval_sign: 'طلب توقيع',
   session_soon: 'جلسة قريبة',
   incoming_message: 'رسالة واردة',
   wa_client: 'رسالة عميل — واتساب',

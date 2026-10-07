@@ -9,6 +9,7 @@ import {
   ExternalLink,
   Scale,
   MessageCircle,
+  MessagesSquare,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -39,6 +40,8 @@ import { OutgoingLetterForm } from './OutgoingLetterForm'
 import { ApprovalSection } from './ApprovalSection'
 import { OutgoingDocumentsSection } from './OutgoingDocumentsSection'
 import { SendLetterDialog } from './SendLetterDialog'
+import { ReferToDiscussionDialog } from './ReferToDiscussionDialog'
+import { requestDiscussionJump } from '@/lib/discussionJump'
 
 export function OutgoingLetterDetail({ id }: { id: string }) {
   const [, navigate] = useLocation()
@@ -51,6 +54,7 @@ export function OutgoingLetterDetail({ id }: { id: string }) {
   const [previewOpen, setPreviewOpen] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [sendOpen, setSendOpen] = useState(false)
+  const [referOpen, setReferOpen] = useState(false)
 
   if (isLoading) {
     return (
@@ -113,6 +117,20 @@ export function OutgoingLetterDetail({ id }: { id: string }) {
 
           {/* روابط + ملف */}
           <div className="flex flex-wrap gap-2 border-t pt-4">
+            {/* خطاب وُقّع من نقاش الملف — يعود إلى رسالته */}
+            {l.source_comment_id && l.case_id && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  requestDiscussionJump({ caseId: l.case_id })
+                  navigate('/discussions')
+                }}
+              >
+                <MessagesSquare className="h-4 w-4" />
+                من نقاش الملف
+              </Button>
+            )}
             {l.case_id && (
               <Button variant="outline" size="sm" asChild>
                 <Link href={`/cases/${l.case_id}`}>
@@ -136,6 +154,11 @@ export function OutgoingLetterDetail({ id }: { id: string }) {
                 >
                   <MessageCircle className="h-4 w-4" />
                   إرسال واتساب
+                </Button>
+                {/* أحِل الخطاب (الموقّع) لنقاش مشروع — ويُحفظ في مستنداته (2026-10-07) */}
+                <Button variant="outline" size="sm" onClick={() => setReferOpen(true)}>
+                  <MessagesSquare className="h-4 w-4" />
+                  أحِل للنقاش
                 </Button>
                 <Button variant="ghost" size="sm" asChild>
                   <a href={l.file_url} target="_blank" rel="noopener noreferrer">
@@ -166,6 +189,7 @@ export function OutgoingLetterDetail({ id }: { id: string }) {
 
       {/* إرسال الخطاب واتساب */}
       <SendLetterDialog letter={l} open={sendOpen} onOpenChange={setSendOpen} />
+      {referOpen && <ReferToDiscussionDialog letter={l} open={referOpen} onOpenChange={setReferOpen} />}
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         {/* نقرة الخلفية لا تُغلق النموذج — حتى لا تضيع التعديلات بلا تحذير */}

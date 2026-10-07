@@ -1029,6 +1029,9 @@ export interface OutgoingLetter {
   deleted_at: string | null
   deleted_by: string | null
   created_at: string | null
+  /** وُقّع من نقاش الملف: رسالته ومستند النسخة الموقّعة (2026-10-07) */
+  source_comment_id?: string | null
+  document_id?: string | null
   case?: {
     id: string
     title: string | null
@@ -1051,6 +1054,8 @@ export interface OutgoingApproval {
   apply_mode: string | null // both / stamp / signature
   // تواقيع إضافية متعددة [{page,x,y}] — وsig2_* القديمة تُقرأ للتوافق
   extra_sigs: { page: number; x: number; y: number }[] | null
+  /** مركز التوقيع مستقلاً عن الختم (2026-10-07) — null = فوق الختم */
+  sig_pos?: { x: number; y: number } | null
   sig2_page: number | null
   sig2_x: number | null
   sig2_y: number | null

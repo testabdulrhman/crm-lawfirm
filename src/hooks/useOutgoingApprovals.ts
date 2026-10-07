@@ -78,12 +78,13 @@ export function usePendingOutgoingApprovalsCount() {
   return useQuery({
     queryKey: ['pending_outgoing_approvals'],
     queryFn: async (): Promise<number> => {
-      const { count, error } = await supabase
-        .from('outgoing_approvals')
-        .select('id', { count: 'exact', head: true })
-        .eq('status', 'pending')
-      if (error) throw error
-      return count ?? 0
+      // طلبات الاعتماد في الصادر + طلبات التوقيع من النقاشات (2026-10-07)
+      const [a, s] = await Promise.all([
+        supabase.from('outgoing_approvals').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
+        supabase.from('sign_requests').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
+      ])
+      if (a.error) throw a.error
+      return (a.count ?? 0) + (s.count ?? 0)
     },
   })
 }
@@ -99,6 +100,7 @@ export function useRequestApproval() {
       position,
       mode,
       extraSignatures,
+      sigPos,
     }: {
       letter: OutgoingLetter
       requesterId: string | null
@@ -106,6 +108,8 @@ export function useRequestApproval() {
       position: StampPosition
       mode: ApplyMode
       extraSignatures: StampPosition[]
+      /** مركز التوقيع مستقلاً عن الختم (2026-10-07) */
+      sigPos?: { x: number; y: number } | null
     }): Promise<SmsOutcome> => {
       const { error } = await supabase.from('outgoing_approvals').upsert(
         {
@@ -117,6 +121,7 @@ export function useRequestApproval() {
           stamp_y: position.y,
           apply_mode: mode,
           extra_sigs: extraSignatures.length > 0 ? extraSignatures : null,
+          sig_pos: sigPos ?? null,
           // الأعمدة القديمة تُصفَّر — extra_sigs هي المرجع الآن
           sig2_page: null,
           sig2_x: null,

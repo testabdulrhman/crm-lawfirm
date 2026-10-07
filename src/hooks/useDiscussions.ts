@@ -407,6 +407,8 @@ export function usePostAttachment() {
         ...(input.parentId ? { parent_id: input.parentId, also_to_stream: true } : {}),
       })
       if (error) throw error
+      // المستند ورابطه — يحتاجهما من يربط المرفق بغيره (الخطاب الموقّع ← الصادر)
+      return { documentId: doc.id as string, fileUrl: publicUrl }
     },
     onSuccess: (_d, vars) => {
       invalidate(qc, vars.caseId)

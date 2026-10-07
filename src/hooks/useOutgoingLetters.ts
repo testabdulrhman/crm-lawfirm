@@ -85,7 +85,9 @@ export function useCreateOutgoingLetter() {
       autoNumber,
       ...input
     }: OutgoingLetterInput & { autoNumber?: boolean }): Promise<OutgoingLetter> => {
-      let row = input
+      // الرقم المقترح لم يُغيَّر ⇒ يُرقِّم الخادم (outgoing_number_trg بقفل) — لا «أكبر رقم + 1» من المتصفح
+      // الذي يكرّر الأرقام تحت الصلاحيات (2026-10-07). والمكتوب يدوياً يُحترم كما هو.
+      let row = autoNumber ? { ...input, letter_number: null } : input
       for (let tries = 0; tries < 30; tries++) {
         const { data, error } = await supabase
           .from('outgoing_letters')
@@ -107,13 +109,10 @@ export function useCreateOutgoingLetter() {
     },
     onSuccess: (letter, vars) => {
       invalidate(qc)
-      const moved = !!vars.letter_number && letter.letter_number !== vars.letter_number
       toast({
         variant: 'success',
         title: 'تمت إضافة الخطاب',
-        description: moved
-          ? `برقم ${letter.letter_number} — الرقم ${vars.letter_number} مستخدم في خطاب آخر`
-          : undefined,
+        description: vars.autoNumber ? `برقم ${letter.letter_number}` : undefined,
       })
     },
     onError: errToast('تعذّرت إضافة الخطاب'),

@@ -1268,7 +1268,14 @@ function MessageBubble({
               <div className="min-w-0 flex-1">
                 <AttachmentChip name={msg.document_name} url={msg.document_url} />
               </div>
-              <SignAttachmentButton name={msg.document_name} url={msg.document_url} caseId={caseId} parentId={msg.id} />
+              <SignAttachmentButton
+                name={msg.document_name}
+                url={msg.document_url}
+                caseId={caseId}
+                parentId={msg.id}
+                messageId={msg.id}
+                documentId={msg.document_id}
+              />
             </div>
           ))}
 
@@ -1786,6 +1793,8 @@ function ThreadReply({
                 url={r.document_url}
                 caseId={caseId}
                 parentId={rootId}
+                messageId={r.id}
+                documentId={r.document_id}
                 compact
               />
             </div>

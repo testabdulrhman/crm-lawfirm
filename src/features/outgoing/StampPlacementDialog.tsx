@@ -26,6 +26,7 @@ import {
   DEFAULT_STAMP_POS,
   APPLY_MODE_LABELS,
   computeLayout,
+  NUMBER_WIDTH_PT,
   type StampPosition,
   type ApplyMode,
 } from '@/lib/pdfStamp'
@@ -57,6 +58,9 @@ export function StampPlacementDialog({
   initial,
   initialMode = 'both',
   initialSigs = [],
+  initialSigPos = null,
+  numberPreview = null,
+  headerExtra = null,
   onConfirm,
   confirmLabel = 'تأكيد الموضع',
   confirming = false,
@@ -69,10 +73,18 @@ export function StampPlacementDialog({
   initial?: StampPosition | null
   initialMode?: ApplyMode
   initialSigs?: StampPosition[]
+  /** مركز التوقيع المستقل المحفوظ (طلبات ما بعد 2026-10-07) */
+  initialSigPos?: { x: number; y: number } | null
+  /** سطور رقم الصادر — تُعرض تحت التوقيع كما ستُطبع */
+  numberPreview?: string[] | null
+  /** خيار إضافي أعلى النافذة (مثل «خطاب صادر برقم» في النقاش) */
+  headerExtra?: React.ReactNode
   onConfirm: (
     pos: StampPosition,
     mode: ApplyMode,
-    sigs: StampPosition[]
+    sigs: StampPosition[],
+    /** مركز التوقيع مستقلاً عن الختم — في صفحة الختم نفسها */
+    sigPos: { x: number; y: number }
   ) => void
   confirmLabel?: string
   confirming?: boolean
@@ -80,13 +92,17 @@ export function StampPlacementDialog({
   const containerRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const dragging = useRef(false)
-  // ما الذي يُسحب: الكتلة الأساسية أو رقم توقيع إضافي — null = لا شيء
-  const dragTarget = useRef<'primary' | number | null>(null)
+  // رسمٌ واحد على اللوحة في كل لحظة: الجديد يلغي السابق (تغيّر الصفحة أثناء الرسم، أو تكرار المؤثر)
+  const renderTask = useRef<{ cancel: () => void } | null>(null)
+  // ما الذي يُسحب: الختم أو التوقيع (كلٌّ مستقل — 2026-10-07) أو رقم توقيع إضافي — null = لا شيء
+  const dragTarget = useRef<'stamp' | 'sig' | number | null>(null)
 
   const [pageCount, setPageCount] = useState(1)
   const [page, setPage] = useState(1)
   const [mode, setMode] = useState<ApplyMode>(initialMode)
   const [pos, setPos] = useState({ x: DEFAULT_STAMP_POS.x, y: DEFAULT_STAMP_POS.y })
+  // مركز التوقيع مستقلاً عن الختم (null = يُشتق من الترتيب القديم أول ما تُعرف الأبعاد)
+  const [sigPos, setSigPos] = useState<{ x: number; y: number } | null>(null)
   // صفحة الكتلة الأساسية (قد يتنقل المستخدم لصفحات أخرى لوضع بقية التواقيع)
   const [primaryPage, setPrimaryPage] = useState(1)
   const [sigs, setSigs] = useState<StampPosition[]>([])
@@ -110,10 +126,13 @@ export function StampPlacementDialog({
       setPage(initial.page)
       setPrimaryPage(initial.page)
       setPos({ x: initial.x, y: initial.y })
+      setSigPos(initialSigPos ?? null)
     } else {
       setPage(0) // 0 = «آخر صفحة» تُحسم بعد معرفة العدد
       setPrimaryPage(0)
-      setPos({ x: DEFAULT_STAMP_POS.x, y: DEFAULT_STAMP_POS.y })
+      // الافتراضي الجديد: التوقيع يساراً ورقم الصادر تحته، والختم بجانبه — لا فوق بعض
+      setPos({ x: 0.42, y: 0.85 })
+      setSigPos({ x: 0.2, y: 0.82 })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
@@ -154,9 +173,15 @@ export function StampPlacementDialog({
         setCssSize({ w: containerW, h: baseViewport.height * scale })
 
         const ctx = canvas.getContext('2d')!
-        await p.render({ canvas, canvasContext: ctx, viewport }).promise
+        renderTask.current?.cancel()
+        const task = p.render({ canvas, canvasContext: ctx, viewport })
+        renderTask.current = task
+        await task.promise
+        if (renderTask.current === task) renderTask.current = null
         if (!cancelled) setLoading(false)
       } catch (e) {
+        // رسمٌ أُلغي لصالح أحدث منه — ليس خطأً
+        if ((e as { name?: string })?.name === 'RenderingCancelledException') return
         if (!cancelled) {
           setError(errMessage(e) ?? 'تعذّر عرض الملف')
           setLoading(false)
@@ -186,8 +211,10 @@ export function StampPlacementDialog({
     if (!p) return
     const x = Math.min(0.97, Math.max(0.03, p.x))
     const y = Math.min(0.97, Math.max(0.03, p.y))
-    if (dragTarget.current === 'primary') {
+    if (dragTarget.current === 'stamp') {
       setPos({ x, y })
+    } else if (dragTarget.current === 'sig') {
+      setSigPos({ x, y })
     } else {
       const i = dragTarget.current
       setSigs((arr) => arr.map((s, j) => (j === i ? { page, x, y } : s)))
@@ -197,6 +224,23 @@ export function StampPlacementDialog({
   // مقياس التحويل: نقاط PDF ← بكسلات الشاشة
   const k = cssSize.w / pageSizePt.w
 
+  // موضع التوقيع الفعلي: المستقل إن وُجد، وإلا المشتق من الترتيب القديم (فوق الختم)
+  const legacy = computeLayout({
+    pageW: pageSizePt.w,
+    pageH: pageSizePt.h,
+    pos,
+    stampAspect: mode !== 'signature' && stampUrl ? stampAspect : null,
+    sigAspect: mode !== 'stamp' && signatureUrl ? sigAspect : null,
+  })
+  const effSigPos =
+    sigPos ??
+    (legacy.sig
+      ? {
+          x: (legacy.sig.x + legacy.sig.w / 2) / pageSizePt.w,
+          y: (legacy.sig.y + legacy.sig.h / 2) / pageSizePt.h,
+        }
+      : pos)
+  const numberAspect = numberPreview?.length ? (numberPreview.length * 11.5 + 3) / NUMBER_WIDTH_PT : null
   // ⚠️ نفس حاسبة الدمج النهائي (computeLayout) — المعاينة مطابقة للنتيجة بالمليمتر
   const primaryLayout = computeLayout({
     pageW: pageSizePt.w,
@@ -204,6 +248,8 @@ export function StampPlacementDialog({
     pos,
     stampAspect: mode !== 'signature' && stampUrl ? stampAspect : null,
     sigAspect: mode !== 'stamp' && signatureUrl ? sigAspect : null,
+    sigPos: effSigPos,
+    numberAspect,
   })
   const extraSigRect = (s: StampPosition) =>
     computeLayout({
@@ -226,7 +272,7 @@ export function StampPlacementDialog({
     py >= r.y * k - PAD &&
     py <= (r.y + r.h) * k + PAD
 
-  const findTarget = (clientX: number, clientY: number): 'primary' | number | null => {
+  const findTarget = (clientX: number, clientY: number): 'stamp' | 'sig' | number | null => {
     const el = containerRef.current
     if (!el || cssSize.w === 0) return null
     const rect = el.getBoundingClientRect()
@@ -238,10 +284,16 @@ export function StampPlacementDialog({
         if (inRect(px, py, extraSigRect(sigs[i]))) return i
       }
     }
-    // الكتلة الأساسية (في صفحتها فقط) — أيٌّ من مستطيلي الختم/التوقيع
+    // الختم والتوقيع (في صفحتهما فقط) — كلٌّ يُسحب وحده؛ والتوقيع أولاً لأنه فوق الختم إن تداخلا
     if (page === primaryPage) {
-      if (primaryLayout.stamp && inRect(px, py, primaryLayout.stamp)) return 'primary'
-      if (primaryLayout.sig && inRect(px, py, primaryLayout.sig)) return 'primary'
+      if (primaryLayout.sig && inRect(px, py, primaryLayout.sig)) {
+        if (!sigPos) setSigPos(effSigPos) // أول سحب يفكّ ارتباطه بالختم
+        return 'sig'
+      }
+      if (primaryLayout.stamp && inRect(px, py, primaryLayout.stamp)) {
+        if (!sigPos && primaryLayout.sig) setSigPos(effSigPos) // يبقى التوقيع مكانه والختم يتحرك
+        return 'stamp'
+      }
     }
     return null
   }
@@ -252,6 +304,7 @@ export function StampPlacementDialog({
         <DialogHeader>
           <DialogTitle>ماذا يُطبَّق على الخطاب؟ وأين؟</DialogTitle>
         </DialogHeader>
+        {headerExtra}
 
         {/* اختيار ما يُطبَّق: ختم وتوقيع / ختم فقط / توقيع فقط */}
         <div className="flex flex-wrap gap-2">
@@ -317,7 +370,7 @@ export function StampPlacementDialog({
           <Move className="h-3.5 w-3.5" />
           {sigs.length > 0
             ? `أمسك أي عنصر واسحبه لمكانه — كل توقيع مستقل وبإمكانه أن يكون في صفحة أخرى (تنقّل بالأسهم). كل عنصر يبقى في صفحته.`
-            : 'أمسك الختم/التوقيع واسحبه إلى الموضع المطلوب.'}
+            : 'أمسك الختم أو التوقيع واسحب كلاً منهما وحده إلى موضعه' + (numberPreview?.length ? ' — ورقم الصادر يُطبع تحت التوقيع.' : '.')}
         </p>
 
         {error ? (
@@ -391,6 +444,26 @@ export function StampPlacementDialog({
                     top: primaryLayout.sig.y * k,
                   }}
                 />
+              )}
+
+              {/* رقم الصادر كما سيُطبع — تحت التوقيع مباشرة ويتبعه */}
+              {!loading && page === primaryPage && primaryLayout.num && numberPreview && (
+                <div
+                  className="pointer-events-none absolute flex flex-col items-center justify-start rounded-sm bg-gold/10 text-center font-semibold leading-none text-gray-800 outline-dashed outline-1 outline-gold/50"
+                  style={{
+                    width: primaryLayout.num.w * k,
+                    height: primaryLayout.num.h * k,
+                    left: primaryLayout.num.x * k,
+                    top: primaryLayout.num.y * k,
+                    fontSize: 8.5 * k,
+                    gap: 3 * k,
+                    paddingTop: 1.5 * k,
+                  }}
+                >
+                  {numberPreview.map((l) => (
+                    <span key={l}>{l}</span>
+                  ))}
+                </div>
               )}
 
               {/* التواقيع الإضافية — كلٌّ في صفحته، ويُسحب مستقلاً، مع رقمه */}
@@ -478,7 +551,8 @@ export function StampPlacementDialog({
                 onConfirm(
                   { page: primaryPage || pageCount, x: pos.x, y: pos.y },
                   mode,
-                  mode === 'stamp' ? [] : sigs
+                  mode === 'stamp' ? [] : sigs,
+                  effSigPos
                 )
               }
             >

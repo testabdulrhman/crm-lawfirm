@@ -50,11 +50,18 @@ export function computeLayout(args: {
   pos: { x: number; y: number } // مركز الكتلة بكسور 0..1 من أعلى يسار
   stampAspect: number | null // null = بلا ختم
   sigAspect: number | null // null = بلا توقيع
-}): { stamp?: LayoutRect; sig?: LayoutRect } {
+  /**
+   * مركز التوقيع مستقلاً عن الختم (طلب المدير 2026-10-07: «أقدر أغير مكان التوقيع ما يكون مكانهم
+   * مرتبطين»). null/غائب = الترتيب القديم: التوقيع فوق الختم بتداخل خفيف.
+   */
+  sigPos?: { x: number; y: number } | null
+  /** كتلة رقم الصادر تحت التوقيع مباشرة (وتحت الختم إن لم يكن توقيع) — نسبة ارتفاعها لعرضها */
+  numberAspect?: number | null
+}): { stamp?: LayoutRect; sig?: LayoutRect; num?: LayoutRect } {
   const { pageW, pageH, pos } = args
   const cx = pos.x * pageW
   const cyTop = pos.y * pageH
-  const out: { stamp?: LayoutRect; sig?: LayoutRect } = {}
+  const out: { stamp?: LayoutRect; sig?: LayoutRect; num?: LayoutRect } = {}
 
   let stampH = 0
   if (args.stampAspect != null) {
@@ -65,7 +72,9 @@ export function computeLayout(args: {
   if (args.sigAspect != null) {
     const w = SIGNATURE_WIDTH_PT
     const h = args.sigAspect * w
-    if (out.stamp) {
+    if (args.sigPos) {
+      out.sig = { x: args.sigPos.x * pageW - w / 2, y: args.sigPos.y * pageH - h / 2, w, h }
+    } else if (out.stamp) {
       // فوق الختم بتداخل خفيف (نفس معادلة الدمج التاريخية)
       const bottomFromBottom =
         pageH - cyTop - stampH / 2 + Math.max(stampH * 0.55, 30)
@@ -74,8 +83,54 @@ export function computeLayout(args: {
       out.sig = { x: cx - w / 2, y: cyTop - h / 2, w, h }
     }
   }
+  if (args.numberAspect != null) {
+    const anchor = out.sig ?? out.stamp
+    if (anchor) {
+      const w = NUMBER_WIDTH_PT
+      const h = args.numberAspect * w
+      out.num = { x: anchor.x + anchor.w / 2 - w / 2, y: anchor.y + anchor.h + 1, w, h }
+    }
+  }
   return out
 }
+
+// ---------- رقم الصادر تحت التوقيع ----------
+// pdf-lib لا يشكّل الحروف العربية، فيُرسم النص في لوحة المتصفح (التي تشكّله بخط الهوية) ويُدمج صورة.
+export const NUMBER_WIDTH_PT = 150
+const NUMBER_SCALE = 4 // كثافة الصورة: ٤ بكسلات لكل نقطة
+const NUMBER_FONT_PT = 8.5
+const NUMBER_LINE_PT = 11.5
+
+export async function renderNumberBlock(lines: string[]): Promise<{ png: Blob; aspect: number }> {
+  const font = `600 ${NUMBER_FONT_PT * NUMBER_SCALE}px "IBM Plex Sans Arabic", system-ui, sans-serif`
+  try {
+    await document.fonts?.load(font)
+  } catch {
+    /* الخط الاحتياطي يكفي */
+  }
+  const w = NUMBER_WIDTH_PT * NUMBER_SCALE
+  const h = Math.ceil((lines.length * NUMBER_LINE_PT + 3) * NUMBER_SCALE)
+  const canvas = document.createElement('canvas')
+  canvas.width = w
+  canvas.height = h
+  const ctx = canvas.getContext('2d')!
+  ctx.font = font
+  ctx.direction = 'rtl'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'top'
+  ctx.fillStyle = '#1f2937'
+  lines.forEach((line, i) => ctx.fillText(line, w / 2, (1.5 + i * NUMBER_LINE_PT) * NUMBER_SCALE))
+  const png = await new Promise<Blob>((res, rej) =>
+    canvas.toBlob((b) => (b ? res(b) : rej(new Error('تعذّر رسم رقم الصادر'))), 'image/png')
+  )
+  return { png, aspect: h / w }
+}
+
+/** سطرا رقم الصادر كما يُطبعان تحت التوقيع */
+export const numberLines = (letterNumber: string, hijriDate: string) => [
+  `رقم الصادر: ${letterNumber}`,
+  `التاريخ: ${hijriDate}`,
+]
 
 export async function stampPdf(
   fileUrl: string,
@@ -85,6 +140,10 @@ export async function stampPdf(
     position?: StampPosition | null
     // تواقيع إضافية بمواضع مستقلة (وقد تكون في صفحات مختلفة)
     extraSignatures?: StampPosition[] | null
+    /** مركز التوقيع الأساسي مستقلاً عن الختم (في صفحة الختم نفسها) — null = فوق الختم كالسابق */
+    sigPosition?: { x: number; y: number } | null
+    /** سطور رقم الصادر تحت التوقيع مباشرة */
+    numberLines?: string[] | null
   }
 ): Promise<Blob> {
   if (!opts.stampUrl && !opts.signatureUrl)
@@ -119,13 +178,21 @@ export async function stampPdf(
     x: opts.position?.x ?? DEFAULT_STAMP_POS.x,
     y: opts.position?.y ?? DEFAULT_STAMP_POS.y,
   }
+  const numBlock = opts.numberLines?.length ? await renderNumberBlock(opts.numberLines) : null
+  const numImg = numBlock ? await doc.embedPng(await numBlock.png.arrayBuffer()) : null
   const layout = computeLayout({
     pageW: width,
     pageH: height,
     pos,
     stampAspect: stampImg ? stampImg.height / stampImg.width : null,
     sigAspect: sigImg ? sigImg.height / sigImg.width : null,
+    sigPos: opts.sigPosition ?? null,
+    numberAspect: numBlock?.aspect ?? null,
   })
+  if (numImg && layout.num) {
+    const r = layout.num
+    page.drawImage(numImg, { x: r.x, y: height - (r.y + r.h), width: r.w, height: r.h })
+  }
 
   // تحويل أعلى-يسار → أصل pdf-lib أسفل-يسار: y = pageH - (top + h)
   if (stampImg && layout.stamp) {
