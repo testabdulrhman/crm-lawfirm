@@ -105,7 +105,7 @@ struct DiscussionsView: View {
     private var segmentBar: some View {
         Picker("", selection: $segment) {
             Text("الفريق").tag(0)
-            Text(clientUnread > 0 ? "العملاء · \(clientUnread)" : "العملاء").tag(1)
+            Text(clientUnread > 0 ? "واتساب · \(clientUnread)" : "واتساب").tag(1)
         }
         .pickerStyle(.segmented)
         .padding(.horizontal, 16)

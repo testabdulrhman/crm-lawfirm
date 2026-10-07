@@ -64,7 +64,7 @@ struct AppointmentSheet: View {
                         HStack {
                             Image(systemName: "person.crop.circle.badge.plus")
                                 .foregroundStyle(Theme.goldDark)
-                            Text(contact == nil ? "اختر من جهات الاتصال" : (contact?.name ?? "—"))
+                            Text(contact == nil ? "اختر العميل" : (contact?.name ?? "—"))
                                 .foregroundStyle(contact == nil ? Theme.muted : Theme.navy)
                             Spacer()
                             if contact != nil {
