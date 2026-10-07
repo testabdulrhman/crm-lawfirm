@@ -2073,6 +2073,23 @@ function NewDmDialog({
             />
           </div>
           <div className="max-h-72 space-y-0.5 overflow-y-auto rounded-lg border border-border/60 p-1">
+            {/* «ملاحظاتي»: راسل نفسك — محفوظاتك الخاصة (طلب المدير 2026-10-07) */}
+            {!needle && teamMember?.id && (
+              <button
+                type="button"
+                disabled={openDm.isPending}
+                onClick={() => openDm.mutate(teamMember.id, { onSuccess: onOpened })}
+                className="flex w-full items-center gap-2.5 rounded-md border-b border-border/50 px-2 py-2 text-right transition-colors hover:bg-muted/60 disabled:opacity-60"
+              >
+                <UserAvatar member={teamMember} className="h-8 w-8" fallbackClassName="text-xs" />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-medium text-foreground">ملاحظاتي</span>
+                  <span className="block truncate text-[11px] text-muted-foreground">
+                    راسل نفسك — ملاحظات وملفات وروابط لا يراها غيرك
+                  </span>
+                </span>
+              </button>
+            )}
             {shown.length === 0 ? (
               <p className="py-6 text-center text-xs text-muted-foreground">
                 {eligible.length === 0 ? 'لا زملاء بعد' : 'لا أحد بهذا الاسم'}
