@@ -160,11 +160,18 @@ struct MainTabs: View {
         .onReceive(NotificationCenter.default.publisher(for: .discussionRead)) { _ in
             Task { await refreshUnread() }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .clientChatRead)) { _ in
+            Task { await refreshUnread() }
+        }
     }
 
     private func refreshUnread() async {
-        let rows = (try? await SB.shared.discussions()) ?? []
-        unreadDiscussions = rows.reduce(0) { $0 + ($1.unread ?? 0) }
+        async let disc = SB.shared.discussions()
+        // ومحادثات العملاء غير المقروءة (مفتاح «العملاء» داخل التبويب نفسه — 2026-10-07)
+        async let clients = SB.shared.clientThreads()
+        let rows = (try? await disc) ?? []
+        let c = ((try? await clients) ?? []).filter { $0.unread == true }.count
+        unreadDiscussions = rows.reduce(0) { $0 + ($1.unread ?? 0) } + c
     }
 
     private func switchTab(for route: String?) {
