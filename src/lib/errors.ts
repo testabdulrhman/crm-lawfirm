@@ -8,6 +8,10 @@ export function errMessage(e: unknown): string | undefined {
 
   if (typeof e === 'object') {
     const o = e as Record<string, unknown>
+    // رفض الصلاحية من القاعدة (RLS) — كان يظهر للموظف نصاً إنجليزياً تقنياً (بلاغ راكان 2026-10-07)
+    if (o.code === '42501') {
+      return 'ليست لديك صلاحية لهذا الإجراء في هذا الملف — إن كنت تحتاجها فاطلبها من المدير [42501]'
+    }
     const parts: string[] = []
     const push = (v: unknown) => {
       if (typeof v === 'string' && v.trim() !== '') parts.push(v.trim())
