@@ -2073,7 +2073,7 @@ function NewDmDialog({
             />
           </div>
           <div className="max-h-72 space-y-0.5 overflow-y-auto rounded-lg border border-border/60 p-1">
-            {/* «ملاحظاتي»: راسل نفسك — محفوظاتك الخاصة (طلب المدير 2026-10-07) */}
+            {/* راسل نفسك — محفوظاتك الخاصة باسمك (طلب المدير 2026-10-07) */}
             {!needle && teamMember?.id && (
               <button
                 type="button"
@@ -2083,7 +2083,9 @@ function NewDmDialog({
               >
                 <UserAvatar member={teamMember} className="h-8 w-8" fallbackClassName="text-xs" />
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium text-foreground">ملاحظاتي</span>
+                  <span className="block truncate text-sm font-medium text-foreground">
+                    {teamMember.short_name || teamMember.name} <span className="font-normal text-muted-foreground">(أنت)</span>
+                  </span>
                   <span className="block truncate text-[11px] text-muted-foreground">
                     راسل نفسك — ملاحظات وملفات وروابط لا يراها غيرك
                   </span>

@@ -1,4 +1,4 @@
--- «ملاحظاتي»: المحادثة المباشرة مع نفسك (طلب المدير 2026-10-07: «في المحادثة المباشرة ودي أقدر احادث نفسي
+-- المحادثة المباشرة مع نفسك (باسمك) (طلب المدير 2026-10-07: «في المحادثة المباشرة ودي أقدر احادث نفسي
 -- عشان مثلاً لو استخدمه كأنه محفوظات») — كـ«راسل نفسك» في الواتساب. نقاش dm بعضوٍ واحد، فحواجز المحادثة
 -- المباشرة نفسها (my_blocked_dm_ids) تحجبه عن غيرك بلا استثناء — حتى المدير.
 
@@ -72,7 +72,7 @@ CREATE OR REPLACE FUNCTION public.case_discussions()
  SET search_path TO 'public'
 AS $function$
   with me as (
-    select id as tm_id, avatar_url as my_avatar_url,
+    select id as tm_id, avatar_url as my_avatar_url, coalesce(short_name, name) as my_name,
            coalesce(avatar_initial, left(coalesce(short_name, name, '؟'), 1)) as my_initial
       from team_members where auth_id = auth.uid() limit 1
   ),
@@ -94,8 +94,8 @@ AS $function$
     select
       l.case_id,
       case when cs.kind = 'dm'
-             -- محادثة بلا طرفٍ آخر = «ملاحظاتي» (محادثتك مع نفسك — 2026-10-07)
-             then coalesce(p.short_name, p.name, case when p.channel_id is null then 'ملاحظاتي' end, 'محادثة مباشرة')
+             -- محادثة بلا طرفٍ آخر = محادثتك مع نفسك، باسمك أنت (المدير 2026-10-07: «لا تسميها ملاحظاتي خله اسم الشخص نفسه»)
+             then coalesce(p.short_name, p.name, case when p.channel_id is null then (select my_name from me) end, 'محادثة مباشرة')
            else coalesce(cs.title, 'عام — المكتب') end as case_title,
       case when cs.kind = 'dm' then null else cs.office_num end as office_num,
       l.body as last_body,
