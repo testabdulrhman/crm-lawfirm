@@ -338,7 +338,7 @@ struct NewDmSheet: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 } else if !loaded {
                     ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if candidates.isEmpty {
+                } else if candidates.isEmpty && !search.isEmpty {
                     EmptyBox(
                         icon: "person.2",
                         text: search.isEmpty ? "لا زملاء بعد" : "لا أحد بهذا الاسم",
@@ -346,7 +346,30 @@ struct NewDmSheet: View {
                     )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
-                    List(candidates) { m in
+                    List {
+                    // «ملاحظاتي»: راسل نفسك — محفوظاتك الخاصة (طلب المدير 2026-10-07)
+                    if search.isEmpty, let me = sb.member {
+                        Button { Task { await open(me, title: "ملاحظاتي") } } label: {
+                            HStack(spacing: 10) {
+                                AvatarCircle(member: me, size: 36)
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text("ملاحظاتي")
+                                        .font(.system(size: 15, weight: .semibold))
+                                        .foregroundStyle(Theme.navy)
+                                    Text("راسل نفسك — ملاحظات وملفات لا يراها غيرك")
+                                        .font(.system(size: 11)).foregroundStyle(Theme.muted)
+                                        .lineLimit(1)
+                                }
+                                Spacer(minLength: 8)
+                                if opening == me.id { ProgressView().tint(Theme.goldDark) }
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(opening != nil)
+                        .listRowBackground(Theme.card)
+                    }
+                    ForEach(candidates) { m in
                         Button { Task { await open(m) } } label: {
                             HStack(spacing: 10) {
                                 AvatarCircle(member: m, size: 36)
@@ -369,6 +392,7 @@ struct NewDmSheet: View {
                         .buttonStyle(.plain)
                         .disabled(opening != nil)
                         .listRowBackground(Theme.card)
+                    }
                     }
                     .listStyle(.plain)
                     .searchable(text: $search, prompt: "ابحث عن زميل")
@@ -402,14 +426,14 @@ struct NewDmSheet: View {
         }
     }
 
-    private func open(_ m: TeamMember) async {
+    private func open(_ m: TeamMember, title: String? = nil) async {
         guard opening == nil else { return }
         opening = m.id
         defer { opening = nil }
         do {
             let id = try await sb.openDm(m.id)
             Usage.shared.action("محادثة مباشرة")
-            onOpened(id, m.short_name ?? m.name ?? "زميل")
+            onOpened(id, title ?? m.short_name ?? m.name ?? "زميل")
             dismiss()
         } catch {
             if let t = uiErrorText(error) { alertText = t }
