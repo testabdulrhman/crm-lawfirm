@@ -29,6 +29,9 @@ struct HomeView: View {
     @State private var showNotifications = false
     @State private var showOfficeDocs = false
     @State private var birthdays: [BirthdayPerson] = []
+    /// «خبر اليوم» من أساب للنشر (2026-10-08) — يُغلق ليومه
+    @State private var dailyNews: DailyNewsItem?
+    @AppStorage("home.news.dismissed") private var newsDismissed = ""
     @State private var greetingId: String?
     @State private var pendingHr = 0
     @State private var openedTask: TaskRow?
@@ -124,6 +127,7 @@ struct HomeView: View {
         }
         .task { await load() }
         .task { await loadBirthdays() }
+        .task { await loadNews() }
         .retryIfCancelled($cancelled) { await load() }
         .task {
             while !Task.isCancelled {
@@ -179,6 +183,13 @@ struct HomeView: View {
 
                 tasksSection(ov)
                     .padding(.top, 14)
+
+                // خبر اليوم — بعد المطلوب، هادئ بلا إشعار (قرار المدير 2026-10-08: للفريق داخل التطبيق)
+                if let news = dailyNews, newsDismissed != news.day {
+                    newsCard(news)
+                        .padding(.top, 14)
+                        .transition(.opacity)
+                }
 
                 if isDirector && pendingHr > 0 {
                     hrPendingCard
@@ -407,6 +418,23 @@ struct HomeView: View {
             birthdayCelebrated = Fmt.todayISO()
             try? await Task.sleep(for: .milliseconds(700))
             celebrateTick += 1
+        }
+    }
+
+    // MARK: - خبر اليوم
+
+    private func loadNews() async {
+        let rows: [DailyNewsItem] = (try? await sb.get("daily_news", query: [
+            ("select", "id,day,title,category,url,why"), ("order", "day.desc"), ("limit", "1"),
+        ])) ?? []
+        // خبر اليوم أو الأمس فقط — ما أقدم لا يُعرض
+        let yesterday = Fmt.iso(Date().addingTimeInterval(-86_400))
+        dailyNews = rows.first.flatMap { $0.day >= yesterday ? $0 : nil }
+    }
+
+    private func newsCard(_ n: DailyNewsItem) -> some View {
+        DailyNewsCard(news: n) {
+            withAnimation(.easeInOut(duration: 0.3)) { newsDismissed = n.day }
         }
     }
 
@@ -1009,6 +1037,84 @@ private extension View {
 }
 
 /// صاحب عيد ميلاد اليوم — اليوم والشهر فقط يُعرضان، لا سنة ولا عمر
+/// بطاقة «خبر اليوم» في الرئيسية (2026-10-08) — العنوان و«لماذا يهمّنا» ورابط المصدر، تُغلق ليومها
+struct DailyNewsCard: View {
+    let news: DailyNewsItem
+    var onClose: () -> Void = {}
+
+    var body: some View {
+        let n = news
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: "newspaper")
+                    .font(.system(size: 13.5, weight: .medium))
+                    .foregroundStyle(Theme.goldDark)
+                    .frame(width: 32, height: 32)
+                    .background(Theme.goldDark.opacity(0.09), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+                Text("خبر اليوم")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(Theme.navy)
+                if let c = n.category, !c.isEmpty {
+                    Text(c)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(Theme.muted)
+                        .padding(.horizontal, 8).padding(.vertical, 2)
+                        .background(Theme.line.opacity(0.6), in: Capsule())
+                }
+                Spacer()
+            }
+            Text(n.title)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Theme.navy)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+            (Text("لماذا يهمّنا: ").foregroundStyle(Theme.goldDark).fontWeight(.semibold)
+             + Text(n.why).foregroundStyle(Theme.muted))
+                .font(.system(size: 13))
+                .fixedSize(horizontal: false, vertical: true)
+            HStack {
+                Text("المصدر: أساب للنشر")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.muted)
+                Spacer()
+                HStack(spacing: 4) {
+                    Text("اقرأ الخبر كاملاً")
+                    Image(systemName: "arrow.up.forward.square")
+                }
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Theme.goldDark)
+            }
+            .padding(.top, 2)
+        }
+        .padding(14)
+        .padding(.trailing, 14)
+        .homeCard(radius: 22)
+        .contentShape(Rectangle())
+        .onTapGesture { if let u = URL(string: n.url) { UIApplication.shared.open(u) } }
+        .overlay(alignment: .topTrailing) {
+            Button(action: onClose) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(Theme.muted)
+                    .frame(width: 26, height: 26)
+                    .background(Theme.card.opacity(0.85), in: Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("إغلاق لليوم")
+            .padding(6)
+        }
+    }
+}
+
+struct DailyNewsItem: Codable, Identifiable {
+    let id: String
+    let day: String
+    let title: String
+    let category: String?
+    let url: String
+    let why: String
+}
+
 struct BirthdayPerson: Codable, Identifiable {
     let id: String
     let name: String?
