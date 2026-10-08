@@ -52,4 +52,8 @@ node ios-native/tools/upload.mjs <dir>/Redwan.ipa 1.0.15 18
 node ios-native/tools/submit.mjs 1.0.15 18 "نص ما الجديد"
 ```
 
+⚠️ التصدير نفسه (`-exportArchive` بـExportIPA.plist) يُنشئ سجل رفع فارغاً بحالة AWAITING_UPLOAD، فيظنه
+`upload.mjs` رفعاً قائماً ويتوقف بـ«مرفوع سابقاً». شغّله بعد التصدير مباشرة بـ`FORCE_UPLOAD=1`:
+`FORCE_UPLOAD=1 node ios-native/tools/upload.mjs <dir>/Redwan.ipa 1.0.30 44` (2026-10-08)
+
 ⚠️ تحقق دائماً بعد submit أن البناء المرفق هو الجديد: `appStoreVersions/<id>?include=build`.
