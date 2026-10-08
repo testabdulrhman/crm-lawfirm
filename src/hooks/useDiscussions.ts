@@ -686,6 +686,34 @@ export function useRenameChannel(channelId: string | null) {
   })
 }
 
+/** صورة النقاش الخاص (القناة) — للمدير، كاسمها (اقتراح المدير 2026-10-08). null = إزالة الصورة */
+export function useSetChannelAvatar(channelId: string | null) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (file: File | null) => {
+      if (!channelId) return
+      let url: string | null = null
+      if (file) {
+        if (!file.type.startsWith('image/')) throw new Error('اختر صورة (JPG أو PNG)')
+        const up = await uploadFile(file, { bucket: 'avatars', folder: `channels/${channelId}` })
+        url = up.publicUrl
+      }
+      const { error } = await supabase
+        .from('cases')
+        .update({ avatar_url: url })
+        .eq('id', channelId)
+        .eq('kind', 'channel')
+      if (error) throw error
+    },
+    onSuccess: (_d, file) => {
+      qc.invalidateQueries({ queryKey: ['discussions'] })
+      toast({ variant: 'success', title: file ? 'تم تغيير صورة النقاش' : 'أُزيلت صورة النقاش' })
+    },
+    onError: (e) =>
+      toast({ variant: 'destructive', title: 'تعذّر تغيير الصورة', description: errMessage(e) }),
+  })
+}
+
 /* ===== إيصالات القراءة (مثل الواتساب) =====
  * «قرأها» = فتح النقاش بعد إرسالها. case_reads يحجب صفوف الآخرين، فالحساب بدالتين في
  * القاعدة تُرجعان للمُرسل وحده ما يخصّ رسائله. */

@@ -23,6 +23,7 @@ import {
   Users,
   X,
   MessageSquareReply,
+  Image as ImageIcon,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -89,6 +90,7 @@ import {
   type Reaction,
   type StreamMsg,
   type ThreadMsg,
+  useSetChannelAvatar,
 } from '@/hooks/useDiscussions'
 import { useIsDirector } from '@/hooks/useIsDirector'
 import { Switch } from '@/components/ui/switch'
@@ -735,7 +737,7 @@ function ChannelList({
                 )}
               >
                 {/* المحادثة المباشرة: صورة الزميل نفسه مكان الرمز (طلب المدير) */}
-                {isDm ? (
+                {isDm || (isChannel && c.peer_avatar_url) ? (
                   <PeerAvatar
                     url={c.peer_avatar_url}
                     initial={c.peer_avatar_initial}
@@ -1041,7 +1043,7 @@ function StreamPane({
         </div>
       )}
       <div className="flex items-center gap-2 border-b border-border/60 px-4 py-3">
-        {kind === 'dm' ? (
+        {kind === 'dm' || (kind === 'channel' && peerAvatarUrl) ? (
           <PeerAvatar
             url={peerAvatarUrl}
             initial={peerAvatarInitial}
@@ -1118,6 +1120,7 @@ function StreamPane({
         <ChannelMembersDialog
           channelId={caseId}
           title={title}
+          avatarUrl={peerAvatarUrl}
           open={membersOpen}
           onOpenChange={setMembersOpen}
         />
@@ -1930,11 +1933,13 @@ function Composer({
 function ChannelMembersDialog({
   channelId,
   title,
+  avatarUrl = null,
   open,
   onOpenChange,
 }: {
   channelId: string
   title: string
+  avatarUrl?: string | null
   open: boolean
   onOpenChange: (v: boolean) => void
 }) {
@@ -1942,6 +1947,7 @@ function ChannelMembersDialog({
   const { data: members, isLoading } = useChannelMembers(channelId)
   const toggle = useToggleChannelMember(channelId)
   const rename = useRenameChannel(channelId)
+  const setAvatar = useSetChannelAvatar(channelId)
   const [name, setName] = useState(title)
   useEffect(() => {
     if (open) setName(title)
@@ -1959,6 +1965,36 @@ function ChannelMembersDialog({
         <DialogHeader>
           <DialogTitle>إدارة النقاش</DialogTitle>
         </DialogHeader>
+        {/* صورة النقاش (اقتراح المدير 2026-10-08) — تظهر في القائمة وأعلى النقاش بدل رمز القناة */}
+        <div className="flex items-center gap-3">
+          <PeerAvatar url={avatarUrl} name={name || title} className="h-14 w-14 text-lg" />
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8"
+              disabled={setAvatar.isPending}
+              onClick={async () => {
+                const f = await pickFile({ accept: 'image/*' })
+                if (f) setAvatar.mutate(f)
+              }}
+            >
+              {setAvatar.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ImageIcon className="h-3.5 w-3.5" />}
+              {avatarUrl ? 'تغيير الصورة' : 'إضافة صورة'}
+            </Button>
+            {avatarUrl && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-8 text-muted-foreground"
+                disabled={setAvatar.isPending}
+                onClick={() => setAvatar.mutate(null)}
+              >
+                إزالة
+              </Button>
+            )}
+          </div>
+        </div>
         <div className="space-y-1.5">
           <Label htmlFor="channel-rename">اسم النقاش</Label>
           <div className="flex gap-2">
