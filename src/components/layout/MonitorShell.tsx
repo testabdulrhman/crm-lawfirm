@@ -1,10 +1,10 @@
 // «مركز المتابعة» — صفحات المدير الأربع تحت تبويب واحد بتبويبات داخلية على اليمين (طلب المدير 2026-10-08:
 // «سجل الأخطاء، سجل المساعد الذكي، اقتراحات التعديل، مراقبة الاتصالات — ليه ما تكون بتبويب واحد، بعدين
 // التقسيمات تكون تبويبات داخلية على السلايد اليمين»). المسارات القديمة باقية فتعمل الروابط والإشعارات كما هي.
-// غير المدير يرى «اقتراحات التعديل» وحدها فلا تُعرض له التبويبات.
+// غير المدير يرى «اقتراحات التعديل» وحدها فلا تُعرض له التبويبات. و«استخدام التطبيق» انتقل من التقارير إليه.
 import type { ReactNode } from 'react'
 import { Link, useLocation } from 'wouter'
-import { Activity, Bug, Lightbulb, Sparkles, type LucideIcon } from 'lucide-react'
+import { Activity, Bug, Lightbulb, MonitorSmartphone, Sparkles, type LucideIcon } from 'lucide-react'
 
 import { useIsDirector } from '@/hooks/useIsDirector'
 import { useNewChangeRequestsCount } from '@/hooks/useChangeRequests'
@@ -15,6 +15,7 @@ export const MONITOR_TABS: { href: string; label: string; icon: LucideIcon }[] =
   { href: '/errors', label: 'سجل الأخطاء', icon: Bug },
   { href: '/assistant-log', label: 'سجل المساعد الذكي', icon: Sparkles },
   { href: '/hub', label: 'مراقبة الاتصالات', icon: Activity },
+  { href: '/usage', label: 'استخدام التطبيق', icon: MonitorSmartphone },
 ]
 
 export const isMonitorPath = (loc: string) => MONITOR_TABS.some((t) => loc.startsWith(t.href))

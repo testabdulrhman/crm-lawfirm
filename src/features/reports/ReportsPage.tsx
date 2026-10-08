@@ -32,7 +32,6 @@ import {
   Timer,
   LogIn,
   LayoutGrid,
-  Activity,
   type LucideIcon,
 } from 'lucide-react'
 import { useLocation } from 'wouter'
@@ -94,7 +93,6 @@ export function ReportsPage() {
     refetch: refetchAssignee,
   } = useReportsByAssignee()
   const [, navigate] = useLocation()
-  const isDirector = useIsDirector()
   // التبويب المفتوح يدوم للرجوع والتحديث
   const [tab, setTab] = usePageState('reports:tab', 'overview')
 
@@ -127,7 +125,6 @@ export function ReportsPage() {
     { value: 'overview', label: 'نظرة عامة', icon: LayoutGrid },
     { value: 'charts', label: 'الرسوم البيانية', icon: BarChart3 },
     { value: 'team', label: 'أداء الفريق', icon: Users },
-    ...(isDirector ? [{ value: 'usage', label: 'الاستخدام', icon: Activity }] : []),
   ]
   const current = tabs.find((t) => t.value === tab) ?? tabs[0]
 
@@ -321,12 +318,6 @@ export function ReportsPage() {
       </Card>
         </TabsContent>
 
-        {isDirector && (
-          <TabsContent value="usage" className="mt-4">
-            {/* استخدام التطبيق (للمدير) */}
-            <UsageSection />
-          </TabsContent>
-        )}
       </Tabs>
     </SideTabsLayout>
   )
@@ -338,6 +329,16 @@ const fmtMins = (m: number): string => {
   const h = Math.floor(m / 60)
   const r = m % 60
   return r === 0 ? `${fmtNumber(h)} س` : `${fmtNumber(h)} س ${fmtNumber(r)} د`
+}
+
+// «استخدام التطبيق» صار في «مركز المتابعة» لا في التقارير (قرار المدير 2026-10-08): يقيس كيف يستعمل الفريق
+// النظام لا شغل المكتب، وهو للمدير وحده — فتبقى التقارير واحدة للمدير والموظفين.
+export function UsagePage() {
+  return (
+    <div className="mx-auto max-w-6xl">
+      <UsageSection />
+    </div>
+  )
 }
 
 function UsageSection() {
@@ -354,9 +355,9 @@ function UsageSection() {
         <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gold/10">
           <MonitorSmartphone className="h-[18px] w-[18px] text-gold" />
         </span>
-        <h3 className="text-base font-semibold text-foreground">
-          استخدام التطبيق (آخر 30 يوماً)
-        </h3>
+        <h2 className="text-2xl font-bold tracking-tight text-foreground">
+          استخدام التطبيق <span className="text-sm font-normal text-muted-foreground">آخر 30 يوماً</span>
+        </h2>
       </div>
 
       {isLoading || !usage ? (

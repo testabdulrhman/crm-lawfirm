@@ -44,7 +44,7 @@ import { AppointmentsPage } from '@/features/appointments/AppointmentsPage'
 import { AppointmentDetail } from '@/features/appointments/AppointmentDetail'
 import { OutgoingLettersPage } from '@/features/outgoing/OutgoingLettersPage'
 import { OutgoingLetterDetail } from '@/features/outgoing/OutgoingLetterDetail'
-import { ReportsPage } from '@/features/reports/ReportsPage'
+import { ReportsPage, UsagePage } from '@/features/reports/ReportsPage'
 import { ErrorLogPage } from '@/features/settings/ErrorLogPage'
 import { AssistantLogPage } from '@/features/settings/AssistantLogPage'
 import { ChangeRequestsPage } from '@/features/change-requests/ChangeRequestsPage'
@@ -69,7 +69,7 @@ function FullScreenLoader() {
 const COLLAB_BLOCKED = [
   '/contacts', '/inbox', '/mail', '/requests', '/staff-applications',
   '/engagements', '/poa', '/appointments', '/outgoing', '/team',
-  '/reports', '/settings', '/hr', '/errors', '/hub', '/change-requests',
+  '/reports', '/settings', '/hr', '/errors', '/hub', '/change-requests', '/usage',
 ]
 
 function CollaboratorGuard() {
@@ -133,6 +133,7 @@ function ProtectedRoutes() {
         <Route path="/monitor">{() => <Redirect to="/change-requests" />}</Route>
         <Route path="/errors">{() => <MonitorShell><ErrorLogPage /></MonitorShell>}</Route>
         <Route path="/assistant-log">{() => <MonitorShell><AssistantLogPage /></MonitorShell>}</Route>
+        <Route path="/usage">{() => <MonitorShell><UsagePage /></MonitorShell>}</Route>
         <Route path="/change-requests">{() => <MonitorShell><ChangeRequestsPage /></MonitorShell>}</Route>
         <Route path="/notifications" component={NotificationsPage} />
         <Route path="/office-documents" component={OfficeDocumentsPage} />
