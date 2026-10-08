@@ -34,4 +34,5 @@ export const ROUTE_TITLES: Record<string, string> = {
   '/errors': 'سجل الأخطاء',
   '/assistant-log': 'سجل المساعد الذكي',
   '/hub': 'مراقبة الاتصالات',
+  '/monitor': 'مركز المتابعة',
 }

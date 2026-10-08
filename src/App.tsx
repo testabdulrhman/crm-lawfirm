@@ -52,6 +52,7 @@ import { NotificationsPage } from '@/features/notifications/NotificationsPage'
 import { OfficeDocumentsPage } from '@/features/office-docs/OfficeDocumentsPage'
 import { HrRequestsPage } from '@/features/hr/HrRequestsPage'
 import { HubMonitorPage } from '@/features/hub/HubMonitorPage'
+import { MonitorShell } from '@/components/layout/MonitorShell'
 
 function FullScreenLoader() {
   return (
@@ -128,12 +129,14 @@ function ProtectedRoutes() {
         </Route>
         <Route path="/outgoing" component={OutgoingLettersPage} />
         <Route path="/reports" component={ReportsPage} />
-        <Route path="/errors" component={ErrorLogPage} />
-        <Route path="/assistant-log" component={AssistantLogPage} />
-        <Route path="/change-requests" component={ChangeRequestsPage} />
+        {/* «مركز المتابعة»: الأربع تحت تبويب واحد بتبويبات داخلية (2026-10-08) */}
+        <Route path="/monitor">{() => <Redirect to="/change-requests" />}</Route>
+        <Route path="/errors">{() => <MonitorShell><ErrorLogPage /></MonitorShell>}</Route>
+        <Route path="/assistant-log">{() => <MonitorShell><AssistantLogPage /></MonitorShell>}</Route>
+        <Route path="/change-requests">{() => <MonitorShell><ChangeRequestsPage /></MonitorShell>}</Route>
         <Route path="/notifications" component={NotificationsPage} />
         <Route path="/office-documents" component={OfficeDocumentsPage} />
-        <Route path="/hub" component={HubMonitorPage} />
+        <Route path="/hub">{() => <MonitorShell><HubMonitorPage /></MonitorShell>}</Route>
         <Route path="/hr" component={HrRequestsPage} />
         <Route path="/inbox" component={IncomingMessagesPage} />
         <Route path="/mail" component={MailPage} />

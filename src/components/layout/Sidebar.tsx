@@ -22,18 +22,17 @@ import {
   FolderOpen,
   Send,
   BarChart3,
-  Bug,
   Lightbulb,
   LogOut,
   type LucideIcon,
   FileBadge,
   ChevronDown,
-  Sparkles,
   Pin,
   PinOff,
 } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
+import { isMonitorPath } from '@/components/layout/MonitorShell'
 import { useAuth } from '@/stores/auth'
 import { useOfficeInfo } from '@/hooks/useSettings'
 import { useIsDirector } from '@/hooks/useIsDirector'
@@ -60,6 +59,8 @@ interface NavItem {
   collab?: true
   /** للمدير وحده — يُخفى عن غيره */
   director?: true
+  /** للموظف وحده (للمدير ما يقابله في «مركز المتابعة») */
+  staffOnly?: true
   /** يظهر للموظف في القائمة الأساسية؛ وما سواه تحت «المزيد» (المدير يرى الكل) */
   primary?: true
   badge?:
@@ -103,7 +104,9 @@ const isActive = (href: string, location: string) =>
     ? location === '/'
     : location.startsWith(href) ||
       // طلبات التوظيف تبويب داخل الموظفين
-      (href === '/team' && location.startsWith('/staff-applications'))
+      (href === '/team' && location.startsWith('/staff-applications')) ||
+      // أقسام «مركز المتابعة» الأربعة
+      (href === '/monitor' && isMonitorPath(location))
 
 const navSections: { title?: string; items: NavItem[] }[] = [
   {
@@ -169,13 +172,10 @@ const navSections: { title?: string; items: NavItem[] }[] = [
       { label: 'مستندات المكتب', href: '/office-documents', icon: FileBadge },
       { label: 'التقارير', href: '/reports', icon: BarChart3 },
       { label: 'الإعدادات', href: '/settings', icon: Settings },
-      // كل خطأ ظهر لموظف (طلب المدير 2026-09-15)
-      { label: 'سجل الأخطاء', href: '/errors', icon: Bug, director: true },
-      // ما طُلب من المساعد وما نفّذه فعلاً (2026-10-01)
-      { label: 'سجل المساعد الذكي', href: '/assistant-log', icon: Sparkles, director: true },
-      // «اقترح تعديلاً» من أي صفحة — والردود عليها (2026-09-24)
-      { label: 'اقتراحات التعديل', href: '/change-requests', icon: Lightbulb, badge: 'new_change_requests' },
-      { label: 'مراقبة الاتصالات', href: '/hub', icon: Activity, director: true },
+      // «مركز المتابعة» للمدير: اقتراحات التعديل، وسجل الأخطاء، وسجل المساعد، ومراقبة الاتصالات — تبويب
+      // واحد بتبويبات داخلية (طلب المدير 2026-10-08). والموظف يرى «اقتراحات التعديل» وحدها كما كانت.
+      { label: 'مركز المتابعة', href: '/monitor', icon: Activity, director: true, badge: 'new_change_requests' },
+      { label: 'اقتراحات التعديل', href: '/change-requests', icon: Lightbulb, staffOnly: true },
     ],
   },
 ]
@@ -244,7 +244,9 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                       : 0
 
   const visible = (items: NavItem[]) =>
-    (isCollaborator ? items.filter((i) => i.collab) : items).filter((i) => !i.director || isDirector)
+    (isCollaborator ? items.filter((i) => i.collab) : items).filter(
+      (i) => (!i.director || isDirector) && (!i.staffOnly || !isDirector)
+    )
   const inMain = (i: NavItem) => !compact || !!i.primary || pins.includes(i.href)
   // ما تحت «المزيد» بأقسامه — وإن كانت الصفحة المفتوحة منه يُفتح تلقائياً فلا يضيع موضعها
   const moreSections = compact
