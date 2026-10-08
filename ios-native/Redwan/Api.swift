@@ -386,6 +386,24 @@ extension SB {
             ("channel_id", "eq.\(channelId)"), ("member_id", "eq.\(memberId)")])
     }
 
+    /// صورة النقاش الخاص (اقتراح المدير 2026-10-08) — nil يزيلها. كاسم القناة: للمدير وحده (channels_update_gate)
+    func setChannelAvatar(_ channelId: String, jpeg: Data?) async throws -> String? {
+        var url: String? = nil
+        if let jpeg {
+            let stamp = Int(Date().timeIntervalSince1970)
+            url = try await storageUpload(bucket: "avatars", path: "channels/\(channelId)/\(stamp).jpg", data: jpeg, mime: "image/jpeg")
+        }
+        try await patch("cases", query: [("id", "eq.\(channelId)"), ("kind", "eq.channel")],
+                        values: ["avatar_url": url.map { $0 as Any } ?? NSNull()])
+        return url
+    }
+
+    func channelAvatarURL(_ channelId: String) async throws -> String? {
+        struct Row: Codable { let avatar_url: String? }
+        let rows: [Row] = try await get("cases", query: [("select", "avatar_url"), ("id", "eq.\(channelId)"), ("limit", "1")])
+        return rows.first?.avatar_url
+    }
+
     func renameChannel(_ channelId: String, title: String) async throws {
         try await patch("cases", query: [("id", "eq.\(channelId)"), ("kind", "eq.channel")],
                         values: ["title": title])

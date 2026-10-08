@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 
 // نقاش جديد مُسمّى بأعضاء (طلب المدير 2026-09-13: «ودي أفتح نقاش جديد وأقدر أسميّه،
 // وأضيف فيه الناس»). النقاش المُسمّى = قناة بعضوية: يراها أعضاؤها والمدير فقط،
@@ -183,6 +184,10 @@ struct ChannelMembersSheet: View {
     @State private var alertText: String?
     @State private var savingTitle = false
     @State private var savedTitle: String?
+    /// صورة النقاش (اقتراح المدير 2026-10-08)
+    @State private var avatarURL: String?
+    @State private var photoItem: PhotosPickerItem?
+    @State private var savingPhoto = false
 
     private var trimmed: String { title.trimmingCharacters(in: .whitespacesAndNewlines) }
     private var titleChanged: Bool { !trimmed.isEmpty && trimmed != (savedTitle ?? currentTitle) }
@@ -190,6 +195,50 @@ struct ChannelMembersSheet: View {
     var body: some View {
         NavigationStack {
             Form {
+                // صورة النقاش — تظهر في قائمة النقاشات بدل رمز القناة
+                Section("صورة النقاش") {
+                    HStack(spacing: 14) {
+                        Group {
+                            if let s = avatarURL, let u = URL(string: s) {
+                                AsyncImage(url: u) { p in
+                                    if case .success(let img) = p { img.resizable().scaledToFill() }
+                                    else { Theme.line.opacity(0.4) }
+                                }
+                            } else {
+                                Image(systemName: "building.columns.fill")
+                                    .font(.system(size: 20)).foregroundStyle(Theme.gold)
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                    .background(Theme.navy)
+                            }
+                        }
+                        .frame(width: 56, height: 56)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                        VStack(alignment: .leading, spacing: 8) {
+                            PhotosPicker(selection: $photoItem, matching: .images) {
+                                Label(avatarURL == nil ? "إضافة صورة" : "تغيير الصورة", systemImage: "photo")
+                                    .foregroundStyle(Theme.goldDark)
+                            }
+                            .disabled(savingPhoto)
+                            if avatarURL != nil {
+                                Button("إزالة الصورة", role: .destructive) { Task { await savePhoto(nil) } }
+                                    .buttonStyle(.borderless)
+                                    .disabled(savingPhoto)
+                            }
+                        }
+                        if savingPhoto { Spacer(); ProgressView() }
+                    }
+                }
+                .onChange(of: photoItem) { _, item in
+                    guard let item else { return }
+                    Task {
+                        if let data = try? await item.loadTransferable(type: Data.self),
+                           let img = UIImage(data: data), let jpeg = ProfilePhoto.prepare(img) {
+                            await savePhoto(jpeg)
+                        }
+                        photoItem = nil
+                    }
+                }
+
                 Section("اسم النقاش") {
                     HStack(spacing: 8) {
                         TextField("اسم النقاش", text: $title)
@@ -263,8 +312,10 @@ struct ChannelMembersSheet: View {
         do {
             async let s = sb.staff()
             async let m = sb.channelMemberIds(channelId)
+            async let a = sb.channelAvatarURL(channelId)
             staff = try await s
             members = try await m
+            avatarURL = try? await a
             loaded = true
         } catch {
             if let t = uiErrorText(error) { loadError = t }
@@ -286,6 +337,19 @@ struct ChannelMembersSheet: View {
             }
         } catch {
             if adding { members.remove(m.id) } else { members.insert(m.id) }
+            if let t = uiErrorText(error) { alertText = t }
+        }
+    }
+
+    private func savePhoto(_ jpeg: Data?) async {
+        savingPhoto = true
+        defer { savingPhoto = false }
+        do {
+            avatarURL = try await sb.setChannelAvatar(channelId, jpeg: jpeg)
+            // قائمة النقاشات تُعيد الجلب فتظهر الصورة فوراً
+            NotificationCenter.default.post(name: .discussionChanged,
+                                            object: DiscussionChange(caseId: channelId, parentId: nil, commentId: nil, table: "case_comments"))
+        } catch {
             if let t = uiErrorText(error) { alertText = t }
         }
     }

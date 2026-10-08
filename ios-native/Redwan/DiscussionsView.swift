@@ -382,6 +382,14 @@ private struct DiscussionRowView: View {
             // المحادثة المباشرة: صورة الزميل نفسه مكان الرمز (طلب المدير 2026-09-22)
             if row.isDm {
                 AvatarCircle(member: row.peerMember, size: 38)
+            } else if row.kind == "channel", let s = row.peer_avatar_url, let u = URL(string: s) {
+                // صورة النقاش الخاص إن وُضعت (اقتراح المدير 2026-10-08)
+                AsyncImage(url: u) { p in
+                    if case .success(let img) = p { img.resizable().scaledToFill() }
+                    else { Theme.navy }
+                }
+                .frame(width: 38, height: 38)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
             } else {
                 if row.kind == "bankruptcy" {
                     // إجراء الإفلاس: دائرة بحلقة خضراء بلون لجنة الإفلاس (2026-10-07)
