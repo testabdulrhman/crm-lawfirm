@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils'
 import { fmtDatePref, fmtNumber, todayISO } from '@/lib/format'
 import { WeatherBadge } from '@/components/WeatherBadge'
 import { BirthdayCard } from '@/components/BirthdayCard'
+import { DailyNewsCard } from '@/components/DailyNewsCard'
 import { FeedContent } from '@/features/feed/FeedPage'
 import { useCompleteTask, useDashboardOverview, type DashboardScope } from '@/hooks/useDashboard'
 import { useConfirmDeadline } from '@/hooks/useDeadlineLoop'
@@ -197,6 +198,9 @@ export default function Dashboard() {
               onCalendar={() => navigate('/calendar')}
             />
           </div>
+
+          {/* خبر اليوم من أساب للنشر — للفريق، بعد المطلوب والجدول (لا يزاحمهما) */}
+          <DailyNewsCard />
 
           {isAll && overview.data?.stats && (
             <OfficeCard
