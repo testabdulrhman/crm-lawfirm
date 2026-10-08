@@ -55,7 +55,7 @@ import { cn } from '@/lib/utils'
 import { categoryLabel } from '@/lib/contactLabels'
 import { caseTypeLabel } from '@/lib/caseLabels'
 import { useReportsOverview, useReportsByAssignee } from '@/hooks/useReports'
-import { useUsageStats } from '@/hooks/useUsageStats'
+import { useUsageStats, USAGE_PERIODS } from '@/hooks/useUsageStats'
 import { useUsageDetails } from '@/hooks/useUsageDetails'
 import { useIsDirector } from '@/hooks/useIsDirector'
 import { usePageState } from '@/hooks/usePageState'
@@ -343,21 +343,45 @@ export function UsagePage() {
 
 function UsageSection() {
   const isDirector = useIsDirector()
-  const { data: usage, isLoading } = useUsageStats()
+  // الفترة تحكم كل ما في الصفحة (طلب المدير 2026-10-08: «ما يعلمني مدة الحساب، يعني لمدة اسبوع أو 14 يوم أو شهر»)
+  const [daysStr, setDaysStr] = usePageState('usage:days', '30')
+  const days = USAGE_PERIODS.includes(Number(daysStr) as never) ? Number(daysStr) : 30
+  const period = PERIOD_LABEL[days]
+  const { data: usage, isLoading } = useUsageStats(days)
   const [userFilter, setUserFilter] = usePageState('reports:usage-user', 'all')
-  const { data: details } = useUsageDetails(userFilter)
+  const { data: details } = useUsageDetails(userFilter, days)
 
   if (!isDirector) return null
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2.5">
-        <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gold/10">
-          <MonitorSmartphone className="h-[18px] w-[18px] text-gold" />
-        </span>
-        <h2 className="text-2xl font-bold tracking-tight text-foreground">
-          استخدام التطبيق <span className="text-sm font-normal text-muted-foreground">آخر 30 يوماً</span>
-        </h2>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gold/10">
+            <MonitorSmartphone className="h-[18px] w-[18px] text-gold" />
+          </span>
+          <div>
+            <h2 className="text-2xl font-bold tracking-tight text-foreground">استخدام التطبيق</h2>
+            <p className="text-sm text-muted-foreground">كل الأرقام أدناه عن {period}</p>
+          </div>
+        </div>
+        <div className="inline-flex rounded-xl border bg-card p-1" role="radiogroup" aria-label="الفترة">
+          {USAGE_PERIODS.map((d) => (
+            <button
+              key={d}
+              type="button"
+              role="radio"
+              aria-checked={d === days}
+              onClick={() => setDaysStr(String(d))}
+              className={cn(
+                'rounded-lg px-3 py-1.5 text-sm transition-colors',
+                d === days ? 'bg-gold font-semibold text-navy' : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+              )}
+            >
+              {PERIOD_SHORT[d]}
+            </button>
+          ))}
+        </div>
       </div>
 
       {isLoading || !usage ? (
@@ -384,14 +408,14 @@ function UsageSection() {
               </CardContent>
             </Card>
             {/* «مرات الدخول» لا «الجلسات» — كلمة «جلسة» محجوزة لجلسات المحكمة */}
-            <StatCard label="مرات الدخول هذا الأسبوع" value={usage.weekSessions} icon={LogIn} tone="gold" />
+            <StatCard label={`مرات الدخول — ${period}`} value={usage.periodSessions} icon={LogIn} tone="gold" />
             <Card>
               <CardContent className="flex items-center justify-between gap-3 p-4">
                 <div>
                   <p className="text-2xl font-bold text-foreground">
-                    {fmtMins(usage.weekMinutes)}
+                    {fmtMins(usage.periodMinutes)}
                   </p>
-                  <p className="text-sm text-muted-foreground">استخدام هذا الأسبوع</p>
+                  <p className="text-sm text-muted-foreground">إجمالي الاستخدام — {period}</p>
                 </div>
                 <div className={cn('flex h-11 w-11 items-center justify-center rounded-xl', TONES.blue)}>
                   <Timer className="h-5 w-5" />
@@ -400,7 +424,7 @@ function UsageSection() {
             </Card>
           </div>
 
-          <ChartCard title="دقائق الاستخدام يومياً (آخر 14 يوماً)">
+          <ChartCard title={`دقائق الاستخدام يومياً — ${period}`}>
             {/* نفس نمط بقية رسوم الصفحة: dir="ltr" ومحور يسار */}
             <div dir="ltr" className="w-full">
               <ResponsiveContainer width="100%" height={240}>
@@ -435,7 +459,7 @@ function UsageSection() {
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">أكثر الشاشات استخداماً (١٤ يوماً)</CardTitle>
+                <CardTitle className="text-base">أكثر الشاشات استخداماً <PeriodTag>{period}</PeriodTag></CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
                 {usage.topScreens.length === 0 ? (
@@ -464,7 +488,7 @@ function UsageSection() {
             </Card>
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">أكثر الأفعال (١٤ يوماً)</CardTitle>
+                <CardTitle className="text-base">أكثر الأفعال <PeriodTag>{period}</PeriodTag></CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
                 {usage.topActions.length === 0 ? (
@@ -495,7 +519,7 @@ function UsageSection() {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">الاستخدام حسب الموظف</CardTitle>
+              <CardTitle className="text-base">الاستخدام حسب الموظف <PeriodTag>{period}</PeriodTag></CardTitle>
             </CardHeader>
             <CardContent>
               {usage.byUser.length === 0 ? (
@@ -537,7 +561,7 @@ function UsageSection() {
           {/* التفاصيل الدقيقة: الصفحات والأزرار (مع فلتر موظف) */}
           <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
             <p className="text-sm font-semibold text-foreground">
-              تفاصيل دقيقة: الصفحات والأزرار
+              تفاصيل دقيقة: الصفحات والأزرار <PeriodTag>{period}</PeriodTag>
             </p>
             <Select value={userFilter} onValueChange={setUserFilter}>
               <SelectTrigger className="h-9 w-44" aria-label="تصفية حسب الموظف">
@@ -638,6 +662,18 @@ function UsageSection() {
 }
 
 /* ===================== مكوّنات ===================== */
+
+const PERIOD_LABEL: Record<number, string> = {
+  7: 'آخر ٧ أيام',
+  14: 'آخر ١٤ يوماً',
+  30: 'آخر ٣٠ يوماً',
+  90: 'آخر ٩٠ يوماً',
+}
+const PERIOD_SHORT: Record<number, string> = { 7: 'أسبوع', 14: '١٤ يوماً', 30: 'شهر', 90: '٣ أشهر' }
+
+function PeriodTag({ children }: { children: React.ReactNode }) {
+  return <span className="ms-1 text-xs font-normal text-muted-foreground">· {children}</span>
+}
 
 const TONES: Record<string, string> = {
   navy: 'text-navy bg-navy/10 dark:text-navy-100 dark:bg-navy-100/10',

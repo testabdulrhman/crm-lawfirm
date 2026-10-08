@@ -1,8 +1,9 @@
-// تفاصيل الاستخدام (آخر 30 يوماً) من usage_daily: الوقت في كل صفحة + أكثر الأزرار ضغطاً
+// تفاصيل الاستخدام للفترة المختارة من usage_daily: الوقت في كل صفحة + أكثر الأزرار ضغطاً
 import { useQuery } from '@tanstack/react-query'
 
 import { supabase } from '@/lib/supabase'
 import { ROUTE_TITLES } from '@/lib/constants'
+import { fetchAllRows } from '@/hooks/useUsageStats'
 
 interface DailyRow {
   user_name: string
@@ -37,22 +38,21 @@ export function pageTitle(page: string): string {
   return clean.includes(':id') ? `${t} — تفاصيل` : t
 }
 
-export function useUsageDetails(userFilter: string) {
+export function useUsageDetails(userFilter: string, days: number) {
   return useQuery({
-    queryKey: ['usage-details', userFilter],
+    queryKey: ['usage-details', userFilter, days],
     queryFn: async () => {
-      const since = new Date(Date.now() - 30 * 86400000)
+      const since = new Date(Date.now() - (days - 1) * 86400000)
         .toISOString()
         .slice(0, 10)
-      let q = supabase
-        .from('usage_daily')
-        .select('user_name, event_type, page, label, hits, seconds')
-        .gte('day', since)
-        .limit(20000)
-      if (userFilter !== 'all') q = q.eq('user_name', userFilter)
-      const { data, error } = await q
-      if (error) throw error
-      const rows = (data ?? []) as DailyRow[]
+      const rows = await fetchAllRows<DailyRow>((a, b) => {
+        let q = supabase
+          .from('usage_daily')
+          .select('user_name, event_type, page, label, hits, seconds')
+          .gte('day', since)
+        if (userFilter !== 'all') q = q.eq('user_name', userFilter)
+        return q.order('day').range(a, b)
+      })
 
       const users = new Set<string>()
       const pages = new Map<string, PageUsage>()

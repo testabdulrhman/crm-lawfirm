@@ -1,4 +1,4 @@
-// إحصاءات استخدام التطبيق من usage_sessions (آخر 30 يوماً) — تجميع في المتصفح
+// إحصاءات استخدام التطبيق من usage_sessions لفترة يختارها المدير (٧/١٤/٣٠/٩٠ يوماً) — تجميع في المتصفح
 import { useQuery } from '@tanstack/react-query'
 
 import { supabase } from '@/lib/supabase'
@@ -34,63 +34,78 @@ export interface TopItem {
 
 export interface UsageStats {
   activeToday: number
-  weekSessions: number
-  weekMinutes: number
-  webShare: number // نسبة دقائق الويب هذا الأسبوع ٪
+  periodSessions: number
+  periodMinutes: number
+  webShare: number // نسبة دقائق الويب خلال الفترة ٪
   byUser: UserUsage[]
-  byDay: DayUsage[] // آخر 14 يوماً
-  topScreens: TopItem[] // بالدقائق — آخر 14 يوماً
+  byDay: DayUsage[] // يوماً بيوم خلال الفترة
+  topScreens: TopItem[] // بالدقائق
   topActions: TopItem[] // بالنقرات
 }
 
-export function useUsageStats() {
+export const USAGE_PERIODS = [7, 14, 30, 90] as const
+
+// PostgREST يقطع عند ١٠٠٠ صف — usage_daily يتجاوزها في أسبوعين، فنقرأ صفحةً صفحة
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function fetchAllRows<T>(build: (from: number, to: number) => PromiseLike<{ data: any; error: any }>): Promise<T[]> {
+  const PAGE = 1000
+  const out: T[] = []
+  for (let from = 0; from < 50000; from += PAGE) {
+    const { data, error } = await build(from, from + PAGE - 1)
+    if (error) throw error
+    out.push(...((data ?? []) as T[]))
+    if (!data || data.length < PAGE) break
+  }
+  return out
+}
+
+export function useUsageStats(days: number) {
   return useQuery({
-    queryKey: ['usage-stats'],
+    queryKey: ['usage-stats', days],
     queryFn: async (): Promise<UsageStats> => {
-      const since = new Date(Date.now() - 30 * 86400000).toISOString()
-      const since14 = new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10)
-      const [sess, daily] = await Promise.all([
-        supabase
-          .from('usage_sessions')
-          .select('user_name, user_role, login_at, minutes, updated_at, platform')
-          .gte('login_at', since)
-          .order('login_at', { ascending: false })
-          .limit(3000),
-        supabase
-          .from('usage_daily')
-          .select('event_type, page, label, hits, seconds')
-          .gte('day', since14)
-          .limit(5000),
+      const since = new Date(Date.now() - days * 86400000).toISOString()
+      const sinceDay = new Date(Date.now() - (days - 1) * 86400000).toISOString().slice(0, 10)
+      const [rows, dailyRows] = await Promise.all([
+        fetchAllRows<UsageSessionRow & { platform?: string }>((a, b) =>
+          supabase
+            .from('usage_sessions')
+            .select('user_name, user_role, login_at, minutes, updated_at, platform')
+            .gte('login_at', since)
+            .order('login_at', { ascending: false })
+            .range(a, b)
+        ),
+        fetchAllRows<{
+          event_type: string
+          page: string | null
+          label: string | null
+          hits: number | null
+          seconds: number | null
+        }>((a, b) =>
+          supabase
+            .from('usage_daily')
+            .select('event_type, page, label, hits, seconds')
+            .gte('day', sinceDay)
+            .order('day')
+            .range(a, b)
+        ),
       ])
-      if (sess.error) throw sess.error
-      const rows = (sess.data ?? []) as (UsageSessionRow & { platform?: string })[]
-      const dailyRows = (daily.data ?? []) as {
-        event_type: string
-        page: string | null
-        label: string | null
-        hits: number | null
-        seconds: number | null
-      }[]
 
       const todayStr = new Date().toISOString().slice(0, 10)
-      const weekAgo = Date.now() - 7 * 86400000
 
       const activeTodaySet = new Set<string>()
-      let weekSessions = 0
-      let weekMinutes = 0
-      let weekWebMinutes = 0
+      let periodSessions = 0
+      let periodMinutes = 0
+      let periodWebMinutes = 0
       const users = new Map<string, UserUsage>()
-      const days = new Map<string, { total: number; web: number; ios: number }>()
+      const dayMap = new Map<string, { total: number; web: number; ios: number }>()
 
       for (const r of rows) {
         const mins = r.minutes ?? 0
         const day = r.login_at.slice(0, 10)
         if (day === todayStr) activeTodaySet.add(r.user_name)
-        if (new Date(r.login_at).getTime() >= weekAgo) {
-          weekSessions++
-          weekMinutes += mins
-          if ((r.platform ?? 'web') === 'web') weekWebMinutes += mins
-        }
+        periodSessions++
+        periodMinutes += mins
+        if ((r.platform ?? 'web') === 'web') periodWebMinutes += mins
         const u = users.get(r.user_name)
         if (u) {
           u.sessions++
@@ -105,14 +120,14 @@ export function useUsageStats() {
             lastLogin: r.login_at,
           })
         }
-        const d = days.get(day) ?? { total: 0, web: 0, ios: 0 }
+        const d = dayMap.get(day) ?? { total: 0, web: 0, ios: 0 }
         d.total += mins
         if ((r.platform ?? 'web') === 'ios') d.ios += mins
         else d.web += mins
-        days.set(day, d)
+        dayMap.set(day, d)
       }
 
-      // أكثر الشاشات (بالثواني) وأكثر الأفعال (بالنقرات) — آخر ١٤ يوماً
+      // أكثر الشاشات (بالثواني) وأكثر الأفعال (بالنقرات) خلال الفترة
       const screens = new Map<string, number>()
       const actions = new Map<string, number>()
       for (const r of dailyRows) {
@@ -132,15 +147,15 @@ export function useUsageStats() {
         .sort((a, b) => b.value - a.value)
         .slice(0, 8)
 
-      // آخر 14 يوماً متتالية (حتى الأيام بلا استخدام تظهر صفراً)
+      // أيام الفترة متتالية (حتى الأيام بلا استخدام تظهر صفراً)
       const byDay: DayUsage[] = []
-      for (let i = 13; i >= 0; i--) {
+      for (let i = days - 1; i >= 0; i--) {
         const d = new Date(Date.now() - i * 86400000)
         const key = d.toISOString().slice(0, 10)
-        const v = days.get(key)
+        const v = dayMap.get(key)
         byDay.push({
           day: key,
-          label: d.toLocaleDateString('ar', { weekday: 'short', day: 'numeric' }),
+          label: days > 14 ? `${d.getMonth() + 1}/${d.getDate()}` : d.toLocaleDateString('ar', { weekday: 'short', day: 'numeric' }),
           minutes: v?.total ?? 0,
           webMinutes: v?.web ?? 0,
           iosMinutes: v?.ios ?? 0,
@@ -149,9 +164,9 @@ export function useUsageStats() {
 
       return {
         activeToday: activeTodaySet.size,
-        weekSessions,
-        weekMinutes,
-        webShare: weekMinutes > 0 ? Math.round((weekWebMinutes / weekMinutes) * 100) : 100,
+        periodSessions,
+        periodMinutes,
+        webShare: periodMinutes > 0 ? Math.round((periodWebMinutes / periodMinutes) * 100) : 100,
         byUser: [...users.values()].sort((a, b) => b.minutes - a.minutes),
         byDay,
         topScreens,
