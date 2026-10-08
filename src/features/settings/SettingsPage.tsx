@@ -14,13 +14,12 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { Tabs, TabsContent } from '@/components/ui/tabs'
 import { usePageState } from '@/hooks/usePageState'
 import { IntegrationsTab } from './IntegrationsTab'
 import { Card, CardContent } from '@/components/ui/card'
 import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
 import { useTheme } from '@/stores/theme'
 import { usePrefs, type DateDisplay } from '@/stores/prefs'
 import { fmtDatePref, todayISO } from '@/lib/format'
@@ -33,6 +32,7 @@ import { ContractTemplatesTab } from './ContractTemplatesTab'
 import { TrashTab } from './TrashTab'
 import { NotificationRulesTab } from './NotificationRulesTab'
 import { useIsDirector } from '@/hooks/useIsDirector'
+import { SideTabsLayout } from '@/components/layout/SideTabs'
 
 // المستوى الأول: مجموعتان — والثاني: تبويبات كل مجموعة
 interface TabDef {
@@ -87,53 +87,21 @@ export function SettingsPage() {
       ? { ...GROUPS[1], tabs: officeTabs }
       : GROUPS[0]
 
+  const groups = [GROUPS[0], { ...GROUPS[1], tabs: officeTabs }]
+  const current = group.tabs.find((t) => t.value === tab) ?? group.tabs[0]
+
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    // التقسيمات على اليمين مثل «مركز المتابعة» (طلب المدير 2026-10-08: «والإعدادات نفس الطريقة خل التقسيم سلايد
+    // على اليمين»)
+    <SideTabsLayout groups={groups} value={current.value} onChange={setTab}>
       <div>
-        <h2 className="text-2xl font-bold tracking-tight text-foreground">الإعدادات</h2>
-        <p className="mt-1 text-sm text-muted-foreground">{group.hint}</p>
+        <h2 className="text-2xl font-bold tracking-tight text-foreground">{current.label}</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {group.label} · {group.hint}
+        </p>
       </div>
 
-      {/* المستوى الأول: إعداداتي / إعدادات المكتب */}
-      <div className="inline-flex rounded-2xl border bg-card p-1">
-        {GROUPS.map((g) => {
-          const Icon = g.icon
-          const active = g.key === group.key
-          return (
-            <button
-              key={g.key}
-              onClick={() => setTab(g.tabs[0].value)}
-              className={cn(
-                'flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-colors',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-                active
-                  ? 'bg-gold text-navy shadow-sm'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-              )}
-            >
-              <Icon className="h-4 w-4" />
-              {g.label}
-            </button>
-          )
-        })}
-      </div>
-
-      <Tabs value={tab} onValueChange={setTab} dir="rtl">
-        {/* المستوى الثاني: تبويبات المجموعة المختارة */}
-        <div className="overflow-x-auto">
-          <TabsList className="inline-flex w-max justify-start gap-1">
-            {group.tabs.map((t) => {
-              const Icon = t.icon
-              return (
-                <TabsTrigger key={t.value} value={t.value} className="gap-2">
-                  <Icon className="h-4 w-4" />
-                  {t.label}
-                </TabsTrigger>
-              )
-            })}
-          </TabsList>
-        </div>
-
+      <Tabs value={current.value} onValueChange={setTab} dir="rtl">
         {/* forceMount: التبويبان يحملان نماذج — التفكيك يُفقد التعديلات غير المحفوظة */}
         <TabsContent value="office" forceMount className="data-[state=inactive]:hidden">
           <OfficeInfoTab />
@@ -175,7 +143,7 @@ export function SettingsPage() {
           <IntegrationsTab />
         </TabsContent>
       </Tabs>
-    </div>
+    </SideTabsLayout>
   )
 }
 

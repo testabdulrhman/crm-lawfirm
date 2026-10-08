@@ -31,6 +31,8 @@ import {
   Users,
   Timer,
   LogIn,
+  LayoutGrid,
+  Activity,
   type LucideIcon,
 } from 'lucide-react'
 import { useLocation } from 'wouter'
@@ -39,7 +41,8 @@ import { Button } from '@/components/ui/button'
 import { QueryErrorState } from '@/components/QueryErrorState'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { Tabs, TabsContent } from '@/components/ui/tabs'
+import { SideTabsLayout, type SideTab } from '@/components/layout/SideTabs'
 import {
   Table,
   TableBody,
@@ -120,11 +123,20 @@ export function ReportsPage() {
     navigate('/tasks')
   }
 
+  const tabs: SideTab[] = [
+    { value: 'overview', label: 'نظرة عامة', icon: LayoutGrid },
+    { value: 'charts', label: 'الرسوم البيانية', icon: BarChart3 },
+    { value: 'team', label: 'أداء الفريق', icon: Users },
+    ...(isDirector ? [{ value: 'usage', label: 'الاستخدام', icon: Activity }] : []),
+  ]
+  const current = tabs.find((t) => t.value === tab) ?? tabs[0]
+
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    // التبويبات على اليمين مثل الإعدادات و«مركز المتابعة» (طلب المدير 2026-10-08)
+    <SideTabsLayout groups={[{ key: 'reports', label: 'التقارير', tabs }]} value={current.value} onChange={setTab}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-2xl font-bold tracking-tight text-foreground">
-          التقارير والإحصاءات
+          {current.label}
         </h2>
         <Button
           variant="outline"
@@ -177,15 +189,7 @@ export function ReportsPage() {
       )}
 
       {/* التبويبات: أرقام عامة / رسوم / أداء الفريق / الاستخدام (للمدير) */}
-      <Tabs value={tab} onValueChange={setTab} dir="rtl">
-        <div className="overflow-x-auto">
-          <TabsList className="inline-flex w-max justify-start">
-            <TabsTrigger value="overview">نظرة عامة</TabsTrigger>
-            <TabsTrigger value="charts">الرسوم البيانية</TabsTrigger>
-            <TabsTrigger value="team">أداء الفريق</TabsTrigger>
-            {isDirector && <TabsTrigger value="usage">الاستخدام</TabsTrigger>}
-          </TabsList>
-        </div>
+      <Tabs value={current.value} onValueChange={setTab} dir="rtl">
 
         <TabsContent value="overview" className="mt-4">
       {/* بطاقات KPI */}
@@ -324,7 +328,7 @@ export function ReportsPage() {
           </TabsContent>
         )}
       </Tabs>
-    </div>
+    </SideTabsLayout>
   )
 }
 
