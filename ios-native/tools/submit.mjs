@@ -8,7 +8,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // ١) انتظار معالجة أبل للبناء
 let buildId = null;
 for (let i = 0; i < 40; i++) {
-  const d = await call('GET', `/builds?filter[app]=${APP}&sort=-uploadedDate&limit=1&fields[builds]=version,processingState`);
+  // البناء برقمه لا «آخر مرفوع» — في الطابور يُرفع بناء أحدث قبل تقديم الأقدم (1.0.29 بعد رفع 44، 2026-10-10)
+  const d = await call('GET', `/builds?filter[app]=${APP}&filter[version]=${BUILD}&filter[preReleaseVersion.version]=${VERSION}&limit=1&fields[builds]=version,processingState`);
   const a = d.data?.[0]?.attributes ?? {};
   if (a.version === BUILD && a.processingState === 'VALID') { buildId = d.data[0].id; break; }
   console.log('انتظار…', a.version, a.processingState);
