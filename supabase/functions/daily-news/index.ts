@@ -68,9 +68,9 @@ async function pick(force = false) {
   const fresh = all.filter((n) => n?.slug && n?.title && new Date(n.published_at).getTime() >= since && !seen.has(n.slug)).slice(0, 15);
 
   if (fresh.length === 0) {
-    // يومان بلا جديد = غالباً تغيّر شيء عندهم — يظهر في سجل الأخطاء للمدير
+    // أساب لا تنشر في عطلة نهاية الأسبوع (الخميس مساءً ← الأحد) — فيومان بلا جديد طبيعي؛ أربعة أيام = تغيّر شيء عندهم
     const newest = all.reduce((m, n) => Math.max(m, new Date(n?.published_at ?? 0).getTime() || 0), 0);
-    if (Date.now() - newest > 48 * 3600_000) await logError("أخبار أساب: لا أخبار جديدة منذ يومين — تحقّق من المصدر");
+    if (Date.now() - newest > 96 * 3600_000) await logError("أخبار أساب: لا أخبار جديدة منذ أربعة أيام — تحقّق من المصدر");
     return { ok: true, skipped: "no fresh news" };
   }
 
