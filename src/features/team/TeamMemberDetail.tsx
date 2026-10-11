@@ -56,7 +56,7 @@ import { pickFile, uploadFile } from '@/lib/files'
 import { errMessage } from '@/lib/errors'
 import { toast } from '@/hooks/use-toast'
 import { useAuth } from '@/stores/auth'
-import { useIsDirector } from '@/hooks/useIsDirector'
+import { useCanViewOffice, useIsDirector } from '@/hooks/useIsDirector'
 import { useOpenDm } from '@/hooks/useDiscussions'
 import { requestDiscussionJump } from '@/lib/discussionJump'
 import { useTeamMembers, useProvisionMember } from '@/hooks/useTeam'
@@ -74,6 +74,7 @@ import {
 import { TeamMemberForm } from './TeamMemberForm'
 import { MyDetailsDialog } from './MyDetailsDialog'
 import { LeaveBalanceCard } from '@/features/hr/LeaveBalanceCard'
+import { MemberAttendanceCard } from '@/features/hr/Attendance'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { usePageState } from '@/hooks/usePageState'
 import { useMemberWork } from '@/hooks/useMemberWork'
@@ -93,6 +94,7 @@ export function TeamMemberDetail({ id }: { id: string }) {
   const [, navigate] = useLocation()
   const { teamMember: me } = useAuth()
   const isDirector = useIsDirector()
+  const canViewOffice = useCanViewOffice()
   const { data: members, isLoading } = useTeamMembers()
 
   const isSelf = me?.id === id
@@ -266,7 +268,7 @@ export function TeamMemberDetail({ id }: { id: string }) {
         <TabsList className="h-11 rounded-xl p-1">
           <TabsTrigger value="work" className="rounded-lg px-4">عمله الآن</TabsTrigger>
           <TabsTrigger value="info" className="rounded-lg px-4">بياناته</TabsTrigger>
-          <TabsTrigger value="hr" className="rounded-lg px-4">الإجازات</TabsTrigger>
+          <TabsTrigger value="hr" className="rounded-lg px-4">الإجازات والحضور</TabsTrigger>
           <TabsTrigger value="pay" className="rounded-lg px-4">المالية</TabsTrigger>
         </TabsList>
 
@@ -286,6 +288,8 @@ export function TeamMemberDetail({ id }: { id: string }) {
 
         <TabsContent value="hr" className="space-y-4">
           <LeaveBalanceCard memberId={member.id} isSelf={isSelf} />
+          {/* الحضور والغياب — يراه صاحبه (بلا إشعار) والمدير وراكان، ويسجّل المدير وراكان */}
+          {(isSelf || isDirector || canViewOffice) && <MemberAttendanceCard memberId={member.id} />}
           <MemberHrList memberId={member.id} />
         </TabsContent>
 

@@ -37,8 +37,9 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { EmptyState } from '@/components/EmptyState'
 import { QueryErrorState } from '@/components/QueryErrorState'
 import { useConfirm } from '@/components/ConfirmDialog'
-import { useIsDirector } from '@/hooks/useIsDirector'
+import { useCanViewOffice, useIsDirector } from '@/hooks/useIsDirector'
 import { LeaveBalanceCard } from './LeaveBalanceCard'
+import { AttendancePanel } from './Attendance'
 import { usePageState } from '@/hooks/usePageState'
 import { fmtDatePref, fmtDateTime, fmtNumber, fmtTime, todayISO, daysLabel } from '@/lib/format'
 import { cn } from '@/lib/utils'
@@ -72,9 +73,14 @@ const STATUS_BADGE: Record<HrStatus, 'warning' | 'success' | 'destructive' | 'se
   cancelled: 'secondary',
 }
 
+type HrTab = 'mine' | 'team' | 'attendance'
+
 export function HrRequestsPage() {
   const isDirector = useIsDirector()
-  const [tab, setTab] = usePageState<'mine' | 'team'>('hr:tab', isDirector ? 'team' : 'mine')
+  const canViewOffice = useCanViewOffice()
+  const [savedTab, setTab] = usePageState<HrTab>('hr:tab', isDirector ? 'team' : canViewOffice ? 'attendance' : 'mine')
+  // تبويب محفوظ لا يخص هذا الدور (team لغير المدير) يعود لما يناسبه
+  const tab: HrTab = savedTab === 'team' && !isDirector ? 'attendance' : savedTab
   const [newOpen, setNewOpen] = useState(false)
 
   return (
@@ -87,14 +93,21 @@ export function HrRequestsPage() {
         </Button>
       </div>
 
-      {isDirector ? (
-        <Tabs value={tab} onValueChange={(v) => setTab(v as 'mine' | 'team')} dir="rtl">
+      {/* «الحضور والغياب» للمدير وراكان (2026-10-11)؛ وقرارات الطلبات للمدير وحده كما كانت */}
+      {canViewOffice ? (
+        <Tabs value={tab} onValueChange={(v) => setTab(v as HrTab)} dir="rtl">
           <TabsList>
-            <TabsTrigger value="team">طلبات الفريق</TabsTrigger>
+            {isDirector && <TabsTrigger value="team">طلبات الفريق</TabsTrigger>}
+            <TabsTrigger value="attendance">الحضور والغياب</TabsTrigger>
             <TabsTrigger value="mine">طلباتي</TabsTrigger>
           </TabsList>
-          <TabsContent value="team" className="mt-4">
-            <RequestsList scope="all" canDecide />
+          {isDirector && (
+            <TabsContent value="team" className="mt-4">
+              <RequestsList scope="all" canDecide />
+            </TabsContent>
+          )}
+          <TabsContent value="attendance" className="mt-4">
+            <AttendancePanel />
           </TabsContent>
           <TabsContent value="mine" className="mt-4 space-y-4">
             <LeaveBalanceCard />
