@@ -462,6 +462,15 @@ struct CaseDetailView: View {
     private var studyTab: some View {
         VStack(alignment: .leading, spacing: 12) {
             if let st = study {
+                // الملخصان للقراءة السريعة — مفتوحان ويُنسخان بضغطة
+                if let t = st.oral_brief, !t.isEmpty {
+                    StudyQuickCard(icon: "text.bubble", title: "لو سألك القاضي: «علّمني وش ردّك»",
+                                   hint: "نقاط تُقال في دقيقة", text: t)
+                }
+                if let t = st.client_summary, !t.isEmpty {
+                    StudyQuickCard(icon: "person.crop.circle", title: "ملخص للعميل",
+                                   hint: "يُرسل كما هو", text: t)
+                }
                 if st.stale_since != nil {
                     HStack(spacing: 8) {
                         Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Theme.amber)
@@ -799,5 +808,48 @@ struct MemberPickerSheet: View {
         loadError = nil
         do { staff = try await sb.staff(); loaded = true }
         catch { loadError = error.localizedDescription }
+    }
+}
+
+/// بطاقة ملخص في الدراسة — النص كاملاً وزرّ نسخ (2026-10-10)
+struct StudyQuickCard: View {
+    let icon: String
+    let title: String
+    let hint: String
+    let text: String
+    @State private var copied = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: icon).font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.goldDark)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(title).font(.system(size: 15, weight: .bold)).foregroundStyle(Theme.navy)
+                    Text(hint).font(.system(size: 11)).foregroundStyle(Theme.muted)
+                }
+                Spacer()
+                Button {
+                    UIPasteboard.general.string = text
+                    withAnimation { copied = true }
+                    Task { try? await Task.sleep(for: .seconds(1.5)); withAnimation { copied = false } }
+                } label: {
+                    Label(copied ? "نُسخ" : "نسخ", systemImage: copied ? "checkmark" : "doc.on.doc")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Theme.goldDark)
+                        .padding(.horizontal, 10).padding(.vertical, 6)
+                        .background(Theme.gold.opacity(0.15), in: Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+            Text(text)
+                .font(.system(size: 14))
+                .foregroundStyle(Theme.navy)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .textSelection(.enabled)
+        }
+        .padding(14)
+        .background(Theme.goldPale)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Theme.gold.opacity(0.35), lineWidth: 1))
     }
 }

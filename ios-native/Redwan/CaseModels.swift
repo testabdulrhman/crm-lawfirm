@@ -149,6 +149,9 @@ struct CaseStudyRow: Codable {
     let attachments_list: String?
     let precedents: String?
     let statutes: String?
+    /// ملخصان (اقتراح المدير 2026-10-10): لو سأل القاضي شفهياً، ولو سأل الموكّل — يُعرضان مفتوحين أعلى الدراسة
+    let oral_brief: String?
+    let client_summary: String?
 
     /// الأقسام بترتيب القراءة على الجوال — الرأي والتوصية أولاً لأنهما ما يُقرأ في الطريق
     var sections: [(title: String, text: String)] {

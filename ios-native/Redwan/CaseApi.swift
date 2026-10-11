@@ -91,7 +91,7 @@ extension SB {
 
     func caseStudy(caseId: String) async throws -> CaseStudyRow? {
         let rows: [CaseStudyRow] = try await get("case_studies", query: [
-            ("select", "version,generated_at,generated_by,stale_since,what_changed,basics,timeline,facts,requests,plaintiff_grounds,defendant_defenses,references_list,legal_opinion,suitability,attachments_list,precedents,statutes"),
+            ("select", "version,generated_at,generated_by,stale_since,what_changed,basics,timeline,facts,requests,plaintiff_grounds,defendant_defenses,references_list,legal_opinion,suitability,attachments_list,precedents,statutes,oral_brief,client_summary"),
             ("case_id", "eq.\(caseId)"),
             ("limit", "1"),
         ])
