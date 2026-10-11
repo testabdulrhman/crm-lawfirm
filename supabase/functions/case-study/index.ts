@@ -191,6 +191,10 @@ async function streamStudy(
 
 /* ===================== دراسة القضية ===================== */
 
+// إرشادا الملخصين — مشتركان بين الدراسة الكاملة ووضع «الملخصان وحدهما»
+const GUIDE_SUMMARIES = `- oral_brief: «لو قال القاضي: اترك المذكرة وعلّمني وش ردّك» — من ٣ إلى ٥ نقاط قصيرة تُقال شفهياً في دقيقة، بلسان محامي موكّلنا أمام القاضي، الأقوى أولاً: ماذا نطلب (أو ندفع)، وسنده الأساسي، وردّنا على أهم ما يتمسك به الخصم. جمل قصيرة تُحفظ، بلا ذكر لنقاط ضعفنا.
+- client_summary: ملخص يُرسل للموكّل كما هو إن سأل عن قضيته — بلغة بسيطة واضحة بلا مصطلحات معقدة، ٨٠–١٥٠ كلمة، يخاطبه بـ«حضرتكم»: أين وصلت القضية، وآخر ما تم، والخطوة القادمة وموعدها إن وُجد، والمتوقع بحذر مهني بلا وعود. لا يذكر استراتيجيتنا الداخلية ولا تقييمنا لنقاط الضعف ولا أسماء الموظفين.`;
+
 const STUDY_SYSTEM = `أنت مستشار قانوني خبير في ${FIRM_NAME}، متمرّس في دراسة القضايا وفق القضاء السعودي والأنظمة السعودية.
 تكتب دراسات قضايا احترافية بمنهجية الشركة المعتمدة. أسلوبك: عربية فصحى رسمية دقيقة، تحليل متوازن يبين نقاط القوة والضعف («يمكن الطعن بـ… ولكن مما يضعف ذلك…»)، استناد لنصوص الأنظمة بأرقام موادها عند الإمكان، وحياد مهني تام.
 قواعد صارمة:
@@ -319,6 +323,7 @@ async function generateStudy(caseId: string, userName: string | null, reason?: s
 - what_changed: ${prev ? "قارن بالدراسة السابقة وأحداث الملف منذها (أدناه): ما الجديد وما أثره على الرأي والتوصية. إن لم يتغير شيء جوهري قل ذلك صراحة." : "هذه أول دراسة — اكتب: «أول دراسة للملف»."}
 - precedents: من «سوابق المكتب» أدناه فقط: القضايا المشابهة فعلاً وكيف انتهت وما يُستفاد منها هنا. إن لم يكن بينها مشابه قل: «لا سوابق مشابهة في ملفات المكتب».
 - statutes: الأسانيد النظامية من «نتائج البحث الرسمي» أدناه — اسم النظام ورقم المادة وعلاقتها. لا تذكر مادة لم ترد في البحث أو لست متأكداً منها.
+${GUIDE_SUMMARIES}
 - proposals: مقترحات تنفيذية يعتمدها المحامي بضغطة — من ٣ إلى ٨: مهام ملموسة (أدلة تُجمع، شهود، خبير، مذكرة تُعد، طلب يُقدَّم)، ومخاطر بمهلها (due_in_days عدد الأيام من اليوم)، وأسئلة تُطرح على الموكّل. كل مقترح عنوان قصير + تفصيل سطرين.
 
 ${prev ? `الدراسة السابقة (النسخة ${prev.version ?? 1}، ${String(prev.generated_at ?? "").slice(0,10)}) — الرأي والتوصية فيها:
@@ -374,6 +379,7 @@ ${blocks.length > 0 ? `المستندات المرفقة أعلاه (${readDocs.
         plaintiff_grounds: S, defendant_defenses: S, references_list: S,
         legal_opinion: S, suitability: S, attachments_list: S,
         what_changed: S, precedents: S, statutes: S,
+        oral_brief: S, client_summary: S,
         proposals: {
           type: "array",
           items: {
@@ -388,7 +394,7 @@ ${blocks.length > 0 ? `المستندات المرفقة أعلاه (${readDocs.
           },
         },
       },
-      required: ["basics", "timeline", "facts", "requests", "plaintiff_grounds", "defendant_defenses", "references_list", "legal_opinion", "suitability", "attachments_list", "what_changed", "precedents", "statutes", "proposals"],
+      required: ["basics", "timeline", "facts", "requests", "plaintiff_grounds", "defendant_defenses", "references_list", "legal_opinion", "suitability", "attachments_list", "what_changed", "precedents", "statutes", "oral_brief", "client_summary", "proposals"],
     },
   };
   const model = await getModel();
@@ -430,6 +436,8 @@ ${blocks.length > 0 ? `المستندات المرفقة أعلاه (${readDocs.
     legal_opinion: parsed.legal_opinion ?? null,
     suitability: parsed.suitability ?? null,
     attachments_list: parsed.attachments_list ?? null,
+    oral_brief: parsed.oral_brief ?? null,
+    client_summary: parsed.client_summary ?? null,
     status: "draft",
     generated_at: new Date().toISOString(),
     generated_by: `${model} — قرأ ${readDocs.length} مستند`,
@@ -462,6 +470,69 @@ ${blocks.length > 0 ? `المستندات المرفقة أعلاه (${readDocs.
   }
 }
 
+/* ===================== الملخصان وحدهما (دراسة قائمة) ===================== */
+
+// اقتراح المدير 2026-10-10: الدراسات السابقة ليس فيها «لو سألك القاضي» و«ملخص للعميل» — يُولَّدان من نص الدراسة
+// القائمة وآخر الجلسات دون إعادة قراءة المستندات (أرخص وأسرع)، ولا يمسّان بقية الأقسام ولا النسخة.
+const SUMMARIES_TOOL = {
+  name: "save_summaries",
+  description: "حفظ ملخصَي الدراسة",
+  input_schema: {
+    type: "object",
+    properties: { oral_brief: { type: "string" }, client_summary: { type: "string" } },
+    required: ["oral_brief", "client_summary"],
+  },
+};
+
+async function generateSummaries(caseId: string): Promise<void> {
+  const { data: st } = await admin.from("case_studies")
+    .select("basics, facts, requests, plaintiff_grounds, defendant_defenses, legal_opinion, suitability, what_changed")
+    .eq("case_id", caseId).maybeSingle();
+  if (!st) throw new Error("لا دراسة لهذا الملف بعد");
+  const [{ data: c }, { data: sessions }] = await Promise.all([
+    admin.from("cases").select("title, status, court, contact:contacts(name)").eq("id", caseId).maybeSingle(),
+    admin.from("sessions").select("session_date, title, outcome, next_action").eq("case_id", caseId)
+      .order("session_date", { ascending: false }).limit(4),
+  ]);
+  const cut = (v: unknown, n: number) => String(v ?? "").slice(0, n);
+  const user = `من دراسة هذه القضية اكتب ملخصين وسلّمهما عبر أداة save_summaries:
+${GUIDE_SUMMARIES}
+القضية: ${cut((c as any)?.title, 200)} — الحالة: ${cut((c as any)?.status, 30)} — المحكمة: ${cut((c as any)?.court, 120)} — الموكّل: ${cut((c as any)?.contact?.name, 120)}
+آخر الجلسات (الأحدث أولاً): ${JSON.stringify(sessions ?? [])}
+
+من الدراسة:
+بيانات القضية: ${cut(st.basics, 800)}
+الوقائع: ${cut(st.facts, 1500)}
+الطلبات: ${cut(st.requests, 600)}
+أسانيد المدعي: ${cut(st.plaintiff_grounds, 1200)}
+دفوع المدعى عليه: ${cut(st.defendant_defenses, 1200)}
+الرأي القانوني: ${cut(st.legal_opinion, 2000)}
+الموقف والتوصية: ${cut(st.suitability, 800)}
+آخر ما تغيّر: ${cut(st.what_changed, 600)}`;
+
+  const res = await fetch(ANTHROPIC_URL, {
+    method: "POST",
+    headers: { "x-api-key": ANTHROPIC_API_KEY!, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+    body: JSON.stringify({
+      model: await getModel(),
+      max_tokens: 8000,
+      system: STUDY_SYSTEM.replace("بأقسامها العشرة كاملة", "").replace("save_study", "save_summaries"),
+      tools: [SUMMARIES_TOOL],
+      tool_choice: { type: "auto" },
+      messages: [{ role: "user", content: user }],
+    }),
+  });
+  if (!res.ok) throw new Error(`مزوّد الذكاء (${res.status}): ${(await res.text()).slice(0, 300)}`);
+  const out = await res.json();
+  const call = (out?.content ?? []).find((b: any) => b.type === "tool_use");
+  const oral = String(call?.input?.oral_brief ?? "").trim();
+  const client = String(call?.input?.client_summary ?? "").trim();
+  if (!oral || !client) throw new Error(`لم يكتمل الملخصان (توقّف: ${out?.stop_reason ?? "غير معروف"})`);
+  const { error } = await admin.from("case_studies")
+    .update({ oral_brief: oral, client_summary: client }).eq("case_id", caseId);
+  if (error) throw new Error(`تعذّر حفظ الملخصين: ${error.message}`);
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "method not allowed" }, 405);
@@ -474,7 +545,14 @@ Deno.serve(async (req) => {
       const { data: stale } = await admin.from("case_studies")
         .select("case_id, stale_reasons").not("stale_since", "is", null)
         .order("stale_since", { ascending: true }).limit(5);
+      // ويملأ الملخصين للدراسات السابقة لهما — خمس كل ليلة حتى تكتمل
+      const { data: missing } = await admin.from("case_studies")
+        .select("case_id").is("oral_brief", null).is("stale_since", null)
+        .order("generated_at", { ascending: false }).limit(5);
       const work = (async () => {
+        for (const m of missing ?? []) {
+          await generateSummaries(m.case_id).catch((e) => console.error("summaries backfill", m.case_id, e?.message || e));
+        }
         for (const st of stale ?? []) {
           const why = (st.stale_reasons ?? []).map((r: any) => r.kind).join("، ");
           await generateStudy(st.case_id, "تجديد ليلي", `تجديد تلقائي — أحداث: ${why}`).catch(async (e) => {
@@ -486,6 +564,19 @@ Deno.serve(async (req) => {
       const er: any = (globalThis as any).EdgeRuntime;
       if (er?.waitUntil) er.waitUntil(work);
       return json({ ok: true, queued: (stale ?? []).length }, 202);
+    }
+
+    // الملخصان وحدهما لدراسة قائمة — زرّ في تبويب الدراسة
+    if (body?.mode === "summaries") {
+      const cid = String(body?.case_id || "");
+      if (!cid) return json({ error: "case_id مطلوب" }, 400);
+      const work = generateSummaries(cid).catch(async (e) => {
+        console.error("summaries", cid, e?.message || e);
+        await logFailure(cid, `ملخصا الدراسة: ${String(e?.message || e)}`);
+      });
+      const er: any = (globalThis as any).EdgeRuntime;
+      if (er?.waitUntil) er.waitUntil(work);
+      return json({ ok: true, started: true }, 202);
     }
 
     const caseId = String(body?.case_id || "");

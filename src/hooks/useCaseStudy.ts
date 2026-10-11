@@ -23,6 +23,9 @@ export interface CaseStudy {
   what_changed: string | null
   precedents: string | null
   statutes: string | null
+  // ملخصان (اقتراح المدير 2026-10-10): لو سأل القاضي شفهياً، ولو سأل الموكّل
+  oral_brief: string | null
+  client_summary: string | null
   stale_since: string | null
   stale_reasons: StudyStaleReason[]
   status: string // draft/approved
@@ -79,6 +82,48 @@ export function useSaveCaseStudy(caseId: string) {
 }
 
 // التوليد يعمل في خلفية الخادم (قد يستغرق دقائق) — نطلقه ثم نتابع الصف حتى يكتمل
+/** الملخصان وحدهما لدراسة قائمة — بلا إعادة قراءة المستندات ولا مساس ببقية الأقسام */
+export function useGenerateStudySummaries(caseId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async () => {
+      const startedIso = new Date(Date.now() - 10000).toISOString()
+      const { data, error } = await supabase.functions.invoke('case-study', {
+        body: { mode: 'summaries', case_id: caseId },
+      })
+      if (error) throw new Error(errMessage(error))
+      if (data?.error) throw new Error(data.error)
+      for (let i = 0; i < 40; i++) {
+        await new Promise((r) => setTimeout(r, 5000))
+        const { data: row } = await supabase
+          .from('case_studies')
+          .select('oral_brief, client_summary')
+          .eq('case_id', caseId)
+          .maybeSingle()
+        if (row?.oral_brief && row?.client_summary) return
+        if (i % 4 === 3) {
+          const { data: fail } = await supabase
+            .from('error_logs')
+            .select('message')
+            .eq('source', 'case-study')
+            .eq('url', caseId)
+            .gte('created_at', startedIso)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+          if (fail?.message) throw new Error(fail.message as string)
+        }
+      }
+      throw new Error('استغرق أطول من المتوقع — أعد فتح التبويب بعد قليل.')
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [KEY, caseId] })
+      toast({ title: 'اكتمل الملخصان' })
+    },
+    onError: (e) => toast({ variant: 'destructive', title: 'تعذّر توليد الملخصين', description: errMessage(e) }),
+  })
+}
+
 export function useGenerateCaseStudy(caseId: string) {
   const qc = useQueryClient()
   return useMutation({

@@ -24,6 +24,9 @@ import {
   FilePenLine,
   Check,
   X,
+  Copy,
+  MessageCircleMore,
+  UserRound,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -45,6 +48,8 @@ import {
 } from '@/components/ui/alert-dialog'
 import { QueryErrorState } from '@/components/QueryErrorState'
 import { fmtDateTime } from '@/lib/format'
+import { cn } from '@/lib/utils'
+import { toast } from '@/hooks/use-toast'
 import { useAuth } from '@/stores/auth'
 import { usePageState } from '@/hooks/usePageState'
 import {
@@ -55,6 +60,7 @@ import {
   useStudyProposals,
   useDecideProposal,
   useDraftMemoFromStudy,
+  useGenerateStudySummaries,
   type CaseStudyInput,
   type StudyProposal,
 } from '@/hooks/useCaseStudy'
@@ -64,7 +70,26 @@ const SECTIONS: {
   label: string
   icon: LucideIcon
   rows: number
+  hint?: string
+  copy?: true
 }[] = [
+  // أولاً للقراءة السريعة (اقتراح المدير 2026-10-10) — يُنسخان بضغطة
+  {
+    key: 'oral_brief',
+    label: 'لو سألك القاضي: «علّمني وش ردّك»',
+    icon: MessageCircleMore,
+    rows: 5,
+    hint: 'نقاط تُقال شفهياً في دقيقة — الأقوى أولاً',
+    copy: true,
+  },
+  {
+    key: 'client_summary',
+    label: 'ملخص للعميل',
+    icon: UserRound,
+    rows: 5,
+    hint: 'بلغة بسيطة بلا استراتيجيتنا الداخلية — يُرسل كما هو',
+    copy: true,
+  },
   { key: 'basics', label: 'أولاً: بيانات القضية', icon: FileText, rows: 5 },
   { key: 'timeline', label: 'ثانياً: الخط الزمني', icon: CalendarClock, rows: 5 },
   { key: 'facts', label: 'ثالثاً: الوقائع', icon: ListOrdered, rows: 6 },
@@ -90,6 +115,7 @@ export function StudyTab({ caseId }: { caseId: string }) {
   const { data: proposals = [] } = useStudyProposals(caseId)
   const decideM = useDecideProposal(caseId)
   const memoM = useDraftMemoFromStudy(caseId)
+  const sumM = useGenerateStudySummaries(caseId)
 
   const [confirmRegen, setConfirmRegen] = useState(false)
   const [memoSide, setMemoSide] = useState<null | 'ask'>(null)
@@ -333,14 +359,45 @@ export function StudyTab({ caseId }: { caseId: string }) {
       {/* الأقسام */}
       <Card>
         <CardContent className="space-y-5 p-5">
+          {/* دراسة قديمة بلا الملخصين — تُولَّد وحدها دون إعادة الدراسة */}
+          {!values.oral_brief && !values.client_summary && (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gold/40 bg-gold/5 p-3">
+              <p className="text-sm text-muted-foreground">
+                هذه الدراسة بلا «لو سألك القاضي» و«ملخص للعميل» — يُولَّدان من الدراسة الحالية دون تغيير بقية الأقسام.
+              </p>
+              <Button size="sm" variant="gold" onClick={() => sumM.mutate()} disabled={sumM.isPending}>
+                {sumM.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                {sumM.isPending ? 'جارٍ الكتابة…' : 'ولّد الملخصين'}
+              </Button>
+            </div>
+          )}
           {SECTIONS.map((s) => {
             const Icon = s.icon
             return (
-              <div key={s.key} className="space-y-1.5">
-                <Label className="flex items-center gap-2 text-sm font-semibold">
-                  <Icon className="h-4 w-4 text-gold" />
-                  {s.label}
-                </Label>
+              <div key={s.key} className={cn('space-y-1.5', s.copy && 'rounded-xl bg-gold/5 p-3')}>
+                <div className="flex items-center justify-between gap-2">
+                  <Label className="flex items-center gap-2 text-sm font-semibold">
+                    <Icon className="h-4 w-4 text-gold" />
+                    {s.label}
+                    {s.hint && <span className="text-xs font-normal text-muted-foreground">· {s.hint}</span>}
+                  </Label>
+                  {s.copy && values[s.key] && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 gap-1 text-xs"
+                      onClick={() => {
+                        void navigator.clipboard.writeText(values[s.key]).then(
+                          () => toast({ title: 'نُسخ' }),
+                          () => toast({ variant: 'destructive', title: 'تعذّر النسخ — انسخه يدوياً' })
+                        )
+                      }}
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                      نسخ
+                    </Button>
+                  )}
+                </div>
                 <Textarea
                   rows={s.rows}
                   value={values[s.key] ?? ''}
