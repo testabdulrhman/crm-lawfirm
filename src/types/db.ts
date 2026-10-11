@@ -696,9 +696,33 @@ export interface CaseDocument {
   uploaded_by_name: string | null
   category: string | null // تصنيف الذكاء: حكم قضائي، وكالة، عقد…
   suggested_case_id: string | null // اقتراح الذكاء لملف مستندٍ رُفع بلا ملف
+  folder_id?: string | null // مجلده داخل الملف (document_folders) — null = بلا مجلد
   deleted_at: string | null
   deleted_by: string | null
   created_at: string | null
+}
+
+/** مجلد مستندات داخل الملف (2026-10-11) — شجرة بـ parent_id */
+export interface DocumentFolder {
+  id: string
+  case_id: string
+  parent_id: string | null
+  name: string
+  sort_order: number
+  created_at: string
+}
+
+/** نسخة سابقة لمستند استُبدل ملفه — الصف نفسه يبقى بالملف الجديد */
+export interface DocumentVersion {
+  id: string
+  document_id: string
+  name: string | null
+  file_url: string | null
+  file_type: string | null
+  file_size: number | null
+  uploaded_by_name: string | null
+  replaced_at: string
+  replaced_by_name: string | null
 }
 
 /* ===== القضايا: المذكرات (memos + memo_documents) ===== */
