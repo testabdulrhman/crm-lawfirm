@@ -185,3 +185,49 @@ export function useLinkableMatters(q: string) {
     },
   })
 }
+
+/* ===================== الطلبات الواردة ↔ الواتساب (2026-10-12) ===================== */
+
+export interface WaRequestLink {
+  phone_e164: string
+  request_id: string
+  ref_no: string | null
+  client_name: string | null
+  assigned_to_name: string | null
+}
+
+/** الطلب المفتوح لكل محادثة — للمدير وراكان كلها، ولغيرهما ما أُحيل إليه */
+export function useWaRequestLinks() {
+  const myId = useAuth((s) => s.teamMember?.id)
+  return useQuery({
+    queryKey: ['wa_request_links', myId],
+    enabled: !!myId,
+    staleTime: 60_000,
+    queryFn: async (): Promise<Map<string, WaRequestLink>> => {
+      const { data, error } = await supabase.rpc('wa_request_links')
+      if (error) throw error
+      return new Map(((data ?? []) as WaRequestLink[]).map((l) => [l.phone_e164, l]))
+    },
+  })
+}
+
+/** محادثات رقم عميل الطلب (مطابقة آخر ٩ أرقام) — بطاقة في صفحة الطلب */
+export function useRequestClientThreads(phone: string | null | undefined) {
+  const key = (phone ?? '').replace(/\D/g, '').slice(-9)
+  return useQuery({
+    queryKey: ['client_threads_of_request', key],
+    enabled: key.length === 9,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('wa_threads')
+        .select('phone_e164, display_name, last_message_at, last_preview, last_direction, contact:contacts(name)')
+        .like('phone_e164', `%${key}`)
+        .order('last_message_at', { ascending: false, nullsFirst: false })
+      if (error) throw error
+      return (data ?? []) as unknown as Pick<
+        ClientThread,
+        'phone_e164' | 'display_name' | 'last_message_at' | 'last_preview' | 'last_direction' | 'contact'
+      >[]
+    },
+  })
+}

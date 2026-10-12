@@ -91,6 +91,7 @@ import type {
   RequestDocument,
   RequestEvaluation,
 } from '@/types/db'
+import { RequestClientChatCard } from './RequestClientChatCard'
 
 export function RequestDetail({ id }: { id: string }) {
   const [, navigate] = useLocation()
@@ -245,6 +246,9 @@ export function RequestDetail({ id }: { id: string }) {
         <AssignmentCard requestId={r.id} currentName={r.assigned_to_name} />
         <div id="decision-card"><DecisionCard request={r} evaluations={evaluations} gates={railGates} /></div>
       </div>
+
+      {/* محادثة العميل على الواتساب — يراها المحال إليه الطلب (2026-10-12) */}
+      <RequestClientChatCard phone={r.client_phone} />
 
       {/* الوصف */}
       {r.description && (

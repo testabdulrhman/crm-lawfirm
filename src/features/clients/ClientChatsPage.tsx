@@ -11,6 +11,7 @@ import {
   Bot,
   Clock,
   FolderOpen,
+  Inbox,
   Link2,
   Lock,
   MessageCircle,
@@ -40,6 +41,7 @@ import {
   useLinkableMatters,
   useSendClientMessage,
   type ClientMsg,
+  useWaRequestLinks,
   type ClientThread,
 } from '@/hooks/useClientChats'
 import { requestDiscussionJump } from '@/lib/discussionJump'
@@ -185,6 +187,9 @@ export function ClientChatsPage() {
 
 function ThreadRow({ t, active, onClick }: { t: ClientThread; active: boolean; onClick: () => void }) {
   const name = threadName(t)
+  // محادثة بلا ملف لكنها لطلب وارد مفتوح — تظهر للمحال إليه (2026-10-12)
+  const { data: links } = useWaRequestLinks()
+  const link = links?.get(t.phone_e164)
   return (
     <button
       type="button"
@@ -216,6 +221,10 @@ function ThreadRow({ t, active, onClick }: { t: ClientThread; active: boolean; o
             <span className="rounded-full bg-gold/15 px-2 py-px text-[10px] font-medium text-gold-700 dark:text-gold-300">
               <MatterKindIcon kind={t.matter?.kind} /> <Ltr>{t.matter?.office_num ?? 'ملف'}</Ltr>
             </span>
+          ) : link ? (
+            <span className="rounded-full bg-sky-500/15 px-2 py-px text-[10px] font-medium text-sky-700 dark:text-sky-300">
+              طلب وارد{link.ref_no ? <> · <Ltr>{link.ref_no}</Ltr></> : null}
+            </span>
           ) : (
             <span className="rounded-full bg-muted px-2 py-px text-[10px] text-muted-foreground">غير مصنّف</span>
           )}
@@ -230,6 +239,8 @@ function ChatPane({ thread, viewer, onBack }: { thread: ClientThread; viewer: bo
   const name = threadName(thread)
   const { data, isLoading, error, refetch } = useClientThread(phone)
   const send = useSendClientMessage(phone)
+  const { data: reqLinks } = useWaRequestLinks()
+  const reqLink = reqLinks?.get(phone)
   const [text, setText] = useState('')
   const [linkOpen, setLinkOpen] = useState(false)
   const [discuss, setDiscuss] = useState<ClientMsg | null>(null)
@@ -290,6 +301,14 @@ function ChatPane({ thread, viewer, onBack }: { thread: ClientThread; viewer: bo
             <FolderOpen className="h-3.5 w-3.5 shrink-0" />
             <Ltr>{thread.matter?.office_num ?? 'الملف'}</Ltr>
             {thread.matter?.title && <span className="hidden truncate font-normal xl:inline">· {thread.matter.title}</span>}
+          </Link>
+        ) : reqLink ? (
+          <Link
+            href={`/requests/${reqLink.request_id}`}
+            className="flex shrink-0 items-center gap-1 rounded-full bg-sky-500/15 px-2 py-1 text-[11px] font-medium text-sky-700 hover:bg-sky-500/25 dark:text-sky-300"
+          >
+            <Inbox className="h-3.5 w-3.5 shrink-0" />
+            طلب وارد{reqLink.ref_no ? <> · <Ltr>{reqLink.ref_no}</Ltr></> : null}
           </Link>
         ) : (
           <span className="shrink-0 rounded-full bg-muted px-2 py-1 text-[11px] text-muted-foreground">غير مصنّف</span>
