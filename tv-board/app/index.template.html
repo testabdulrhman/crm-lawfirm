@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1920, initial-scale=1">
+<title>شاشة المكتب</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* شاشة عرض المكتب — تطبيق سامسونج (Tizen) — 2026-10-12.
+   الشاشة يراها كل زائر: لا أسماء موكّلين ولا عناوين قضايا ولا مهام؛ أرقام الملفات والمحاكم والأعداد فقط.
+   هوية المشروع: كحلي #111D3A · ذهبي #C9A84C · IBM Plex Sans Arabic — نسخة داكنة لشاشة معلّقة طوال اليوم. */
+:root{
+  --navy:#0e1832; --card:#16224a; --card-2:#121c3c;
+  --gold:#C9A84C; --gold-soft:rgba(201,168,76,.16);
+  --text:#F4F1E8; --muted:#93a0c0; --line:rgba(201,168,76,.22);
+  --danger:#e0645c; --ok:#4fb37a; --wa:#25b366; --sky:#5aa9e6;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden;background:var(--navy)}
+body{color:var(--text);font-family:'IBM Plex Sans Arabic',Tahoma,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+.wrap{display:grid;grid-template-columns:58fr 42fr;grid-template-rows:1fr auto;gap:18px;height:100vh;width:100vw;padding:20px}
+
+/* ===== الكاميرا ===== */
+.cam{position:relative;border-radius:22px;overflow:hidden;background:#000;border:1px solid var(--line)}
+.cam iframe{width:100%;height:100%;border:0;display:block}
+.cam-badge{position:absolute;top:18px;right:18px;z-index:2;display:flex;align-items:center;gap:10px;
+  background:rgba(14,24,50,.85);border:1px solid var(--line);border-radius:999px;padding:8px 16px;font-size:20px;font-weight:600}
+.dot{width:12px;height:12px;border-radius:50%;background:var(--danger);animation:pulse 1.6s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.cam-off{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
+  background:radial-gradient(circle at 50% 40%,#1b2a57 0%,#0e1832 70%);color:var(--muted);font-size:24px;text-align:center;padding:40px}
+.cam-off .big{font-size:120px;font-weight:700;color:var(--gold);line-height:1}
+
+/* ===== الجانب ===== */
+.side{display:flex;flex-direction:column;gap:16px;min-height:0}
+.card{background:var(--card-2);border:1px solid var(--line);border-radius:22px;padding:18px 22px}
+.head{display:flex;align-items:center;justify-content:space-between;gap:16px;background:linear-gradient(160deg,var(--card) 0%,var(--card-2) 100%)}
+.brand{font-size:20px;font-weight:700;color:var(--gold);line-height:1.45}
+.clock{font-size:72px;font-weight:700;line-height:1;letter-spacing:1px;white-space:nowrap}
+.clock small{font-size:28px;color:var(--muted);margin-right:8px;font-weight:600}
+.date{font-size:19px;color:var(--muted);margin-top:6px;line-height:1.5}
+.weather{display:flex;align-items:center;gap:10px;font-size:34px;font-weight:700;white-space:nowrap}
+.weather span.w-ico{font-size:40px}
+.weather small{display:block;font-size:15px;color:var(--muted);font-weight:500}
+
+h2{font-size:22px;font-weight:700;color:var(--gold);display:flex;align-items:center;justify-content:space-between;
+   padding-bottom:10px;margin-bottom:10px;border-bottom:1px solid var(--line)}
+h2 .c{font-size:17px;color:var(--muted);font-weight:500}
+.sessions{flex:0 1 auto;max-height:40%;display:flex;flex-direction:column;min-height:0}
+.list{overflow:hidden;display:flex;flex-direction:column;gap:6px;min-height:0}
+.row{display:flex;align-items:center;gap:14px;padding:6px 2px}
+.time{flex:0 0 auto;background:var(--gold);color:#0e1832;border-radius:10px;padding:5px 12px;font-size:20px;font-weight:700;white-space:nowrap}
+.rb{min-width:0;flex:1}
+.rt{display:block;font-size:21px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rs{display:block;font-size:16px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.empty{color:var(--ok);font-size:21px;font-weight:600;text-align:center;padding:10px 0}
+.tomorrow{font-size:16px;color:var(--muted);text-align:center;padding-top:8px}
+
+.tasks{flex:1 1 auto;display:flex;flex-direction:column;min-height:0}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px}
+.stat{background:rgba(255,255,255,.04);border-radius:14px;padding:10px 12px;text-align:center}
+.stat b{display:block;font-size:40px;line-height:1.1}
+.stat span{font-size:16px;color:var(--muted)}
+.stat.bad b{color:var(--danger)} .stat.wa b{color:var(--wa)}
+.bars{display:flex;flex-direction:column;gap:9px;overflow:hidden;min-height:0}
+.bar{display:grid;grid-template-columns:120px 1fr 70px;align-items:center;gap:12px;font-size:18px}
+.bar .n{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
+.track{height:14px;border-radius:7px;background:rgba(255,255,255,.07);overflow:hidden;display:flex}
+.fill{height:100%;background:var(--gold)} .fill.late{background:var(--danger)}
+.bar .v{color:var(--muted);text-align:left;white-space:nowrap}
+
+/* ===== شريط سفلي: خبر اليوم + أعياد الميلاد ===== */
+.ticker{grid-column:1 / -1;display:flex;align-items:center;gap:18px;padding:14px 22px}
+.tag{flex:0 0 auto;background:var(--gold-soft);color:var(--gold);border-radius:999px;padding:6px 16px;font-size:18px;font-weight:700;white-space:nowrap}
+.news{min-width:0;flex:1}
+.news .t{font-size:23px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.news .w{font-size:17px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+.bday{flex:0 0 auto;font-size:21px;font-weight:700;color:var(--gold);white-space:nowrap}
+.foot{flex:0 0 auto;font-size:14px;color:var(--muted);white-space:nowrap}
+.err{color:#ffb1ab;font-size:19px;text-align:center;padding:16px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="cam" id="cam">
+    <div class="cam-off" id="camOff">
+      <div class="big" id="camClock">--:--</div>
+      <div id="camMsg">جارٍ تشغيل البث…</div>
+    </div>
+    <iframe id="camFrame" allow="autoplay; fullscreen"></iframe>
+    <div class="cam-badge" id="camBadge" style="display:none"><span class="dot"></span><span id="camLabel">بث مباشر</span></div>
+  </div>
+
+  <div class="side">
+    <div class="card head">
+      <div>
+        <div class="brand">شركة عبدالرحمن بن رضوان المشيقح<br>للمحاماة وإدارة إجراءات الإفلاس</div>
+        <div class="date" id="dateLine">—</div>
+      </div>
+      <div style="text-align:left">
+        <div class="clock"><span id="clockTime">--:--</span><small id="clockMer"></small></div>
+        <div class="weather" id="weather" style="justify-content:flex-end;margin-top:8px"></div>
+      </div>
+    </div>
+
+    <div class="card sessions">
+      <h2>جلسات اليوم <span class="c" id="sessCount"></span></h2>
+      <div class="list" id="sessList"><div class="err">جارٍ التحميل…</div></div>
+      <div class="tomorrow" id="tomorrow"></div>
+    </div>
+
+    <div class="card tasks">
+      <h2>العمل المفتوح</h2>
+      <div class="stats">
+        <div class="stat"><b id="stOpen">—</b><span>مهمة مفتوحة</span></div>
+        <div class="stat bad"><b id="stLate">—</b><span>متأخرة</span></div>
+        <div class="stat wa"><b id="stWa">—</b><span>واتساب بانتظار رد</span></div>
+      </div>
+      <div class="bars" id="bars"></div>
+    </div>
+  </div>
+
+  <div class="card ticker">
+    <span class="tag">خبر اليوم</span>
+    <div class="news" id="news"><div class="t">—</div></div>
+    <div class="bday" id="bday"></div>
+    <div class="foot" id="lastUpdate"></div>
+  </div>
+</div>
+
+<script>
+/* ======================= CONFIG — يُملأ عند البناء (build.sh) ======================= */
+var CONFIG = {
+  SUPABASE_URL : 'https://zwaahunavepleczuamuy.supabase.co',
+  SUPABASE_ANON: '__ANON_KEY__',
+  BOARD_SECRET : '__BOARD_SECRET__',
+  CAMERA_URL   : '__CAMERA_URL__',     /* go2rtc على الـiMac — فارغ = بلا كاميرا (تظهر ساعة كبيرة مكانها) */
+  CAMERA_LABEL : 'بث مباشر — مدخل المكتب',
+  LAT: 26.33, LON: 43.97,              /* بريدة */
+  REFRESH_MS: 5 * 60 * 1000,
+  RELOAD_MS : 12 * 60 * 60 * 1000
+};
+/* ==================================================================================== */
+
+function esc(s){ return s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function pad2(n){ return n < 10 ? '0' + n : '' + n; }
+function $(id){ return document.getElementById(id); }
+var DAYS = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+var MONTHS = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+var KIND = { case:'⚖️', legal_service:'📝', property:'🏠', bankruptcy:'🏦' };
+
+function hijri(d){
+  try {
+    return new Intl.DateTimeFormat('ar-SA-u-ca-islamic-umalqura-nu-latn', { day:'numeric', month:'long', year:'numeric' }).format(d);
+  } catch (e) { return ''; }
+}
+function h12(d){ var h = d.getHours() % 12; return (h === 0 ? 12 : h) + ':' + pad2(d.getMinutes()); }
+function mer(d){ return d.getHours() >= 12 ? 'م' : 'ص'; }
+
+function tick(){
+  var d = new Date();
+  $('clockTime').innerHTML = h12(d);
+  $('clockMer').innerHTML = mer(d);
+  $('camClock').innerHTML = h12(d) + ' <span style="font-size:48px;color:#93a0c0">' + mer(d) + '</span>';
+  var hj = hijri(d);
+  $('dateLine').innerHTML = DAYS[d.getDay()] + ' ' + d.getDate() + ' ' + MONTHS[d.getMonth()] + ' ' + d.getFullYear() +
+    (hj ? '<br>' + esc(hj) : '');
+}
+
+function fmtTime(hhmm){
+  if (!hhmm) return '—';
+  var p = String(hhmm).split(':'); var h = parseInt(p[0], 10);
+  if (isNaN(h)) return esc(hhmm);
+  var m = h >= 12 ? 'م' : 'ص'; h = h % 12; if (h === 0) h = 12;
+  return h + ':' + (p[1] || '00') + ' ' + m;
+}
+
+/* ---------- الكاميرا (اختيارية) ---------- */
+function initCamera(){
+  var url = CONFIG.CAMERA_URL;
+  if (!url || url.indexOf('__') === 0) { $('camMsg').innerHTML = ''; return; }
+  var f = $('camFrame');
+  f.onload = function(){ $('camOff').style.display = 'none'; $('camBadge').style.display = 'flex'; };
+  $('camLabel').innerHTML = esc(CONFIG.CAMERA_LABEL);
+  f.src = url;
+  setTimeout(function(){
+    if ($('camOff').style.display !== 'none') $('camMsg').innerHTML = 'البث غير متاح الآن — تحقّق من تشغيل الكاميرا على الـiMac';
+  }, 15000);
+}
+
+/* ---------- الطقس (Open-Meteo بلا مفتاح) ---------- */
+function wIcon(code){
+  if (code === 0) return '☀️'; if (code <= 2) return '🌤️'; if (code === 3) return '☁️';
+  if (code >= 45 && code <= 48) return '🌫️'; if (code >= 51 && code <= 67) return '🌧️';
+  if (code >= 80 && code <= 82) return '🌦️'; if (code >= 95) return '⛈️'; return '🌡️';
+}
+function loadWeather(){
+  var x = new XMLHttpRequest();
+  x.open('GET', 'https://api.open-meteo.com/v1/forecast?latitude=' + CONFIG.LAT + '&longitude=' + CONFIG.LON +
+    '&current=temperature_2m,weather_code&timezone=Asia%2FRiyadh', true);
+  x.timeout = 15000;
+  x.onload = function(){
+    try {
+      var c = JSON.parse(x.responseText).current;
+      /* «°» تُعزل اتجاهاً كي لا تنقلب في RTL */
+      $('weather').innerHTML = '<span class="w-ico">' + wIcon(c.weather_code) + '</span>' +
+        '<span><span dir="ltr">' + Math.round(c.temperature_2m) + '°</span><small>بريدة</small></span>';
+    } catch (e) {}
+  };
+  x.send();
+}
+
+/* ---------- العرض ---------- */
+function renderSessions(list, tomorrow){
+  var el = $('sessList');
+  $('sessCount').innerHTML = list.length ? '(' + list.length + ')' : '';
+  if (!list.length) el.innerHTML = '<div class="empty">لا جلسات اليوم ✓</div>';
+  else {
+    var h = '';
+    for (var i = 0; i < list.length; i++){
+      var s = list[i];
+      var sub = s.court || ''; if (s.division) sub = sub ? sub + ' — ' + s.division : s.division;
+      h += '<div class="row"><span class="time">' + esc(fmtTime(s.time)) + '</span><span class="rb">' +
+        '<span class="rt">' + (KIND[s.kind] || '⚖️') + ' ' + esc(s.office_num || 'جلسة') + '</span>' +
+        (sub ? '<span class="rs">' + esc(sub) + '</span>' : '') + '</span></div>';
+    }
+    el.innerHTML = h;
+    trim(el, list.length, 'جلسة');
+  }
+  $('tomorrow').innerHTML = tomorrow ? 'غداً: ' + tomorrow + (tomorrow === 1 ? ' جلسة' : tomorrow === 2 ? ' جلستان' : ' جلسات') : '';
+}
+
+function renderTasks(t, wa){
+  $('stOpen').innerHTML = t.open; $('stLate').innerHTML = t.late; $('stWa').innerHTML = wa;
+  var max = 1, i;
+  for (i = 0; i < t.by_member.length; i++) if (t.by_member[i].open > max) max = t.by_member[i].open;
+  var h = '';
+  for (i = 0; i < t.by_member.length; i++){
+    var m = t.by_member[i];
+    var ok = m.open - m.late;
+    h += '<div class="bar"><span class="n">' + esc(m.name) + '</span><span class="track">' +
+      '<span class="fill late" style="width:' + (m.late / max * 100) + '%"></span>' +
+      '<span class="fill" style="width:' + (ok / max * 100) + '%"></span></span>' +
+      '<span class="v">' + m.open + (m.late ? ' · <span style="color:#e0645c">' + m.late + '</span>' : '') + '</span></div>';
+  }
+  $('bars').innerHTML = h || '<div class="empty">لا مهام مفتوحة ✓</div>';
+}
+
+function renderTicker(news, bdays){
+  $('news').innerHTML = news
+    ? '<div class="t">' + esc(news.title) + '</div><div class="w">لماذا يهمّنا: ' + esc(news.why) + '</div>'
+    : '<div class="t" style="color:#93a0c0;font-weight:500">لا خبر قانوني جديد اليوم</div>';
+  $('bday').innerHTML = bdays && bdays.length ? '🎂 كل عام وأنت بخير يا ' + esc(bdays.join(' و')) : '';
+}
+
+/* القائمة لا تُقصّ بصمت — ما لا يتسع يُعلَن عنه */
+function trim(el, total, noun){
+  var rows = el.getElementsByClassName('row'), g = 0;
+  while (el.scrollHeight > el.clientHeight + 2 && rows.length > 1 && g++ < 60) rows[rows.length - 1].parentNode.removeChild(rows[rows.length - 1]);
+  if (rows.length < total) {
+    var more = document.createElement('div'); more.className = 'tomorrow';
+    more.innerHTML = '+ ' + (total - rows.length) + ' ' + noun + ' أخرى';
+    el.appendChild(more);
+  }
+}
+
+function showError(msg){ $('sessList').innerHTML = '<div class="err">' + esc(msg) + '</div>'; }
+
+function loadData(){
+  var x = new XMLHttpRequest();
+  x.open('GET', CONFIG.SUPABASE_URL + '/functions/v1/tv-board?k=' + encodeURIComponent(CONFIG.BOARD_SECRET), true);
+  x.setRequestHeader('apikey', CONFIG.SUPABASE_ANON);
+  x.setRequestHeader('Authorization', 'Bearer ' + CONFIG.SUPABASE_ANON);
+  x.timeout = 20000;
+  x.onload = function(){
+    var d = null; try { d = JSON.parse(x.responseText); } catch (e) {}
+    if (x.status !== 200 || !d || !d.ok) { showError('تعذّر تحديث البيانات — ستُعاد المحاولة تلقائياً'); return; }
+    renderSessions(d.sessions || [], d.tomorrow_sessions || 0);
+    renderTasks(d.tasks_summary || { open: 0, late: 0, by_member: [] }, d.wa_waiting || 0);
+    renderTicker(d.news, d.birthdays);
+    var n = new Date(); $('lastUpdate').innerHTML = 'آخر تحديث ' + h12(n) + ' ' + mer(n);
+  };
+  x.onerror = function(){ showError('تعذّر الوصول للخادم — تحقّق من الشبكة'); };
+  x.ontimeout = function(){ showError('انتهت مهلة الاتصال — ستُعاد المحاولة'); };
+  x.send();
+}
+
+/* أزرار الريموت: «رجوع» لا يغلق الشاشة بالخطأ */
+document.addEventListener('keydown', function(e){ if (e.keyCode === 10009) e.preventDefault(); });
+
+tick(); setInterval(tick, 10000);
+initCamera(); loadWeather(); loadData();
+setInterval(loadData, CONFIG.REFRESH_MS);
+setInterval(loadWeather, 30 * 60 * 1000);
+setTimeout(function(){ location.reload(); }, CONFIG.RELOAD_MS);
+</script>
+</body>
+</html>

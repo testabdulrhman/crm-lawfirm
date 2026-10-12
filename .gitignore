@@ -42,3 +42,6 @@ supabase/.temp/
 # أدوات محلية (لا تخص التطبيق)
 .claude/
 deno.lock
+
+tv-board/app/dist/
+*.wgt
