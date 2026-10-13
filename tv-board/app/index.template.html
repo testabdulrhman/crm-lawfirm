@@ -19,10 +19,12 @@
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;overflow:hidden;background:var(--navy)}
 body{color:var(--text);font-family:'IBM Plex Sans Arabic',Tahoma,Arial,sans-serif;-webkit-font-smoothing:antialiased}
-.wrap{display:grid;grid-template-columns:58fr 42fr;grid-template-rows:1fr auto;gap:18px;height:100vh;width:100vw;padding:20px}
+.wrap{display:grid;grid-template-columns:42fr 58fr;grid-template-rows:minmax(0,1fr) auto;gap:18px;height:100vh;width:100vw;padding:20px}
+/* عمود الكاميرا (يمين): البث بنسبة ١٦:٩ أعلاه والعمل المفتوح تحته — صُغّرت الكاميرا بطلب المدير 2026-10-13 */
+.camcol{display:flex;flex-direction:column;gap:16px;min-height:0}
 
 /* ===== الكاميرا ===== */
-.cam{position:relative;border-radius:22px;overflow:hidden;background:#000;border:1px solid var(--line)}
+.cam{position:relative;flex:0 0 auto;aspect-ratio:16/9;border-radius:22px;overflow:hidden;background:#000;border:1px solid var(--line)}
 .cam iframe{width:100%;height:100%;border:0;display:block}
 .cam-badge{position:absolute;top:18px;right:18px;z-index:2;display:flex;align-items:center;gap:10px;
   background:rgba(14,24,50,.85);border:1px solid var(--line);border-radius:999px;padding:8px 16px;font-size:20px;font-weight:600}
@@ -30,7 +32,7 @@ body{color:var(--text);font-family:'IBM Plex Sans Arabic',Tahoma,Arial,sans-seri
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
 .cam-off{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
   background:radial-gradient(circle at 50% 40%,#1b2a57 0%,#0e1832 70%);color:var(--muted);font-size:24px;text-align:center;padding:40px}
-.cam-off .big{font-size:120px;font-weight:700;color:var(--gold);line-height:1}
+.cam-off .big{font-size:84px;font-weight:700;color:var(--gold);line-height:1}
 
 /* ===== الجانب ===== */
 .side{display:flex;flex-direction:column;gap:16px;min-height:0}
@@ -47,7 +49,7 @@ body{color:var(--text);font-family:'IBM Plex Sans Arabic',Tahoma,Arial,sans-seri
 h2{font-size:22px;font-weight:700;color:var(--gold);display:flex;align-items:center;justify-content:space-between;
    padding-bottom:10px;margin-bottom:10px;border-bottom:1px solid var(--line)}
 h2 .c{font-size:17px;color:var(--muted);font-weight:500}
-.sessions{flex:0 1 auto;max-height:40%;display:flex;flex-direction:column;min-height:0}
+.sessions{flex:1 1 auto;display:flex;flex-direction:column;min-height:0}
 .list{overflow:hidden;display:flex;flex-direction:column;gap:6px;min-height:0}
 .row{display:flex;align-items:center;gap:14px;padding:6px 2px}
 .time{flex:0 0 auto;background:var(--gold);color:#0e1832;border-radius:10px;padding:5px 12px;font-size:20px;font-weight:700;white-space:nowrap}
@@ -83,13 +85,25 @@ h2 .c{font-size:17px;color:var(--muted);font-weight:500}
 </head>
 <body>
 <div class="wrap">
-  <div class="cam" id="cam">
-    <div class="cam-off" id="camOff">
-      <div class="big" id="camClock">--:--</div>
-      <div id="camMsg">جارٍ تشغيل البث…</div>
+  <div class="camcol">
+    <div class="cam" id="cam">
+      <div class="cam-off" id="camOff">
+        <div class="big" id="camClock">--:--</div>
+        <div id="camMsg">جارٍ تشغيل البث…</div>
+      </div>
+      <iframe id="camFrame" allow="autoplay; fullscreen"></iframe>
+      <div class="cam-badge" id="camBadge" style="display:none"><span class="dot"></span><span id="camLabel">بث مباشر</span></div>
     </div>
-    <iframe id="camFrame" allow="autoplay; fullscreen"></iframe>
-    <div class="cam-badge" id="camBadge" style="display:none"><span class="dot"></span><span id="camLabel">بث مباشر</span></div>
+
+    <div class="card tasks">
+      <h2>العمل المفتوح</h2>
+      <div class="stats">
+        <div class="stat"><b id="stOpen">—</b><span>مهمة مفتوحة</span></div>
+        <div class="stat bad"><b id="stLate">—</b><span>متأخرة</span></div>
+        <div class="stat wa"><b id="stWa">—</b><span>واتساب بانتظار رد</span></div>
+      </div>
+      <div class="bars" id="bars"></div>
+    </div>
   </div>
 
   <div class="side">
@@ -108,16 +122,6 @@ h2 .c{font-size:17px;color:var(--muted);font-weight:500}
       <h2>جلسات اليوم <span class="c" id="sessCount"></span></h2>
       <div class="list" id="sessList"><div class="err">جارٍ التحميل…</div></div>
       <div class="tomorrow" id="tomorrow"></div>
-    </div>
-
-    <div class="card tasks">
-      <h2>العمل المفتوح</h2>
-      <div class="stats">
-        <div class="stat"><b id="stOpen">—</b><span>مهمة مفتوحة</span></div>
-        <div class="stat bad"><b id="stLate">—</b><span>متأخرة</span></div>
-        <div class="stat wa"><b id="stWa">—</b><span>واتساب بانتظار رد</span></div>
-      </div>
-      <div class="bars" id="bars"></div>
     </div>
   </div>
 
@@ -162,7 +166,7 @@ function tick(){
   var d = new Date();
   $('clockTime').innerHTML = h12(d);
   $('clockMer').innerHTML = mer(d);
-  $('camClock').innerHTML = h12(d) + ' <span style="font-size:48px;color:#93a0c0">' + mer(d) + '</span>';
+  $('camClock').innerHTML = h12(d) + ' <span style="font-size:34px;color:#93a0c0">' + mer(d) + '</span>';
   var hj = hijri(d);
   $('dateLine').innerHTML = DAYS[d.getDay()] + ' ' + d.getDate() + ' ' + MONTHS[d.getMonth()] + ' ' + d.getFullYear() +
     (hj ? '<br>' + esc(hj) : '');
