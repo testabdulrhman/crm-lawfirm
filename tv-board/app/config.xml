@@ -13,6 +13,9 @@
     <tizen:privilege name="http://developer.samsung.com/privilege/network.public"/>
     <access origin="*" subdomains="true"/>
     <tizen:allow-navigation>*</tizen:allow-navigation>
+    <!-- Tizen 9 يفرض افتراضياً script-src/style-src 'self' فيُحجب كل ما هو داخل الصفحة (شاشة سوداء — 2026-10-13).
+         الصفحة ملف واحد بأسلوبها وشيفرتها، ومعها خطوط Google وبث الكاميرا (go2rtc) وSupabase وOpen-Meteo. -->
+    <tizen:content-security-policy>default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://zwaahunavepleczuamuy.supabase.co https://api.open-meteo.com; frame-src http: https:</tizen:content-security-policy>
     <tizen:setting screen-orientation="landscape" context-menu="disable" background-support="disable"
                    encryption="disable" install-location="auto" hwkey-event="enable"/>
 </widget>
