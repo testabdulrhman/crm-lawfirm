@@ -60,14 +60,21 @@ Deno.serve(async (req) => {
   try {
     // ⚠️ الشاشة يراها كل زائر: لا عناوين قضايا (تحمل أسماء الموكّلين «فلان ضد فلان») ولا عناوين مهام —
     //    رقم الملف والمحكمة للجلسات، وأعداد للمهام (تحديث 2026-10-12 مع تطبيق التلفزيون)
-    const tomorrow = new Date(Date.parse(today) + 86400000).toISOString().slice(0, 10);
+    // يوم العمل التالي (المحاكم لا تعمل الجمعة والسبت): بعد الخميس يأتي الأحد — طلب المدير 2026-10-13:
+    // «جلسات بكرا… عشان مثل هذا الوقت وانا اشتغل اعرف وش عندي»
+    let nextMs = Date.parse(today) + 86400000;
+    while ([5, 6].includes(new Date(nextMs).getUTCDay())) nextMs += 86400000;
+    const tomorrow = new Date(nextMs).toISOString().slice(0, 10);
     const mmdd = today.slice(5);
     const [sessR, tomR, taskR, newsR, teamR, waR] = await Promise.all([
       admin.from("sessions")
         .select("id, session_time, court, case:cases(office_num, kind, court, court_division)")
         .eq("session_date", today)
         .order("session_time", { ascending: true, nullsFirst: false }),
-      admin.from("sessions").select("id", { count: "exact", head: true }).eq("session_date", tomorrow),
+      admin.from("sessions")
+        .select("id, session_time, court, case:cases(office_num, kind, court, court_division)")
+        .eq("session_date", tomorrow)
+        .order("session_time", { ascending: true, nullsFirst: false }),
       admin.from("tasks")
         .select("due_date, is_urgent, status, assignee:team_members!tasks_assignee_id_fkey(short_name, name, is_reviewer)")
         .is("deleted_at", null).neq("status", "done").limit(500),
@@ -79,6 +86,18 @@ Deno.serve(async (req) => {
         .eq("last_direction", "in").gt("last_in_at", new Date(Date.now() - 7 * 86400000).toISOString()),
     ]);
     if (sessR.error) throw sessR.error;
+    if (tomR.error) throw tomR.error;
+    const shape = (rows: any[]) => rows
+      .filter((s) => !String(s.case?.office_num ?? "").startsWith("DEMO"))
+      .map((s: any) => ({
+        time: s.session_time ? String(s.session_time).slice(0, 5) : null,
+        office_num: s.case?.office_num ?? null,
+        kind: s.case?.kind ?? "case",
+        court: s.court || s.case?.court || "",
+        division: s.case?.court_division || "",
+        title: s.case?.office_num ? `ملف ${s.case.office_num}` : "جلسة",   // توافق الصفحة القديمة — بلا أسماء
+      }));
+    const nextList = shape((tomR.data ?? []) as any[]);
     if (taskR.error) throw taskR.error;
 
     // المهام: أعداد فقط — مفتوحة/متأخرة/عاجلة، وعدد كل موظف (الأكثر أولاً)
@@ -105,20 +124,15 @@ Deno.serve(async (req) => {
     return json({
       ok: true,
       today,
-      sessions: ((sessR.data ?? []) as any[]).filter((s) => !String(s.case?.office_num ?? "").startsWith("DEMO")).map((s: any) => ({
-        time: s.session_time ? String(s.session_time).slice(0, 5) : null,
-        office_num: s.case?.office_num ?? null,
-        kind: s.case?.kind ?? "case",
-        court: s.court || s.case?.court || "",
-        division: s.case?.court_division || "",
-        title: s.case?.office_num ? `ملف ${s.case.office_num}` : "جلسة",   // توافق الصفحة القديمة — بلا أسماء
-      })),
+      sessions: shape((sessR.data ?? []) as any[]),
+      next_day: tomorrow,
+      next_sessions: nextList,
       // توافق الصفحة القديمة (index.html على الـiMac): صف لكل موظف بعدد مهامه بدل عناوينها
       tasks: byMember.map((m) => ({
         title: `${m.name} — ${m.open} مفتوحة${m.late ? ` · ${m.late} متأخرة` : ""}`,
         due: null, urgent: m.late > 0, review: false,
       })),
-      tomorrow_sessions: tomR.count ?? 0,
+      tomorrow_sessions: nextList.length,
       tasks_summary: {
         open: tasks.length, late, urgent, review,
         by_member: byMember,

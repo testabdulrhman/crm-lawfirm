@@ -58,6 +58,10 @@ h2 .c{font-size:17px;color:var(--muted);font-weight:500}
 .rs{display:block;font-size:16px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .empty{color:var(--ok);font-size:21px;font-weight:600;text-align:center;padding:10px 0}
 .tomorrow{font-size:16px;color:var(--muted);text-align:center;padding-top:8px}
+/* جلسات اليوم ويوم العمل التالي يتقاسمان البطاقة (طلب المدير 2026-10-13) */
+.sessions .list{flex:1 1 0}
+h2.next{margin-top:14px}
+.time.soft{background:transparent;color:var(--gold);border:1px solid var(--gold)}
 
 .tasks{flex:1 1 auto;display:flex;flex-direction:column;min-height:0}
 .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px}
@@ -121,7 +125,8 @@ h2 .c{font-size:17px;color:var(--muted);font-weight:500}
     <div class="card sessions">
       <h2>جلسات اليوم <span class="c" id="sessCount"></span></h2>
       <div class="list" id="sessList"><div class="err">جارٍ التحميل…</div></div>
-      <div class="tomorrow" id="tomorrow"></div>
+      <h2 class="next"><span id="nextTitle">جلسات الغد</span> <span class="c" id="nextCount"></span></h2>
+      <div class="list" id="nextList"></div>
     </div>
   </div>
 
@@ -216,23 +221,38 @@ function loadWeather(){
 }
 
 /* ---------- العرض ---------- */
-function renderSessions(list, tomorrow){
+function sessionRows(list, soft){
+  var h = '';
+  for (var i = 0; i < list.length; i++){
+    var s = list[i];
+    var sub = s.court || ''; if (s.division) sub = sub ? sub + ' — ' + s.division : s.division;
+    h += '<div class="row"><span class="time' + (soft ? ' soft' : '') + '">' + esc(fmtTime(s.time)) + '</span><span class="rb">' +
+      '<span class="rt">' + (KIND[s.kind] || '⚖️') + ' ' + esc(s.office_num || 'جلسة') + '</span>' +
+      (sub ? '<span class="rs">' + esc(sub) + '</span>' : '') + '</span></div>';
+  }
+  return h;
+}
+
+/* «الغد» = يوم العمل التالي؛ بعد الخميس يُسمّى اليوم باسمه (جلسات الأحد) */
+function nextTitle(iso){
+  if (!iso) return 'جلسات الغد';
+  var d = new Date(iso + 'T12:00:00');
+  var t = new Date(); t.setHours(12, 0, 0, 0);
+  var diff = Math.round((d - t) / 86400000);
+  return diff === 1 ? 'جلسات الغد' : 'جلسات ' + DAYS[d.getDay()];
+}
+
+function renderSessions(list, next, nextDay){
   var el = $('sessList');
   $('sessCount').innerHTML = list.length ? '(' + list.length + ')' : '';
   if (!list.length) el.innerHTML = '<div class="empty">لا جلسات اليوم ✓</div>';
-  else {
-    var h = '';
-    for (var i = 0; i < list.length; i++){
-      var s = list[i];
-      var sub = s.court || ''; if (s.division) sub = sub ? sub + ' — ' + s.division : s.division;
-      h += '<div class="row"><span class="time">' + esc(fmtTime(s.time)) + '</span><span class="rb">' +
-        '<span class="rt">' + (KIND[s.kind] || '⚖️') + ' ' + esc(s.office_num || 'جلسة') + '</span>' +
-        (sub ? '<span class="rs">' + esc(sub) + '</span>' : '') + '</span></div>';
-    }
-    el.innerHTML = h;
-    trim(el, list.length, 'جلسة');
-  }
-  $('tomorrow').innerHTML = tomorrow ? 'غداً: ' + tomorrow + (tomorrow === 1 ? ' جلسة' : tomorrow === 2 ? ' جلستان' : ' جلسات') : '';
+  else { el.innerHTML = sessionRows(list, false); trim(el, list.length, 'جلسة'); }
+
+  var nx = $('nextList');
+  $('nextTitle').innerHTML = esc(nextTitle(nextDay));
+  $('nextCount').innerHTML = next.length ? '(' + next.length + ')' : '';
+  if (!next.length) nx.innerHTML = '<div class="empty">لا جلسات ✓</div>';
+  else { nx.innerHTML = sessionRows(next, true); trim(nx, next.length, 'جلسة'); }
 }
 
 function renderTasks(t, wa){
@@ -280,7 +300,7 @@ function loadData(){
   x.onload = function(){
     var d = null; try { d = JSON.parse(x.responseText); } catch (e) {}
     if (x.status !== 200 || !d || !d.ok) { showError('تعذّر تحديث البيانات — ستُعاد المحاولة تلقائياً'); return; }
-    renderSessions(d.sessions || [], d.tomorrow_sessions || 0);
+    renderSessions(d.sessions || [], d.next_sessions || [], d.next_day);
     renderTasks(d.tasks_summary || { open: 0, late: 0, by_member: [] }, d.wa_waiting || 0);
     renderTicker(d.news, d.birthdays);
     var n = new Date(); $('lastUpdate').innerHTML = 'آخر تحديث ' + h12(n) + ' ' + mer(n);
