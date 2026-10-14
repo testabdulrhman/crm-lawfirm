@@ -7,7 +7,7 @@ import {
 import { supabase } from '@/lib/supabase'
 import { toast } from '@/hooks/use-toast'
 import { uploadFile } from '@/lib/files'
-import { todayISO } from '@/lib/format'
+import { arPlural, todayISO } from '@/lib/format'
 import type {
   IncomingRequest,
   IncomingRequestInput,
@@ -453,6 +453,51 @@ async function summarizeRequest(requestId: string): Promise<{ filled: string[] }
   }
   if (data?.error) throw new Error(data.error)
   return { filled: (data?.filled ?? []) as string[] }
+}
+
+/**
+ * «طلب جديد» من محادثة واتساب (2026-10-14): بعد إنشاء الطلب تُنسخ مرفقات المحادثة ونصّها إلى ملفات الطلب
+ * في الخادم (wa-inbox → to_request)، ثم يُلخَّص الطلب منها. يعمل في الخلفية بعد الانتقال لصفحة الطلب.
+ */
+export function useWaChatToRequest() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ phone, requestId }: { phone: string; requestId: string }) => {
+      const { data, error } = await supabase.functions.invoke('wa-inbox', {
+        body: { action: 'to_request', phone, request_id: requestId },
+      })
+      if (error) {
+        let detail = errMessage(error)
+        try {
+          const ctx = await (error as { context?: Response }).context?.json()
+          if (ctx?.message) detail = ctx.message
+        } catch {
+          /* الرسالة العامة */
+        }
+        throw new Error(detail)
+      }
+      const r = data as { copied: string[]; failed: string[]; chat: boolean }
+      invalidateAll(qc)
+      let summarized = false
+      if (r.copied.length || r.chat) {
+        summarized = await summarizeRequest(requestId).then(() => true, () => false)
+      }
+      return { ...r, summarized }
+    },
+    onSuccess: (r) => {
+      invalidateAll(qc)
+      const files = r.copied.length ? arPlural(r.copied.length, { one: 'ملف واحد', two: 'ملفان', many: 'ملفات' }) : 'لا مرفقات'
+      toast({
+        variant: r.failed.length ? 'default' : 'success',
+        title: `نُقلت المحادثة إلى الطلب: ${files}${r.chat ? ' ونص المحادثة' : ''}${r.summarized ? ' — ولُخّصت' : ''}`,
+        description: r.failed.length ? `تعذّر نسخ: ${r.failed.join('، ')}` : undefined,
+      })
+    },
+    onError: (e) => {
+      invalidateAll(qc)
+      errToast('أُنشئ الطلب وتعذّر نقل ملفات المحادثة')(e)
+    },
+  })
 }
 
 const fieldLabel = (k: string) =>

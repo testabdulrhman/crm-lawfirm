@@ -14,6 +14,7 @@ export function ContactPicker({
   placeholder = 'ابحث عن عميل بالاسم أو الجوال…',
   allowCreate = true,
   createCategory = 'client',
+  createDefaults,
 }: {
   contacts: Contact[]
   value: string | null
@@ -23,6 +24,8 @@ export function ContactPicker({
   allowCreate?: boolean
   /** تصنيف الجهة المُنشأة: 'client' لموكّل، 'caller' لمتصل */
   createCategory?: string
+  /** اسم ورقم يُملآن في «إضافة عميل جديد» حين لا يُكتب بحث (من محادثة واتساب) */
+  createDefaults?: { name?: string; phone?: string }
 }) {
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
@@ -164,7 +167,8 @@ export function ContactPicker({
         <QuickContactDialog
           open={creating}
           onOpenChange={setCreating}
-          initialName={query.trim()}
+          initialName={query.trim() || createDefaults?.name || ''}
+          initialPhone={createDefaults?.phone ?? ''}
           category={createCategory}
           onCreated={(c) => {
             setJustCreated(c)

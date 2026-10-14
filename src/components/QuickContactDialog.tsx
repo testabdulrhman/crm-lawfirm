@@ -34,6 +34,7 @@ export function QuickContactDialog({
   open,
   onOpenChange,
   initialName = '',
+  initialPhone = '',
   category = 'client',
   onCreated,
 }: {
@@ -41,6 +42,8 @@ export function QuickContactDialog({
   onOpenChange: (v: boolean) => void
   /** ما كتبه المستخدم في البحث — يُملأ مسبقاً في حقل الاسم */
   initialName?: string
+  /** رقم معروف سلفاً — مثل رقم محادثة الواتساب */
+  initialPhone?: string
   /** تصنيف الجهة الجديدة: 'client' لموكّل، 'caller' لمتصل */
   category?: string
   onCreated: (c: Contact) => void
@@ -55,7 +58,7 @@ export function QuickContactDialog({
   useEffect(() => {
     if (open) {
       setName(initialName)
-      setPhone('')
+      setPhone(initialPhone)
       setEntityType('فرد')
     }
   }, [open, initialName])

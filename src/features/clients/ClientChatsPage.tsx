@@ -17,6 +17,7 @@ import {
   MessageCircle,
   MessagesSquare,
   Paperclip,
+  Plus,
   Search,
   Send,
 } from 'lucide-react'
@@ -46,7 +47,9 @@ import {
 } from '@/hooks/useClientChats'
 import { requestDiscussionJump } from '@/lib/discussionJump'
 import { errMessage } from '@/lib/errors'
-import { fmtDate } from '@/lib/format'
+import { fmtDate, localISO, todayISO } from '@/lib/format'
+import { RequestForm } from '@/features/requests/RequestForm'
+import { useWaChatToRequest } from '@/hooks/useRequests'
 import { matterHref } from '@/lib/matterHref'
 import { cn } from '@/lib/utils'
 
@@ -244,6 +247,9 @@ function ChatPane({ thread, viewer, onBack }: { thread: ClientThread; viewer: bo
   const [text, setText] = useState('')
   const [linkOpen, setLinkOpen] = useState(false)
   const [discuss, setDiscuss] = useState<ClientMsg | null>(null)
+  const [reqOpen, setReqOpen] = useState(false)
+  const toRequest = useWaChatToRequest()
+  const [, navigate] = useLocation()
   const pendingId = useRef<string | null>(null)
   const endRef = useRef<HTMLDivElement>(null)
 
@@ -311,7 +317,20 @@ function ChatPane({ thread, viewer, onBack }: { thread: ClientThread; viewer: bo
             طلب وارد{reqLink.ref_no ? <> · <Ltr>{reqLink.ref_no}</Ltr></> : null}
           </Link>
         ) : (
-          <span className="shrink-0 rounded-full bg-muted px-2 py-1 text-[11px] text-muted-foreground">غير مصنّف</span>
+          <>
+            <span className="shrink-0 rounded-full bg-muted px-2 py-1 text-[11px] text-muted-foreground">غير مصنّف</span>
+            {/* محادثة عميل جديد ← طلب وارد: بياناته ونص المحادثة ومرفقاتها تنتقل معه (2026-10-14) */}
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 shrink-0 gap-1 border-sky-500/40 px-2 text-xs text-sky-700 hover:bg-sky-500/10 sm:px-3 dark:text-sky-300"
+              onClick={() => setReqOpen(true)}
+              aria-label="طلب جديد من المحادثة"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">طلب جديد</span>
+            </Button>
+          </>
         )}
         {viewer && (
           <Button
@@ -413,6 +432,39 @@ function ChatPane({ thread, viewer, onBack }: { thread: ClientThread; viewer: bo
       </div>
 
       {linkOpen && <LinkDialog thread={thread} onClose={() => setLinkOpen(false)} />}
+      <Dialog open={reqOpen} onOpenChange={setReqOpen}>
+        <DialogContent
+          className="max-w-2xl"
+          onInteractOutside={(ev) => ev.preventDefault()}
+          onOpenAutoFocus={(ev) => ev.preventDefault()}
+        >
+          {reqOpen && (
+            <RequestForm
+              initial={{
+                client_id: thread.contact_id,
+                client_name: thread.contact?.name?.trim() || thread.display_name?.trim() || localPhone(phone),
+                client_phone: localPhone(phone),
+                source: 'واتساب',
+                received_at: (() => {
+                  const first = msgs.find((m) => m.direction === 'in')?.at
+                  return first ? localISO(new Date(first)) : todayISO()
+                })(),
+                // ما كتبه العميل نفسه — والمحادثة كاملة تُحفظ ملفاً في الطلب
+                description: msgs
+                  .filter((m) => m.who === 'client' && !m.media && m.body?.trim())
+                  .map((m) => m.body!.trim())
+                  .join('\n')
+                  .slice(-1500),
+              }}
+              onCreated={(r) => {
+                toRequest.mutate({ phone, requestId: r.id })
+                navigate(`/requests/${r.id}`)
+              }}
+              onDone={() => setReqOpen(false)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
       {discuss && thread.case_id && (
         <DiscussDialog msg={discuss} caseId={thread.case_id} clientName={name} onClose={() => setDiscuss(null)} />
       )}

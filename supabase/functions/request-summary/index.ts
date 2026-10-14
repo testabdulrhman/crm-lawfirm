@@ -118,6 +118,7 @@ const SYSTEM = `أنت محامٍ أول في شركة عبدالرحمن بن �
 - عربية مهنية موجزة، نقاط قصيرة، بلا Markdown.
 - المهل: نبّه على كل مهلة نظامية يفوت بفواتها حق (مثل ٣٠ يوماً للاعتراض من تاريخ استلام الحكم) واذكر من أي تاريخ تُحسب.
 - الانطباع الأولي حذر ومتوازن: ما يقوّي موقف العميل وما يضعفه، بلا وعود.
+- إن كان بين الملفات نص محادثة واتساب: خذ منها ما قاله العميل عن مسألته وتواريخه، ولا تعدّ ردود المكتب الآلية وقائع.
 ${HIJRI_RULE}
 - سلّم النتيجة حصراً عبر أداة save_summary.`;
 
@@ -142,14 +143,16 @@ Deno.serve(async (req) => {
   if (rErr || !r) return json({ error: "لا صلاحية على هذا الطلب أو غير موجود" }, 403);
 
   const { data: docs } = await admin.from("request_documents").select("id, name, file_url")
-    .eq("request_id", requestId).is("deleted_at", null).order("created_at", { ascending: true }).limit(20);
+    .eq("request_id", requestId).is("deleted_at", null).order("created_at", { ascending: true }).limit(60);
   if (!docs?.length) return json({ error: "لا ملفات في الطلب بعد" }, 400);
 
+  // نص محادثة الواتساب أولاً فلا يُسقطه سقف الملفات، والصوت والمرئي لا يُنزَّلان أصلاً (لا يُقرآن)
+  const ordered = [...docs].sort((a, b) => Number(/\.txt$/i.test(b.name ?? "")) - Number(/\.txt$/i.test(a.name ?? "")));
   const blocks: unknown[] = [];
   const read: string[] = [];
   const skipped: string[] = [];
-  for (const d of docs) {
-    if (read.length >= MAX_DOCS) { skipped.push(d.name); continue; }
+  for (const d of ordered) {
+    if (read.length >= MAX_DOCS || /\.(ogg|opus|mp3|m4a|mp4|mov|3gp)$/i.test(d.name ?? "")) { skipped.push(d.name); continue; }
     const f = await loadFile(d.file_url).catch(() => null);
     if (!f || f.bytes.length > MAX_BYTES) { skipped.push(d.name); continue; }
     const name = String(d.name ?? "").toLowerCase();
@@ -163,11 +166,14 @@ Deno.serve(async (req) => {
         blocks.push({ type: "image", source: { type: "base64", media_type: mt, data: b64(f.bytes) } });
       } else if (name.endsWith(".docx") || type.includes("wordprocessingml")) {
         blocks.push({ type: "text", text: `مستند Word «${d.name}»:\n${(await docxText(f.bytes)).slice(0, 40000)}` });
+      } else if (type.startsWith("text/") || name.endsWith(".txt")) {
+        // نص محادثة الواتساب (2026-10-14) — ومن قبلُ أي ملف نصي
+        blocks.push({ type: "text", text: `ملف نصي «${d.name}»:\n${new TextDecoder().decode(f.bytes).replace(/^\uFEFF/, "").slice(-30000)}` });
       } else { skipped.push(d.name); continue; }
       read.push(d.name);
     } catch { skipped.push(d.name); }
   }
-  if (!read.length) return json({ error: "تعذّرت قراءة الملفات — الصيغ المدعومة: PDF وصور وWord" }, 400);
+  if (!read.length) return json({ error: "تعذّرت قراءة الملفات — الصيغ المدعومة: PDF وصور وWord ونص" }, 400);
 
   blocks.push({
     type: "text",

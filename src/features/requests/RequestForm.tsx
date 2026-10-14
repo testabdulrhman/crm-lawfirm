@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -53,7 +54,7 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>
 
-function toDefaults(r?: IncomingRequest | null): FormValues {
+function toDefaults(r?: Partial<IncomingRequest> | null): FormValues {
   return {
     client_name: r?.client_name ?? '',
     client_phone: r?.client_phone ?? '',
@@ -76,9 +77,15 @@ function toDefaults(r?: IncomingRequest | null): FormValues {
 
 export function RequestForm({
   request,
+  initial,
+  onCreated,
   onDone,
 }: {
   request?: IncomingRequest | null
+  /** قيم مبدئية لطلب جديد — مثل «طلب جديد» من محادثة واتساب (2026-10-14) */
+  initial?: Partial<IncomingRequest>
+  /** بعد الإضافة وقبل الإغلاق — يُعطى الطلب المُنشأ */
+  onCreated?: (r: IncomingRequest) => void
   onDone: () => void
 }) {
   const isEdit = Boolean(request)
@@ -97,7 +104,7 @@ export function RequestForm({
     formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: toDefaults(request),
+    defaultValues: toDefaults(request ?? initial),
   })
 
   // طلب قديم مسجل بالاسم الحر بلا عميل — نعرضه بدل إخفائه
@@ -106,6 +113,21 @@ export function RequestForm({
     isEdit && (!watchedClientId || watchedClientId === NONE)
       ? request?.client_name || ''
       : ''
+  // رقم المحادثة مسجّل لعميل في السجل ⇒ يُختار تلقائياً (آخر ٩ أرقام — 05 أو 966 سواء)
+  useEffect(() => {
+    const key = (initial?.client_phone ?? '').replace(/\D/g, '').slice(-9)
+    if (isEdit || key.length !== 9 || (watchedClientId && watchedClientId !== NONE)) return
+    const hits = (contacts ?? []).filter((c) =>
+      [c.phone, c.phone2].some((p) => (p ?? '').replace(/\D/g, '').slice(-9) === key)
+    )
+    if (hits.length === 1) {
+      setValue('client_id', hits[0].id)
+      setValue('client_name', hits[0].name ?? '')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contacts])
+  // من محادثة واتساب برقم ليس في سجل العملاء: الاسم والرقم محفوظان ولو لم يُختر عميل
+  const fromChat = !isEdit && initial?.client_name && (!watchedClientId || watchedClientId === NONE) ? initial : null
 
   const onSubmit = async (values: FormValues) => {
     const input: IncomingRequestInput = {
@@ -130,11 +152,12 @@ export function RequestForm({
       await updateM.mutateAsync({ id: request.id, input })
     } else {
       // عند الإضافة: الحالة قيد الدراسة + المُنشئ = المستخدم الحالي
-      await createM.mutateAsync({
+      const created = await createM.mutateAsync({
         ...input,
         status: 'under_review',
         created_by: teamMember?.name ?? null,
       })
+      onCreated?.(created)
     }
     onDone()
   }
@@ -159,14 +182,22 @@ export function RequestForm({
                   contacts={contacts ?? []}
                   value={field.value && field.value !== NONE ? field.value : null}
                   placeholder="ابحث بالاسم أو الجوال — أو أضف جهة جديدة…"
+                  createDefaults={initial?.client_name ? { name: initial.client_name, phone: initial.client_phone ?? '' } : undefined}
                   onSelect={(c: Contact | null) => {
                     field.onChange(c?.id ?? NONE)
                     setValue('client_name', c?.name ?? '')
-                    setValue('client_phone', c?.phone ?? '')
+                    // من محادثة: يبقى رقمها هو رقم الطلب — به تُربط المحادثة بالطلب
+                    setValue('client_phone', initial?.client_phone || c?.phone || '')
                   }}
                 />
               )}
             />
+            {fromChat && (
+              <p className="text-xs text-muted-foreground">
+                من الواتساب: «{fromChat.client_name}»{fromChat.client_phone ? <> · <span dir="ltr">{fromChat.client_phone}</span></> : null}
+                {' '}— يُسجَّل بهما، واختر العميل من السجل إن كان موجوداً أو أضفه.
+              </p>
+            )}
             {legacyName && (
               <p className="text-xs text-muted-foreground">
                 الطلب مسجل باسم «{legacyName}» بلا عميل — اختر عميلاً لربطه

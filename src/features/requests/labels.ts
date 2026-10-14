@@ -46,7 +46,7 @@ export const statusBadgeVariant = (
 
 /* ===== قناة الوصول — «توحيد قناة الدخول» (بند ١ من المرحلة الأولى) ===== */
 
-export const SOURCE_OPTIONS = ['هاتف', 'حضور', 'الموقع', 'رسالة', 'إحالة'] as const
+export const SOURCE_OPTIONS = ['هاتف', 'واتساب', 'حضور', 'الموقع', 'رسالة', 'إحالة'] as const
 
 export const sourceLabel = (s: string | null | undefined): string => s || 'هاتف'
 

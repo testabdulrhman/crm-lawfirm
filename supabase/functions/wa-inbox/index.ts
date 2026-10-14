@@ -8,6 +8,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 //                                   وردود موظفينا (بأسمائهم من wa_outbox)، وردود لوحة هاتف — ونافذة الـ24 ساعة.
 //   send   {phone, body, mode}   ⇒ نصٌّ حر داخل النافذة؛ وخارجها (mode='template') داخل القالب
 //                                   المعتمد «followup» (حياك الله … {{1}} … شكراً لك).
+//   to_request {phone, request_id} ⇒ ينسخ مرفقات المحادثة ونصّها إلى ملفات طلب وارد (2026-10-14).
 //
 // الرؤية من القاعدة نفسها (can_see_wa_thread بجلسة الموظف): مسؤول الملف وفريقه، والمدير وراكان
 // يرون الكل، و«غير المصنّف» لهما وحدهما.
@@ -67,6 +68,112 @@ const HUB_ERRORS: Record<string, string> = {
   template_not_approved: 'القالب «متابعة» غير معتمد حالياً في الـHub.',
   outbound_disabled: 'الإرسال عبر الـHub موقوف مؤقتاً.',
 };
+
+// ---------- محادثة ← طلب وارد (2026-10-14) ----------
+// «طلب جديد» من رأس المحادثة: بعد إنشاء الطلب تُنسخ مرفقات الواتساب (من العميل ومنّا) إلى ملفات الطلب
+// في مخزننا — روابط هاتف (voxa على Aliyun) لا نملك بقاءها — ومعها نص المحادثة ملفاً يقرؤه ملخص الذكاء.
+// يُعاد تشغيله بأمان: مسار كل مرفق مشتق من رابطه، فما نُسخ قبلُ لا يتكرر.
+
+const MAX_MEDIA = 30;
+const MAX_MEDIA_BYTES = 25 * 1024 * 1024;
+const phoneKey = (p: string | null | undefined) => String(p ?? '').replace(/\D/g, '').slice(-9);
+const EXT_BY_MIME: Record<string, string> = {
+  'application/pdf': 'pdf', 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp',
+  'audio/ogg': 'ogg', 'audio/mpeg': 'mp3', 'audio/mp4': 'm4a', 'video/mp4': 'mp4',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx', 'application/msword': 'doc',
+};
+/** نص رسالة المستند هو اسم ملفه — يصير اسمه في الطلب ولا يُكرَّر في السطر */
+const isFileName = (t: string) => /\.[a-z0-9]{2,5}$/i.test(t) && t.length < 120;
+const KIND_LABEL = (mime: string, type: string | null) =>
+  mime.startsWith('image/') || type === 'image' ? 'صورة'
+  : mime.startsWith('audio/') || type === 'audio' || type === 'voice' ? 'مقطع صوتي'
+  : mime.startsWith('video/') || type === 'video' ? 'مقطع مرئي'
+  : 'مستند';
+
+async function sha(s: string) {
+  const h = await crypto.subtle.digest('SHA-1', new TextEncoder().encode(s));
+  return [...new Uint8Array(h)].map((x) => x.toString(16).padStart(2, '0')).join('').slice(0, 16);
+}
+const riyadh = (iso: string) =>
+  new Date(Date.parse(iso) + 3 * 3600_000).toISOString().slice(0, 16).replace('T', ' ');
+
+// deno-lint-ignore no-explicit-any
+async function copyToRequest(asUser: any, phone: string, requestId: string) {
+  if (!/^[0-9a-f-]{36}$/i.test(requestId)) throw new Error('طلب غير صالح');
+  // الطلب بصلاحيات الموظف نفسه — ورقمه رقم المحادثة، فلا تُلصق محادثة بطلب غيرها
+  const { data: r } = await asUser.from('incoming_requests').select('id, client_phone').eq('id', requestId).maybeSingle();
+  if (!r) throw new Error('لا صلاحية على هذا الطلب أو غير موجود');
+  if (r.client_phone && phoneKey(r.client_phone) !== phoneKey(phone)) throw new Error('رقم الطلب غير رقم المحادثة');
+
+  const hub = await hubThread(phone);
+  const msgs = hub.messages.filter((m) => m.type !== 'sticker' && m.type !== 'reaction');
+  const { data: existing } = await admin.from('request_documents').select('file_url')
+    .eq('request_id', requestId).is('deleted_at', null);
+  const have = new Set((existing ?? []).map((d: { file_url: string }) => d.file_url));
+  const pub = (path: string) => `${URL_}/storage/v1/object/public/documents/${path}`;
+
+  const copied: string[] = [];
+  const failed: string[] = [];
+  const lines: string[] = [];
+  let n = 0;
+  for (const m of msgs) {
+    const who = m.direction === 'in' ? 'العميل' : 'المكتب';
+    const text = (m.body ?? m.rendered ?? '').trim();
+    let note = '';
+    if (m.media && n < MAX_MEDIA) {
+      n++;
+      const mime = String(m.mime ?? '').split(';')[0].toLowerCase();
+      const urlExt = (m.media.split('?')[0].match(/\.([a-z0-9]{2,5})$/i)?.[1] ?? '').toLowerCase();
+      const ext = EXT_BY_MIME[mime] ?? (urlExt || 'bin');
+      const label = `${KIND_LABEL(mime, m.type)} ${m.direction === 'in' ? 'من العميل' : 'من المكتب'} — ${riyadh(m.at).slice(0, 10).replace(/-/g, '/')}`;
+      // اسم الملف كما أرسله العميل إن جاء نصاً بامتداد (المستندات غالباً)، وإلا وصفٌ بنوعه وتاريخه
+      const name = isFileName(text) ? text : `${label}.${ext}`;
+      const path = `request_documents/wa/${requestId}/${await sha(m.media)}.${ext}`;
+      note = ` [📎 ${name}]`;
+      if (!have.has(pub(path))) {
+        try {
+          const res = await fetch(m.media, { signal: AbortSignal.timeout(30_000) });
+          if (!res.ok) throw new Error(String(res.status));
+          const bytes = new Uint8Array(await res.arrayBuffer());
+          if (bytes.length > MAX_MEDIA_BYTES) throw new Error('حجم');
+          const type = mime || (res.headers.get('content-type') ?? '').split(';')[0] || 'application/octet-stream';
+          const up = await admin.storage.from('documents').upload(path, bytes, { contentType: type, upsert: true });
+          if (up.error) throw new Error(up.error.message);
+          const { error } = await asUser.from('request_documents').insert({
+            request_id: requestId, name, file_url: pub(path), file_type: type, file_size: bytes.length,
+          });
+          if (error) throw new Error(error.message);
+          have.add(pub(path));
+          copied.push(name);
+        } catch (e) {
+          console.error('wa media', (e as Error).message);
+          failed.push(name);
+        }
+      }
+    }
+    if (text || note) lines.push(`[${riyadh(m.at)}] ${who}: ${m.media && isFileName(text) ? '' : text}${note}`.trim());
+  }
+
+  // نص المحادثة ملفاً واحداً يُستبدل في كل نسخ (آخر حالة للمحادثة)
+  let chat = false;
+  if (lines.length) {
+    const body = `محادثة الواتساب مع ${phone} — حتى ${riyadh(new Date().toISOString())} (بتوقيت الرياض)\n\n${lines.join('\n')}\n`;
+    const bytes = new TextEncoder().encode('\uFEFF' + body);
+    const path = `request_documents/wa/${requestId}/chat.txt`;
+    const up = await admin.storage.from('documents').upload(path, bytes, { contentType: 'text/plain; charset=utf-8', upsert: true });
+    if (!up.error) {
+      if (!have.has(pub(path))) {
+        await asUser.from('request_documents').insert({
+          request_id: requestId, name: 'نص محادثة الواتساب.txt', file_url: pub(path), file_type: 'text/plain', file_size: bytes.length,
+        });
+      } else {
+        await admin.from('request_documents').update({ file_size: bytes.length }).eq('request_id', requestId).eq('file_url', pub(path));
+      }
+      chat = true;
+    }
+  }
+  return { ok: true, copied, failed, chat, messages: msgs.length };
+}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
@@ -158,6 +265,10 @@ Deno.serve(async (req) => {
       }).eq('phone_e164', phone);
       await asUser.rpc('wa_mark_read', { p_phone: phone });
       return json({ ok: true, status: out?.status ?? 'sent' });
+    }
+
+    if (b.action === 'to_request') {
+      return json(await copyToRequest(asUser, phone, String(b.request_id ?? '')));
     }
 
     return fail(400, 'فعل غير معروف');
