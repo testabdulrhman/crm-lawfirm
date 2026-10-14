@@ -12,6 +12,9 @@ import {
   Paperclip,
   Sparkles,
   AlertTriangle,
+  ArrowUp,
+  ChevronDown,
+  Hourglass,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -43,7 +46,8 @@ import { QueryErrorState } from '@/components/QueryErrorState'
 import { EmptyState } from '@/components/EmptyState'
 import { Ltr } from '@/components/Ltr'
 
-import { fmtDatePref, todayISO } from '@/lib/format'
+import { fmtDatePref, fmtNumber, todayISO } from '@/lib/format'
+import { cn } from '@/lib/utils'
 import { pickFile, uploadFile } from '@/lib/files'
 import { useAuth } from '@/stores/auth'
 import { hijriTextToISO } from '@/lib/hijri'
@@ -53,12 +57,15 @@ import {
   useAddRuling,
   useUpdateRuling,
   useDeleteRuling,
+  useObjectionTask,
+  useRulingOutcomes,
 } from '@/hooks/useCaseRulings'
 import type { Ruling, RulingInput } from '@/types/db'
 
 export function RulingsTab({ caseId }: { caseId: string }) {
   const { data, isLoading, isError, error, refetch } = useCaseRulings(caseId)
   const deleteM = useDeleteRuling(caseId)
+  useRulingOutcomes(caseId, data)
 
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<Ruling | null>(null)
@@ -116,20 +123,50 @@ export function RulingsTab({ caseId }: { caseId: string }) {
           }}
         />
       ) : (
-        <div className="space-y-3">
-          {rulings.map((r) => (
-            <RulingCard
-              key={r.id}
-              ruling={r}
-              onEdit={() => {
-                setEditing(r)
-                setFormOpen(true)
-              }}
-              onDelete={() => setToDelete(r)}
-              onPreview={setPreview}
-            />
-          ))}
-        </div>
+        <>
+          <DeadlineBanner ruling={rulings[0]} />
+          {/* خط زمني من الأحدث: الابتدائي ← الاستئناف ← العليا */}
+          <div className="relative pr-7">
+            <span className="absolute bottom-8 right-[9px] top-5 border-r-2 border-border" aria-hidden />
+            {rulings.map((r, i) => {
+              const older = rulings[i + 1]
+              const appealed = older && rulingLevel(r).rank > rulingLevel(older).rank
+              return (
+                <div key={r.id}>
+                  <div className="relative">
+                    <span
+                      className={cn(
+                        'absolute -right-[25px] top-5 h-3.5 w-3.5 rounded-full border-[3px] border-background',
+                        i === 0 ? 'bg-gold' : 'bg-muted-foreground/40'
+                      )}
+                      aria-hidden
+                    />
+                    <RulingCard
+                      ruling={r}
+                      latest={i === 0}
+                      onEdit={() => {
+                        setEditing(r)
+                        setFormOpen(true)
+                      }}
+                      onDelete={() => setToDelete(r)}
+                      onPreview={setPreview}
+                    />
+                  </div>
+                  {older && (
+                    <p className="flex h-9 items-center gap-1.5 text-xs text-muted-foreground">
+                      {appealed && (
+                        <>
+                          <ArrowUp className="h-3.5 w-3.5" />
+                          استُؤنف
+                        </>
+                      )}
+                    </p>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </>
       )}
 
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
@@ -176,52 +213,135 @@ export function RulingsTab({ caseId }: { caseId: string }) {
   )
 }
 
+/** درجة الحكم من اسم المحكمة — بلا حقل جديد */
+function rulingLevel(r: Ruling): { rank: number; label: string; title: string; next: string | null } {
+  const t = `${r.court_name ?? ''} ${r.title ?? ''}`
+  if (/العليا/.test(t)) return { rank: 3, label: 'عليا', title: 'حكم المحكمة العليا', next: null }
+  if (/استئناف/.test(t)) return { rank: 2, label: 'استئناف', title: 'حكم الاستئناف', next: 'المحكمة العليا' }
+  return { rank: 1, label: 'ابتدائي', title: 'الحكم الابتدائي', next: 'محكمة الاستئناف' }
+}
+
+const daysUntil = (iso: string) => Math.round((Date.parse(iso) - Date.parse(todayISO())) / 864e5)
+
+/** شريط المهلة: آخر حكم ما زالت مهلة الاعتراض عليه قائمة — والمكلّف بمهمتها */
+function DeadlineBanner({ ruling }: { ruling: Ruling | undefined }) {
+  const until = ruling?.objection_until ?? null
+  const days = until ? daysUntil(until) : -1
+  const { data: task } = useObjectionTask(until && days >= 0 ? ruling!.id : null)
+  if (!ruling || !until || days < 0) return null
+  const lv = rulingLevel(ruling)
+  const urgent = days <= 7
+  const who = task?.assignee?.short_name || task?.assignee?.name
+  return (
+    <div
+      className={cn(
+        'flex items-center gap-3 rounded-2xl border px-4 py-3',
+        urgent
+          ? 'border-destructive/30 bg-destructive/5 text-destructive'
+          : 'border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-300'
+      )}
+    >
+      <Hourglass className="h-5 w-5 shrink-0" />
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold">
+          مهلة الاعتراض على {lv.rank === 1 ? 'الحكم الابتدائي' : 'حكم الاستئناف'}
+          {lv.next ? ` أمام ${lv.next}` : ''}
+        </p>
+        <p className="mt-0.5 text-xs opacity-90">
+          تنتهي {fmtDatePref(until)}
+          {task
+            ? task.status === 'done'
+              ? ' — مهمة الاعتراض أُنجزت'
+              : ` — مهمة «${task.title.split(' — ')[0]}»${who ? ` عند ${who}` : ''}`
+            : ' — لا مهمة اعتراض مسجّلة'}
+        </p>
+      </div>
+      <p className="shrink-0 text-2xl font-bold tabular-nums">
+        {days === 0 ? 'اليوم' : fmtNumber(days)}
+        {days > 0 && <span className="text-xs font-normal"> {days <= 10 ? 'أيام' : 'يوماً'}</span>}
+      </p>
+    </div>
+  )
+}
+
 function RulingCard({
   ruling: r,
+  latest,
   onEdit,
   onDelete,
   onPreview,
 }: {
   ruling: Ruling
+  latest: boolean
   onEdit: () => void
   onDelete: () => void
   onPreview: (p: { url: string; name: string }) => void
 }) {
+  const [open, setOpen] = useState(false)
+  const lv = rulingLevel(r)
+  // العنوان القصير كما هو، والطويل (يعيد موضوع القضية) يُستبدل بدرجة الحكم
+  const title = r.title && r.title.trim().length <= 28 ? r.title.trim() : lv.title
+  const reversed = /نقض|إلغاء|ألغ/.test(r.outcome_short ?? '')
+  const longResult = (r.result?.length ?? 0) > 260
+  const expandable = !!r.summary?.trim() || longResult
   return (
     <Card>
-      <CardContent className="space-y-3 p-4">
+      <CardContent className="space-y-2.5 p-4">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="min-w-0">
-            <p className="font-semibold text-foreground">
-              {r.title || 'حكم'}
-            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <span
+                className={cn(
+                  'rounded-full px-2.5 py-0.5 text-xs font-medium',
+                  latest ? 'bg-gold/15 text-gold-700 dark:text-gold-300' : 'bg-muted text-muted-foreground'
+                )}
+              >
+                {lv.label}
+              </span>
+              <p className="font-semibold text-foreground" title={r.title ?? undefined}>
+                {title}
+              </p>
+            </div>
             <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-              {r.ruling_number && (
-                <span>
-                  رقم: <Ltr>{r.ruling_number}</Ltr>
-                </span>
-              )}
+              {r.ruling_number && <Ltr>{r.ruling_number}</Ltr>}
               {r.ruling_date && <span>{fmtDatePref(r.ruling_date)}</span>}
               {r.court_name && <span>{r.court_name}</span>}
             </div>
           </div>
+          {r.outcome_short && (
+            <span
+              className={cn(
+                'inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium',
+                reversed
+                  ? 'bg-destructive/10 text-destructive'
+                  : latest
+                    ? 'bg-gold/15 text-gold-700 dark:text-gold-300'
+                    : 'bg-muted text-muted-foreground'
+              )}
+            >
+              <Gavel className="h-3 w-3" />
+              {r.outcome_short}
+            </span>
+          )}
         </div>
 
         {r.result && (
-          <div className="rounded-lg bg-gold/10 p-2.5 text-sm">
-            <p className="mb-0.5 text-xs font-semibold text-gold-600 dark:text-gold-300">
-              منطوق / نتيجة الحكم
-            </p>
-            <p className="whitespace-pre-wrap text-foreground">{r.result}</p>
+          <div className="rounded-lg bg-muted/50 px-3 py-2 text-sm">
+            <p className="text-[11px] text-muted-foreground">المنطوق</p>
+            <p className={cn('whitespace-pre-wrap leading-7 text-foreground', !open && 'line-clamp-3')}>{r.result}</p>
           </div>
         )}
-        {r.summary && (
-          <p className="whitespace-pre-wrap text-sm text-muted-foreground">
-            {r.summary}
-          </p>
+        {open && r.summary && (
+          <p className="whitespace-pre-wrap text-sm leading-7 text-muted-foreground">{r.summary}</p>
         )}
 
         <div className="flex flex-wrap items-center gap-1.5 border-t pt-2">
+          {expandable && (
+            <Button variant="outline" size="sm" onClick={() => setOpen((o) => !o)}>
+              <ChevronDown className={cn('h-4 w-4 transition-transform', open && 'rotate-180')} />
+              {open ? 'إخفاء الأسباب' : 'عرض الأسباب'}
+            </Button>
+          )}
           {r.document_url && (
             <Button
               variant="outline"
@@ -234,6 +354,7 @@ function RulingCard({
               صك الحكم
             </Button>
           )}
+          <span className="flex-1" />
           <Button variant="ghost" size="sm" onClick={onEdit}>
             <Pencil className="h-4 w-4" />
             تعديل

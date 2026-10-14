@@ -574,6 +574,10 @@ export interface Ruling {
   drop_document_url: string | null
   dropped_by_name: string | null
   drop_uploaded_at: string | null
+  /** شارة النتيجة («نقض جزئي وتشديد»…) يكتبها الذكاء من المنطوق (2026-10-14) */
+  outcome_short?: string | null
+  /** آخر يوم للاعتراض — يحسبه الخادم؛ null لحكم المحكمة العليا */
+  objection_until?: string | null
   created_at: string | null
 }
 

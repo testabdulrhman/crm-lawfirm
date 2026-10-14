@@ -804,6 +804,44 @@ function stripMarkdown(raw: string): string {
   return out.join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
+// شارة نتيجة الحكم في تبويب الأحكام (2026-10-14): كلمتان إلى أربع من المنطوق — تُكتب مرة لكل حكم
+// ويُفرّغها محفّز rulings_prepare إن تغيّر المنطوق. تُطلب من الواجهة لأحكام الملف الناقصة فقط.
+async function rulingOutcomes(payload: any, auth: string): Promise<Response> {
+  const ids = (Array.isArray(payload?.ids) ? payload.ids : []).map(String).filter((x: string) => /^[0-9a-f-]{36}$/i.test(x)).slice(0, 30);
+  if (!ids.length) return json({ ok: true, outcomes: {} });
+  // القراءة بجلسة الموظف — لا يُكتب ولا يُعاد إلا ما يراه من أحكام
+  const asUser = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
+    global: { headers: { Authorization: auth } }, auth: { persistSession: false, autoRefreshToken: false },
+  });
+  const { data: rows } = await asUser.from("rulings").select("id, title, court_name, result")
+    .in("id", ids).is("outcome_short", null).not("result", "is", null);
+  if (!rows?.length) return json({ ok: true, outcomes: {} });
+  const list = rows.map((r: any) => ({ id: r.id, court: r.court_name ?? "", title: r.title ?? "", ruling: String(r.result).slice(0, 2500) }));
+  const res = await fetch(ANTHROPIC_URL, {
+    method: "POST",
+    headers: { "x-api-key": ANTHROPIC_API_KEY!, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+    body: JSON.stringify({
+      model: await getAssistantModel(), max_tokens: 6000,
+      system: "أنت محامٍ سعودي. لكل حكم اكتب نتيجته في كلمتين إلى أربع كلمات بالعربية، وصفاً محايداً لما قضى به المنطوق لا لصالح من. أمثلة: «إدانة»، «براءة»، «إدانة جزئية»، «تأييد الحكم»، «نقض جزئي وتشديد»، «نقض وإعادة»، «رفض الدعوى»، «قبول الدعوى جزئياً»، «عدم اختصاص»، «صرف النظر»، «إلزام بالدفع». أجب بـJSON فقط: مصفوفة [{\"id\":\"…\",\"outcome\":\"…\"}].",
+      messages: [{ role: "user", content: JSON.stringify(list) }],
+    }),
+  });
+  const d = await res.json();
+  if (!res.ok) return json({ error: "خطأ من مزوّد الذكاء الاصطناعي", detail: d?.error?.message }, 502);
+  const txt = (d.content || []).filter((b: any) => b.type === "text").map((b: any) => b.text).join("\n");
+  let arr: any[] = [];
+  try { const m = txt.match(/\[[\s\S]*\]/); arr = m ? JSON.parse(m[0]) : []; } catch (_) { arr = []; }
+  const outcomes: Record<string, string> = {};
+  const valid = new Set(rows.map((r: any) => r.id));
+  for (const o of arr) {
+    const id = String(o?.id ?? ""), out = String(o?.outcome ?? "").trim().slice(0, 40);
+    if (!valid.has(id) || !out) continue;
+    await admin.from("rulings").update({ outcome_short: out }).eq("id", id);
+    outcomes[id] = out;
+  }
+  return json({ ok: true, outcomes });
+}
+
 async function runAgent(payload: any, caller: Caller): Promise<Response> {
   // الاسم من القاعدة لا من الطلب — لا يُنتحل
   const userName = caller.name;
@@ -987,6 +1025,7 @@ Deno.serve(async (req) => {
     if (!task) return json({ error: "task مطلوب" }, 400);
 
     if (task === "agent") return await runAgent(payload ?? {}, caller);
+    if (task === "ruling_outcomes") return await rulingOutcomes(payload ?? {}, req.headers.get("Authorization") ?? "");
 
     const p = payload ?? {};
     let doc: Doc | null = null;
