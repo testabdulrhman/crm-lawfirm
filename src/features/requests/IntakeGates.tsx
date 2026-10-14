@@ -93,7 +93,7 @@ export function IntakeGatesCard({
         ) : (
           <ShieldAlert className="h-5 w-5 text-amber-500" />
         )}
-        <CardTitle className="text-base">بوابات الاستقطاب</CardTitle>
+        <CardTitle className="text-base">قائمة التحقق</CardTitle>
         {(!gates.canOpenMatter || !memoApproved) && (
           <Badge variant="warning" className="ms-auto">
             ينقص {fmtNumber(gates.missing.length + (memoApproved ? 0 : 1))}
@@ -109,7 +109,7 @@ export function IntakeGatesCard({
           status={
             gates.conflict
               ? `${OUTCOME_LABELS[gates.conflict.outcome]} · ${gates.conflict.checked_by_name ?? '—'} · ${fmtDateTime(gates.conflict.checked_at)}`
-              : 'لم يُجرَ بعد — الوثيقة: لا فتح ملف دون فحص موثّق'
+              : 'لم يُجرَ بعد — بضغطة يبحث عن العميل والخصم في ملفاتنا'
           }
           danger={gates.conflict?.outcome === 'reject'}
           onClick={() => setConflictOpen(true)}
@@ -135,7 +135,7 @@ export function IntakeGatesCard({
           done={memoApproved}
           status={
             !memo
-              ? 'لم تُكتب — الوثيقة: لا يُوقَّع عقد قبلها'
+              ? 'اختيارية — للقضايا الكبيرة أو المعقدة'
               : memoApproved
                 ? `اعتمدها ${memo.approved_by_name ?? 'المدير'} · التوصية: ${memo.recommendation ?? '—'}`
                 : `كتبها ${memo.evaluator_name ?? '—'} — بانتظار اعتماد المدير`

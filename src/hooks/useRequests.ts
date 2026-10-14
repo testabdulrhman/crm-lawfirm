@@ -381,6 +381,8 @@ export function useAddRequestDocument() {
         request_id: requestId,
         name: file.name,
         file_url: publicUrl,
+        file_type: file.type || null,
+        file_size: file.size,
       })
       if (error) throw error
     },
@@ -389,6 +391,83 @@ export function useAddRequestDocument() {
       toast({ variant: 'success', title: 'تم رفع المرفق' })
     },
     onError: errToast('تعذّر رفع المرفق'),
+  })
+}
+
+/* ===================== مسار العميل (2026-10-14) ===================== */
+
+/** رفع ملفات العميل دفعة واحدة ثم تلخيصها بالذكاء — الملخص يعبّي الحقول الفارغة فقط */
+export function useUploadAndSummarize() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ requestId, files }: { requestId: string; files: File[] }) => {
+      for (const file of files) {
+        const { publicUrl } = await uploadFile(file, { folder: 'request_documents' })
+        const { error } = await supabase.from('request_documents').insert({
+          request_id: requestId, name: file.name, file_url: publicUrl,
+          file_type: file.type || null, file_size: file.size,
+        })
+        if (error) throw error
+      }
+      invalidateAll(qc)
+      return summarizeRequest(requestId)
+    },
+    onSuccess: (r) => {
+      invalidateAll(qc)
+      toast({
+        variant: 'success',
+        title: 'قُرئت الملفات ولُخّصت',
+        description: r.filled.length ? `وعُبّئ من الملفات: ${r.filled.map(fieldLabel).join('، ')}` : undefined,
+      })
+    },
+    onError: (e) => {
+      invalidateAll(qc)
+      errToast('رُفعت الملفات وتعذّر التلخيص')(e)
+    },
+  })
+}
+
+export function useSummarizeRequest() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (requestId: string) => summarizeRequest(requestId),
+    onSuccess: () => {
+      invalidateAll(qc)
+      toast({ variant: 'success', title: 'تحدّث الملخص' })
+    },
+    onError: errToast('تعذّر التلخيص'),
+  })
+}
+
+async function summarizeRequest(requestId: string): Promise<{ filled: string[] }> {
+  const { data, error } = await supabase.functions.invoke('request-summary', { body: { request_id: requestId } })
+  if (error) {
+    let detail = errMessage(error)
+    try {
+      const ctx = await (error as { context?: Response }).context?.json()
+      if (ctx?.error) detail = ctx.error
+    } catch {
+      /* الرسالة العامة */
+    }
+    throw new Error(detail)
+  }
+  if (data?.error) throw new Error(data.error)
+  return { filled: (data?.filled ?? []) as string[] }
+}
+
+const fieldLabel = (k: string) =>
+  ({ opponent_name: 'الخصم', court_name: 'المحكمة', claim_number: 'رقم القضية', case_type: 'نوع القضية', critical_date: 'التاريخ الحرج', critical_date_kind: 'نوعه' } as Record<string, string>)[k] ?? k
+
+/** نقل الطلب بين مراحل المسار (السحب في اللوحة أو زرّ الخطوة التالية) */
+export function useSetRequestStage() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, stage }: { id: string; stage: import('@/types/db').RequestStage }) => {
+      const { error } = await supabase.from('incoming_requests').update({ stage }).eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: () => invalidateAll(qc),
+    onError: errToast('تعذّر نقل الطلب'),
   })
 }
 

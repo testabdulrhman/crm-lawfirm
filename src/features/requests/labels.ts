@@ -1,6 +1,6 @@
 // تسميات وألوان الطلبات الواردة (عربية)
 import type { BadgeProps } from '@/components/ui/badge'
-import type { RequestStatus, RequestType } from '@/types/db'
+import type { RequestStage, RequestStatus, RequestType } from '@/types/db'
 
 export const STATUS_LABELS: Record<RequestStatus, string> = {
   under_review: 'قيد الدراسة',
@@ -67,3 +67,21 @@ export const criticalKindLabel = (k: string | null | undefined): string =>
   k && k in CRITICAL_KIND_LABELS
     ? CRITICAL_KIND_LABELS[k as keyof typeof CRITICAL_KIND_LABELS]
     : 'تاريخ حرج'
+
+/* ===== مسار العميل (2026-10-14) — المرحلة تتقدّم بأفعالها: الإحالة ← تواصلنا، عرض السعر، العقد، فتح الملف ===== */
+
+
+export const STAGES: { value: RequestStage; label: string; next: string }[] = [
+  { value: 'new', label: 'جديد', next: 'تواصلنا مع العميل' },
+  { value: 'contacted', label: 'تواصلنا', next: 'أرسل عرض السعر' },
+  { value: 'quoted', label: 'عرض سعر', next: 'سجّل العقد والمقدّم' },
+  { value: 'contracted', label: 'تعاقدنا', next: 'افتح الملف' },
+  { value: 'opened', label: 'فُتح الملف', next: 'اذهب للملف' },
+]
+
+export const stageLabel = (s: string | null | undefined): string =>
+  STAGES.find((x) => x.value === s)?.label ?? 'جديد'
+
+/** أيام بلا نشاط — ٣ فأكثر تُعدّ ركوداً (يُذكَّر مسؤوله يومياً) */
+export const staleDays = (lastActivity: string | null | undefined): number =>
+  lastActivity ? Math.floor((Date.now() - Date.parse(lastActivity)) / 86400000) : 0

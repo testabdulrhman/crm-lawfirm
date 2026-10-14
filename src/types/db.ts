@@ -224,9 +224,32 @@ export interface IncomingRequest {
   quote_scope: string | null
   quote_amount: number | null
   quote_sent_at: string | null
+  // مسار العميل (2026-10-14): المرحلة تتقدّم بأفعالها، وعدّاد الركود، وملخص ملفات العميل بالذكاء
+  stage: RequestStage
+  stage_changed_at: string | null
+  last_activity_at: string | null
+  docs_summary: RequestDocsSummary | null
+  docs_summary_at: string | null
+}
+
+export type RequestStage = 'new' | 'contacted' | 'quoted' | 'contracted' | 'opened'
+
+/** «ملخص ما اطّلعنا عليه» — يكتبه request-summary */
+export interface RequestDocsSummary {
+  headline: string
+  facts: string[]
+  parties: { name: string; role: string }[]
+  claim?: string
+  key_dates: { label: string; date?: string | null; date_hijri?: string; due?: string | null; is_deadline?: boolean; deadline_days?: number; deadline_kind?: string }[]
+  documents_seen: { name: string; what: string }[]
+  missing_docs: string[]
+  first_impression: string
+  read: string[]
+  skipped: string[]
 }
 
 export type IncomingRequestInput = {
+  stage?: RequestStage
   quote_no?: string | null
   quote_scope?: string | null
   quote_amount?: number | null
@@ -303,6 +326,8 @@ export interface RequestDocument {
   request_id: string | null
   name: string | null
   file_url: string | null
+  file_type?: string | null
+  file_size?: number | null
   created_at: string | null
   deleted_at: string | null
   deleted_by: string | null

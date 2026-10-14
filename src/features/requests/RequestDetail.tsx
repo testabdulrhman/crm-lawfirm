@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useLocation } from 'wouter'
 import {
   ArrowRight,
@@ -28,7 +28,7 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { IntakeGatesCard } from './IntakeGates'
-import { RequestRail } from './RequestRail'
+import { ClientFilesCard, JourneyCard, StageBar } from './RequestPipeline'
 import { Ltr } from '@/components/Ltr'
 import { cn } from '@/lib/utils'
 import { useIntakeGates, type GateState } from '@/hooks/useIntakeGates'
@@ -124,7 +124,7 @@ export function RequestDetail({ id }: { id: string }) {
   const { request: r, evaluations, documents } = data
 
   return (
-    <div className="mx-auto max-w-4xl space-y-5">
+    <div className="mx-auto max-w-6xl space-y-4">
       <Button variant="ghost" onClick={() => navigate('/requests')}>
         <ArrowRight className="h-4 w-4" />
         رجوع للطلبات
@@ -219,58 +219,62 @@ export function RequestDetail({ id }: { id: string }) {
         </CardContent>
       </Card>
 
-      {/* شريط المسار الموجّه — بوصلة الدورة، لا قفل (اختيار المستخدم 2026-08-30) */}
-      <RequestRail request={r} gates={railGates} evaluations={evaluations} />
+      {/* مسار العميل (2026-10-14): المرحلة وزرّ الخطوة التالية — بدل «الخطوات السبع» */}
+      <StageBar
+        request={r}
+        onQuote={() => setQuoteOpen(true)}
+        onReject={() => window.dispatchEvent(new CustomEvent('request:reject'))}
+      />
 
       <CriticalDateStrip request={r} />
 
       <QuotePdfDialog request={r} open={quoteOpen} onOpenChange={setQuoteOpen} />
 
-      {/* بوابات الاستقطاب — تسبق القرار في ترتيب الوثيقة */}
-      <div id="intake-gates">
-      <IntakeGatesCard
-        requestId={r.id}
-        clientName={r.client_name}
-        opponentName={r.opponent_name ?? null}
-        evaluations={evaluations}
-      />
+      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
+        {/* العميل أولاً: ما يريد، ومحادثته، وملفاته */}
+        <div className="space-y-4">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">وش يبي العميل</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
+                {r.description?.trim() || 'لم يُكتب وصف بعد — عدّله من «تعديل الطلب» أو أضف ملفاته ليلخّصها الذكاء.'}
+              </p>
+            </CardContent>
+          </Card>
+
+          {/* محادثة العميل على الواتساب — يراها المحال إليه الطلب (2026-10-12) */}
+          <RequestClientChatCard phone={r.client_phone} />
+
+          {/* ملفات العميل وملخص الذكاء (طلب المدير 2026-10-14) */}
+          <ClientFilesCard request={r} documents={documents} />
+          <DocumentsSection requestId={r.id} documents={documents} />
+
+          {/* مذكرة التقييم — اختيارية للقضايا الكبيرة */}
+          <div id="evaluations-section">
+            <EvaluationsSection requestId={r.id} evaluations={evaluations} />
+          </div>
+        </div>
+
+        {/* الجانب: المسؤول، وقائمة التحقق (لا توقف شيئاً)، والقرار، والرحلة */}
+        <div className="space-y-4">
+          <AssignmentCard requestId={r.id} currentName={r.assigned_to_name} />
+          <div id="intake-gates">
+            <IntakeGatesCard
+              requestId={r.id}
+              clientName={r.client_name}
+              opponentName={r.opponent_name ?? null}
+              evaluations={evaluations}
+            />
+          </div>
+          <div id="onboarding-card">
+            <OnboardingGateCard request={r} />
+          </div>
+          <div id="decision-card"><DecisionCard request={r} evaluations={evaluations} gates={railGates} /></div>
+          <JourneyCard request={r} gates={railGates} />
+        </div>
       </div>
-
-      {/* ستة فتح الملف — المرحلة الثالثة: العقد والوكالة والدفعة */}
-      <div id="onboarding-card">
-        <OnboardingGateCard request={r} />
-      </div>
-
-      {/* الإسناد + القرار */}
-      <div className="grid gap-4 md:grid-cols-2">
-        <AssignmentCard requestId={r.id} currentName={r.assigned_to_name} />
-        <div id="decision-card"><DecisionCard request={r} evaluations={evaluations} gates={railGates} /></div>
-      </div>
-
-      {/* محادثة العميل على الواتساب — يراها المحال إليه الطلب (2026-10-12) */}
-      <RequestClientChatCard phone={r.client_phone} />
-
-      {/* الوصف */}
-      {r.description && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">الوصف</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
-              {r.description}
-            </p>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* التقييمات */}
-      <div id="evaluations-section">
-        <EvaluationsSection requestId={r.id} evaluations={evaluations} />
-      </div>
-
-      {/* المرفقات */}
-      <DocumentsSection requestId={r.id} documents={documents} />
     </div>
   )
 }
@@ -410,7 +414,7 @@ function OnboardingGateCard({ request: r }: { request: IncomingRequest }) {
                   )}
                 </>
               ) : (
-                'لا عمل جوهرياً قبل تحصيلها — نص الوثيقة'
+                'لم تُستلم بعد'
               )}
             </p>
           </div>
@@ -569,17 +573,13 @@ function AssignmentCard({
 
 function DecisionCard({
   request: r,
-  evaluations = [],
   gates,
 }: {
   request: IncomingRequest
   evaluations?: RequestEvaluation[]
   gates?: GateState
 }) {
-  const memoApproved = evaluations.some((e) => e.approved_at)
   const updateReqM = useUpdateRequest()
-  const [bypassOpen, setBypassOpen] = useState(false)
-  const [bypassWhy, setBypassWhy] = useState('')
 
   // ستة فتح الملف — نص الوثيقة حرفياً
   const six: [string, boolean][] = [
@@ -687,21 +687,31 @@ function DecisionCard({
       })
   }
 
+  // قائمة تحقق لا بوابة (قرار المدير 2026-10-14): الناقص يُذكر ويُسجَّل على الطلب للأثر، ولا يوقف فتح الملف
   const convertToCase = () => {
-    if (missingSix.length > 0) {
-      // الوثيقة: لا يُعد الملف مفتوحاً إلا باكتمال الستة — تجاوزٌ يشهد
-      setBypassWhy('')
-      setBypassOpen(true)
-      return
-    }
     confirm({
       title: 'فتح الملف',
-      description: `الستة مكتملة — ستُنشأ قضية باسم «${r.client_name}» وتُنقل لصفحتها.`,
+      description:
+        missingSix.length > 0
+          ? `ستُنشأ قضية باسم «${r.client_name}». غير مكتمل في قائمة التحقق: ${missingSix.join('، ')} — يُستكمل لاحقاً.`
+          : `قائمة التحقق مكتملة — ستُنشأ قضية باسم «${r.client_name}» وتُنقل لصفحتها.`,
       confirmLabel: 'افتح الملف',
       destructive: false,
-      onConfirm: () => reallyConvert(),
+      onConfirm: () => reallyConvert(missingSix.length ? `قائمة التحقق ناقصة عند الفتح: ${missingSix.join('، ')}` : undefined),
     })
   }
+
+  // شريط المسار يطلب الفتح أو الاعتذار من هنا — منطقهما واحد
+  useEffect(() => {
+    const onConvert = () => convertToCase()
+    const onReject = () => setRejectOpen(true)
+    window.addEventListener('request:convert', onConvert)
+    window.addEventListener('request:reject', onReject)
+    return () => {
+      window.removeEventListener('request:convert', onConvert)
+      window.removeEventListener('request:reject', onReject)
+    }
+  })
 
   return (
     <Card>
@@ -739,13 +749,9 @@ function DecisionCard({
             disabled={decideM.isPending}
             onClick={() =>
               confirm({
-                title: memoApproved
-                  ? 'قبول الطلب'
-                  : 'قبول قبل اعتماد المذكرة',
-                description: memoApproved
-                  ? `سيُسجَّل قبول طلب «${r.client_name}» رسمياً باسمك.`
-                  : `الوثيقة: لا يُوقَّع عقد قبل مذكرة تقييم معتمدة — ولا مذكرة معتمدة لهذا الطلب بعد. القبول سيُسجَّل باسمك على مسؤوليتك.`,
-                confirmLabel: memoApproved ? 'قبول' : 'أكمل على مسؤوليتي',
+                title: 'قبول الطلب',
+                description: `سيُسجَّل قبول طلب «${r.client_name}» باسمك.`,
+                confirmLabel: 'قبول',
                 destructive: false,
                 onConfirm: () => decide('accepted'),
               })
@@ -800,46 +806,6 @@ function DecisionCard({
       </CardContent>
 
       {dialog}
-
-      {/* بوابة الستة: التجاوز يشهد */}
-      <Dialog open={bypassOpen} onOpenChange={setBypassOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>فتح الملف قبل اكتمال الستة</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            الوثيقة: «لا يُعد الملف مفتوحاً إلا باستكمال الستة». الناقص:
-          </p>
-          <div className="flex flex-wrap gap-1.5">
-            {missingSix.map((n) => (
-              <Badge key={n} variant="warning">
-                ○ {n}
-              </Badge>
-            ))}
-          </div>
-          <Textarea
-            value={bypassWhy}
-            onChange={(e) => setBypassWhy(e.target.value)}
-            rows={2}
-            placeholder="ليش تفتحه الآن؟ — يُسجَّل بنصّك على الطلب"
-          />
-          <div className="flex justify-start gap-2">
-            <Button
-              variant="gold"
-              disabled={!bypassWhy.trim() || createCaseM.isPending}
-              onClick={() => {
-                setBypassOpen(false)
-                reallyConvert(bypassWhy.trim())
-              }}
-            >
-              أكمل على مسؤوليتي
-            </Button>
-            <Button variant="ghost" onClick={() => setBypassOpen(false)}>
-              إلغاء
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
 
       {/* نافذة سبب الرفض */}
       <Dialog open={rejectOpen} onOpenChange={setRejectOpen}>
@@ -928,7 +894,7 @@ function EvaluationsSection({
     <Card>
       <CardHeader className="flex-row items-center justify-between gap-2 space-y-0">
         <CardTitle className="text-base">
-          التقييمات{' '}
+          مذكرة التقييم (اختيارية){' '}
           <span className="text-sm text-muted-foreground">
             ({fmtNumber(evaluations.length)})
           </span>
@@ -941,7 +907,7 @@ function EvaluationsSection({
       <CardContent className="space-y-3">
         {evaluations.length === 0 ? (
           <p className="py-4 text-center text-sm text-muted-foreground">
-            لا مذكرة بعد — والوثيقة: لا يُوقَّع عقد قبلها.
+            اختيارية — تُكتب للقضايا الكبيرة أو المعقدة: المحاور الأربعة ونقاط القوة والضعف.
           </p>
         ) : (
           evaluations.map((e) => (
@@ -1116,7 +1082,7 @@ function DocumentsSection({
       <CardHeader className="flex-row items-center justify-between gap-2 space-y-0">
         <CardTitle className="flex items-center gap-2 text-base">
           <Paperclip className="h-4 w-4" />
-          المرفقات{' '}
+          الملفات{' '}
           <span className="text-sm text-muted-foreground">
             ({fmtNumber(documents.length)})
           </span>
