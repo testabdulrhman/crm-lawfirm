@@ -47,6 +47,7 @@ import { FilePreviewDialog } from '@/components/FilePreviewDialog'
 import { CasePicker } from '@/components/CasePicker'
 import { QueryErrorState } from '@/components/QueryErrorState'
 import { useConfirm } from '@/components/ConfirmDialog'
+import { EngagementTermsCard, InstallmentsCard } from './EngagementTerms'
 
 import { fmtDatePref, fmtNumber, todayISO } from '@/lib/format'
 import { useAuth } from '@/stores/auth'
@@ -288,6 +289,10 @@ export function EngagementDetail({ id }: { id: string }) {
           )}
         </CardContent>
       </Card>
+
+      {/* الأتعاب والدفعات + البنود والأطراف (2026-10-14) — المال للمدير وحده */}
+      {isDirector && <InstallmentsCard e={e} />}
+      <EngagementTermsCard e={e} canEdit={isDirector} />
 
       {/* المشاريع المرتبطة */}
       <Card>

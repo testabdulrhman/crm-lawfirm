@@ -7,6 +7,7 @@ import {
   CalendarDays,
   FileBadge,
   Globe,
+  Wallet,
   Lightbulb,
   PenLine,
   ListTodo,
@@ -48,6 +49,7 @@ const ICONS: Record<string, LucideIcon> = {
   office_doc_expiry: FileBadge,
   member_doc: IdCard,
   wa_client: MessageCircle,
+  installment_due: Wallet,
 }
 
 export function notificationIcon(type: string | null): LucideIcon {
@@ -69,6 +71,8 @@ export function notificationDestination(n: AppNotification): string {
   if (n.type === 'approval_sign') return '/discussions'
   // رسالة عميل على الواتساب — صندوق «العملاء» لا صفحة الملف
   if (n.type === 'wa_client') return '/clients'
+  // دفعة عقد استحقت (بتاريخها أو بصدور الحكم) — صفحة العقود لا الملف
+  if (n.type === 'installment_due') return '/engagements'
   if (n.case_id) return `/cases/${n.case_id}`
   // طلبات الإجازة والاستئذان — صفحتها لا مهمة ولا ملف
   if (n.type === 'hr_request' || n.type === 'hr_result') return '/hr'

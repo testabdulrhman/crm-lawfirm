@@ -20,8 +20,9 @@ import { QueryErrorState } from '@/components/QueryErrorState'
 import { EmptyState, FilteredEmptyState } from '@/components/EmptyState'
 import { cn } from '@/lib/utils'
 import { arNorm } from '@/lib/arabic'
-import { fmtNumber, fmtDatePref } from '@/lib/format'
-import { useEngagements } from '@/hooks/useEngagements'
+import { fmtNumber, fmtDatePref, todayISO } from '@/lib/format'
+import { useAllInstallments, useEngagements } from '@/hooks/useEngagements'
+import { useIsDirector } from '@/hooks/useIsDirector'
 import { usePageState } from '@/hooks/usePageState'
 import { EngagementForm } from './EngagementForm'
 import { NewDebtContractDialog } from './NewDebtContractDialog'
@@ -30,8 +31,19 @@ import {
   engStatusBadge,
   engStatusLabel,
   engTypeLabel,
+  installmentAmount,
+  installmentState,
+  type InstallmentState,
 } from './labels'
-import type { Engagement } from '@/types/db'
+import type { Engagement, EngagementInstallment } from '@/types/db'
+
+// ملخص تحصيل العقد للصف: المحصّل من الإجمالي، والدفعة التالية غير المسددة بحالتها
+interface Collection {
+  total: number
+  paid: number
+  next: { inst: EngagementInstallment; state: InstallmentState; amount: number | null } | null
+}
+const STATE_ORDER: InstallmentState[] = ['overdue', 'due', 'waiting', 'upcoming']
 
 export function EngagementsPage() {
   const { data, isLoading, isError, error, refetch } = useEngagements()
@@ -40,6 +52,34 @@ export function EngagementsPage() {
   const [status, setStatus] = usePageState<string>('eng:status', 'all')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [templateOpen, setTemplateOpen] = useState(false)
+  const isDirector = useIsDirector()
+  const { data: installments } = useAllInstallments()
+
+  // المال للمدير وحده (RLS) — لغيره تبقى الخريطة فارغة فلا يظهر ملخص ولا شريط
+  const { byEng, summary } = useMemo(() => {
+    const map = new Map<string, Collection>()
+    const sum = { active: 0, dueMonth: 0, overdue: 0, waiting: 0 }
+    const feesOf = new Map((data ?? []).map((e) => [e.id, e.fees_total]))
+    const monthEnd = todayISO().slice(0, 8) + '31'
+    for (const i of installments ?? []) {
+      if (!feesOf.has(i.engagement_id)) continue
+      const fees = feesOf.get(i.engagement_id) ?? null
+      const c = map.get(i.engagement_id) ?? { total: fees ?? 0, paid: 0, next: null }
+      const amt = installmentAmount(i, fees)
+      if (fees == null) c.total += amt ?? 0
+      const st = installmentState(i)
+      if (st === 'paid') c.paid += i.paid_amount ?? amt ?? 0
+      else {
+        if (st === 'overdue') sum.overdue += amt ?? 0
+        else if (st === 'due' || (st === 'upcoming' && i.due_date && i.due_date <= monthEnd)) sum.dueMonth += amt ?? 0
+        else if (st === 'waiting') sum.waiting += amt ?? 0
+        if (!c.next || STATE_ORDER.indexOf(st) < STATE_ORDER.indexOf(c.next.state)) c.next = { inst: i, state: st, amount: amt }
+      }
+      map.set(i.engagement_id, c)
+    }
+    sum.active = (data ?? []).filter((e) => e.status === 'signed' || e.status === 'active').length
+    return { byEng: map, summary: sum }
+  }, [data, installments])
 
   const counts = useMemo(() => {
     const c: Record<string, number> = { all: data?.length ?? 0 }
@@ -83,6 +123,16 @@ export function EngagementsPage() {
           </Button>
         </div>
       </div>
+
+      {/* ملخص التحصيل — للمدير */}
+      {isDirector && (installments?.length ?? 0) > 0 && (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <SumTile label="عقود سارية" value={fmtNumber(summary.active)} />
+          <SumTile label="مستحق هذا الشهر" value={`${fmtNumber(summary.dueMonth)} ريال`} tone="text-amber-700 dark:text-amber-300" />
+          <SumTile label="متأخر" value={`${fmtNumber(summary.overdue)} ريال`} tone={summary.overdue > 0 ? 'text-destructive' : undefined} />
+          <SumTile label="ينتظر حدثاً (حكم/صك)" value={`${fmtNumber(summary.waiting)} ريال`} tone="text-sky-700 dark:text-sky-300" />
+        </div>
+      )}
 
       {/* البحث */}
       <div className="relative">
@@ -147,6 +197,7 @@ export function EngagementsPage() {
             <EngagementRow
               key={e.id}
               engagement={e}
+              collection={byEng.get(e.id)}
               onOpen={() => navigate(`/engagements/${e.id}`)}
             />
           ))}
@@ -202,13 +253,33 @@ function StatusChip({
   )
 }
 
+function SumTile({ label, value, tone }: { label: string; value: string; tone?: string }) {
+  return (
+    <div className="rounded-xl border bg-card px-4 py-3">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className={cn('mt-1 text-lg font-bold tabular-nums text-foreground', tone)}>{value}</p>
+    </div>
+  )
+}
+
+const NEXT_TONE: Record<InstallmentState, string> = {
+  overdue: 'text-destructive font-medium',
+  due: 'text-amber-700 dark:text-amber-300 font-medium',
+  waiting: 'text-sky-700 dark:text-sky-300',
+  upcoming: '',
+  paid: '',
+}
+
 function EngagementRow({
   engagement: e,
+  collection: c,
   onOpen,
 }: {
   engagement: Engagement
+  collection?: Collection
   onOpen: () => void
 }) {
+  const pct = c && c.total > 0 ? Math.min(100, Math.round((c.paid / c.total) * 100)) : null
   return (
     <button
       onClick={onOpen}
@@ -251,6 +322,21 @@ function EngagementRow({
           </span>
         )}
         {e.end_date && <span>ينتهي {fmtDatePref(e.end_date)}</span>}
+        {c?.next && (
+          <span className={NEXT_TONE[c.next.state]}>
+            التالية: {c.next.inst.label}
+            {c.next.amount != null ? ` · ${fmtNumber(c.next.amount)}` : ''}
+            {c.next.state === 'overdue' ? ' (متأخرة)' : c.next.state === 'due' ? ' (مستحقة)' : ''}
+          </span>
+        )}
+        {pct != null && (
+          <span className="ms-auto flex items-center gap-1.5">
+            <span className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
+              <span className="block h-full rounded-full bg-gold" style={{ width: `${pct}%` }} />
+            </span>
+            {fmtNumber(pct)}٪
+          </span>
+        )}
       </div>
     </button>
   )

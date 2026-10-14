@@ -1042,6 +1042,46 @@ export interface Engagement {
   created_at: string | null
   updated_at: string | null
   client?: { id: string; name: string | null; phone: string | null } | null
+  // من تحليل ١١٢ عقداً للمكتب (2026-10-14)
+  fee_model: 'fixed' | 'percentage' | 'mixed' | 'periodic' | 'other' | null
+  fee_percentage: number | null
+  percentage_base: string | null
+  vat_mode: 'included' | 'excluded' | 'exempt' | 'unspecified'
+  client_side: string | null
+  beneficiary_name: string | null
+  beneficiary_relation: string | null
+  opponent_name: string | null
+  stages_covered: string[]
+  ends_on: string | null
+  first_party: 'company' | 'lawyer' | 'trustee' | null
+  client_rep_name: string | null
+  client_rep_capacity: string | null
+  dispute_venue: string | null
+  expenses_on_client: boolean | null
+  poa_required: boolean | null
+  fees_due_on_settlement: boolean | null
+  advance_refundable: boolean | null
+  signed_file_url: string | null
+  request_id: string | null
+}
+
+/** دفعة من دفعات العقد — عند التوقيع، أو بتاريخ، أو عند حدث (كالحكم الابتدائي) */
+export interface EngagementInstallment {
+  id: string
+  engagement_id: string
+  seq: number
+  label: string
+  trigger: 'on_signing' | 'date' | 'event'
+  due_date: string | null
+  event_kind: 'first_ruling' | 'final_ruling' | 'case_end' | 'procedure_opening' | 'plan_approval' | 'other' | null
+  event_label: string | null
+  event_reached_at: string | null
+  amount: number | null
+  percent: number | null
+  paid_at: string | null
+  paid_amount: number | null
+  payment_method: string | null
+  note: string | null
 }
 
 export interface EngagementInput {

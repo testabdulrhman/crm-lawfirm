@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { toast } from '@/hooks/use-toast'
 import { errMessage } from '@/lib/errors'
-import type { Engagement, EngagementInput } from '@/types/db'
+import type { Engagement, EngagementInput, EngagementInstallment } from '@/types/db'
 
 const SELECT = '*, client:contacts(id,name,phone)'
 const KEY = 'engagements'
@@ -175,5 +175,71 @@ export function useLinkCaseToEngagement(engagementId: string) {
       })
     },
     onError: errToast('تعذّر تحديث الربط'),
+  })
+}
+
+/* ===================== الدفعات (2026-10-14) — للمدير وحده كبقية المال ===================== */
+
+const INST = 'engagement_installments'
+
+export function useInstallments(engagementId: string | null) {
+  return useQuery({
+    queryKey: [INST, engagementId],
+    enabled: !!engagementId,
+    queryFn: async (): Promise<EngagementInstallment[]> => {
+      const { data, error } = await supabase
+        .from('engagement_installments')
+        .select('*')
+        .eq('engagement_id', engagementId!)
+        .order('seq')
+      if (error) throw error
+      return (data ?? []) as EngagementInstallment[]
+    },
+  })
+}
+
+/** كل الدفعات — لملخص التحصيل في صفحة العقود */
+export function useAllInstallments() {
+  return useQuery({
+    queryKey: [INST, 'all'],
+    queryFn: async (): Promise<EngagementInstallment[]> => {
+      const { data, error } = await supabase.from('engagement_installments').select('*').order('seq')
+      if (error) throw error
+      return (data ?? []) as EngagementInstallment[]
+    },
+  })
+}
+
+export function useSaveInstallment(engagementId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (v: Partial<EngagementInstallment> & { id?: string }) => {
+      const { id, ...row } = v
+      const payload = { ...row, engagement_id: engagementId, updated_at: new Date().toISOString() }
+      const { error } = id
+        ? await supabase.from('engagement_installments').update(payload).eq('id', id)
+        : await supabase.from('engagement_installments').insert(payload)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [INST] })
+      toast({ variant: 'success', title: 'حُفظت الدفعة' })
+    },
+    onError: errToast('تعذّر حفظ الدفعة'),
+  })
+}
+
+export function useDeleteInstallment() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('engagement_installments').delete().eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [INST] })
+      toast({ variant: 'success', title: 'حُذفت الدفعة' })
+    },
+    onError: errToast('تعذّر حذف الدفعة'),
   })
 }

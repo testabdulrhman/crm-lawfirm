@@ -1,5 +1,6 @@
 // تسميات وحدة العقود (اتفاقيات الأتعاب)
 import type { BadgeProps } from '@/components/ui/badge'
+import type { EngagementInstallment } from '@/types/db'
 
 export const ENG_STATUS_OPTIONS = [
   { value: 'draft', label: 'مسودة' },
@@ -42,3 +43,76 @@ export const ENG_TYPE_OPTIONS = [
 export function engTypeLabel(t: string | null): string {
   return ENG_TYPE_OPTIONS.find((o) => o.value === t)?.label ?? '—'
 }
+
+/* ===================== من تحليل ١١٢ عقداً للمكتب (2026-10-14) ===================== */
+
+
+export const FEE_MODEL_OPTIONS = [
+  { value: 'fixed', label: 'مقطوع' },
+  { value: 'percentage', label: 'نسبة' },
+  { value: 'mixed', label: 'مقطوع + نسبة' },
+  { value: 'periodic', label: 'شهري / سنوي' },
+  { value: 'other', label: 'أخرى' },
+] as const
+
+export const VAT_OPTIONS = [
+  { value: 'unspecified', label: 'غير مذكورة' },
+  { value: 'included', label: 'شاملة الضريبة' },
+  { value: 'excluded', label: 'غير شاملة الضريبة' },
+  { value: 'exempt', label: 'معفاة' },
+] as const
+
+export const CLIENT_SIDE_OPTIONS = ['مدعٍ', 'مدعى عليه', 'متهم', 'مجنيّ عليه', 'طالب تنفيذ', 'منفَّذ ضده', 'مدين (إفلاس)', 'دائن', 'غير قضائي'] as const
+export const STAGE_OPTIONS = ['ما قبل التقاضي / صلح', 'ابتدائي', 'استئناف', 'عليا', 'تنفيذ'] as const
+
+export const FIRST_PARTY_OPTIONS = [
+  { value: 'company', label: 'الشركة' },
+  { value: 'lawyer', label: 'المحامي باسمه' },
+  { value: 'trustee', label: 'أمين الإفلاس' },
+] as const
+
+export const TRIGGER_OPTIONS = [
+  { value: 'on_signing', label: 'عند توقيع العقد' },
+  { value: 'date', label: 'في تاريخ محدد' },
+  { value: 'event', label: 'عند حدث' },
+] as const
+
+export const EVENT_KIND_OPTIONS = [
+  { value: 'first_ruling', label: 'صدور الحكم الابتدائي', auto: true },
+  { value: 'final_ruling', label: 'صدور الحكم النهائي', auto: false },
+  { value: 'case_end', label: 'انتهاء القضية', auto: false },
+  { value: 'procedure_opening', label: 'افتتاح الإجراء', auto: false },
+  { value: 'plan_approval', label: 'تصديق المقترح', auto: false },
+  { value: 'other', label: 'حدث آخر', auto: false },
+] as const
+
+export const eventLabel = (i: Pick<EngagementInstallment, 'event_kind' | 'event_label'>) =>
+  i.event_label || EVENT_KIND_OPTIONS.find((o) => o.value === i.event_kind)?.label || 'حدث'
+
+export type InstallmentState = 'paid' | 'overdue' | 'due' | 'waiting' | 'upcoming'
+
+/** حالة الدفعة من وقائعها — لا عمود حالة يتقادم */
+export function installmentState(i: EngagementInstallment, today = new Date().toISOString().slice(0, 10)): InstallmentState {
+  if (i.paid_at) return 'paid'
+  if (i.trigger === 'on_signing') return 'due'
+  if (i.trigger === 'date') {
+    if (!i.due_date) return 'upcoming'
+    if (i.due_date < today) return 'overdue'
+    return i.due_date === today ? 'due' : 'upcoming'
+  }
+  if (!i.event_reached_at) return 'waiting'
+  const days = (Date.parse(today) - Date.parse(i.event_reached_at)) / 86400000
+  return days > 7 ? 'overdue' : 'due'
+}
+
+export const STATE_LABEL: Record<InstallmentState, string> = {
+  paid: 'سُدّدت',
+  overdue: 'متأخرة',
+  due: 'مستحقة',
+  waiting: 'بانتظار الحدث',
+  upcoming: 'قادمة',
+}
+
+/** مبلغ الدفعة بالريال — المبلغ أو نسبتها من إجمالي الأتعاب */
+export const installmentAmount = (i: EngagementInstallment, feesTotal: number | null | undefined): number | null =>
+  i.amount ?? (i.percent != null && feesTotal ? Math.round((i.percent / 100) * feesTotal) : null)
