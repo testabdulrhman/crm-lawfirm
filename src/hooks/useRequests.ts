@@ -17,6 +17,7 @@ import type {
   RequestStatus,
 } from '@/types/db'
 import { errMessage } from '@/lib/errors'
+import { WA_REGION } from '@/hooks/useClientChats'
 
 const LIST_KEY = 'incoming_requests'
 const PENDING_KEY = ['incoming_requests', 'pending_count'] as const
@@ -465,6 +466,7 @@ export function useWaChatToRequest() {
     mutationFn: async ({ phone, requestId }: { phone: string; requestId: string }) => {
       const { data, error } = await supabase.functions.invoke('wa-inbox', {
         body: { action: 'to_request', phone, request_id: requestId },
+        region: WA_REGION,
       })
       if (error) {
         let detail = errMessage(error)

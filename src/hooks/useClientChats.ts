@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { FunctionRegion } from '@supabase/supabase-js'
 
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/stores/auth'
@@ -6,6 +7,12 @@ import { useAuth } from '@/stores/auth'
 // صندوق «العملاء» — محادثات الواتساب مع العملاء (قرار المدير 2026-10-06).
 // الفهرس والربط من القاعدة (wa_threads)، والنص نفسه من الـHub عبر دالة wa-inbox عند الفتح.
 // يرى المحادثة مسؤول ملفها وفريقه؛ والمدير وراكان يرون الكل، و«غير المصنّف» لهما وحدهما.
+
+/**
+ * wa-inbox يُشغَّل في أيرلندا بجوار القاعدة (eu-west-1) وقرب الـHub (فرانكفورت) — كان يُشغَّل في مومباي
+ * الأقرب للمتصفح فتعبر كل رحلة إلى القاعدة قارّتين (٢٫٤ ثانية للفتح في المتوسط — بلاغ المدير 2026-10-15)
+ */
+export const WA_REGION = FunctionRegion.EuWest1
 
 export interface ClientThread {
   phone_e164: string
@@ -66,7 +73,7 @@ export function useClientThreads() {
   return useQuery({
     queryKey: ['client_threads', myId],
     enabled: !!myId,
-    refetchInterval: 20_000,
+    refetchInterval: 10_000,
     queryFn: async (): Promise<ClientThread[]> => {
       const [threads, reads] = await Promise.all([
         supabase
@@ -98,9 +105,9 @@ export function useClientThread(phone: string | null) {
   return useQuery({
     queryKey: ['client_thread', phone],
     enabled: !!phone,
-    refetchInterval: 12_000,
+    refetchInterval: 6_000,
     queryFn: async (): Promise<ClientThreadDetail> => {
-      const { data, error } = await supabase.functions.invoke('wa-inbox', { body: { action: 'thread', phone } })
+      const { data, error } = await supabase.functions.invoke('wa-inbox', { body: { action: 'thread', phone }, region: WA_REGION })
       if (error) throw error
       // الفتح يعلّم المحادثة مقروءة — تُحدَّث الشارة
       qc.invalidateQueries({ queryKey: ['client_threads'] })
@@ -116,9 +123,28 @@ export function useSendClientMessage(phone: string | null) {
     mutationFn: async (v: { body: string; mode: 'text' | 'template'; clientId: string }) => {
       const { data, error } = await supabase.functions.invoke('wa-inbox', {
         body: { action: 'send', phone, body: v.body, mode: v.mode, client_id: v.clientId },
+        region: WA_REGION,
       })
       if (error) throw error
       return data
+    },
+    // الرسالة تظهر فوراً بساعة «يُرسل» — لا تنتظر الإرسال ثم إعادة جلب المحادثة
+    onMutate: async (v) => {
+      const key = ['client_thread', phone]
+      await qc.cancelQueries({ queryKey: key })
+      const prev = qc.getQueryData<ClientThreadDetail>(key)
+      if (prev) {
+        const pending: ClientMsg = {
+          id: `pending-${v.clientId}`, at: new Date().toISOString(), direction: 'out', who: 'member',
+          member_id: null, member_name: null, body: v.body, type: 'text', media: null, mime: null,
+          status: 'sending', template: v.mode === 'template' ? 'followup' : null,
+        }
+        qc.setQueryData<ClientThreadDetail>(key, { ...prev, messages: [...prev.messages, pending] })
+      }
+      return { prev }
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.prev) qc.setQueryData(['client_thread', phone], ctx.prev)
     },
     onSettled: () => {
       qc.invalidateQueries({ queryKey: ['client_thread', phone] })

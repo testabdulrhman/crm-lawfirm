@@ -265,14 +265,16 @@ function ChatPane({ thread, viewer, onBack }: { thread: ClientThread; viewer: bo
     if (!body || send.isPending) return
     // معرّفٌ ثابت للنص نفسه: إعادة المحاولة بعد انقطاع لا تُرسل نسخة ثانية
     pendingId.current ??= newId()
+    // الرسالة تظهر في المحادثة فوراً — فيُفرَّغ الحقل الآن ويُعاد نصها إن فشل الإرسال
+    setText('')
     send.mutate(
       { body, mode: windowOpen ? 'text' : 'template', clientId: pendingId.current },
       {
         onSuccess: () => {
-          setText('')
           pendingId.current = null
         },
         onError: (e) => {
+          setText((cur) => cur || body)
           toast({ variant: 'destructive', title: 'لم تُرسل الرسالة', description: errMessage(e) })
           // الرفض النهائي (النافذة/الإيقاف) لا يُعاد بالمعرّف نفسه
           pendingId.current = null
@@ -537,7 +539,7 @@ function ClientBubble({
             <Ltr>{riyadhTime(m.at)}</Ltr>
             {!fromClient && m.status && (
               <span className={cn('ms-1', m.status === 'read' && 'text-sky-600')}>
-                {m.status === 'failed' ? '⚠︎' : m.status === 'read' || m.status === 'delivered' ? '✓✓' : '✓'}
+                {m.status === 'sending' ? '🕓' : m.status === 'failed' ? '⚠︎' : m.status === 'read' || m.status === 'delivered' ? '✓✓' : '✓'}
               </span>
             )}
           </p>

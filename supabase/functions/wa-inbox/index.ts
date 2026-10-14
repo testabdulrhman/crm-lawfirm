@@ -182,10 +182,6 @@ Deno.serve(async (req) => {
   const auth = req.headers.get('Authorization') ?? '';
   const jwt = auth.replace(/^Bearer\s+/i, '');
   if (!jwt) return fail(401, 'لا جلسة');
-  const { data: u } = await admin.auth.getUser(jwt);
-  if (!u?.user) return fail(401, 'جلسة غير صالحة');
-  const { data: me } = await admin.from('team_members').select('id, name, is_active').eq('auth_id', u.user.id).maybeSingle();
-  if (!me || me.is_active === false) return fail(403, 'الحساب غير نشط');
 
   // عميلٌ بجلسة الموظف: كل فحص رؤية يمرّ بسياسات القاعدة نفسها
   const asUser = createClient(URL_, Deno.env.get('SUPABASE_ANON_KEY')!, {
@@ -193,12 +189,21 @@ Deno.serve(async (req) => {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  let b: Record<string, unknown>;
-  try { b = await req.json(); } catch { return fail(400, 'طلب غير صالح'); }
+  // ⚡ الخطوات المستقلة متوازية (بلاغ المدير 2026-10-15: «الإرسال والاستقبال بطيء») — كانت ست رحلات متتالية
+  const [{ data: u }, b] = await Promise.all([
+    admin.auth.getUser(jwt),
+    req.json().catch(() => null) as Promise<Record<string, unknown> | null>,
+  ]);
+  if (!u?.user) return fail(401, 'جلسة غير صالحة');
+  if (!b) return fail(400, 'طلب غير صالح');
   const phone = String(b.phone ?? '').replace(/\D/g, '');
   if (phone.length < 9) return fail(400, 'رقم غير صالح');
 
-  const { data: canSee, error: seeErr } = await asUser.rpc('can_see_wa_thread', { p_phone: phone });
+  const [{ data: me }, { data: canSee, error: seeErr }] = await Promise.all([
+    admin.from('team_members').select('id, name, is_active').eq('auth_id', u.user.id).maybeSingle(),
+    asUser.rpc('can_see_wa_thread', { p_phone: phone }),
+  ]);
+  if (!me || me.is_active === false) return fail(403, 'الحساب غير نشط');
   if (seeErr) return fail(500, `تعذّر التحقق من الصلاحية: ${seeErr.message}`);
   if (canSee !== true) return fail(403, 'هذه المحادثة ليست ضمن ملفاتك');
 
@@ -208,6 +213,7 @@ Deno.serve(async (req) => {
         hubThread(phone),
         admin.from('wa_outbox').select('idempotency_key, member_id, team_members(name)').eq('phone_e164', phone)
           .order('created_at', { ascending: false }).limit(500),
+        asUser.rpc('wa_mark_read', { p_phone: phone }),
       ]);
       const byKey = new Map((sent ?? []).map((s: any) => [s.idempotency_key, s]));
       const messages = hub.messages.map((m) => {
@@ -225,7 +231,6 @@ Deno.serve(async (req) => {
         };
       });
       const exp = hub.window_expires_at ? Date.parse(hub.window_expires_at) : 0;
-      await asUser.rpc('wa_mark_read', { p_phone: phone });
       return json({ ok: true, window_expires_at: hub.window_expires_at, window_open: exp > Date.now() + 60_000, messages });
     }
 
@@ -260,10 +265,12 @@ Deno.serve(async (req) => {
       if (!okSend) return fail(res.status === 422 ? 422 : 502, reason!, { code: out?.error ?? null });
 
       const preview = (mode === 'template' ? '📨 ' : '') + body.slice(0, 140);
-      await admin.from('wa_threads').update({
-        last_message_at: new Date().toISOString(), last_preview: preview, last_direction: 'out',
-      }).eq('phone_e164', phone);
-      await asUser.rpc('wa_mark_read', { p_phone: phone });
+      await Promise.all([
+        admin.from('wa_threads').update({
+          last_message_at: new Date().toISOString(), last_preview: preview, last_direction: 'out',
+        }).eq('phone_e164', phone),
+        asUser.rpc('wa_mark_read', { p_phone: phone }),
+      ]);
       return json({ ok: true, status: out?.status ?? 'sent' });
     }
 
