@@ -10,14 +10,11 @@ import {
   Gavel,
   FileText,
   Paperclip,
-  Ban,
-  RotateCcw,
   Sparkles,
   AlertTriangle,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -46,7 +43,6 @@ import { QueryErrorState } from '@/components/QueryErrorState'
 import { EmptyState } from '@/components/EmptyState'
 import { Ltr } from '@/components/Ltr'
 
-import { cn } from '@/lib/utils'
 import { fmtDatePref, todayISO } from '@/lib/format'
 import { pickFile, uploadFile } from '@/lib/files'
 import { useAuth } from '@/stores/auth'
@@ -57,20 +53,16 @@ import {
   useAddRuling,
   useUpdateRuling,
   useDeleteRuling,
-  useDropRuling,
-  useUndropRuling,
 } from '@/hooks/useCaseRulings'
 import type { Ruling, RulingInput } from '@/types/db'
 
 export function RulingsTab({ caseId }: { caseId: string }) {
   const { data, isLoading, isError, error, refetch } = useCaseRulings(caseId)
   const deleteM = useDeleteRuling(caseId)
-  const undropM = useUndropRuling(caseId)
 
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<Ruling | null>(null)
   const [toDelete, setToDelete] = useState<Ruling | null>(null)
-  const [dropFor, setDropFor] = useState<Ruling | null>(null)
   const [preview, setPreview] = useState<{ url: string; name: string } | null>(
     null
   )
@@ -134,8 +126,6 @@ export function RulingsTab({ caseId }: { caseId: string }) {
                 setFormOpen(true)
               }}
               onDelete={() => setToDelete(r)}
-              onDrop={() => setDropFor(r)}
-              onUndrop={() => undropM.mutate(r.id)}
               onPreview={setPreview}
             />
           ))}
@@ -151,12 +141,6 @@ export function RulingsTab({ caseId }: { caseId: string }) {
           />
         </DialogContent>
       </Dialog>
-
-      <DropDialog
-        caseId={caseId}
-        ruling={dropFor}
-        onClose={() => setDropFor(null)}
-      />
 
       <FilePreviewDialog
         open={!!preview}
@@ -196,29 +180,19 @@ function RulingCard({
   ruling: r,
   onEdit,
   onDelete,
-  onDrop,
-  onUndrop,
   onPreview,
 }: {
   ruling: Ruling
   onEdit: () => void
   onDelete: () => void
-  onDrop: () => void
-  onUndrop: () => void
   onPreview: (p: { url: string; name: string }) => void
 }) {
-  const dropped = !!r.is_dropped
   return (
-    <Card className={cn(dropped && 'opacity-75')}>
+    <Card>
       <CardContent className="space-y-3 p-4">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="min-w-0">
-            <p
-              className={cn(
-                'font-semibold text-foreground',
-                dropped && 'line-through'
-              )}
-            >
+            <p className="font-semibold text-foreground">
               {r.title || 'حكم'}
             </p>
             <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
@@ -231,7 +205,6 @@ function RulingCard({
               {r.court_name && <span>{r.court_name}</span>}
             </div>
           </div>
-          {dropped && <Badge variant="destructive">مُسقط</Badge>}
         </div>
 
         {r.result && (
@@ -248,35 +221,6 @@ function RulingCard({
           </p>
         )}
 
-        {/* معلومات الإسقاط */}
-        {dropped && (
-          <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-2.5 text-sm">
-            <p className="text-xs font-semibold text-destructive">تفاصيل الإسقاط</p>
-            {r.drop_date && (
-              <p className="text-xs text-muted-foreground">
-                التاريخ: {fmtDatePref(r.drop_date)}
-                {r.dropped_by_name ? ` · بواسطة ${r.dropped_by_name}` : ''}
-              </p>
-            )}
-            {r.drop_reason && (
-              <p className="mt-1 whitespace-pre-wrap">{r.drop_reason}</p>
-            )}
-            {r.drop_document_url && (
-              <Button
-                variant="link"
-                size="sm"
-                className="h-auto p-0 text-destructive"
-                onClick={() =>
-                  onPreview({ url: r.drop_document_url!, name: 'مستند الإسقاط' })
-                }
-              >
-                <Paperclip className="h-3.5 w-3.5" />
-                مستند الإسقاط
-              </Button>
-            )}
-          </div>
-        )}
-
         <div className="flex flex-wrap items-center gap-1.5 border-t pt-2">
           {r.document_url && (
             <Button
@@ -288,17 +232,6 @@ function RulingCard({
             >
               <FileText className="h-4 w-4" />
               صك الحكم
-            </Button>
-          )}
-          {dropped ? (
-            <Button variant="outline" size="sm" onClick={onUndrop}>
-              <RotateCcw className="h-4 w-4" />
-              إلغاء الإسقاط
-            </Button>
-          ) : (
-            <Button variant="outline" size="sm" onClick={onDrop}>
-              <Ban className="h-4 w-4" />
-              إسقاط الحكم
             </Button>
           )}
           <Button variant="ghost" size="sm" onClick={onEdit}>
@@ -595,104 +528,7 @@ function RulingForm({
   )
 }
 
-/* ===================== نافذة الإسقاط ===================== */
-
-function DropDialog({
-  caseId,
-  ruling,
-  onClose,
-}: {
-  caseId: string
-  ruling: Ruling | null
-  onClose: () => void
-}) {
-  const { teamMember } = useAuth()
-  const dropM = useDropRuling(caseId)
-  const [reason, setReason] = useState('')
-  const [date, setDate] = useState(todayISO())
-  const [file, setFile] = useState<File | null>(null)
-  const [uploading, setUploading] = useState(false)
-
-  const submit = async () => {
-    if (!ruling) return
-    let dropDocumentUrl: string | null = null
-    if (file) {
-      setUploading(true)
-      try {
-        const { publicUrl } = await uploadFile(file, {
-          folder: `case_rulings/${caseId}`,
-        })
-        dropDocumentUrl = publicUrl
-      } finally {
-        setUploading(false)
-      }
-    }
-    dropM.mutate(
-      {
-        id: ruling.id,
-        dropDate: date,
-        dropReason: reason.trim(),
-        dropDocumentUrl,
-        droppedByName: teamMember?.name ?? null,
-      },
-      {
-        onSuccess: () => {
-          setReason('')
-          setFile(null)
-          onClose()
-        },
-      }
-    )
-  }
-
-  const busy = dropM.isPending || uploading
-
-  return (
-    <Dialog open={!!ruling} onOpenChange={(o) => !o && !busy && onClose()}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>إسقاط الحكم</DialogTitle>
-        </DialogHeader>
-        <div className="my-3 space-y-3">
-          <div className="space-y-1.5">
-            <Label htmlFor="drop_reason">سبب الإسقاط *</Label>
-            <Textarea
-              id="drop_reason"
-              rows={3}
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-            />
-          </div>
-          <DualDatePicker
-            label="تاريخ الإسقاط"
-            value={date || null}
-            onChange={(v) => setDate(v ?? '')}
-          />
-          <FilePicker
-            label="مستند الإسقاط (اختياري)"
-            file={file}
-            onPick={setFile}
-          />
-        </div>
-        <DialogFooter className="gap-2">
-          <Button
-            variant="destructive"
-            disabled={busy || reason.trim() === ''}
-            onClick={submit}
-          >
-            {busy && <Loader2 className="h-4 w-4 animate-spin" />}
-            تأكيد الإسقاط
-          </Button>
-          <Button variant="outline" onClick={onClose} disabled={busy}>
-            إلغاء
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
-/* ===================== منتقي ملف ===================== */
+/* ===================== اختيار ملف ===================== */
 
 export function FilePicker({
   label,
