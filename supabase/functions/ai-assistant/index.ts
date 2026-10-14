@@ -94,10 +94,20 @@ type Doc = { base64: string; mediaType: string; kind: "pdf" | "image" | "other" 
 
 async function fetchDocAsBase64(url: string): Promise<Doc | null> {
   try {
-    const res = await fetch(url);
-    if (!res.ok) return null;
-    const ct = (res.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
-    const buf = new Uint8Array(await res.arrayBuffer());
+    // ملفات مخزننا تُنزَّل بمفتاح الخادم — لا يُعتمد على أن المخزن عام
+    const path = url.match(/\/storage\/v1\/object\/(?:public|sign)\/documents\/([^?]+)/)?.[1];
+    let ct = "";
+    let buf: Uint8Array | null = null;
+    if (path) {
+      const { data, error } = await admin.storage.from("documents").download(decodeURIComponent(path));
+      if (!error && data) { buf = new Uint8Array(await data.arrayBuffer()); ct = (data.type || "").toLowerCase(); }
+    }
+    if (!buf) {
+      const res = await fetch(url);
+      if (!res.ok) return null;
+      ct = (res.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
+      buf = new Uint8Array(await res.arrayBuffer());
+    }
     if (buf.length > 10 * 1024 * 1024) return null;
     let binary = "";
     const chunk = 8192;
@@ -244,13 +254,15 @@ const AGENT_TOOLS = [
   },
   {
     name: "save_attachment",
-    description: "حفظ الملف الذي أرفقه الموظف في هذه المحادثة داخل النظام. استخدمها فقط عندما يوجد مرفق فعلي (سيُذكر لك في السياق). خياران: target=case_document لحفظه في مستندات القضية، أو target=session_minutes لحفظه كمحضر ضبط جلسة (وعندها يُقرأ الملف ويُستخرج منه ما تمّ في الجلسة ويُحدّث تلقائياً). حدّد القضية برقم المكتب، وللجلسة يمكن تمرير session_id من list_sessions وإلا تُختار أحدث جلسة غير مغلقة.",
+    description: "حفظ الملف الذي أرفقه الموظف في هذه المحادثة داخل النظام — بعد موافقته. خياران: target=case_document لحفظه في مستندات القضية، أو target=session_minutes لتسجيله محضرَ ضبط جلسة: يُقرأ الملف ويُغلق النظام الجلسة بنتيجتها ويُنشئ الخطوة التالية (الجلسة القادمة أو مهمة استلام الحكم) كما في «إغلاق الجلسة». القضية برقم المكتب. والجلسة: مرّر تاريخ الجلسة المذكور في المحضر (session_date_hijri كما ورد) فتُطابَق جلسة القضية في ذلك اليوم أو تُنشأ؛ أو session_id إن عرفته.",
     input_schema: {
       type: "object",
       properties: {
         target: { type: "string", enum: ["case_document", "session_minutes"], description: "وجهة الحفظ" },
         case_office_num: { type: "string", description: "رقم مكتب القضية مثل CASE26045" },
         session_id: { type: "string", description: "معرّف الجلسة (اختياري)" },
+        session_date_hijri: { type: "string", description: "تاريخ الجلسة الهجري كما ورد في المحضر مثل 1448/04/23 — لا تحوّله" },
+        session_date: { type: "string", description: "تاريخ الجلسة ميلادي YYYY-MM-DD إن ورد ميلادياً فقط" },
         name: { type: "string", description: "اسم المستند كما يظهر في النظام (اختياري)" },
       },
       required: ["target", "case_office_num"],
@@ -495,30 +507,14 @@ async function runAgentTool(name: string, input: any, userName: string, actions:
         return JSON.stringify({ ok: false, error: "لا يوجد ملف مرفق في هذه الرسالة — اطلب من الموظف إرفاقه بزر المشبك." });
       }
       const officeNum = String(input.case_office_num ?? "").trim();
-      const { data: cs } = await admin.from("cases").select("id, title").ilike("office_num", `%${officeNum}%`).limit(1);
+      const { data: cs } = await admin.from("cases").select("id, title, court").ilike("office_num", `%${officeNum}%`).limit(1);
       const caseRow = cs?.[0];
       if (!caseRow) return JSON.stringify({ ok: false, error: `لم أجد قضية برقم ${officeNum}` });
 
       const docName = String(input.name ?? attachment.name ?? "مستند");
 
       if (input.target === "session_minutes") {
-        let sessionId = input.session_id ? String(input.session_id) : null;
-        if (!sessionId) {
-          const { data: ss } = await admin.from("sessions").select("id").eq("case_id", caseRow.id).is("closed_at", null).order("session_date", { ascending: false }).limit(1);
-          sessionId = ss?.[0]?.id ?? null;
-        }
-        if (!sessionId) return JSON.stringify({ ok: false, error: "لا توجد جلسة مفتوحة في هذه القضية — حدّد جلسة أو أنشئها أولاً." });
-
-        const { error: upErr } = await admin.from("sessions").update({ minutes_url: attachment.url }).eq("id", sessionId);
-        if (upErr) return JSON.stringify({ ok: false, error: upErr.message });
-
-        await admin.from("documents").insert({
-          case_id: caseRow.id, name: docName, file_url: attachment.url,
-          file_type: attachment.type ?? null,
-          description: "محضر ضبط جلسة — أُرفق عبر المساعد الذكي",
-          uploaded_by_name: userName,
-        });
-
+        // ١) قراءة المحضر أولاً — منه تاريخ الجلسة ونتيجتها وخطوتها التالية
         let extracted: any = null;
         let extractNote = "";
         const doc = await fetchDocAsBase64(attachment.url);
@@ -544,15 +540,90 @@ async function runAgentTool(name: string, input: any, userName: string, actions:
         } else {
           extractNote = "تعذّرت قراءة الملف (PDF أو صورة أقل من 10 ميغابايت)";
         }
-        if (extracted?.outcome) {
-          const patch: any = { outcome: extracted.outcome };
-          if (extracted.next_action) patch.next_action = extracted.next_action;
-          if (extracted.ruling_due_date) patch.ruling_due_date = extracted.ruling_due_date;
-          if (extracted.session_number) patch.session_number = extracted.session_number;
-          await admin.from("sessions").update(patch).eq("id", sessionId);
+        // الهجري يُحوَّل هنا بأم القرى — لا بالنموذج
+        const sessDate = pickDate(input.session_date, input.session_date_hijri)
+          ?? pickDate(extracted?.session_date, extracted?.session_date_hijri);
+        const nextDate = pickDate(extracted?.next_session_date, extracted?.next_session_date_hijri);
+        const rulingDate = pickDate(extracted?.ruling_due_date, extracted?.ruling_due_date_hijri);
+
+        // ٢) الجلسة: المعرّف إن مُرِّر، وإلا جلسة القضية في يوم المحضر، وإلا تُنشأ بتاريخه
+        let sessionId: string | null = input.session_id ? String(input.session_id) : null;
+        let created = false;
+        if (!sessionId && sessDate) {
+          const { data: ss } = await admin.from("sessions").select("id").eq("case_id", caseRow.id)
+            .eq("session_date", sessDate).limit(1);
+          sessionId = ss?.[0]?.id ?? null;
         }
-        actions.push(`حُفظ ضبط الجلسة في قضية ${caseRow.title}`);
-        return JSON.stringify({ ok: true, case_title: caseRow.title, session_id: sessionId, extracted, extract_note: extractNote || undefined });
+        if (!sessionId && !sessDate) {
+          // بلا تاريخ مقروء: أحدث جلسة مضت ولم تُغلق — لا جلسة قادمة
+          const { data: ss } = await admin.from("sessions").select("id").eq("case_id", caseRow.id).is("closed_at", null)
+            .lte("session_date", isoToday()).order("session_date", { ascending: false }).limit(1);
+          sessionId = ss?.[0]?.id ?? null;
+        }
+        if (!sessionId) {
+          if (!sessDate) return JSON.stringify({ ok: false, error: "لم أجد تاريخ الجلسة في المحضر ولا جلسة سابقة مفتوحة — اذكر تاريخ الجلسة.", extracted });
+          const { count } = await admin.from("sessions").select("id", { count: "exact", head: true }).eq("case_id", caseRow.id);
+          const num = Number(extracted?.session_number) || (count ?? 0) + 1;
+          const { data: ins, error: insErr } = await admin.from("sessions").insert({
+            case_id: caseRow.id, session_date: sessDate, session_number: num,
+            title: `جلسة رقم ${String(num).padStart(2, "0")}`, court: caseRow.court ?? null, status: "held",
+          }).select("id").single();
+          if (insErr) return JSON.stringify({ ok: false, error: insErr.message });
+          sessionId = ins.id;
+          created = true;
+        }
+
+        await admin.from("documents").insert({
+          case_id: caseRow.id, name: docName, file_url: attachment.url,
+          file_type: attachment.type ?? null,
+          description: "محضر ضبط جلسة — أُرفق عبر المساعد الذكي",
+          uploaded_by_name: userName,
+        });
+
+        // ٣) الإغلاق بدالة «إغلاق الجلسة» نفسها — الجلسة القادمة أو مهمة استلام الحكم
+        const { data: sess } = await admin.from("sessions").select("closed_at, outcome").eq("id", sessionId).maybeSingle();
+        const notes: string[] = [];
+        if (extractNote) notes.push(extractNote);
+        if (sess?.closed_at) {
+          // أُغلقت من قبل: يُرفق المحضر ولا تُكرَّر الخطوة التالية
+          await admin.from("sessions").update({ minutes_url: attachment.url, ...(sess.outcome ? {} : extracted?.outcome ? { outcome: extracted.outcome } : {}) }).eq("id", sessionId);
+          notes.push("الجلسة كانت مغلقة — أُرفق المحضر بها فقط");
+        } else if (extracted?.outcome) {
+          let nextAction = ["next_session", "await_ruling", "case_closed"].includes(extracted.next_action) ? extracted.next_action : "none";
+          // إقفال القضية قرار المحامي لا المحضر
+          if (nextAction === "case_closed") { nextAction = "none"; notes.push("المحضر يذكر صدور حكم — أقفل القضية بنفسك إن كان نهائياً"); }
+          // جلسة قادمة مسجّلة سلفاً (من ناجز مثلاً) لا تُكرَّر
+          let existingNext: string | null = null;
+          if (nextAction === "next_session" && nextDate) {
+            const { data: nx } = await admin.from("sessions").select("id").eq("case_id", caseRow.id).eq("session_date", nextDate).limit(1);
+            existingNext = nx?.[0]?.id ?? null;
+          }
+          const { error: cErr } = await admin.rpc("close_session", {
+            p_session_id: sessionId, p_outcome: String(extracted.outcome), p_minutes_url: attachment.url,
+            p_next_action: existingNext ? "none" : nextAction,
+            p_next_session_date: nextAction === "next_session" ? nextDate : null,
+            p_next_session_time: nextAction === "next_session" && /^\d{1,2}:\d{2}$/.test(String(extracted.next_session_time ?? "")) ? extracted.next_session_time : null,
+            p_ruling_due_date: nextAction === "await_ruling" ? rulingDate : null,
+          });
+          if (cErr) return JSON.stringify({ ok: false, error: cErr.message });
+          if (existingNext) {
+            await admin.from("sessions").update({ next_action: "next_session", next_session_id: existingNext }).eq("id", sessionId);
+            notes.push("الجلسة القادمة مسجّلة من قبل فلم تُكرَّر");
+          }
+          if (nextAction === "next_session" && !nextDate) notes.push("أُجّلت الجلسة بلا تاريخ مقروء — أضف الجلسة القادمة بنفسك");
+          const sn = Number(extracted.session_number);
+          if (!created && Number.isInteger(sn) && sn > 0) await admin.from("sessions").update({ session_number: sn }).eq("id", sessionId);
+        } else {
+          await admin.from("sessions").update({ minutes_url: attachment.url }).eq("id", sessionId);
+        }
+        actions.push(`${created ? "سُجّلت جلسة جديدة بتاريخ " + sessDate + " و" : ""}حُفظ ضبط الجلسة في قضية ${caseRow.title}`);
+        return JSON.stringify({
+          ok: true, case_title: caseRow.title, session_id: sessionId, session_date: sessDate, session_created: created,
+          outcome: extracted?.outcome ?? null, next_action: extracted?.next_action ?? null,
+          next_session_date: nextDate, ruling_due_date: rulingDate,
+          link: `https://app.redwan.sa/#/cases/${caseRow.id}`,
+          extract_note: notes.length ? notes.join(" · ") : undefined,
+        });
       }
 
       const { error } = await admin.from("documents").insert({
@@ -665,7 +736,12 @@ const AGENT_SYSTEM = `أنت المساعد الذكي لنظام ${FIRM_NAME}. 
 قواعد:
 - ابحث بالأدوات قبل الإجابة، ولا تختلق بيانات. للأسئلة الزمنية (الأسبوع القادم/اليوم/الشهر) استخدم list_sessions أو list_tasks أو list_expiring_poas بالتواريخ المناسبة. لطلبات التوظيف استخدم list_staff_applications، ولأسئلة المفاضلة بين المتقدمين (الأفضل/المعدلات/الترتيب) استخدم list_applicant_analyses — وإن وجدت متقدمين غير محلّلين (analyzed=false) فنبّه بسطر واحد قصير أن تحليلهم متاح من صفحة طلبات التوظيف (زر تحليل الكل).
 - إذا طلب الموظف صراحةً إرسال رسالة (مثل «أرسل له…») فأرسلها مباشرة بعد إيجاد الرقم الصحيح. إن كان الطلب غامضاً اعرض مسودة الرسالة واطلب تأكيداً.
-- المرفقات: إن أرفق الموظف ملفاً وطلب حفظه في قضية، استخدم save_attachment. إن ذكر أنه «ضبط جلسة» أو «محضر» فاجعل target=session_minutes، وإلا case_document. إن لم يذكر القضية فاسأله عن رقمها أو ابحث بـ search_cases إن ذكر اسماً. بعد الحفظ اذكر ملخّص ما استُخرج من المحضر (outcome) في سطرين، وإن رجع extract_note فاذكر سببه بصراحة في سطر واحد.
+- المرفقات: الملف المرفق الجديد يصلك بمحتواه في آخر رسالة — اقرأه بنفسك ولا تسأل الموظف عمّا فيه.
+  • حدّد نوعه (محضر ضبط جلسة، حكم، صحيفة دعوى، مستند…) وقضيته من داخله: ابحث بـ search_cases برقم القضية/الدعوى المذكور فيه (يُطابق رقم المحكمة court_num) ثم بأسماء الأطراف إن لم يُطابق. لا تسأل عن رقم القضية إلا إن لم تجدها بعد البحث.
+  • ثم اعرض في سطرين ما فهمته (القضية برقم مكتبها، وتاريخ الجلسة، وما تمّ والخطوة التالية) واسأل سؤالاً واحداً للتأكيد، مثل: «أسجّله محضراً لجلسة 1448/04/23 في قضية CASE26045 وأُغلقها بنتيجتها؟». اجعل اقتراحات المتابعة إجابات جاهزة («نعم، سجّله» …).
+  • لا تحفظ قبل موافقته — إلا إن طلب الحفظ صراحة في رسالته نفسها.
+  • عند الموافقة: محضر الجلسة ← save_attachment بـ target=session_minutes مع session_date_hijri كما ورد في المحضر؛ وغيره ← target=case_document. بعدها اذكر ما سُجّل (الجلسة، ونتيجتها، والجلسة القادمة أو مهمة الحكم)، وإن رجع extract_note فاذكره في سطر.
+  • إن وصلك الملف سابقاً في المحادثة ولم يعد محتواه أمامك فاعتمد على ما ذكرتَه عنه في ردودك السابقة.
 - رسائل العملاء: عربية فصحى رسمية موجزة، تُختم بالاسم الرسمي الكامل: «${FIRM_NAME}» (لا تختصره أبداً).
 - الجلسات: إن وصل الموظف إشعار جلسة من ناجز أو المحكمة وطلب تسجيله، استخدم create_session. التواريخ في إشعارات ناجز هجرية غالباً — مرّرها في session_date_hijri كما وردت ولا تحوّلها بنفسك، واذكر في ردّك الميلادي الذي أعاده النظام ليتحقق منه الموظف.\n- إن تعدّدت النتائج المطابقة فاسأل أيّها المقصود قبل أي إجراء.
 - بعد التنفيذ اذكر بوضوح ما فعلته (لمن أُرسل، وما نص الرسالة).
@@ -744,9 +820,23 @@ async function runAgent(payload: any, caller: Caller): Promise<Response> {
   let finished = false;
   const toolLog: string[] = [];
 
-  const attachNote = attachment?.url
-    ? `\nأرفق الموظف ملفاً في رسالته الأخيرة اسمه: «${attachment.name}». إن طلب حفظه فاستخدم أداة save_attachment بعد تحديد القضية (اسأله عن رقمها إن لم يذكره).`
-    : "";
+  // المرفق الجديد يُقرأ: محتواه يُلحق برسالة الموظف الأخيرة (كان يصل اسمه وحده فلا يعرف المساعد قضيته
+  // — بلاغ المدير 2026-10-14). والسابق في المحادثة يبقى متاحاً للحفظ دون إعادة قراءته.
+  const isNew = payload?.attachment_new !== false;
+  let attachNote = "";
+  if (attachment?.url) {
+    const doc = isNew ? await fetchDocAsBase64(String(attachment.url)) : null;
+    const block = doc ? buildDocBlock(doc) : null;
+    const last = messages[messages.length - 1];
+    if (block && last?.role === "user") {
+      last.content = [block, { type: "text", text: String(last.content) }];
+      attachNote = `\nأرفق الموظف في رسالته الأخيرة ملفاً اسمه «${attachment.name}» — محتواه أمامك في الرسالة: اقرأه وحدّد قضيته بنفسك.`;
+    } else if (isNew) {
+      attachNote = `\nأرفق الموظف ملفاً اسمه «${attachment.name}» ولم تتيسّر قراءته (يُقرأ PDF والصور حتى 10 ميغابايت) — يمكن حفظه بـ save_attachment بعد أن يحدّد القضية.`;
+    } else {
+      attachNote = `\nفي المحادثة ملف أرفقه الموظف سابقاً اسمه «${attachment.name}» — متاح للحفظ بـ save_attachment.`;
+    }
+  }
 
   for (let iter = 0; iter < 12; iter++) {
     const aiRes = await fetch(ANTHROPIC_URL, {
@@ -756,7 +846,7 @@ async function runAgent(payload: any, caller: Caller): Promise<Response> {
       // على آخر الثابت؛ واسم الموظف والتاريخ والمرفق — وكانت ملصقة بآخر التعليمات فتبطل التخزين بين الموظفين
       // والأيام — في كتلة بعدها بالنص نفسه. والنقطة التلقائية أعلى الطلب تخزّن ذيل الجولات المتنامي.
       body: JSON.stringify({
-        model, max_tokens: 4000, cache_control: ephemeral(),
+        model, max_tokens: 8000, cache_control: ephemeral(),
         system: [cachedText(AGENT_SYSTEM), { type: "text", text: `\nالموظف الحالي: ${userName}. تاريخ اليوم: ${isoToday()}.${attachNote}` }],
         tools: AGENT_TOOLS, messages,
       }),
@@ -850,7 +940,7 @@ function buildPrompt(task: string, payload: any): { system: string; user: string
     case "extract_session_minutes":
       return {
         system: "أنت مساعد قانوني لشركة محاماة سعودية، دقيق في قراءة محاضر الجلسات. استخرج ما تمّ في الجلسة من المحضر المرفق حرفيّاً دون تخمين. أجب بالعربية فقط وبصيغة JSON دون أي نص إضافي.",
-        user: `استخرج بيانات هذه الجلسة من محضر الجلسة المرفق أدناه.\nاستخرج رقم هذه الجلسة إن ذُكر كعدد صحيح.\nاجعل outcome ملخّصاً دقيقاً موجزاً لما تمّ (لا يتجاوز 120 كلمة).\nحدّد الخطوة القادمة من واقع المحضر:\n- إن أُجّلت الجلسة لتاريخ لاحق ← next_action=\"next_session\" مع التاريخ.\n- إن حُجزت القضية للحكم ← next_action=\"await_ruling\" مع تاريخ النطق.\n- إن صدر حكم نهائي ← next_action=\"case_closed\".\n- غير ذلك ← next_action=\"none\".\nحوّل أي تاريخ هجري إلى ميلادي YYYY-MM-DD. اترك أي قيمة لا تجدها = null.\n\nأرجِع JSON:\n{\n  \"session_number\": رقم الجلسة عدداً أو null,\n  \"outcome\": \"ملخّص دقيق لما تمّ في الجلسة\",\n  \"next_action\": \"none | next_session | await_ruling | case_closed\",\n  \"next_session_date\": \"YYYY-MM-DD أو null\",\n  \"next_session_time\": \"HH:MM أو null\",\n  \"ruling_due_date\": \"YYYY-MM-DD أو null\",\n  \"hijri_note\": \"التواريخ الهجرية كما وردت أو null\"\n}`,
+        user: `استخرج بيانات هذه الجلسة من محضر الجلسة المرفق أدناه.\nاستخرج رقم هذه الجلسة إن ذُكر كعدد صحيح.\nاجعل outcome ملخّصاً دقيقاً موجزاً لما تمّ (لا يتجاوز 120 كلمة).\nحدّد الخطوة القادمة من واقع المحضر:\n- إن أُجّلت الجلسة لتاريخ لاحق ← next_action=\"next_session\" مع التاريخ.\n- إن حُجزت القضية للحكم ← next_action=\"await_ruling\" مع تاريخ النطق.\n- إن صدر حكم نهائي ← next_action=\"case_closed\".\n- غير ذلك ← next_action=\"none\".\nالتواريخ: انقل الهجري كما ورد في حقول *_hijri (مثل 1448/04/23) ولا تحوّله بنفسك — يحوّله النظام بتقويم أم القرى؛ والحقول الميلادية لما ورد ميلادياً فقط. اترك أي قيمة لا تجدها = null.\n\nأرجِع JSON:\n{\n  \"session_date_hijri\": \"تاريخ انعقاد هذه الجلسة كما ورد أو null\",\n  \"session_date\": \"YYYY-MM-DD إن ورد ميلادياً أو null\",\n  \"session_number\": رقم الجلسة عدداً أو null,\n  \"outcome\": \"ملخّص دقيق لما تمّ في الجلسة\",\n  \"next_action\": \"none | next_session | await_ruling | case_closed\",\n  \"next_session_date_hijri\": \"كما ورد أو null\",\n  \"next_session_date\": \"YYYY-MM-DD إن ورد ميلادياً أو null\",\n  \"next_session_time\": \"HH:MM أو null\",\n  \"ruling_due_date_hijri\": \"كما ورد أو null\",\n  \"ruling_due_date\": \"YYYY-MM-DD إن ورد ميلادياً أو null\"\n}`,
         maxTokens: 8000,
       };
 
@@ -941,6 +1031,12 @@ Deno.serve(async (req) => {
     let parsed = null;
     if (task === "analyze_applicant" || task === "extract_ruling" || task === "extract_session_minutes") {
       parsed = parseLoose(text);
+    }
+    // تواريخ المحضر: الهجري المنقول يُحوَّل هنا بأم القرى — والواجهة تستلم الميلادي كما كانت
+    if (task === "extract_session_minutes" && parsed) {
+      parsed.session_date = pickDate(parsed.session_date, parsed.session_date_hijri);
+      parsed.next_session_date = pickDate(parsed.next_session_date, parsed.next_session_date_hijri);
+      parsed.ruling_due_date = pickDate(parsed.ruling_due_date, parsed.ruling_due_date_hijri);
     }
 
     if (task === "analyze_applicant" && parsed && p.application_id) {

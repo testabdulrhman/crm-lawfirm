@@ -58,6 +58,9 @@ export function AiAssistant() {
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
   const [attachment, setAttachment] = useState<Attachment | null>(null)
+  // آخر مرفق في المحادثة — يبقى مع الردود التالية («نعم سجّله»، «القضية رقم…») وإلا ضاع الملف
+  // بعد أول سؤال من المساعد فلا يُحفظ (بلاغ المدير 2026-10-14)
+  const [convAttachment, setConvAttachment] = useState<Attachment | null>(null)
   const [uploading, setUploading] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -113,6 +116,7 @@ export function AiAssistant() {
     setMessages(next)
     setInput('')
     setAttachment(null)
+    if (attachment) setConvAttachment(attachment)
     setBusy(true)
     try {
       const { data, error } = await supabase.functions.invoke('ai-assistant', {
@@ -120,7 +124,9 @@ export function AiAssistant() {
           task: 'agent',
           payload: {
             user_name: teamMember?.name ?? 'موظف',
-            attachment,
+            attachment: attachment ?? convAttachment,
+            // الجديد وحده يُقرأ محتواه — والسابق يُمرَّر للحفظ فقط
+            attachment_new: !!attachment,
             messages: next.map((m) => ({ role: m.role, content: m.content })),
           },
         },
