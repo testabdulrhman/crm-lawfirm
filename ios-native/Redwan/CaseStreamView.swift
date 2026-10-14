@@ -32,9 +32,10 @@ enum Mention {
         }.map(\.id)
     }
 
-    /// تلوين أي @كلمة بالذهبي (يشمل @الذكاء) — للعرض في الفقاعات
+    /// تلوين أي @كلمة بالذهبي (يشمل @الذكاء) والروابط قابلة للضغط — للعرض في الفقاعات
     static func styled(_ text: String) -> AttributedString {
         var out = AttributedString(text)
+        MessageLinks.linkify(&out, text: text)
         guard text.contains("@"),
               let re = try? NSRegularExpression(pattern: "@[\\p{L}\\p{N}_]+")
         else { return out }

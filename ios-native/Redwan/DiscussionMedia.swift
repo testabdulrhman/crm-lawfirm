@@ -29,6 +29,30 @@ enum MessageLinks {
         trailRE.stringByReplacingMatches(in: raw, range: NSRange(location: 0, length: (raw as NSString).length), withTemplate: "")
     }
 
+    /// يجعل الروابط داخل نص الرسالة قابلة للضغط (تُفتح في سفاري) — كانت نصاً عادياً
+    /// والضغط على الفقاعة يفتح الخيط، فلا يُفتح الرابط أبداً (بلاغ المدير 2026-10-14)
+    static func linkify(_ out: inout AttributedString, text: String) {
+        let ns = text as NSString
+        for m in urlRE.matches(in: text, range: NSRange(location: 0, length: ns.length)) {
+            let raw = ns.substring(with: m.range)
+            let url = clean(raw)
+            guard url.count > 4, let href = href(url),
+                  let sr = Range(NSRange(location: m.range.location, length: (url as NSString).length), in: text),
+                  let lo = AttributedString.Index(sr.lowerBound, within: out),
+                  let up = AttributedString.Index(sr.upperBound, within: out)
+            else { continue }
+            out[lo..<up].link = href
+            out[lo..<up].foregroundColor = Theme.blue
+            out[lo..<up].underlineStyle = .single
+        }
+    }
+
+    static func linked(_ text: String) -> AttributedString {
+        var out = AttributedString(text)
+        linkify(&out, text: text)
+        return out
+    }
+
     /// «www.» تُكمَّل بـhttps://
     static func href(_ url: String) -> URL? {
         URL(string: url.lowercased().hasPrefix("http") ? url : "https://\(url)")

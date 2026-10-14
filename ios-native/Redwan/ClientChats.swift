@@ -567,7 +567,7 @@ private struct ClientBubble: View {
                     }
                 }
                 if let b = m.body, !b.isEmpty {
-                    Text(b)
+                    Text(MessageLinks.linked(b))
                         .font(.system(size: 15))
                         .foregroundStyle(m.fromClient ? Theme.navy : WA.ink)
                         .textSelection(.enabled)
