@@ -55,7 +55,7 @@ export function computeLayout(args: {
    * مرتبطين»). null/غائب = الترتيب القديم: التوقيع فوق الختم بتداخل خفيف.
    */
   sigPos?: { x: number; y: number } | null
-  /** كتلة رقم الصادر تحت التوقيع مباشرة (وتحت الختم إن لم يكن توقيع) — نسبة ارتفاعها لعرضها */
+  /** كتلة رقم الصادر — نسبة ارتفاعها لعرضها (موضعها ثابت أعلى يسار الصفحة الأولى: numberRect) */
   numberAspect?: number | null
 }): { stamp?: LayoutRect; sig?: LayoutRect; num?: LayoutRect } {
   const { pageW, pageH, pos } = args
@@ -83,18 +83,23 @@ export function computeLayout(args: {
       out.sig = { x: cx - w / 2, y: cyTop - h / 2, w, h }
     }
   }
-  if (args.numberAspect != null) {
-    const anchor = out.sig ?? out.stamp
-    if (anchor) {
-      const w = NUMBER_WIDTH_PT
-      const h = args.numberAspect * w
-      out.num = { x: anchor.x + anchor.w / 2 - w / 2, y: anchor.y + anchor.h + 1, w, h }
-    }
-  }
+  if (args.numberAspect != null) out.num = numberRect(args.numberAspect)
   return out
 }
 
-// ---------- رقم الصادر تحت التوقيع ----------
+/**
+ * رقم الصادر في موضع ثابت: ١ سم من أعلى الصفحة الأولى و١ سم من يسارها (طلب المدير 2026-10-14) —
+ * كان تحت التوقيع فيتنقّل معه ويزاحمه. بإحداثيات أعلى-يسار كبقية المستطيلات.
+ */
+export const NUMBER_MARGIN_PT = 72 / 2.54 // ١ سم
+export const numberRect = (aspect: number): LayoutRect => ({
+  x: NUMBER_MARGIN_PT,
+  y: NUMBER_MARGIN_PT,
+  w: NUMBER_WIDTH_PT,
+  h: aspect * NUMBER_WIDTH_PT,
+})
+
+// ---------- رقم الصادر أعلى يسار الصفحة الأولى ----------
 // pdf-lib لا يشكّل الحروف العربية، فيُرسم النص في لوحة المتصفح (التي تشكّله بخط الهوية) ويُدمج صورة.
 export const NUMBER_WIDTH_PT = 150
 const NUMBER_SCALE = 4 // كثافة الصورة: ٤ بكسلات لكل نقطة
@@ -116,17 +121,18 @@ export async function renderNumberBlock(lines: string[]): Promise<{ png: Blob; a
   const ctx = canvas.getContext('2d')!
   ctx.font = font
   ctx.direction = 'rtl'
-  ctx.textAlign = 'center'
+  // محاذاة لليسار: بداية الكتلة على بُعد ١ سم من حافة الورقة اليسرى
+  ctx.textAlign = 'left'
   ctx.textBaseline = 'top'
   ctx.fillStyle = '#1f2937'
-  lines.forEach((line, i) => ctx.fillText(line, w / 2, (1.5 + i * NUMBER_LINE_PT) * NUMBER_SCALE))
+  lines.forEach((line, i) => ctx.fillText(line, 0, (1.5 + i * NUMBER_LINE_PT) * NUMBER_SCALE))
   const png = await new Promise<Blob>((res, rej) =>
     canvas.toBlob((b) => (b ? res(b) : rej(new Error('تعذّر رسم رقم الصادر'))), 'image/png')
   )
   return { png, aspect: h / w }
 }
 
-/** سطرا رقم الصادر كما يُطبعان تحت التوقيع */
+/** سطرا رقم الصادر كما يُطبعان أعلى يسار الصفحة الأولى */
 export const numberLines = (letterNumber: string, hijriDate: string) => [
   `رقم الصادر: ${letterNumber}`,
   `التاريخ: ${hijriDate}`,
@@ -142,7 +148,7 @@ export async function stampPdf(
     extraSignatures?: StampPosition[] | null
     /** مركز التوقيع الأساسي مستقلاً عن الختم (في صفحة الختم نفسها) — null = فوق الختم كالسابق */
     sigPosition?: { x: number; y: number } | null
-    /** سطور رقم الصادر تحت التوقيع مباشرة */
+    /** سطور رقم الصادر — أعلى يسار الصفحة الأولى */
     numberLines?: string[] | null
   }
 ): Promise<Blob> {
@@ -191,7 +197,8 @@ export async function stampPdf(
   })
   if (numImg && layout.num) {
     const r = layout.num
-    page.drawImage(numImg, { x: r.x, y: height - (r.y + r.h), width: r.w, height: r.h })
+    const first = doc.getPage(0)
+    first.drawImage(numImg, { x: r.x, y: first.getSize().height - (r.y + r.h), width: r.w, height: r.h })
   }
 
   // تحويل أعلى-يسار → أصل pdf-lib أسفل-يسار: y = pageH - (top + h)

@@ -446,10 +446,10 @@ export function StampPlacementDialog({
                 />
               )}
 
-              {/* رقم الصادر كما سيُطبع — تحت التوقيع مباشرة ويتبعه */}
-              {!loading && page === primaryPage && primaryLayout.num && numberPreview && (
+              {/* رقم الصادر كما سيُطبع — ثابت أعلى يسار الصفحة الأولى (١ سم × ١ سم) */}
+              {!loading && page === 1 && primaryLayout.num && numberPreview && (
                 <div
-                  className="pointer-events-none absolute flex flex-col items-center justify-start rounded-sm bg-gold/10 text-center font-semibold leading-none text-gray-800 outline-dashed outline-1 outline-gold/50"
+                  className="pointer-events-none absolute flex flex-col items-end justify-start rounded-sm bg-gold/10 text-left font-semibold leading-none text-gray-800 outline-dashed outline-1 outline-gold/50"
                   style={{
                     width: primaryLayout.num.w * k,
                     height: primaryLayout.num.h * k,
