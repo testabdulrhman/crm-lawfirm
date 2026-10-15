@@ -9,6 +9,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 //   send   {phone, body, mode}   ⇒ نصٌّ حر داخل النافذة؛ وخارجها (mode='template') داخل القالب
 //                                   المعتمد «followup» (حياك الله … {{1}} … شكراً لك).
 //   to_request {phone, request_id} ⇒ ينسخ مرفقات المحادثة ونصّها إلى ملفات طلب وارد (2026-10-14).
+//   sync_handled                   ⇒ ما رُدّ عليه في «هاتف» يُعلَّم مقروءاً للفريق (2026-10-15)؛ ومن المهمة
+//                                    المجدولة بالترويسة x-internal-secret.
 //
 // الرؤية من القاعدة نفسها (can_see_wa_thread بجلسة الموظف): مسؤول الملف وفريقه، والمدير وراكان
 // يرون الكل، و«غير المصنّف» لهما وحدهما.
@@ -68,6 +70,51 @@ const HUB_ERRORS: Record<string, string> = {
   template_not_approved: 'القالب «متابعة» غير معتمد حالياً في الـHub.',
   outbound_disabled: 'الإرسال عبر الـHub موقوف مؤقتاً.',
 };
+
+// ---------- ما رُدّ عليه في «هاتف» يُعلَّم مقروءاً (طلب المدير 2026-10-15) ----------
+// هاتف لا يُبلغ بالقراءة (الوارد يبقى Sent)، لكن ردّ موظفٍ منه يصل الـHub بمعرّف الموظف (sender='staff').
+// فالمحادثة التي جاءها ردٌّ — من هاتف أو من نظامنا — بعد آخر رسالة للعميل تُعدّ مقروءة للجميع:
+// قراءة الفريق تُحدَّث، وإشعاراتها تُطفأ، وآخر رسالة في القائمة تصير الرد. ولا يُعدّ ردُّ البوت ردّاً.
+const SYNC_DAYS = 7;
+const SYNC_MAX = 25;
+
+async function syncHandled(): Promise<{ checked: number; handled: string[] }> {
+  const since = new Date(Date.now() - SYNC_DAYS * 86_400_000).toISOString();
+  const { data: waiting } = await admin.from('wa_threads').select('phone_e164, last_in_at')
+    .eq('last_direction', 'in').gte('last_in_at', since).order('last_in_at', { ascending: false }).limit(SYNC_MAX);
+  if (!waiting?.length) return { checked: 0, handled: [] };
+  const { data: members } = await admin.from('team_members').select('id').eq('is_active', true);
+  const handled: string[] = [];
+  await Promise.all(waiting.map(async (t: { phone_e164: string; last_in_at: string }) => {
+    try {
+      const { messages } = await hubThread(t.phone_e164);
+      const ms = (iso: string) => Date.parse(iso) || 0;
+      const lastIn = messages.filter((m) => m.direction === 'in').reduce((x, m) => Math.max(x, ms(m.at)), ms(t.last_in_at));
+      const reply = messages
+        .filter((m) => m.direction === 'out' && ms(m.at) > lastIn && (m.sender === 'staff' || (m.idem ?? '').startsWith('inbox:')))
+        .sort((a, b) => ms(b.at) - ms(a.at))[0];
+      if (!reply) return;
+      const preview = String(reply.body ?? reply.rendered ?? (reply.media ? '📎 مرفق' : '')).slice(0, 140);
+      // الحارس last_direction='in': لا يطمس رسالةً أحدث من العميل وصلت في أثناء الفحص
+      const { data: upd } = await admin.from('wa_threads')
+        .update({ last_message_at: reply.at, last_preview: preview, last_direction: 'out' })
+        .eq('phone_e164', t.phone_e164).eq('last_direction', 'in').lte('last_in_at', reply.at).select('phone_e164');
+      if (!upd?.length) return;
+      await Promise.all([
+        admin.from('wa_inbox_reads').upsert(
+          (members ?? []).map((m: { id: string }) => ({ phone_e164: t.phone_e164, member_id: m.id, read_at: reply.at })),
+          { onConflict: 'phone_e164,member_id' },
+        ),
+        admin.from('notifications').update({ is_read: true })
+          .eq('type', 'wa_client').eq('wa_phone', t.phone_e164).eq('is_read', false).lte('created_at', reply.at),
+      ]);
+      handled.push(t.phone_e164);
+    } catch (e) {
+      console.error('wa sync', t.phone_e164.slice(-4), (e as Error).message);
+    }
+  }));
+  return { checked: waiting.length, handled };
+}
 
 // ---------- محادثة ← طلب وارد (2026-10-14) ----------
 // «طلب جديد» من رأس المحادثة: بعد إنشاء الطلب تُنسخ مرفقات الواتساب (من العميل ومنّا) إلى ملفات الطلب
@@ -179,6 +226,16 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   if (req.method !== 'POST') return fail(405, 'POST فقط');
 
+  // مزامنة «ما رُدّ عليه في هاتف» من مهمة القاعدة المجدولة (wa-sync-handled كل دقيقتين) بالسرّ الداخلي
+  const internal = req.headers.get('x-internal-secret');
+  if (internal) {
+    const { data: sec } = await admin.from('lookup_values').select('value')
+      .eq('type', 'discussion_ai_config').eq('label', 'inbound_secret').maybeSingle();
+    if (!sec?.value || internal !== sec.value) return fail(401, 'سرّ غير صالح');
+    try { return json({ ok: true, ...(await syncHandled()) }); }
+    catch (e) { return fail(500, String((e as Error).message).slice(0, 300)); }
+  }
+
   const auth = req.headers.get('Authorization') ?? '';
   const jwt = auth.replace(/^Bearer\s+/i, '');
   if (!jwt) return fail(401, 'لا جلسة');
@@ -196,6 +253,13 @@ Deno.serve(async (req) => {
   ]);
   if (!u?.user) return fail(401, 'جلسة غير صالحة');
   if (!b) return fail(400, 'طلب غير صالح');
+  // فتح صندوق «واتساب» في الويب يطلب المزامنة فوراً (لا ينتظر المهمة المجدولة) — لأي موظف نشط
+  if (b.action === 'sync_handled') {
+    const { data: me0 } = await admin.from('team_members').select('is_active').eq('auth_id', u.user.id).maybeSingle();
+    if (!me0 || me0.is_active === false) return fail(403, 'الحساب غير نشط');
+    try { return json({ ok: true, ...(await syncHandled()) }); }
+    catch (e) { return fail(500, String((e as Error).message).slice(0, 300)); }
+  }
   const phone = String(b.phone ?? '').replace(/\D/g, '');
   if (phone.length < 9) return fail(400, 'رقم غير صالح');
 

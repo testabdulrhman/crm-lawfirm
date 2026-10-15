@@ -68,13 +68,34 @@ export function takeClientChat(): string | null {
   return p
 }
 
+// ما رُدّ عليه في «هاتف» يُعلَّم مقروءاً (2026-10-15): الصندوق المفتوح يطلب المزامنة مرةً كل دقيقة على الأكثر،
+// ولا ينتظرها — والمهمة المجدولة في القاعدة تفعلها كل دقيقتين لمن لم يفتح الويب (الآيفون)
+let lastSyncAt = 0
+function syncHandledSoon(onHandled: () => void) {
+  if (Date.now() - lastSyncAt < 60_000) return
+  lastSyncAt = Date.now()
+  supabase.functions
+    .invoke('wa-inbox', { body: { action: 'sync_handled' }, region: WA_REGION })
+    .then(({ data }) => {
+      if (Array.isArray(data?.handled) && data.handled.length) onHandled()
+    })
+    .catch(() => {
+      lastSyncAt = 0 // يُعاد في الجلب التالي
+    })
+}
+
 export function useClientThreads() {
   const myId = useAuth((s) => s.teamMember?.id)
+  const qc = useQueryClient()
   return useQuery({
     queryKey: ['client_threads', myId],
     enabled: !!myId,
     refetchInterval: 10_000,
     queryFn: async (): Promise<ClientThread[]> => {
+      syncHandledSoon(() => {
+        qc.invalidateQueries({ queryKey: ['client_threads'] })
+        qc.invalidateQueries({ queryKey: ['notifications'] })
+      })
       const [threads, reads] = await Promise.all([
         supabase
           .from('wa_threads')
