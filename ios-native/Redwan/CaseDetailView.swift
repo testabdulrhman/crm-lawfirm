@@ -1,11 +1,11 @@
 import SwiftUI
 
-// ملف القضية على الجوال — أربعة تبويبات: نظرة · الجلسات · القصة · الدراسة.
+// ملف القضية على الجوال — ستة تبويبات: نظرة · الجلسات · الأحكام · المستندات · القصة · الدراسة.
 // «الجلسات» هي غرفة المحكمة: ملخّص ما قبل الجلسة، وتسجيل النتيجة من القاعة،
 // وإرسال التقرير للموكّل. النقاش يفتح من الزر في الأعلى (CaseStreamView).
 
 enum CaseTab: String, CaseIterable {
-    case overview = "نظرة", sessions = "الجلسات", documents = "المستندات", story = "القصة", study = "الدراسة"
+    case overview = "نظرة", sessions = "الجلسات", rulings = "الأحكام", documents = "المستندات", story = "القصة", study = "الدراسة"
 }
 
 struct CaseDetailView: View {
@@ -30,6 +30,10 @@ struct CaseDetailView: View {
     @State private var generating: String?
     @State private var toast: String?
     @State private var documents: [DocumentRow] = []
+    // الأحكام (طلب المدير 2026-10-16: «مافيه الحكم في المشاريع، ودي اشوفه») — للعرض؛ الإضافة في الويب
+    @State private var rulings: [RulingRow] = []
+    @State private var objection: ObjectionTask?
+    @State private var previewRuling: RulingRow?
     @State private var previewDoc: DocumentRow?
     // مشاركة مستند من صفّه بلا فتح المعاينة (طلب الموظفين 2026-09-10)
     @State private var sharing: ShareFile?
@@ -52,14 +56,12 @@ struct CaseDetailView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
                         header
-                        Picker("", selection: $tab) {
-                            ForEach(CaseTab.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-                        }
-                        .pickerStyle(.segmented)
+                        CaseTabBar(tab: $tab)
 
                         switch tab {
                         case .overview: overview
                         case .sessions: sessionsTab
+                        case .rulings: rulingsTab
                         case .documents: documentsTab
                         case .story: storyTab
                         case .study: studyTab
@@ -106,6 +108,9 @@ struct CaseDetailView: View {
         }
         .sheet(item: $previewDoc) { d in
             FilePreviewSheet(name: d.name ?? "مستند", url: d.file_url)
+        }
+        .sheet(item: $previewRuling) { r in
+            FilePreviewSheet(name: r.title ?? "صك الحكم", url: r.document_url)
         }
         .sheet(isPresented: $showScan) {
             ScanSheet(caseId: caseId, caseTitle: c?.title) {
@@ -426,6 +431,19 @@ struct CaseDetailView: View {
         catch { toast = "تعذّر تحميل المستند للمشاركة — تحقق من الاتصال" }
     }
 
+    // MARK: - الأحكام
+
+    private var rulingsTab: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if rulings.isEmpty {
+                EmptyBox(icon: "building.columns", text: "لا توجد أحكام",
+                         subtext: "تُسجَّل الأحكام وصكوكها من الويب، وتظهر هنا")
+            } else {
+                RulingsTimeline(rulings: rulings, objection: objection) { previewRuling = $0 }
+            }
+        }
+    }
+
     // MARK: - القصة
 
     private var storyTab: some View {
@@ -562,10 +580,17 @@ struct CaseDetailView: View {
             async let pr = sb.studyProposals(caseId: caseId)
             async let dc = sb.caseDocuments(caseId: caseId)
             async let cm = sb.caseMembers(caseId: caseId)
-            let (cf, ps, ss, bs, es, sd, prs, docs, mbs) = try await (a, b, s, br, ev, st, pr, dc, cm)
+            async let rl = sb.caseRulings(caseId: caseId)
+            let (cf, ps, ss, bs, es, sd, prs, docs, mbs, rls) = try await (a, b, s, br, ev, st, pr, dc, cm, rl)
             guard let cf else { throw SBError(message: "الملف غير موجود أو لا تملك صلاحية فتحه") }
             c = cf; parties = ps; sessions = ss; events = es; study = sd; proposals = prs; documents = docs
-            members = mbs
+            members = mbs; rulings = rls
+            // مهمة الاعتراض لأحدث حكم ما زالت مهلته قائمة — لشريط المهلة وحده
+            if let latest = rls.first, let d = RulingsTimeline.daysLeft(latest.objection_until), d >= 0 {
+                objection = try? await sb.objectionTask(rulingId: latest.id)
+            } else {
+                objection = nil
+            }
             briefs = Dictionary(uniqueKeysWithValues: bs.map { ($0.session_id, $0) })
             loaded = true
         } catch {
@@ -851,5 +876,212 @@ struct StudyQuickCard: View {
         .background(Theme.goldPale)
         .clipShape(RoundedRectangle(cornerRadius: 14))
         .overlay(RoundedRectangle(cornerRadius: 14).stroke(Theme.gold.opacity(0.35), lineWidth: 1))
+    }
+}
+
+// MARK: - شريط التبويبات — رقائق تُمرَّر أفقياً: ستة تبويبات لا تتسع للشريط المقسّم
+// («المستندات» كانت تنقطع «المستندا…» بعد إضافة «الأحكام» — 2026-10-16)
+
+struct CaseTabBar: View {
+    @Binding var tab: CaseTab
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(CaseTab.allCases, id: \.self) { t in
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.15)) { tab = t }
+                        } label: {
+                            Text(t.rawValue)
+                                .font(.system(size: 14, weight: tab == t ? .semibold : .regular))
+                                .foregroundStyle(tab == t ? Theme.navy : Theme.muted)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 8)
+                                .background(tab == t ? Theme.card : Color.clear)
+                                .clipShape(Capsule())
+                                .overlay(Capsule().stroke(tab == t ? Theme.line : Color.clear, lineWidth: 1))
+                        }
+                        .buttonStyle(.plain)
+                        .id(t)
+                    }
+                }
+                .padding(4)
+            }
+            .background(Theme.navy.opacity(0.05))
+            .clipShape(Capsule())
+            .onChange(of: tab) { _, t in withAnimation { proxy.scrollTo(t, anchor: .center) } }
+            .onAppear { proxy.scrollTo(tab, anchor: .center) }
+        }
+    }
+}
+
+// MARK: - الأحكام: شريط المهلة + خط زمني (نسخة الآيفون من RulingsTab.tsx في الويب)
+
+struct RulingsTimeline: View {
+    let rulings: [RulingRow]
+    let objection: ObjectionTask?
+    let onOpenDeed: (RulingRow) -> Void
+
+    static func daysLeft(_ iso: String?) -> Int? {
+        guard let d = Fmt.date(iso), let today = Fmt.date(Fmt.todayISO()) else { return nil }
+        return Calendar(identifier: .gregorian).dateComponents([.day], from: today, to: d).day
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if let latest = rulings.first, let days = Self.daysLeft(latest.objection_until), days >= 0 {
+                DeadlineBanner(ruling: latest, days: days, task: objection)
+            }
+            ForEach(Array(rulings.enumerated()), id: \.element.id) { i, r in
+                HStack(alignment: .top, spacing: 10) {
+                    VStack(spacing: 0) {
+                        Circle()
+                            .fill(i == 0 ? Theme.gold : Theme.muted.opacity(0.35))
+                            .frame(width: 11, height: 11)
+                            .padding(.top, 18)
+                        if i < rulings.count - 1 {
+                            Rectangle().fill(Theme.line).frame(width: 1.5).frame(maxHeight: .infinity)
+                        }
+                    }
+                    VStack(alignment: .leading, spacing: 6) {
+                        RulingCardView(ruling: r, latest: i == 0) { onOpenDeed(r) }
+                        if i < rulings.count - 1, r.level.rank > rulings[i + 1].level.rank {
+                            Label("استُؤنف", systemImage: "arrow.up")
+                                .font(.system(size: 11))
+                                .foregroundStyle(Theme.muted)
+                                .padding(.vertical, 4)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct DeadlineBanner: View {
+    let ruling: RulingRow
+    let days: Int
+    let task: ObjectionTask?
+
+    var body: some View {
+        let urgent = days <= 7
+        let color = urgent ? Theme.danger : Theme.amber
+        let lv = ruling.level
+        HStack(spacing: 12) {
+            Image(systemName: "hourglass").font(.system(size: 20)).foregroundStyle(color)
+            VStack(alignment: .leading, spacing: 3) {
+                Text("مهلة الاعتراض على \(lv.rank == 1 ? "الحكم الابتدائي" : "حكم الاستئناف")\(lv.next.map { " أمام \($0)" } ?? "")")
+                    .font(.system(size: 13, weight: .semibold))
+                Text("تنتهي \(Fmt.dual(ruling.objection_until))\(taskLine)")
+                    .font(.system(size: 11))
+                    .opacity(0.9)
+            }
+            Spacer(minLength: 4)
+            VStack(spacing: 0) {
+                Text(days == 0 ? "اليوم" : "\(days)").font(.system(size: 24, weight: .bold)).monospacedDigit()
+                if days > 0 { Text(days <= 10 ? "أيام" : "يوماً").font(.system(size: 10)) }
+            }
+        }
+        .foregroundStyle(color)
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(color.opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(color.opacity(0.3), lineWidth: 1))
+    }
+
+    private var taskLine: String {
+        guard let t = task else { return " — لا مهمة اعتراض مسجّلة" }
+        if t.status == "done" { return " — مهمة الاعتراض أُنجزت" }
+        let title = (t.title ?? "").components(separatedBy: " — ").first ?? ""
+        let who = t.assignee?.short_name ?? t.assignee?.name
+        return " — مهمة «\(title)»\(who.map { " عند \($0)" } ?? "")"
+    }
+}
+
+private struct RulingCardView: View {
+    let ruling: RulingRow
+    let latest: Bool
+    let onOpenDeed: () -> Void
+    @State private var open = false
+
+    var body: some View {
+        let r = ruling
+        let reversed = ["نقض", "إلغاء", "ألغ"].contains { (r.outcome_short ?? "").contains($0) }
+        let expandable = !(r.summary ?? "").isEmpty || (r.result?.count ?? 0) > 200
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 8) {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 6) {
+                        chip(r.level.label, latest ? Theme.goldDark : Theme.muted)
+                        Text(r.shortTitle).font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.navy)
+                    }
+                    Text([r.ruling_number, r.ruling_date.map { Fmt.dual($0) }]
+                            .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.muted)
+                    if let court = r.court_name, !court.isEmpty {
+                        Text(court).font(.system(size: 11)).foregroundStyle(Theme.muted).lineLimit(1)
+                    }
+                }
+                Spacer(minLength: 0)
+                if let o = r.outcome_short, !o.isEmpty {
+                    chip(o, reversed ? Theme.danger : (latest ? Theme.goldDark : Theme.muted), icon: "hammer")
+                }
+            }
+            if let res = r.result, !res.isEmpty {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("المنطوق").font(.system(size: 10)).foregroundStyle(Theme.muted)
+                    Text(res)
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.navy)
+                        .lineSpacing(3)
+                        .lineLimit(open ? nil : 3)
+                }
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Theme.ivory)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+            }
+            if open, let sum = r.summary, !sum.isEmpty {
+                Text(sum).font(.system(size: 13)).foregroundStyle(Theme.muted).lineSpacing(3)
+            }
+            HStack(spacing: 8) {
+                if expandable {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) { open.toggle() }
+                    } label: {
+                        Label(open ? "إخفاء الأسباب" : "عرض الأسباب", systemImage: open ? "chevron.up" : "chevron.down")
+                            .font(.system(size: 12, weight: .medium))
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(Theme.navy)
+                }
+                if r.document_url != nil {
+                    Button(action: onOpenDeed) {
+                        Label("صك الحكم", systemImage: "doc.text").font(.system(size: 12, weight: .medium))
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(Theme.goldDark)
+                }
+            }
+        }
+        .padding(14)
+        .background(Theme.card)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Theme.line, lineWidth: 1))
+    }
+
+    private func chip(_ text: String, _ color: Color, icon: String? = nil) -> some View {
+        HStack(spacing: 3) {
+            if let icon { Image(systemName: icon).font(.system(size: 9)) }
+            Text(text).font(.system(size: 11, weight: .medium))
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 3)
+        .background(color.opacity(0.12))
+        .foregroundStyle(color)
+        .clipShape(Capsule())
     }
 }

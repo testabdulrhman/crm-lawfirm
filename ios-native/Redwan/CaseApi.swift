@@ -107,6 +107,26 @@ extension SB {
         ])
     }
 
+    // ===== الأحكام =====
+
+    func caseRulings(caseId: String) async throws -> [RulingRow] {
+        try await get("rulings", query: [
+            ("select", "id,title,ruling_number,ruling_date,court_name,result,summary,document_url,outcome_short,objection_until,created_at"),
+            ("case_id", "eq.\(caseId)"),
+            ("order", "ruling_date.desc.nullslast,created_at.desc"),
+        ])
+    }
+
+    func objectionTask(rulingId: String) async throws -> ObjectionTask? {
+        let rows: [ObjectionTask] = try await get("tasks", query: [
+            ("select", "id,title,status,assignee:team_members!tasks_assignee_id_fkey(name,short_name)"),
+            ("derived_key", "eq.ruling:\(rulingId):objection"),
+            ("deleted_at", "is.null"),
+            ("limit", "1"),
+        ])
+        return rows.first
+    }
+
     // ===== المستندات =====
 
     func caseDocuments(caseId: String) async throws -> [DocumentRow] {

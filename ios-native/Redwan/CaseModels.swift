@@ -187,6 +187,45 @@ struct StudyProposal: Codable, Identifiable {
     let status: String?
 }
 
+/// حكم في الملف (rulings) — outcome_short يكتبه الذكاء من المنطوق، وobjection_until يحسبه الخادم
+/// (تاريخ الحكم + مدة الاعتراض؛ null لحكم المحكمة العليا) — 2026-10-16
+struct RulingRow: Codable, Identifiable {
+    let id: String
+    let title: String?
+    let ruling_number: String?
+    let ruling_date: String?
+    let court_name: String?
+    let result: String?
+    let summary: String?
+    let document_url: String?
+    let outcome_short: String?
+    let objection_until: String?
+    let created_at: String?
+
+    /// درجة الحكم من اسم المحكمة — نفس rulingLevel في الويب (RulingsTab.tsx)
+    var level: (rank: Int, label: String, title: String, next: String?) {
+        let t = "\(court_name ?? "") \(title ?? "")"
+        if t.contains("العليا") { return (3, "عليا", "حكم المحكمة العليا", nil) }
+        if t.contains("استئناف") { return (2, "استئناف", "حكم الاستئناف", "المحكمة العليا") }
+        return (1, "ابتدائي", "الحكم الابتدائي", "محكمة الاستئناف")
+    }
+
+    /// العنوان القصير كما هو، والطويل (يعيد موضوع القضية) يُستبدل بدرجة الحكم
+    var shortTitle: String {
+        let t = (title ?? "").trimmingCharacters(in: .whitespaces)
+        return !t.isEmpty && t.count <= 28 ? t : level.title
+    }
+}
+
+/// مهمة الاعتراض المشتقة من الحكم (tasks.derived_key = ruling:<id>:objection)
+struct ObjectionTask: Codable {
+    struct Who: Codable { let name: String?; let short_name: String? }
+    let id: String
+    let title: String?
+    let status: String?
+    let assignee: Who?
+}
+
 /// مستند في الملف (documents) — category/description يكتبهما classify-doc
 struct DocumentRow: Codable, Identifiable {
     let id: String

@@ -104,6 +104,12 @@ enum Fmt {
         return hijri.string(from: d).replacingOccurrences(of: " هـ", with: "") + " هـ"
     }
 
+    /// «23 ربيع الآخر 1448 هـ (4 أكتوبر 2026)» — الهجري أولاً كبقية النظام
+    static func dual(_ isoStr: String?) -> String {
+        guard date(isoStr) != nil else { return "—" }
+        return "\(hijriLong(isoStr)) (\(gregLong(isoStr)))"
+    }
+
     static func hijriDay(_ d: Date) -> String { hijriDayF.string(from: d) }
 
     static func hijriMonthYear(_ d: Date) -> String {
