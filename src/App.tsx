@@ -50,6 +50,7 @@ import { AssistantLogPage } from '@/features/settings/AssistantLogPage'
 import { ChangeRequestsPage } from '@/features/change-requests/ChangeRequestsPage'
 import { NotificationsPage } from '@/features/notifications/NotificationsPage'
 import { OfficeDocumentsPage } from '@/features/office-docs/OfficeDocumentsPage'
+import { ResearchPage } from '@/features/research/ResearchPage'
 import { HrRequestsPage } from '@/features/hr/HrRequestsPage'
 import { HubMonitorPage } from '@/features/hub/HubMonitorPage'
 import { MonitorShell } from '@/components/layout/MonitorShell'
@@ -94,6 +95,7 @@ function ProtectedRoutes() {
         <Route path="/matters" component={MattersPage} />
         <Route path="/discussions" component={DiscussionsPage} />
         <Route path="/clients" component={ClientChatsPage} />
+        <Route path="/research" component={ResearchPage} />
         <Route path="/cases/new" component={CaseNewPage} />
         <Route path="/cases/:id">
           {(params) => <CaseDetail id={params.id} />}

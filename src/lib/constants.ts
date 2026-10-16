@@ -28,6 +28,7 @@ export const ROUTE_TITLES: Record<string, string> = {
   '/settings': 'الإعدادات',
   '/discussions': 'النقاشات',
   '/clients': 'واتساب',
+  '/research': 'الباحث',
   '/matters': 'المشاريع',
   '/calendar': 'التقويم',
   '/hr': 'الإجازات والاستئذان',

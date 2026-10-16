@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useLocation } from 'wouter'
 import {
   Activity,
+  Sparkles,
   LayoutDashboard,
   Handshake,
   ListTodo,
@@ -116,6 +117,8 @@ const navSections: { title?: string; items: NavItem[] }[] = [
       { label: 'النقاشات', href: '/discussions', icon: MessagesSquare, badge: 'unread_discussions', collab: true, primary: true },
       // محادثات الواتساب مع العملاء — منفصلة عن النقاشات: ما يُكتب هنا يصل للعميل (2026-10-06)
       { label: 'واتساب', href: '/clients', icon: MessageCircle, badge: 'unread_client_chats', primary: true },
+      // «الباحث»: بحث بالذكاء في الإنترنت والأنظمة وبيانات المكتب ومصادر الموظف (2026-10-16) — لا للمتعاون
+      { label: 'الباحث', href: '/research', icon: Sparkles, primary: true },
     ],
   },
   {
