@@ -21,7 +21,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  // x-region: نداء المتصفح بـ region (2026-10-15) يضيفها، وبدونها يرفض المتصفح الطلب كله (عطل ١٥/١٠ صباحاً)
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-region',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 const json = (b: unknown, s = 200) =>
