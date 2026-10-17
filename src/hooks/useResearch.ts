@@ -233,7 +233,7 @@ export interface StreamHandlers {
  * يُرجع ما حُفظ: المحادثة ورسالة الإجابة وإحالاتها.
  */
 export async function askResearch(
-  params: { chatId: string | null; message: string; caseId?: string | null },
+  params: { chatId: string | null; message: string; caseId?: string | null; runId?: string },
   h: StreamHandlers,
   signal?: AbortSignal
 ): Promise<{ chatId: string; messageId: string | null; citations: ResearchCitation[] }> {
@@ -248,7 +248,7 @@ export async function askResearch(
       'Content-Type': 'application/json',
       'x-region': 'eu-west-1',
     },
-    body: JSON.stringify({ chat_id: params.chatId, message: params.message, case_id: params.caseId ?? null }),
+    body: JSON.stringify({ chat_id: params.chatId, message: params.message, case_id: params.caseId ?? null, run_id: params.runId ?? null }),
     signal,
   })
   if (!res.ok || !res.body) {

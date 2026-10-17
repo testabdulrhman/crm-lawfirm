@@ -6,6 +6,7 @@ import { create } from 'zustand'
 import type { QueryClient } from '@tanstack/react-query'
 
 import { askResearch } from '@/hooks/useResearch'
+import { supabase } from '@/lib/supabase'
 import { errMessage } from '@/lib/errors'
 
 export interface Run {
@@ -19,6 +20,8 @@ export interface Run {
   text: string
   status: string | null
   error: string | null
+  /** ضُغط «إيقاف» — ننتظر الخادم يتوقف ويحفظ ما كتبه */
+  stopping?: boolean
 }
 
 interface State {
@@ -62,14 +65,16 @@ export function startRun(qc: QueryClient, params: { chatId: string | null; messa
   void (async () => {
     try {
       const r = await askResearch(
-        params,
+        { ...params, runId: key },
         {
           onMeta: (id) => {
             patch(key, { chatId: id })
+            // ضُغط «إيقاف» قبل أن يُعرف رقم المحادثة
+            if (useResearchRuns.getState().runs[key]?.stopping) void requestStop(id, key)
             void qc.invalidateQueries({ queryKey: ['research', 'chats'] })
           },
-          onStatus: (st) => patch(key, { status: st }),
-          onDelta: (d) => patch(key, (run) => ({ text: run.text + d, status: null })),
+          onStatus: (st) => patch(key, (run) => ({ status: run.stopping ? 'يوقف' : st })),
+          onDelta: (d) => patch(key, (run) => ({ text: run.text + d, status: run.stopping ? 'يوقف' : null })),
         },
         ctrl.signal
       )
@@ -95,8 +100,22 @@ export function startRun(qc: QueryClient, params: { chatId: string | null; messa
   return key
 }
 
+async function requestStop(chatId: string, key: string) {
+  const { error } = await supabase.from('research_chats').update({ stop_run: key }).eq('id', chatId)
+  if (error) controllers.get(key)?.abort() // تعذّر إبلاغ الخادم: نقطع العرض على الأقل
+}
+
+/**
+ * «إيقاف» يوقف الخادم نفسه (طلب المدير 2026-10-17): نكتب رقم التشغيلة في research_chats.stop_run،
+ * فيقطع الخادم البث ويحفظ ما كتبه مع «أُوقفت الإجابة بطلبك» ويُرسل done — فيُغلق البث كالمعتاد.
+ * وإن لم يستجب خلال ١٢ ثانية نقطع العرض هنا.
+ */
 export function stopRun(key: string) {
-  controllers.get(key)?.abort()
+  const run = useResearchRuns.getState().runs[key]
+  if (!run || run.stopping) return
+  useResearchRuns.getState().patch(key, { stopping: true, status: 'يوقف' })
+  if (run.chatId) void requestStop(run.chatId, key)
+  setTimeout(() => controllers.get(key)?.abort(), 12_000)
 }
 
 /** تشغيلات «محادثة جديدة» لم يُتبنَّ رقمها — تُعلَّم حين ينتقل الموظف لغيرها */

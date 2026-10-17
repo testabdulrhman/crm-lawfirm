@@ -273,6 +273,8 @@ Deno.serve(async (req) => {
 
   // المحادثة: القائمة بصلاحية صاحبها، أو جديدة باسم أول سؤال — ومربوطة بملف إن بدأت من صفحته
   let chatId = typeof body?.chat_id === "string" ? body.chat_id : null;
+  // رقم التشغيلة من المتصفح — «إيقاف» يكتبه في research_chats.stop_run فنتوقف (2026-10-17)
+  const runId = typeof body?.run_id === "string" && /^[0-9a-f-]{36}$/i.test(body.run_id) ? body.run_id : null;
   let caseId: string | null = null;
   if (chatId) {
     const { data: c } = await asUser.from("research_chats").select("id, case_id").eq("id", chatId).is("deleted_at", null).maybeSingle();
@@ -311,6 +313,8 @@ Deno.serve(async (req) => {
         try { ctrl.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)); }
         catch { clientGone = true; }
       };
+      let stopped = false;
+      let stopTimer: number | null = null;
       const work = (async () => {
       const tools: string[] = [];
       let answer = "";
@@ -343,8 +347,20 @@ Deno.serve(async (req) => {
           content: i === 0 && blocks.length ? [...blocks, { type: "text", text: t.content }] : t.content,
         }));
 
+        // «إيقاف»: نقرأ stop_run كل ١٫٥ ثانية (لا مع الأحداث وحدها — البحث في الإنترنت يسكت ثواني)،
+        // فإن طابق تشغيلتنا قُطع البث الجاري وحُفظ ما كُتب
+        let current: { abort(): void } | null = null;
+        if (runId) {
+          stopTimer = setInterval(async () => {
+            if (stopped) return;
+            const { data } = await admin.from("research_chats").select("stop_run").eq("id", chatId).maybeSingle();
+            if (data?.stop_run === runId) { stopped = true; current?.abort(); }
+          }, 1500);
+        }
+
         const citations = new Map<string, Cite>();
         for (let round = 0; round < MAX_ROUNDS; round++) {
+          if (stopped) break;
           const s = anthropic.beta.messages.stream({
             model,
             max_tokens: 64000,
@@ -362,6 +378,8 @@ Deno.serve(async (req) => {
             ...({ fallbacks: "default" } as any),
           } as Anthropic.Beta.MessageCreateParamsStreaming);
 
+          current = s;
+          try {
           for await (const ev of s) {
             if (ev.type === "content_block_start") {
               const cb = ev.content_block as { type: string; name?: string };
@@ -376,6 +394,10 @@ Deno.serve(async (req) => {
               send("delta", { text: ev.delta.text });
             }
           }
+          } catch (e) {
+            if (!stopped) throw e; // قطعُنا نحن البث
+          }
+          if (stopped) break;
           const msg = await s.finalMessage();
           collectCitations(msg.content as unknown[] as Record<string, unknown>[], docIndex, citations);
 
@@ -394,11 +416,17 @@ Deno.serve(async (req) => {
             const r = await runSystemTool(asUser, tu.name, tu.input);
             return { type: "tool_result" as const, tool_use_id: tu.id, content: r.text, is_error: r.isError || undefined };
           }));
+          if (stopped) break;
           messages.push({ role: "assistant", content: msg.content as Anthropic.Beta.BetaContentBlockParam[] });
           messages.push({ role: "user", content: results });
           if (answer && !answer.endsWith("\n")) { answer += "\n\n"; send("delta", { text: "\n\n" }); }
         }
 
+        if (stopped) {
+          const note = answer.trim() ? "\n\n— أُوقفت الإجابة بطلبك." : "أُوقفت الإجابة قبل أن تبدأ.";
+          answer = answer.trim() + note;
+          send("delta", { text: note });
+        }
         const cites = [...citations.values()].slice(0, 30);
         const { data: saved } = await admin.from("research_messages")
           .insert({ chat_id: chatId, role: "assistant", content: answer.trim(), citations: cites, tools: [...new Set(tools)], model })
@@ -410,9 +438,10 @@ Deno.serve(async (req) => {
         console.error("research", error);
         send("error", { message: error.includes("credit") ? "رصيد الذكاء منتهٍ — يُشحن من لوحة Anthropic" : "تعذّر إكمال الإجابة — حاول مرة أخرى" });
       } finally {
+        if (stopTimer) clearInterval(stopTimer);
         await admin.from("ai_assistant_runs").insert({
           member_id: me.id, user_name: me.name, request: `[الباحث] ${message.slice(0, 300)}`,
-          reply: answer.slice(0, 1000), tools: [...new Set(tools)], failed_tools: [], actions: [],
+          reply: answer.slice(0, 1000), tools: [...new Set(tools)], failed_tools: [], actions: stopped ? ["stopped"] : [],
           finished: !error, ms: Date.now() - startedAt, model, error,
         }).then(() => {}, () => {});
         if (!clientGone) { try { ctrl.close(); } catch { /* أغلقه المتصفح */ } }
