@@ -19,6 +19,24 @@ import { useIsCollaborator } from '@/hooks/useIsCollaborator'
 export function AppLayout({ children }: { children: ReactNode }) {
   const isCollaborator = useIsCollaborator()
   const [mobileOpen, setMobileOpen] = useState(false)
+  // القائمة الجانبية مطويّة إلى أيقونات (على الحاسب) — تفضيل في المتصفح
+  const [sideCollapsed, setSideCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('sidebar:collapsed') === '1'
+    } catch {
+      return false
+    }
+  })
+  const toggleSide = () => {
+    setSideCollapsed((v) => {
+      try {
+        localStorage.setItem('sidebar:collapsed', v ? '0' : '1')
+      } catch {
+        /* وضع خاص — يبقى للجلسة */
+      }
+      return !v
+    })
+  }
   const { teamMember } = useAuth()
   const [location, navigate] = useLocation()
   // النقاش لحظي في كل الصفحات: المجرى والخيط وشارة غير المقروء (2026-10-07)
@@ -58,8 +76,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
       {/* الإطار العائم: التطبيق كله داخل بطاقة واحدة على خلفية دافئة */}
       <div className="flex h-full w-full min-w-0 overflow-hidden bg-background md:rounded-[28px] md:shadow-[0_8px_40px_rgba(17,29,58,0.10)]">
       {/* Sidebar ثابت على الحاسب (يمين بسبب RTL) */}
-      <div className="hidden md:block">
-        <Sidebar />
+      <div className="relative z-30 hidden md:block">
+        <Sidebar collapsed={sideCollapsed} onToggleCollapse={toggleSide} />
       </div>
 
       {/* Drawer الجوال — وداخل التطبيق يفتحه زر «المزيد» في الشريط السفلي */}

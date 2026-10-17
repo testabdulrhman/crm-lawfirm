@@ -299,10 +299,19 @@ Deno.serve(async (req) => {
 
   const startedAt = Date.now();
   const encoder = new TextEncoder();
+  // الإجابة تكتمل وتُحفظ ولو غادر الموظف الصفحة (2026-10-17: «كتبت للباحث وطلعت ورجعت حصلته متوقف»):
+  // انقطاع المتصفح كان يرمي «cannot close or enqueue» داخل الحلقة فتضيع الإجابة كلها. الآن البث
+  // يتوقف بصمت والعمل يستمر حتى الحفظ، وwaitUntil يُبقي الدالة حيّة بعد إغلاق الاتصال.
+  let clientGone = false;
   const stream = new ReadableStream({
-    async start(ctrl) {
-      const send = (event: string, data: unknown) =>
-        ctrl.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+    cancel() { clientGone = true; },
+    start(ctrl) {
+      const send = (event: string, data: unknown) => {
+        if (clientGone) return;
+        try { ctrl.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)); }
+        catch { clientGone = true; }
+      };
+      const work = (async () => {
       const tools: string[] = [];
       let answer = "";
       let model = FALLBACK_MODEL;
@@ -406,8 +415,12 @@ Deno.serve(async (req) => {
           reply: answer.slice(0, 1000), tools: [...new Set(tools)], failed_tools: [], actions: [],
           finished: !error, ms: Date.now() - startedAt, model, error,
         }).then(() => {}, () => {});
-        ctrl.close();
+        if (!clientGone) { try { ctrl.close(); } catch { /* أغلقه المتصفح */ } }
       }
+      })();
+      // deno-lint-ignore no-explicit-any
+      (globalThis as any).EdgeRuntime?.waitUntil?.(work);
+      return work;
     },
   });
 

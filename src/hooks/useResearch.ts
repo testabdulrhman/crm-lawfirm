@@ -65,10 +65,20 @@ export function useResearchChats() {
   })
 }
 
+/** آخر سؤال بلا إجابة منذ أقل من هذا = الخادم ما زال يكتبها (حدّ الدالة ٤٠٠ ثانية) */
+export const PENDING_MS = 7 * 60_000
+
+export function isAwaitingAnswer(messages: ResearchMessage[] | undefined): boolean {
+  const last = messages?.[messages.length - 1]
+  return !!last && last.role === 'user' && Date.now() - new Date(last.created_at).getTime() < PENDING_MS
+}
+
 export function useResearchMessages(chatId: string | null) {
   return useQuery({
     queryKey: [KEY, 'messages', chatId],
     enabled: !!chatId,
+    // سؤال لم تصل إجابته بعد (غادر الموظف أو حدّث الصفحة): نتابع القاعدة حتى تُحفظ
+    refetchInterval: (q) => (isAwaitingAnswer(q.state.data as ResearchMessage[] | undefined) ? 4000 : false),
     queryFn: async (): Promise<ResearchMessage[]> => {
       const { data, error } = await supabase.from('research_messages')
         .select('id, role, content, citations, tools, created_at').eq('chat_id', chatId!)
@@ -269,7 +279,8 @@ export async function askResearch(
       else if (ev === 'error') throw new Error(data.message)
     }
   }
-  if (!result) throw new Error('انقطعت الإجابة قبل اكتمالها — حاول مرة أخرى')
+  // انقطع البث قبل «done»: انقطاع شبكة لا فشل — الخادم يكمل ويحفظ (TypeError يميّزه عند المتصل)
+  if (!result) throw new TypeError('انقطع الاتصال قبل اكتمال الإجابة')
   return { chatId, ...result }
 }
 

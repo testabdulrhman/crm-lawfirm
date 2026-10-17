@@ -2,6 +2,9 @@ import { useState } from 'react'
 import { Link, useLocation } from 'wouter'
 import {
   Activity,
+  ChevronLeft,
+  ChevronRight,
+  MoreHorizontal,
   Sparkles,
   LayoutDashboard,
   Handshake,
@@ -183,7 +186,13 @@ const navSections: { title?: string; items: NavItem[] }[] = [
   },
 ]
 
-export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
+/**
+ * collapsed: أيقونات فقط (٧٢px) — طلب المدير 2026-10-17 «أبي أقدر أصغر السلايد اللي على اليمين».
+ * التبديل على الحاسب وحده (onToggleCollapse)، والدرج في الجوال كامل دائماً.
+ */
+export function Sidebar({
+  onNavigate, collapsed = false, onToggleCollapse,
+}: { onNavigate?: () => void; collapsed?: boolean; onToggleCollapse?: () => void }) {
   const [location] = useLocation()
   const { teamMember, logout } = useAuth()
   const { data: office } = useOfficeInfo()
@@ -267,6 +276,28 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
     const Icon = item.icon
     const badgeCount = badgeOf(item)
     const showBadge = !!item.badge && badgeCount > 0
+    if (collapsed) {
+      return (
+        <Link
+          key={item.href}
+          href={item.href}
+          onClick={onNavigate}
+          title={item.label}
+          aria-label={item.label}
+          className={cn(
+            'relative mx-auto flex h-10 w-10 items-center justify-center rounded-xl transition-colors',
+            active ? 'bg-gold text-navy' : 'text-foreground/75 hover:bg-muted hover:text-foreground'
+          )}
+        >
+          <Icon className="h-[18px] w-[18px]" />
+          {showBadge && (
+            <span className="absolute -left-1 -top-1 min-w-4 rounded-full bg-navy px-1 text-center text-[10px] font-bold leading-4 text-white tabular-nums dark:bg-gold dark:text-navy">
+              {badgeCount > 99 ? '99+' : fmtNumber(badgeCount)}
+            </span>
+          )}
+        </Link>
+      )
+    }
     return (
       <div key={item.href} className="group relative">
         <Link
@@ -311,10 +342,30 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   }
 
   return (
-    <aside className="pt-safe pb-safe flex h-full w-64 flex-col bg-card text-foreground">
+    <aside
+      className={cn(
+        'pt-safe pb-safe relative flex h-full flex-col bg-card text-foreground transition-[width] duration-200',
+        collapsed ? 'w-[72px]' : 'w-64'
+      )}
+    >
+      {onToggleCollapse && (
+        <button
+          type="button"
+          onClick={onToggleCollapse}
+          title={collapsed ? 'وسّع القائمة' : 'صغّر القائمة'}
+          aria-label={collapsed ? 'وسّع القائمة' : 'صغّر القائمة'}
+          className="absolute -left-3 top-8 z-40 grid h-6 w-6 place-items-center rounded-full border border-border bg-card text-muted-foreground shadow-sm transition-colors hover:bg-gold hover:text-navy"
+        >
+          {collapsed ? <ChevronLeft className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+        </button>
+      )}
       {/* الترويسة: الشعار على لوحة كحلية — يضمن وضوحه أياً كان تصميمه */}
       <div className="px-3 pb-4 pt-4">
-        {office?.logo_url ? (
+        {collapsed ? (
+          <span className="mx-auto grid h-11 w-11 place-items-center rounded-xl bg-navy" title={office?.office_name ?? 'رضوان'}>
+            <Scale className="h-5 w-5 text-gold" />
+          </span>
+        ) : office?.logo_url ? (
           <div className="rounded-2xl bg-navy px-3 py-3">
             <img
               src={office.logo_url}
@@ -335,19 +386,21 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       </div>
 
       {/* التنقل */}
-      <nav className="flex-1 space-y-4 overflow-y-auto px-3 pb-4">
+      <nav className={cn('flex-1 overflow-y-auto pb-4', collapsed ? 'space-y-2 px-2' : 'space-y-4 px-3')}>
         {navSections.map((section, si) => {
           // المتعاون الخارجي: البنود الموسومة collab فقط، والأقسام التي تفرغ تُسقط
           const items = visible(section.items).filter(inMain)
           if (items.length === 0) return null
           return (
             <div key={si}>
-              {section.title && !isCollaborator && (
+              {collapsed ? (
+                si > 0 && <div className="mx-3 mb-2 border-t border-border/60" />
+              ) : section.title && !isCollaborator && (
                 <p className="px-3 pb-1.5 text-[11px] font-semibold tracking-wide text-muted-foreground/70">
                   {section.title}
                 </p>
               )}
-              <div className="space-y-0.5">
+              <div className={collapsed ? 'space-y-1' : 'space-y-0.5'}>
                 {items.map((item) =>
                   renderItem(item, compact && !item.primary ? { pinnable: 'unpin' } : {})
                 )}
@@ -356,7 +409,23 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           )
         })}
 
-        {moreItems.length > 0 && (
+        {moreItems.length > 0 && collapsed && (
+          // المطويّة: «المزيد» يوسّع القائمة ويفتح أقسامه
+          <button
+            type="button"
+            onClick={() => {
+              if (!moreOpen) toggleMore()
+              onToggleCollapse?.()
+            }}
+            title="المزيد"
+            aria-label="المزيد"
+            className="relative mx-auto flex h-10 w-10 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <MoreHorizontal className="h-[18px] w-[18px]" />
+            {moreBadge > 0 && <span className="absolute left-1.5 top-1.5 h-2 w-2 rounded-full bg-gold" />}
+          </button>
+        )}
+        {moreItems.length > 0 && !collapsed && (
           <div>
             <button
               type="button"
@@ -396,7 +465,22 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       </nav>
 
       {/* المستخدم الحالي + خروج */}
-      <div className="border-t border-border/60 p-3">
+      <div className={cn('border-t border-border/60', collapsed ? 'px-2 py-3' : 'p-3')}>
+        {collapsed ? (
+          <div className="flex flex-col items-center gap-2">
+            <Link href={teamMember?.id ? `/team/${teamMember.id}` : '/'} onClick={onNavigate} title={teamMember?.name ?? 'ملفي'} className="rounded-full">
+              <UserAvatar member={teamMember} className="h-8 w-8" />
+            </Link>
+            <button
+              onClick={() => logout()}
+              title="تسجيل الخروج"
+              aria-label="تسجيل الخروج"
+              className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              <LogOut className="h-[18px] w-[18px]" />
+            </button>
+          </div>
+        ) : (
         <div className="flex items-center gap-2.5 rounded-xl px-2 py-1.5">
           {/* الاسم يفتح ملف الموظف نفسه — بياناته ومرفقاته وإجازاته (لا «صفحتي» في الويب) */}
           <Link
@@ -424,6 +508,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
             <LogOut className="h-[18px] w-[18px]" />
           </button>
         </div>
+        )}
       </div>
     </aside>
   )

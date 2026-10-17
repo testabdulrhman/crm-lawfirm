@@ -4,7 +4,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import {
-  ArrowUp, BookOpen, Copy, FileDown, FileText, FolderOpen, Globe, Loader2, MessageSquarePlus, PanelLeft, Search, Sparkles, Square, Trash2, History, X,
+  ArrowUp, BookOpen, PanelRightClose, PanelRightOpen, Copy, FileDown, FileText, FolderOpen, Globe, Loader2, MessageSquarePlus, PanelLeft, Search, Sparkles, Square, Trash2, History, X,
 } from 'lucide-react'
 import { Link } from 'wouter'
 
@@ -21,13 +21,14 @@ import { arNorm } from '@/lib/arabic'
 import { cn } from '@/lib/utils'
 import { usePageState } from '@/hooks/usePageState'
 import {
-  askResearch, useChatSources, useCreateChat, useDeleteChat, useResearchCase, useResearchChats, useResearchMessages,
+  isAwaitingAnswer, useChatSources, useCreateChat, useDeleteChat, useResearchCase, useResearchChats, useResearchMessages,
   type ResearchCitation, type ResearchMessage,
 } from '@/hooks/useResearch'
 import { useOfficeInfo } from '@/hooks/useSettings'
 import { addDocumentDirect } from '@/hooks/useCaseDocuments'
 import { useAuth } from '@/stores/auth'
 import { buildLetterDocx, letterFileName } from '@/lib/letterDocx'
+import { releaseNewRuns, startRun, stopRun, useResearchRuns, type Run } from './liveRuns'
 import { downloadBlob } from '@/lib/docxTemplate'
 import { clearQueryParam, queryParam } from '@/lib/queryParam'
 import { Markdown } from './Markdown'
@@ -48,7 +49,6 @@ const STARTERS = [
   'ابحث في ملفات المكتب عن القضايا العمالية المفتوحة وأحكامها',
 ]
 
-type Live = { question: string; text: string; status: string | null; error: string | null }
 
 export function ResearchPage() {
   const qc = useQueryClient()
@@ -70,11 +70,32 @@ export function ResearchPage() {
   const createChat = useCreateChat()
   const deleteChat = useDeleteChat()
   const [input, setInput] = useState('')
-  const [live, setLive] = useState<Live | null>(null)
+  // الإجابة الجارية لهذه المحادثة — من المخزن العام، فتبقى إن غادرت الصفحة أو انتقلت لمحادثة أخرى
+  const runs = useResearchRuns((st) => st.runs)
+  const live: Run | null =
+    Object.values(runs).find((r) => (chatId ? r.chatId === chatId : r.fromNew && !r.adopted)) ?? null
+  const runningChats = new Set(Object.values(runs).filter((r) => !r.error && r.chatId).map((r) => r.chatId!))
   const [panel, setPanel] = useState<'chats' | 'sources' | null>(null)
-  const abortRef = useRef<AbortController | null>(null)
   const endRef = useRef<HTMLDivElement>(null)
   const busy = !!live && !live.error
+  // سؤال محفوظ بلا إجابة ولا بثّ هنا: الخادم يكملها (غادرت أو حدّثت الصفحة) — نعرض ذلك ونتابع القاعدة
+  const awaiting = !live && isAwaitingAnswer(messages)
+  const stalled = !live && !awaiting && messages.length > 0 && messages[messages.length - 1].role === 'user'
+
+  // «محادثة جديدة» عُرف رقمها وأنت ما زلت عليها ⇒ افتحها
+  useEffect(() => {
+    if (!chatId && live?.fromNew && live.chatId) {
+      setChatId(live.chatId)
+      setPendingCase(null)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatId, live?.chatId])
+  // أُوقف العرض ثم حُفظت الإجابة كاملة ⇒ يُطوى سطر الإيقاف
+  useEffect(() => {
+    if (live?.error && messages.length && messages[messages.length - 1].role === 'assistant') {
+      useResearchRuns.getState().drop(live.key)
+    }
+  }, [live?.error, live?.key, messages])
   const activeCaseId = chatId ? chats.find((c) => c.id === chatId)?.case_id ?? null : pendingCase
   const { data: activeCase } = useResearchCase(activeCaseId)
 
@@ -91,53 +112,41 @@ export function ResearchPage() {
 
   const send = async (text?: string) => {
     const q = (text ?? input).trim()
-    if (!q || busy) return
+    if (!q || busy || awaiting) return
     setInput('')
-    setLive({ question: q, text: '', status: 'يبدأ', error: null })
-    const ctrl = new AbortController()
-    abortRef.current = ctrl
-    try {
-      const r = await askResearch(
-        { chatId, message: q, caseId: chatId ? null : pendingCase },
-        {
-          onMeta: (id) => { if (id !== chatId) { setChatId(id); setPendingCase(null) } },
-          onStatus: (s) => setLive((l) => (l ? { ...l, status: s } : l)),
-          onDelta: (d) => setLive((l) => (l ? { ...l, text: l.text + d, status: null } : l)),
-        },
-        ctrl.signal
-      )
-      await Promise.all([
-        qc.invalidateQueries({ queryKey: ['research', 'messages', r.chatId] }),
-        qc.invalidateQueries({ queryKey: ['research', 'chats'] }),
-      ])
-      setLive(null)
-    } catch (e) {
-      if ((e as Error).name === 'AbortError') {
-        // الإيقاف: ما وصل يبقى معروضاً، ويُعاد السؤال للحقل
-        setLive((l) => (l ? { ...l, status: null, error: 'أُوقفت الإجابة' } : l))
-      } else {
-        setLive((l) => (l ? { ...l, status: null, error: errMessage(e) ?? 'تعذّرت الإجابة' } : l))
-      }
-      setInput((cur) => cur || q)
-      qc.invalidateQueries({ queryKey: ['research'] })
-    } finally {
-      abortRef.current = null
-    }
+    startRun(qc, { chatId, message: q, caseId: chatId ? null : pendingCase })
   }
 
   const newChat = () => {
-    if (busy) return
+    releaseNewRuns()
     setChatId(null)
     setPendingCase(null)
-    setLive(null)
     setPanel(null)
   }
 
-  const chatList = (
+  // قائمة المحادثات تُطوى على الحاسب إلى شريط رفيع (طلب المدير 2026-10-17) — تفضيل في المتصفح
+  const [chatsCollapsed, setChatsCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('research:chatsCollapsed') === '1'
+    } catch {
+      return false
+    }
+  })
+  const collapseChats = (v: boolean) => {
+    setChatsCollapsed(v)
+    try {
+      localStorage.setItem('research:chatsCollapsed', v ? '1' : '0')
+    } catch {
+      /* وضع خاص */
+    }
+  }
+  const chatList = (collapsible: boolean) => (
     <ChatList
       chats={chats}
       activeId={chatId}
-      onPick={(id) => { if (!busy) { setChatId(id); setLive(null); setPanel(null) } }}
+      running={runningChats}
+      onCollapse={collapsible ? () => collapseChats(true) : undefined}
+      onPick={(id) => { releaseNewRuns(); setChatId(id); setPanel(null) }}
       onNew={newChat}
       onDelete={(id) => {
         deleteChat.mutate(id)
@@ -165,9 +174,25 @@ export function ResearchPage() {
   return (
     <div className="mx-auto flex h-[calc(100dvh-7.5rem)] max-w-[1500px] min-h-[520px] gap-3">
       {/* المحادثات */}
-      <aside className="hidden w-64 shrink-0 overflow-hidden rounded-2xl border border-border/70 bg-card lg:flex lg:flex-col">
-        {chatList}
-      </aside>
+      {chatsCollapsed ? (
+        <aside className="hidden w-14 shrink-0 flex-col items-center gap-2 rounded-2xl border border-border/70 bg-card py-3 lg:flex">
+          <Button variant="ghost" size="icon" onClick={() => collapseChats(false)} title="وسّع قائمة المحادثات" aria-label="وسّع قائمة المحادثات">
+            <PanelRightOpen className="h-4 w-4" />
+          </Button>
+          <Button variant="gold" size="icon" onClick={newChat} title="محادثة جديدة" aria-label="محادثة جديدة">
+            <MessageSquarePlus className="h-4 w-4" />
+          </Button>
+          {runningChats.size > 0 && (
+            <span title="إجابة تُكتب في محادثة أخرى" className="mt-1 text-gold">
+              <Loader2 className="h-4 w-4 animate-spin" />
+            </span>
+          )}
+        </aside>
+      ) : (
+        <aside className="hidden w-64 shrink-0 overflow-hidden rounded-2xl border border-border/70 bg-card lg:flex lg:flex-col">
+          {chatList(true)}
+        </aside>
+      )}
 
       {/* المحادثة */}
       <section className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-border/70 bg-card">
@@ -206,6 +231,20 @@ export function ResearchPage() {
                   </div>
                 </>
               )}
+              {awaiting && (
+                <p className="flex items-center gap-2 rounded-xl bg-gold/10 px-3 py-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin text-gold" />
+                  الباحث يكمل الإجابة — تظهر هنا حين تكتمل، ولك أن تتنقّل في هذه الأثناء.
+                </p>
+              )}
+              {stalled && (
+                <div className="flex flex-wrap items-center gap-2 rounded-xl border border-destructive/30 px-3 py-2 text-sm">
+                  <span className="text-destructive">لم تكتمل الإجابة عن هذا السؤال.</span>
+                  <Button size="sm" variant="outline" className="h-7" onClick={() => void send(messages[messages.length - 1].content)}>
+                    أعد السؤال
+                  </Button>
+                </div>
+              )}
               <div ref={endRef} />
             </div>
           )}
@@ -227,8 +266,12 @@ export function ResearchPage() {
               placeholder="اسأل الباحث عن أي شيء — نظام، حكم، صياغة، ملف في المكتب…"
               className="max-h-48 min-h-[40px] resize-none border-0 bg-transparent p-1 shadow-none focus-visible:ring-0"
             />
-            {busy ? (
-              <Button size="icon" variant="outline" className="h-9 w-9 shrink-0 rounded-full" onClick={() => abortRef.current?.abort()} aria-label="إيقاف">
+            {awaiting ? (
+              <Button size="icon" variant="outline" className="h-9 w-9 shrink-0 rounded-full" disabled aria-label="يكمل الإجابة">
+                <Loader2 className="h-4 w-4 animate-spin" />
+              </Button>
+            ) : busy ? (
+              <Button size="icon" variant="outline" className="h-9 w-9 shrink-0 rounded-full" onClick={() => live && stopRun(live.key)} aria-label="إيقاف">
                 <Square className="h-3.5 w-3.5 fill-current" />
               </Button>
             ) : (
@@ -252,7 +295,7 @@ export function ResearchPage() {
       <Dialog open={!!panel} onOpenChange={(o) => !o && setPanel(null)}>
         <DialogContent className="flex h-[80dvh] max-w-md flex-col gap-0 p-0">
           <DialogHeader className="sr-only"><DialogTitle>{panel === 'chats' ? 'المحادثات' : 'المصادر'}</DialogTitle></DialogHeader>
-          <div className="min-h-0 flex-1">{panel === 'chats' ? chatList : sourcesPanel}</div>
+          <div className="min-h-0 flex-1">{panel === 'chats' ? chatList(false) : sourcesPanel}</div>
         </DialogContent>
       </Dialog>
     </div>
@@ -370,22 +413,33 @@ function Citations({ items }: { items: ResearchCitation[] }) {
 }
 
 function ChatList({
-  chats, activeId, onPick, onNew, onDelete,
+  chats, activeId, running, onPick, onNew, onDelete, onCollapse,
 }: {
   chats: { id: string; title: string | null; updated_at: string }[]
   activeId: string | null
+  /** محادثات تُكتب إجابتها الآن */
+  running: Set<string>
   onPick: (id: string) => void
   onNew: () => void
   onDelete: (id: string) => void
+  /** على الحاسب: طيّ القائمة إلى شريط رفيع */
+  onCollapse?: () => void
 }) {
   const [q, setQ] = useState('')
   const shown = q.trim() ? chats.filter((c) => arNorm(c.title ?? '').includes(arNorm(q.trim()))) : chats
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="space-y-2 border-b p-3">
-        <Button variant="gold" className="w-full gap-1" onClick={onNew}>
-          <MessageSquarePlus className="h-4 w-4" /> محادثة جديدة
-        </Button>
+        <div className="flex gap-1.5">
+          <Button variant="gold" className="flex-1 gap-1" onClick={onNew}>
+            <MessageSquarePlus className="h-4 w-4" /> محادثة جديدة
+          </Button>
+          {onCollapse && (
+            <Button variant="ghost" size="icon" className="shrink-0" onClick={onCollapse} title="صغّر القائمة" aria-label="صغّر قائمة المحادثات">
+              <PanelRightClose className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
         <div className="relative">
           <Search className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="بحث في المحادثات…" className="h-8 pr-8 text-sm" />
@@ -401,7 +455,13 @@ function ChatList({
             className={cn('group flex items-center gap-1 rounded-lg px-2 py-1.5 text-sm', c.id === activeId ? 'bg-gold/15' : 'hover:bg-muted/60')}>
             <button type="button" onClick={() => onPick(c.id)} className="min-w-0 flex-1 text-right">
               <p className="truncate font-medium">{c.title || 'محادثة'}</p>
-              <p className="text-[11px] text-muted-foreground">{fmtDatePref(c.updated_at)}</p>
+              {running.has(c.id) ? (
+                <p className="flex items-center gap-1 text-[11px] text-gold">
+                  <Loader2 className="h-3 w-3 animate-spin" /> يكتب الإجابة
+                </p>
+              ) : (
+                <p className="text-[11px] text-muted-foreground">{fmtDatePref(c.updated_at)}</p>
+              )}
             </button>
             <button type="button" onClick={() => { if (confirm('حذف المحادثة؟')) onDelete(c.id) }}
               className="rounded p-1 text-muted-foreground opacity-0 hover:text-destructive group-hover:opacity-100" aria-label="حذف">
