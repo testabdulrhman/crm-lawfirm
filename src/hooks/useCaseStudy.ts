@@ -31,6 +31,12 @@ export interface CaseStudy {
   status: string // draft/approved
   generated_at: string | null
   generated_by: string | null
+  /** ما قرأته الدراسة من مستندات الملف وما لم تقرأه وسببه (2026-10-17) — null للدراسات الأقدم */
+  docs_coverage?: {
+    total: number
+    read: { name: string; kind: string }[]
+    skipped: { name: string; reason: string }[]
+  } | null
   updated_at: string | null
   updated_by: string | null
   created_at: string | null

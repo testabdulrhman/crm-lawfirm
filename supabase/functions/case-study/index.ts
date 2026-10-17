@@ -19,6 +19,7 @@
 //   • تسجيل الفشل في error_logs ليظهر سببه للمحامي بدل «استغرق وقتاً أطول»
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { cachedText, logCacheUsage } from "../_shared/prompt-cache.ts";
+import { docxText } from "../_shared/docx.ts";
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
@@ -48,45 +49,107 @@ async function getModel(): Promise<string> {
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-region",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
 const json = (o: unknown, status = 200) =>
   new Response(JSON.stringify(o), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
-type Doc = { base64: string; mediaType: string; kind: "pdf" | "image" | "other" };
+// ── مستندات الملف كلها (2026-10-17): كانت أحدث ٣ ملفات PDF وحدها، فتسقط صحيفة الدعوى (الأقدم) في الملفات
+//    الطويلة، ولا يُقرأ Word ولا صورة. الآن: الأهم أولاً (التصنيف وإلا الاسم)، والأقدم أولاً داخل الدرجة، حتى
+//    سقوف الطلب الواحد — حجم الطلب ٣٢ م.ب وعدد صفحات PDF ٦٠٠ — وما لا يتسع يُذكر بسببه في docs_coverage.
+const DOC_BYTES_BUDGET = 20 * 1024 * 1024;   // خام؛ يتضخم ثلثاً بترميز base64 فيبقى دون ٣٢ م.ب
+const DOC_PAGES_BUDGET = 450;                // تحت حدّ ٦٠٠ صفحة بهامش للصور ونص الطلب
+const DOC_TEXT_BUDGET = 300_000;             // نصوص Word
+const PDF_MAX_BYTES = 15 * 1024 * 1024;
+const IMG_MAX_BYTES = 3_500_000;             // حدّ الصورة ٥ م.ب بعد الترميز
+const IMG_MAX_COUNT = 15;
 
-async function fetchDocAsBase64(url: string): Promise<Doc | null> {
-  try {
-    const res = await fetch(url);
-    if (!res.ok) return null;
-    const ct = (res.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
-    const buf = new Uint8Array(await res.arrayBuffer());
-    if (buf.length > 10 * 1024 * 1024) return null;
-    let binary = "";
-    const chunk = 8192;
-    for (let i = 0; i < buf.length; i += chunk) {
-      binary += String.fromCharCode(...buf.subarray(i, i + chunk));
-    }
-    const base64 = btoa(binary);
-    let mediaType = ct;
-    const u = url.toLowerCase();
-    if (!mediaType || mediaType === "application/octet-stream") {
-      if (u.includes(".pdf")) mediaType = "application/pdf";
-      else mediaType = "application/pdf";
-    }
-    const kind = mediaType === "application/pdf" ? "pdf" : (mediaType.startsWith("image/") ? "image" : "other");
-    return { base64, mediaType, kind };
-  } catch (_e) {
-    return null;
-  }
+/** درجة أهمية المستند للدراسة: ٠ أهم — من التصنيف (classify-doc) وإلا من الاسم */
+function docRank(d: { name?: string; category?: string; description?: string }): number {
+  const t = `${d.category ?? ""} ${d.name ?? ""} ${d.description ?? ""}`;
+  if (/صحيفة|دعوى|لائحة اعتراض|لائحة|استئناف|اعتراض/.test(t)) return 0;
+  if (/حكم|صك|قرار/.test(t)) return 1;
+  if (/مذكرة|رد |جواب|دفوع/.test(t)) return 2;
+  if (/محضر|ضبط|جلسة/.test(t)) return 3;
+  if (/عقد|اتفاق|وكالة|إقرار|تقرير|خبير|خطاب/.test(t)) return 4;
+  if (/فاتورة|سند|هوية|سجل/.test(t)) return 6;
+  return 5;
 }
 
-function buildDocBlock(doc: Doc): any {
-  if (doc.kind === "pdf") return { type: "document", source: { type: "base64", media_type: "application/pdf", data: doc.base64 } };
-  if (doc.kind === "image") return { type: "image", source: { type: "base64", media_type: doc.mediaType, data: doc.base64 } };
-  return null;
+/** صفحات PDF تقديراً — يعدّ كائنات /Type /Page؛ وإن لم تُعدّ (مضغوطة) فمن الحجم */
+function pdfPages(u8: Uint8Array): number {
+  const head = new TextDecoder("latin1").decode(u8);
+  const n = (head.match(/\/Type\s*\/Page[^s]/g) ?? []).length;
+  return n > 0 ? n : Math.max(1, Math.round(u8.length / 90_000));
+}
+
+const docStoragePath = (url: string) => url.match(/\/storage\/v1\/object\/(?:public|sign)\/documents\/([^?]+)/)?.[1];
+
+async function downloadDoc(url: string): Promise<{ bytes: Uint8Array; type: string } | null> {
+  const path = docStoragePath(url);
+  if (path) {
+    const { data, error } = await admin.storage.from("documents").download(decodeURIComponent(path));
+    if (!error && data) return { bytes: new Uint8Array(await data.arrayBuffer()), type: (data.type || "").toLowerCase() };
+  }
+  const res = await fetch(url).catch(() => null);
+  if (!res?.ok) return null;
+  return { bytes: new Uint8Array(await res.arrayBuffer()), type: (res.headers.get("content-type") || "").split(";")[0].toLowerCase() };
+}
+
+function toB64(u8: Uint8Array): string {
+  let s = "";
+  for (let i = 0; i < u8.length; i += 8192) s += String.fromCharCode(...u8.subarray(i, i + 8192));
+  return btoa(s);
+}
+
+type DocCoverage = { total: number; read: { name: string; kind: string }[]; skipped: { name: string; reason: string }[] };
+
+// deno-lint-ignore no-explicit-any
+async function loadCaseDocs(docList: any[]): Promise<{ blocks: any[]; coverage: DocCoverage }> {
+  const ordered = [...docList].sort((a, b) =>
+    docRank(a) - docRank(b) || String(a.created_at ?? "").localeCompare(String(b.created_at ?? "")));
+  const blocks: any[] = [];
+  const coverage: DocCoverage = { total: docList.length, read: [], skipped: [] };
+  let bytes = 0, pages = 0, chars = 0, images = 0;
+  for (const d of ordered) {
+    const name = String(d.name || "مستند");
+    const low = `${d.file_type ?? ""} ${d.file_url ?? ""} ${name}`.toLowerCase();
+    const kind = /pdf/.test(low) ? "pdf" : /wordprocessingml|\.docx\b/.test(low) ? "word"
+      : /image\/|\.(jpe?g|png|webp|gif)\b/.test(low) ? "image" : /\.doc\b|msword/.test(low) ? "doc" : "other";
+    if (!d.file_url) { coverage.skipped.push({ name, reason: "بلا ملف" }); continue; }
+    if (kind === "doc" || kind === "other") { coverage.skipped.push({ name, reason: kind === "doc" ? "صيغة Word قديمة (.doc)" : "صيغة لا تُقرأ" }); continue; }
+    if (d.file_size && kind === "pdf" && d.file_size > PDF_MAX_BYTES) { coverage.skipped.push({ name, reason: "أكبر من ١٥ م.ب" }); continue; }
+    if (kind === "image" && images >= IMG_MAX_COUNT) { coverage.skipped.push({ name, reason: "تجاوز عدد الصور" }); continue; }
+    if (bytes >= DOC_BYTES_BUDGET || pages >= DOC_PAGES_BUDGET) { coverage.skipped.push({ name, reason: "لم يتسع له حجم القراءة" }); continue; }
+    const f = await downloadDoc(d.file_url).catch(() => null);
+    if (!f) { coverage.skipped.push({ name, reason: "تعذّر تنزيله" }); continue; }
+    try {
+      if (kind === "word") {
+        const text = (await docxText(f.bytes)).trim();
+        if (!text) { coverage.skipped.push({ name, reason: "بلا نص" }); continue; }
+        if (chars + text.length > DOC_TEXT_BUDGET) { coverage.skipped.push({ name, reason: "لم يتسع له حجم القراءة" }); continue; }
+        chars += text.length;
+        blocks.push({ type: "document", source: { type: "text", media_type: "text/plain", data: text }, title: name });
+      } else if (kind === "image") {
+        if (f.bytes.length > IMG_MAX_BYTES || bytes + f.bytes.length > DOC_BYTES_BUDGET) { coverage.skipped.push({ name, reason: "صورة كبيرة" }); continue; }
+        const mt = ["image/png", "image/jpeg", "image/webp", "image/gif"].includes(f.type) ? f.type : "image/jpeg";
+        blocks.push({ type: "text", text: `صورة من مستندات الملف: «${name}»` });
+        blocks.push({ type: "image", source: { type: "base64", media_type: mt, data: toB64(f.bytes) } });
+        bytes += f.bytes.length; images++;
+      } else {
+        const pg = pdfPages(f.bytes);
+        if (bytes + f.bytes.length > DOC_BYTES_BUDGET || pages + pg > DOC_PAGES_BUDGET) { coverage.skipped.push({ name, reason: "لم يتسع له حجم القراءة" }); continue; }
+        blocks.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: toB64(f.bytes) }, title: name });
+        bytes += f.bytes.length; pages += pg;
+      }
+      coverage.read.push({ name, kind });
+    } catch {
+      coverage.skipped.push({ name, reason: "تعذّرت قراءته" });
+    }
+  }
+  return { blocks, coverage };
 }
 
 /** يسجّل فشل التوليد ليعرضه تبويب الدراسة بدل رسالة المهلة العامة */
@@ -229,27 +292,12 @@ async function generateStudy(caseId: string, userName: string | null, reason?: s
       .select("body, kind, created_at, author:team_members(short_name, name)")
       .eq("case_id", caseId).is("deleted_at", null).neq("kind", "system")
       .order("created_at", { ascending: true }).limit(150),
-    admin.from("documents").select("name, description, file_url, file_type, file_size, created_at").eq("case_id", caseId).is("deleted_at", null).order("created_at", { ascending: false }),
+    admin.from("documents").select("name, description, category, file_url, file_type, file_size, created_at").eq("case_id", caseId).is("deleted_at", null).order("created_at", { ascending: true }),
   ]);
 
   const docList = (docs.data ?? []) as any[];
-
-  const blocks: any[] = [];
-  const readDocs: string[] = [];
-  for (const d of docList) {
-    if (blocks.length >= 3) break;
-    const isPdf = (d.file_type || "").includes("pdf") || (d.file_url || "").toLowerCase().includes(".pdf");
-    if (!isPdf || !d.file_url) continue;
-    if (d.file_size && d.file_size > 5 * 1024 * 1024) continue;
-    const doc = await fetchDocAsBase64(d.file_url);
-    if (doc?.kind === "pdf") {
-      const b = buildDocBlock(doc);
-      if (b) {
-        blocks.push(b);
-        readDocs.push(String(d.name || "مستند"));
-      }
-    }
-  }
+  const { blocks, coverage } = await loadCaseDocs(docList);
+  const readDocs = coverage.read.map((r) => r.name);
 
   // ── النسخة السابقة (لقسم «ما الذي تغيّر» وللحفظ في السجل)
   const { data: prev } = await admin.from("case_studies").select("*").eq("case_id", caseId).maybeSingle();
@@ -364,7 +412,7 @@ ${JSON.stringify((notes.data ?? []).map((n: any) => ({
 قائمة مستندات الملف (${docList.length}):
 ${JSON.stringify(docList.map((d: any) => ({ الاسم: d.name, الوصف: d.description })), null, 1)}
 
-${blocks.length > 0 ? `المستندات المرفقة أعلاه (${readDocs.join("، ")}) هي مستندات القضية الفعلية — اقرأها بعناية واستخرج منها الوقائع والأسانيد والدفوع.` : "لا مستندات PDF مقروءة — اعتمد على بيانات النظام فقط ونبّه في الأقسام الناقصة."}`;
+${blocks.length > 0 ? `المستندات المرفقة أعلاه (${readDocs.length} من ${docList.length}: ${readDocs.join("، ")}) هي مستندات القضية الفعلية — اقرأها كلها بعناية واستخرج منها الوقائع والأسانيد والدفوع، وصحيفة الدعوى واللوائح أولاً.${coverage.skipped.length ? `\nلم تُقرأ (اذكرها في attachments_list بسببها): ${coverage.skipped.map((x) => `${x.name} (${x.reason})`).join("، ")}` : ""}` : "لا مستندات مقروءة — اعتمد على بيانات النظام فقط ونبّه في الأقسام الناقصة."}`;
 
   const content: any = blocks.length > 0 ? [...blocks, { type: "text", text: user }] : user;
 
@@ -440,7 +488,8 @@ ${blocks.length > 0 ? `المستندات المرفقة أعلاه (${readDocs.
     client_summary: parsed.client_summary ?? null,
     status: "draft",
     generated_at: new Date().toISOString(),
-    generated_by: `${model} — قرأ ${readDocs.length} مستند`,
+    generated_by: `${model} — قرأ ${readDocs.length} من ${docList.length} مستند`,
+    docs_coverage: coverage,
     updated_at: new Date().toISOString(),
     updated_by: userName,
   };
@@ -539,6 +588,34 @@ Deno.serve(async (req) => {
   if (!ANTHROPIC_API_KEY) return json({ error: "مفتاح Anthropic غير مُعدّ." }, 500);
   try {
     const body = await req.json();
+
+    // ⚠️ التحقق (2026-10-17): كانت الدالة تقبل المفتاح العام (anon، وهو في حزمة الويب) فيُطلق أيٌّ كان دراساتٍ
+    // مكلفة لأي ملف — والدراسة صارت تقرأ مستندات الملف كلها. الآن: المهمة الليلية بالسرّ الداخلي وحده،
+    // والتوليد اليدوي بجلسة موظف نشط يملك الوصول إلى الملف (RLS بجلسته).
+    const internal = req.headers.get("x-internal-secret");
+    let isCron = false;
+    if (internal) {
+      const { data: sec } = await admin.from("lookup_values").select("value")
+        .eq("type", "discussion_ai_config").eq("label", "inbound_secret").maybeSingle();
+      isCron = !!sec?.value && internal === sec.value;
+      if (!isCron) return json({ error: "سرّ غير صالح" }, 401);
+    }
+    if (body?.mode === "stale" && !isCron) return json({ error: "للمهمة الليلية وحدها" }, 403);
+    if (!isCron) {
+      const auth = req.headers.get("Authorization") ?? "";
+      const { data: u } = await admin.auth.getUser(auth.replace(/^Bearer\s+/i, ""));
+      if (!u?.user) return json({ error: "سجّل الدخول أولاً" }, 401);
+      const { data: me } = await admin.from("team_members").select("is_active").eq("auth_id", u.user.id).maybeSingle();
+      if (!me || me.is_active === false) return json({ error: "الحساب غير نشط" }, 403);
+      const cid = String(body?.case_id || "");
+      if (cid) {
+        const asUser = createClient(Deno.env.get("SUPABASE_URL") ?? "", Deno.env.get("SUPABASE_ANON_KEY") ?? "", {
+          global: { headers: { Authorization: auth } }, auth: { persistSession: false, autoRefreshToken: false },
+        });
+        const { data: visible } = await asUser.from("cases").select("id").eq("id", cid).maybeSingle();
+        if (!visible) return json({ error: "لا تملك الوصول إلى هذا الملف" }, 403);
+      }
+    }
 
     // cron ليلي: تجديد الدراسات التي علّمتها أحداث الملف قديمة (بحد ٥ كل ليلة)
     if (body?.mode === "stale") {

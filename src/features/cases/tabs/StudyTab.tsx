@@ -61,6 +61,7 @@ import {
   useDecideProposal,
   useDraftMemoFromStudy,
   useGenerateStudySummaries,
+  type CaseStudy,
   type CaseStudyInput,
   type StudyProposal,
 } from '@/hooks/useCaseStudy'
@@ -359,6 +360,7 @@ export function StudyTab({ caseId }: { caseId: string }) {
       {/* الأقسام */}
       <Card>
         <CardContent className="space-y-5 p-5">
+          <DocsCoverage coverage={study.docs_coverage ?? null} />
           {/* دراسة قديمة بلا الملخصين — تُولَّد وحدها دون إعادة الدراسة */}
           {!values.oral_brief && !values.client_summary && (
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gold/40 bg-gold/5 p-3">
@@ -584,3 +586,46 @@ function ProposalsPanel({
     </Card>
   )
 }
+
+/** ما قرأته الدراسة من مستندات الملف (2026-10-17) — كانت أحدث ٣ ملفات PDF وحدها */
+function DocsCoverage({ coverage }: { coverage: NonNullable<CaseStudy['docs_coverage']> | null }) {
+  const [open, setOpen] = useState(false)
+  if (!coverage) {
+    return (
+      <p className="rounded-xl bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+        هذه الدراسة من قبل قراءة مستندات الملف كلها — كانت تقرأ أحدث ٣ ملفات PDF فقط. أعد التوليد لتُبنى على المستندات كلها.
+      </p>
+    )
+  }
+  const all = coverage.read.length === coverage.total
+  return (
+    <div className={cn('rounded-xl border px-3 py-2 text-sm', all ? 'border-emerald-600/30 bg-emerald-600/5' : 'border-amber-500/30 bg-amber-500/5')}>
+      <button type="button" onClick={() => setOpen((o) => !o)} className="flex w-full items-center justify-between gap-2 text-right">
+        <span className="font-medium">
+          قرأت الدراسة {coverage.read.length} من {coverage.total} {coverage.total === 1 ? 'مستند' : 'مستندات'} الملف
+          {coverage.skipped.length > 0 && <span className="font-normal text-muted-foreground"> — {coverage.skipped.length} لم تُقرأ</span>}
+        </span>
+        <span className="text-xs text-muted-foreground">{open ? 'إخفاء' : 'التفاصيل'}</span>
+      </button>
+      {open && (
+        <div className="mt-2 grid gap-3 border-t pt-2 text-xs sm:grid-cols-2">
+          <div>
+            <p className="mb-1 font-semibold text-emerald-700 dark:text-emerald-300">قُرئت</p>
+            <ul className="space-y-0.5 text-muted-foreground">
+              {coverage.read.map((r, i) => <li key={i} className="truncate">• {r.name}</li>)}
+            </ul>
+          </div>
+          {coverage.skipped.length > 0 && (
+            <div>
+              <p className="mb-1 font-semibold text-amber-700 dark:text-amber-300">لم تُقرأ</p>
+              <ul className="space-y-0.5 text-muted-foreground">
+                {coverage.skipped.map((r, i) => <li key={i} className="truncate">• {r.name} — {r.reason}</li>)}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+

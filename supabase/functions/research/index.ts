@@ -75,7 +75,7 @@ const SYSTEM_TOOLS = [
   },
   {
     name: "get_case",
-    description: "تفاصيل ملف واحد بصلاحيات الموظف: بياناته وآخر جلساته وأحكامه ومهامه المفتوحة. مرّر رقم المكتب (CASE26045) أو المعرّف من search_office.",
+    description: "تفاصيل ملف واحد بصلاحيات الموظف: بياناته وأطرافه بصفاتهم وآخر جلساته وأحكامه ومهامه المفتوحة، ودراسة القضية (الوقائع والطلبات والأسانيد والدفوع والرأي — مبنية على مستندات الملف). استعملها قبل كتابة أي خطاب أو مذكرة عن ملف. مرّر رقم المكتب (CASE26045) أو المعرّف من search_office.",
     input_schema: {
       type: "object",
       properties: { case_ref: { type: "string", description: "رقم المكتب أو المعرّف" } },
@@ -121,20 +121,36 @@ async function runSystemTool(asUser: any, name: string, input: any): Promise<{ t
         .select("id, office_num, title, kind, status, court, court_num, created_at, contact:contacts(name), assignee:team_members!cases_assignee_id_fkey(name)")
         .eq(byId ? "id" : "office_num", byId ? ref : ref.toUpperCase()).is("deleted_at", null).maybeSingle();
       if (!c) return { text: `لا ملف «${ref}» ضمن صلاحياتك`, isError: true };
-      const [s, r, t] = await Promise.all([
+      const [s, r, t, p, st] = await Promise.all([
         asUser.from("sessions").select("session_date, session_time, title, court, status, outcome, next_action")
           .eq("case_id", c.id).order("session_date", { ascending: false }).limit(6),
         asUser.from("rulings").select("title, ruling_number, ruling_date, court_name, result, outcome_short, objection_until")
           .eq("case_id", c.id).order("ruling_date", { ascending: false, nullsFirst: false }).limit(5),
         asUser.from("tasks").select("title, status, due_date, priority").eq("case_id", c.id)
           .is("deleted_at", null).not("status", "in", "(done,cancelled)").limit(10),
+        // الأطراف بصفاتهم، ودراسة القضية (تقرأ مستندات الملف كلها) — مادة أي خطاب أو مذكرة عن الملف (2026-10-17)
+        asUser.from("case_parties").select("role, party_side, name, nationality").eq("case_id", c.id),
+        asUser.from("case_studies").select("basics, facts, requests, plaintiff_grounds, defendant_defenses, legal_opinion, statutes, generated_at, docs_coverage")
+          .eq("case_id", c.id).maybeSingle(),
       ]);
+      const cut = (v: unknown, n: number) => (typeof v === "string" ? v.slice(0, n) : v);
+      const study = st.data
+        ? {
+            تاريخها: st.data.generated_at, البيانات: cut(st.data.basics, 1500), الوقائع: cut(st.data.facts, 4000),
+            الطلبات: cut(st.data.requests, 1500), الأسانيد: cut(st.data.plaintiff_grounds, 2500),
+            الدفوع: cut(st.data.defendant_defenses, 2500), الرأي: cut(st.data.legal_opinion, 3000),
+            الأسانيد_النظامية: cut(st.data.statutes, 2000),
+            المستندات_المقروءة: (st.data.docs_coverage as { read?: { name: string }[] } | null)?.read?.map((x) => x.name) ?? null,
+          }
+        : null;
       return {
         text: JSON.stringify({
           ...c, link: `${APP}/cases/${c.id}`,
           sessions: s.data ?? [],
           rulings: (r.data ?? []).map((x: Record<string, unknown>) => ({ ...x, result: String(x.result ?? "").slice(0, 1200) })),
           open_tasks: t.data ?? [],
+          parties: p.data ?? [],
+          study: study ?? "لا دراسة لهذا الملف بعد — تُولَّد من تبويب «الدراسة» في الملف",
         }),
       };
     }
