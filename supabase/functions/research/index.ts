@@ -58,7 +58,11 @@ const SYSTEM = `أنت «الباحث» في شركة عبدالرحمن بن ر
 - بالعربية الفصحى المهنية، مباشراً: الجواب أولاً ثم التفصيل.
 - استعمل Markdown باعتدال: عناوين قصيرة، ونقاط، وجداول للمقارنة عند الحاجة.
 - التواريخ بالهجري والميلادي معاً متى عرفتهما، والأرقام باللاتينية (1 2 3).
-- اختم الإجابة النظامية بسطر «للتحقق:» يذكر ما يحسن مراجعته في المصدر الرسمي قبل الاعتماد.`;
+- اختم الإجابة النظامية بسطر «للتحقق:» يذكر ما يحسن مراجعته في المصدر الرسمي قبل الاعتماد.
+
+إن طُلب منك خطاب أو مذكرة أو لائحة:
+- اكتب النص نفسه جاهزاً للطباعة: الجهة المرسَل إليها، ثم «السلام عليكم ورحمة الله وبركاته»، ثم الموضوع، ثم المتن، ثم الطلبات مرقّمة، ثم الختام — بلا تمهيد ولا تعليق قبله أو بعده (تُنزَّل الإجابة ملف Word بترويسة المكتب كما هي).
+- لا تكتب رقم الصادر ولا تاريخه — يُطبعان عند التوقيع. ولا سطر «للتحقق:» داخل الخطاب.`;
 
 // ===== أدوات النظام: قراءة فقط وبجلسة الموظف =====
 const SYSTEM_TOOLS = [
@@ -267,16 +271,30 @@ Deno.serve(async (req) => {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  // المحادثة: القائمة بصلاحية صاحبها، أو جديدة باسم أول سؤال
+  // المحادثة: القائمة بصلاحية صاحبها، أو جديدة باسم أول سؤال — ومربوطة بملف إن بدأت من صفحته
   let chatId = typeof body?.chat_id === "string" ? body.chat_id : null;
+  let caseId: string | null = null;
   if (chatId) {
-    const { data: c } = await asUser.from("research_chats").select("id").eq("id", chatId).is("deleted_at", null).maybeSingle();
+    const { data: c } = await asUser.from("research_chats").select("id, case_id").eq("id", chatId).is("deleted_at", null).maybeSingle();
     if (!c) return json({ error: "المحادثة غير موجودة" }, 404);
+    caseId = c.case_id ?? null;
   } else {
+    const wanted = typeof body?.case_id === "string" && /^[0-9a-f-]{36}$/i.test(body.case_id) ? body.case_id : null;
+    if (wanted) {
+      const { data: vis } = await asUser.from("cases").select("id").eq("id", wanted).maybeSingle();
+      if (!vis) return json({ error: "لا تملك الوصول إلى هذا الملف" }, 403);
+      caseId = wanted;
+    }
     const title = message.replace(/\s+/g, " ").slice(0, 70);
-    const { data: c, error } = await admin.from("research_chats").insert({ owner_id: me.id, title }).select("id").single();
+    const { data: c, error } = await admin.from("research_chats").insert({ owner_id: me.id, title, case_id: caseId }).select("id").single();
     if (error || !c) return json({ error: "تعذّر بدء المحادثة" }, 500);
     chatId = c.id;
+  }
+  // الملف المربوط: رقمه وعنوانه في التعليمات، وتفاصيله بأداة get_case (بصلاحية الموظف)
+  let caseNote = "";
+  if (caseId) {
+    const { data: cs } = await asUser.from("cases").select("id, office_num, title").eq("id", caseId).maybeSingle();
+    if (cs) caseNote = `\nهذه المحادثة عن ملف المكتب ${cs.office_num ?? ""} «${cs.title ?? ""}» (المعرّف ${cs.id}). ما يُسأل عنه هنا يخص هذا الملف ما لم يُذكر غيره: اقرأه بأداة get_case بمعرّفه قبل أي خطاب أو رأي، وابنِ على أطرافه ودراسته ووقائعه، ولا تختلق ما ليس فيها — اترك فراغاً (……) لما ينقص.`;
   }
 
   const startedAt = Date.now();
@@ -323,7 +341,7 @@ Deno.serve(async (req) => {
             max_tokens: 64000,
             output_config: { effort: "high" },
             system: [{ type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } },
-                     { type: "text", text: `الموظف: ${me.name}. اليوم: ${new Date().toISOString().slice(0, 10)}.` }],
+                     { type: "text", text: `الموظف: ${me.name}. اليوم: ${new Date().toISOString().slice(0, 10)}.${caseNote}` }],
             tools: [
               { type: "web_search_20260209", name: "web_search", max_uses: 8, user_location: { type: "approximate", country: "SA", city: "Buraydah", timezone: "Asia/Riyadh" } },
               { type: "web_fetch_20260209", name: "web_fetch", max_uses: 5 },

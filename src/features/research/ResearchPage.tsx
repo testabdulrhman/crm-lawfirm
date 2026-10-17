@@ -4,8 +4,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import {
-  ArrowUp, BookOpen, Copy, FileText, Globe, Loader2, MessageSquarePlus, PanelLeft, Search, Sparkles, Square, Trash2, History,
+  ArrowUp, BookOpen, Copy, FileDown, FileText, FolderOpen, Globe, Loader2, MessageSquarePlus, PanelLeft, Search, Sparkles, Square, Trash2, History, X,
 } from 'lucide-react'
+import { Link } from 'wouter'
 
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -20,11 +21,24 @@ import { arNorm } from '@/lib/arabic'
 import { cn } from '@/lib/utils'
 import { usePageState } from '@/hooks/usePageState'
 import {
-  askResearch, useChatSources, useCreateChat, useDeleteChat, useResearchChats, useResearchMessages,
+  askResearch, useChatSources, useCreateChat, useDeleteChat, useResearchCase, useResearchChats, useResearchMessages,
   type ResearchCitation, type ResearchMessage,
 } from '@/hooks/useResearch'
+import { useOfficeInfo } from '@/hooks/useSettings'
+import { addDocumentDirect } from '@/hooks/useCaseDocuments'
+import { useAuth } from '@/stores/auth'
+import { buildLetterDocx, letterFileName } from '@/lib/letterDocx'
+import { downloadBlob } from '@/lib/docxTemplate'
 import { Markdown } from './Markdown'
 import { SourcesPanel } from './SourcesPanel'
+
+// محادثة عن ملف بعينه (من «اسأل الباحث» في صفحته) — بدايات تخصّه
+const CASE_STARTERS = [
+  'اكتب خطاباً للمحكمة بشأن هذا الملف',
+  'لخّص الملف ووضعه الحالي والخطوة التالية',
+  'ما الدفوع المتوقعة من الخصم وكيف نرد عليها؟',
+  'ما المواد النظامية الأقوى لموقفنا في هذا الملف؟',
+]
 
 const STARTERS = [
   'ما مدة الاعتراض على الحكم الابتدائي في نظام المرافعات الشرعية؟ واذكر المادة',
@@ -38,6 +52,17 @@ type Live = { question: string; text: string; status: string | null; error: stri
 export function ResearchPage() {
   const qc = useQueryClient()
   const [chatId, setChatId] = usePageState<string | null>('research:chat', null)
+  // «اسأل الباحث» من صفحة ملف: /research?case=<id> ⇒ محادثة جديدة مربوطة به عند أول سؤال
+  const [pendingCase, setPendingCase] = useState<string | null>(
+    () => new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('case')
+  )
+  useEffect(() => {
+    if (!pendingCase) return
+    setChatId(null)
+    // يُزال من الرابط حتى لا يعيد التحديثُ فتح محادثة جديدة
+    window.history.replaceState(null, '', window.location.href.split('?')[0])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const { data: chats = [] } = useResearchChats()
   const { data: messages = [] } = useResearchMessages(chatId)
   const { data: chatSources = [] } = useChatSources(chatId)
@@ -49,13 +74,16 @@ export function ResearchPage() {
   const abortRef = useRef<AbortController | null>(null)
   const endRef = useRef<HTMLDivElement>(null)
   const busy = !!live && !live.error
+  const activeCaseId = chatId ? chats.find((c) => c.id === chatId)?.case_id ?? null : pendingCase
+  const { data: activeCase } = useResearchCase(activeCaseId)
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: 'end', behavior: 'smooth' })
   }, [messages.length, live?.text.length, live?.status])
 
   const ensureChat = async () => {
-    const id = await createChat.mutateAsync('محادثة جديدة')
+    const id = await createChat.mutateAsync({ title: 'محادثة جديدة', caseId: pendingCase })
+    setPendingCase(null)
     setChatId(id)
     return id
   }
@@ -69,9 +97,9 @@ export function ResearchPage() {
     abortRef.current = ctrl
     try {
       const r = await askResearch(
-        { chatId, message: q },
+        { chatId, message: q, caseId: chatId ? null : pendingCase },
         {
-          onMeta: (id) => { if (id !== chatId) setChatId(id) },
+          onMeta: (id) => { if (id !== chatId) { setChatId(id); setPendingCase(null) } },
           onStatus: (s) => setLive((l) => (l ? { ...l, status: s } : l)),
           onDelta: (d) => setLive((l) => (l ? { ...l, text: l.text + d, status: null } : l)),
         },
@@ -99,6 +127,7 @@ export function ResearchPage() {
   const newChat = () => {
     if (busy) return
     setChatId(null)
+    setPendingCase(null)
     setLive(null)
     setPanel(null)
   }
@@ -117,6 +146,20 @@ export function ResearchPage() {
   )
   const sourcesPanel = <SourcesPanel chatId={chatId} ensureChat={ensureChat} />
   const empty = !chatId && !live
+  const caseBar = activeCase ? (
+    <div className="flex items-center gap-2 border-b bg-gold/5 px-4 py-2 text-sm">
+      <FolderOpen className="h-4 w-4 shrink-0 text-gold" />
+      <span className="text-muted-foreground">عن الملف</span>
+      <Link href={`/cases/${activeCase.id}`} className="min-w-0 truncate font-medium hover:underline">
+        <span dir="ltr">{activeCase.office_num}</span> — {activeCase.title}
+      </Link>
+      {!chatId && (
+        <button type="button" onClick={() => setPendingCase(null)} className="ms-auto rounded p-1 text-muted-foreground hover:bg-muted" aria-label="فكّ الربط">
+          <X className="h-3.5 w-3.5" />
+        </button>
+      )}
+    </div>
+  ) : null
 
   return (
     <div className="mx-auto flex h-[calc(100dvh-7.5rem)] max-w-[1500px] min-h-[520px] gap-3">
@@ -139,12 +182,13 @@ export function ResearchPage() {
           </Button>
         </div>
 
+        {caseBar}
         <div className="min-h-0 flex-1 overflow-y-auto">
           {empty ? (
-            <Welcome onPick={(t) => void send(t)} />
+            <Welcome onPick={(t) => void send(t)} forCase={!!activeCase} />
           ) : (
             <div className="mx-auto max-w-3xl space-y-6 px-4 py-6">
-              {messages.map((m) => <MessageView key={m.id} m={m} />)}
+              {messages.map((m) => <MessageView key={m.id} m={m} caseId={activeCaseId} />)}
               {live && (
                 <>
                   {!messages.some((m) => m.role === 'user' && m.content === live.question && messages[messages.length - 1] === m) && (
@@ -214,7 +258,7 @@ export function ResearchPage() {
   )
 }
 
-function Welcome({ onPick }: { onPick: (t: string) => void }) {
+function Welcome({ onPick, forCase }: { onPick: (t: string) => void; forCase: boolean }) {
   return (
     <div className="mx-auto flex h-full max-w-2xl flex-col items-center justify-center px-6 py-10 text-center">
       <span className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gold/15">
@@ -225,7 +269,7 @@ function Welcome({ onPick }: { onPick: (t: string) => void }) {
         اسأل عن أي شيء: يبحث في الإنترنت والأنظمة السعودية، وفي بيانات المكتب بصلاحياتك، وفي ما تضيفه في «المصادر» من ملفات وروابط ونصوص — ويذكر مصدر كل معلومة.
       </p>
       <div className="mt-6 grid w-full gap-2 sm:grid-cols-2">
-        {STARTERS.map((s) => (
+        {(forCase ? CASE_STARTERS : STARTERS).map((s) => (
           <button key={s} type="button" onClick={() => onPick(s)}
             className="rounded-xl border bg-background px-3 py-2.5 text-right text-sm leading-6 hover:border-gold/50 hover:bg-gold/5">
             {s}
@@ -244,8 +288,33 @@ function UserBubble({ text }: { text: string }) {
   )
 }
 
-function MessageView({ m }: { m: ResearchMessage }) {
+function MessageView({ m, caseId }: { m: ResearchMessage; caseId: string | null }) {
+  const { data: office } = useOfficeInfo()
+  const userName = useAuth((s) => s.teamMember?.name ?? null)
+  const [making, setMaking] = useState(false)
   if (m.role === 'user') return <UserBubble text={m.content} />
+
+  // «خطاب Word»: الإجابة بترويسة المكتب للمراجعة والتعديل — ونسخة في مستندات الملف إن كانت المحادثة عنه
+  const makeLetter = async () => {
+    setMaking(true)
+    try {
+      const blob = await buildLetterDocx({ office: office ?? null, body: m.content })
+      const name = letterFileName(m.content)
+      downloadBlob(blob, name)
+      if (caseId) {
+        const file = new File([blob], name, { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' })
+        await addDocumentDirect(caseId, { file, name, description: 'مسودة من «الباحث» — للمراجعة قبل الإرسال', uploadedByName: userName })
+        toast({ variant: 'success', title: 'نُزّل الخطاب، وحُفظت نسخة في مستندات الملف' })
+      } else {
+        toast({ variant: 'success', title: 'نُزّل الخطاب' })
+      }
+    } catch (e) {
+      toast({ variant: 'destructive', title: 'تعذّر إنشاء الخطاب', description: errMessage(e) })
+    } finally {
+      setMaking(false)
+    }
+  }
+
   return (
     <div className="space-y-3">
       <Markdown text={m.content} />
@@ -256,6 +325,9 @@ function MessageView({ m }: { m: ResearchMessage }) {
           onClick={() => { void navigator.clipboard.writeText(m.content); toast({ title: 'نُسخت الإجابة' }) }}
         >
           <Copy className="h-3.5 w-3.5" /> نسخ
+        </Button>
+        <Button size="sm" variant="ghost" className="h-7 gap-1 px-2 text-xs" onClick={() => void makeLetter()} disabled={making}>
+          {making ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileDown className="h-3.5 w-3.5" />} خطاب Word
         </Button>
         {m.tools?.includes('web_search') && <span className="flex items-center gap-1 text-[11px]"><Globe className="h-3 w-3" /> بحث في الإنترنت</span>}
       </div>

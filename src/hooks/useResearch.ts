@@ -12,6 +12,8 @@ export interface ResearchChat {
   id: string
   title: string | null
   updated_at: string
+  /** المحادثة عن ملف بعينه — بدأت من «اسأل الباحث» في صفحته */
+  case_id: string | null
 }
 
 export interface ResearchCitation {
@@ -55,7 +57,7 @@ export function useResearchChats() {
     queryKey: [KEY, 'chats', myId],
     enabled: !!myId,
     queryFn: async (): Promise<ResearchChat[]> => {
-      const { data, error } = await supabase.from('research_chats').select('id, title, updated_at')
+      const { data, error } = await supabase.from('research_chats').select('id, title, updated_at, case_id')
         .is('deleted_at', null).order('updated_at', { ascending: false }).limit(200)
       if (error) throw error
       return (data ?? []) as ResearchChat[]
@@ -198,8 +200,9 @@ export function useCreateChat() {
   const qc = useQueryClient()
   const myId = useAuth((s) => s.teamMember?.id)
   return useMutation({
-    mutationFn: async (title: string): Promise<string> => {
-      const { data, error } = await supabase.from('research_chats').insert({ owner_id: myId, title }).select('id').single()
+    mutationFn: async ({ title, caseId }: { title: string; caseId?: string | null }): Promise<string> => {
+      const { data, error } = await supabase.from('research_chats')
+        .insert({ owner_id: myId, title, case_id: caseId ?? null }).select('id').single()
       if (error) throw error
       return (data as { id: string }).id
     },
@@ -220,7 +223,7 @@ export interface StreamHandlers {
  * يُرجع ما حُفظ: المحادثة ورسالة الإجابة وإحالاتها.
  */
 export async function askResearch(
-  params: { chatId: string | null; message: string },
+  params: { chatId: string | null; message: string; caseId?: string | null },
   h: StreamHandlers,
   signal?: AbortSignal
 ): Promise<{ chatId: string; messageId: string | null; citations: ResearchCitation[] }> {
@@ -235,7 +238,7 @@ export async function askResearch(
       'Content-Type': 'application/json',
       'x-region': 'eu-west-1',
     },
-    body: JSON.stringify({ chat_id: params.chatId, message: params.message }),
+    body: JSON.stringify({ chat_id: params.chatId, message: params.message, case_id: params.caseId ?? null }),
     signal,
   })
   if (!res.ok || !res.body) {
@@ -269,3 +272,18 @@ export async function askResearch(
   if (!result) throw new Error('انقطعت الإجابة قبل اكتمالها — حاول مرة أخرى')
   return { chatId, ...result }
 }
+
+/** الملف المربوط بالمحادثة — رقمه وعنوانه للشريط أعلاها */
+export function useResearchCase(caseId: string | null) {
+  return useQuery({
+    queryKey: [KEY, 'case', caseId],
+    enabled: !!caseId,
+    staleTime: 5 * 60_000,
+    queryFn: async () => {
+      const { data, error } = await supabase.from('cases').select('id, office_num, title, kind').eq('id', caseId!).maybeSingle()
+      if (error) throw error
+      return data as { id: string; office_num: string | null; title: string | null; kind: string | null } | null
+    },
+  })
+}
+

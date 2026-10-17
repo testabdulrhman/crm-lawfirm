@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { MatterKindIcon } from '@/components/MatterKindIcon'
 import { Link, useLocation } from 'wouter'
-import { ArrowRight, ChevronDown, Handshake, Pencil, Scale } from 'lucide-react'
+import { ArrowRight, ChevronDown, Handshake, Pencil, Scale, Sparkles } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -26,6 +26,7 @@ import { useCaseSessions } from '@/hooks/useCaseSessions'
 import { useCaseTasks } from '@/hooks/useCaseTasks'
 import { useCase, useUpdateCase, useUpdateCaseStatus } from '@/hooks/useCases'
 import { useCaseStudy } from '@/hooks/useCaseStudy'
+import { useIsCollaborator } from '@/hooks/useIsCollaborator'
 import { useCaseRulings } from '@/hooks/useCaseRulings'
 import { useCaseMemos } from '@/hooks/useCaseMemos'
 import { CaseJourney } from './CaseJourney'
@@ -66,6 +67,7 @@ const LEGACY_TAB: Record<string, string> = { overview: 'summary', story: 'summar
 
 export function CaseDetail({ id }: { id: string }) {
   const [, navigate] = useLocation()
+  const isCollaborator = useIsCollaborator()
   const { data: c, isLoading, isError, error, refetch } = useCase(id)
   const statusM = useUpdateCaseStatus()
   const updateM = useUpdateCase()
@@ -185,6 +187,13 @@ export function CaseDetail({ id }: { id: string }) {
                 ))}
               </SelectContent>
             </Select>
+            {/* «اسأل الباحث» عن هذا الملف: محادثة مربوطة به يقرأ فيها أطرافه ودراسته (2026-10-17) */}
+            {!isCollaborator && (
+              <Button variant="outline" size="sm" onClick={() => navigate(`/research?case=${c.id}`)}>
+                <Sparkles className="h-4 w-4 text-gold" />
+                اسأل الباحث
+              </Button>
+            )}
             <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
               <Pencil className="h-4 w-4" />
               تعديل
