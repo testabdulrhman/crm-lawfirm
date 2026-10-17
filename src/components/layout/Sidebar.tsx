@@ -348,39 +348,44 @@ export function Sidebar({
         collapsed ? 'w-[72px]' : 'w-64'
       )}
     >
-      {onToggleCollapse && (
-        <button
-          type="button"
-          onClick={onToggleCollapse}
-          title={collapsed ? 'وسّع القائمة' : 'صغّر القائمة'}
-          aria-label={collapsed ? 'وسّع القائمة' : 'صغّر القائمة'}
-          className="absolute -left-3 top-8 z-40 grid h-6 w-6 place-items-center rounded-full border border-border bg-card text-muted-foreground shadow-sm transition-colors hover:bg-gold hover:text-navy"
-        >
-          {collapsed ? <ChevronLeft className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-        </button>
-      )}
-      {/* الترويسة: الشعار على لوحة كحلية — يضمن وضوحه أياً كان تصميمه */}
+      {/* الترويسة: الشعار على لوحة كحلية — يضمن وضوحه أياً كان تصميمه.
+          زرّ التصغير داخل اللوحة: مربّع زجاجي بإطار ذهبي في زاويتها (اختيار المدير من ثلاثة نماذج، 2026-10-18)،
+          والمصغّرة رمز الشعار الذهبي وعليه علامة توسيع — والمربّع كله يوسّع */}
       <div className="px-3 pb-4 pt-4">
         {collapsed ? (
-          <span className="mx-auto grid h-11 w-11 place-items-center rounded-xl bg-navy" title={office?.office_name ?? 'رضوان'}>
-            <Scale className="h-5 w-5 text-gold" />
-          </span>
+          <button
+            type="button"
+            onClick={onToggleCollapse}
+            disabled={!onToggleCollapse}
+            title="وسّع القائمة"
+            aria-label="وسّع القائمة"
+            className="group relative mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-navy transition-transform hover:scale-[1.04]"
+          >
+            <img src={`${import.meta.env.BASE_URL}brand/emblem-gold.png`} alt="" className="h-8 w-auto" />
+            {onToggleCollapse && (
+              <span className="absolute -bottom-1 -left-1 grid h-[18px] w-[18px] place-items-center rounded-md bg-gold text-navy shadow-sm ring-2 ring-card">
+                <ChevronLeft className="h-3 w-3" strokeWidth={2.75} />
+              </span>
+            )}
+          </button>
         ) : office?.logo_url ? (
-          <div className="rounded-2xl bg-navy px-3 py-3">
+          <div className="relative rounded-2xl bg-navy px-3 py-3">
             <img
               src={office.logo_url}
               alt="شعار المكتب"
               className="max-h-20 w-full object-contain"
             />
+            {onToggleCollapse && <GlassToggle onClick={onToggleCollapse} />}
           </div>
         ) : (
-          <div className="flex items-center gap-2.5 px-1">
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-navy">
+          <div className="relative flex items-center gap-2.5 rounded-2xl bg-navy px-3 py-3">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white/10">
               <Scale className="h-5 w-5 text-gold" />
             </span>
-            <span className="truncate text-[15px] font-bold tracking-tight">
+            <span className="truncate text-[15px] font-bold tracking-tight text-white">
               رضوان
             </span>
+            {onToggleCollapse && <GlassToggle onClick={onToggleCollapse} />}
           </div>
         )}
       </div>
@@ -511,5 +516,20 @@ export function Sidebar({
         )}
       </div>
     </aside>
+  )
+}
+
+/** زرّ التصغير داخل لوحة الشعار: زجاجي بإطار ذهبي، يمتلئ ذهباً عند التمرير */
+function GlassToggle({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title="صغّر القائمة"
+      aria-label="صغّر القائمة"
+      className="absolute left-2 top-2 grid h-[26px] w-[26px] place-items-center rounded-[9px] border border-gold/35 bg-white/10 text-gold transition-colors hover:bg-gold hover:text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
+    >
+      <ChevronRight className="h-3.5 w-3.5" strokeWidth={2.5} />
+    </button>
   )
 }
