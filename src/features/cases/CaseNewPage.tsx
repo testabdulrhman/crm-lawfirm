@@ -1,4 +1,7 @@
+import { useEffect, useState } from 'react'
 import { useLocation } from 'wouter'
+
+import { clearQueryParam, queryParam } from '@/lib/queryParam'
 
 import { CaseForm } from './CaseForm'
 
@@ -12,11 +15,11 @@ import { CaseForm } from './CaseForm'
 export default function CaseNewPage() {
   const [, navigate] = useLocation()
   // ‎?kind=bankruptcy‎ يفتح النموذج نفسه بمفردات إجراء الإفلاس — الجدول واحد
-  const kind =
-    new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('kind') ===
-    'bankruptcy'
-      ? ('bankruptcy' as const)
-      : ('case' as const)
+  const [kind] = useState(() =>
+    queryParam('kind') === 'bankruptcy' ? ('bankruptcy' as const) : ('case' as const)
+  )
+  // يُزال بعد قراءته وإلا علق قبل «#» ففتح «قضية جديدة» لاحقاً نموذجَ الإفلاس
+  useEffect(() => clearQueryParam('kind'), [])
   return (
     <div className="pb-8">
       <CaseForm

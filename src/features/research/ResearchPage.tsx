@@ -29,6 +29,7 @@ import { addDocumentDirect } from '@/hooks/useCaseDocuments'
 import { useAuth } from '@/stores/auth'
 import { buildLetterDocx, letterFileName } from '@/lib/letterDocx'
 import { downloadBlob } from '@/lib/docxTemplate'
+import { clearQueryParam, queryParam } from '@/lib/queryParam'
 import { Markdown } from './Markdown'
 import { SourcesPanel } from './SourcesPanel'
 
@@ -54,13 +55,13 @@ export function ResearchPage() {
   const [chatId, setChatId] = usePageState<string | null>('research:chat', null)
   // «اسأل الباحث» من صفحة ملف: /research?case=<id> ⇒ محادثة جديدة مربوطة به عند أول سؤال
   const [pendingCase, setPendingCase] = useState<string | null>(
-    () => new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('case')
+    () => queryParam('case')
   )
   useEffect(() => {
     if (!pendingCase) return
     setChatId(null)
     // يُزال من الرابط حتى لا يعيد التحديثُ فتح محادثة جديدة
-    window.history.replaceState(null, '', window.location.href.split('?')[0])
+    clearQueryParam('case')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   const { data: chats = [] } = useResearchChats()
