@@ -75,6 +75,7 @@ export function LeaveBalanceCard({ memberId, isSelf = true }: { memberId?: strin
             </div>
             <p className="text-xs text-muted-foreground">
               منذ التعيين {fmtDatePref(b.join_date ?? null)}
+              {b.ended && b.end_date && ` حتى انتهاء العلاقة ${fmtDatePref(b.end_date)}`}
               {b.months_accrued != null && ` · ${fmtNumber(b.months_accrued)} شهراً مكتملاً`}
             </p>
             <p className="text-[11px] text-muted-foreground">

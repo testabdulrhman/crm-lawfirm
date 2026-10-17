@@ -7,6 +7,7 @@ import {
   Briefcase,
   CalendarClock,
   CalendarDays,
+  CalendarOff,
   Cake,
   CheckCircle2,
   ChevronLeft,
@@ -42,6 +43,7 @@ import {
 } from '@/hooks/useHrRequests'
 import type { MemberWork } from '@/hooks/useMemberWork'
 import { MemberDocumentsSection } from './MemberDocuments'
+import { endReasonLabel } from './endReason'
 import type { TeamMember } from '@/types/db'
 
 /* ===== مساعدات ===== */
@@ -56,10 +58,12 @@ const ymd = (s: string) => {
 const dayDiff = (s: string) => Math.round((ymd(s).getTime() - ymd(todayISO()).getTime()) / 864e5)
 
 /** «سنة و8 أشهر» · «سنتين وشهرين» · «أقل من شهر» — تُقرأ بعد «منذ» فالمثنى مجرور */
-export function tenureLabel(join: string | null): string | null {
+/** مدة الخدمة — حتى اليوم، أو حتى انتهاء العلاقة العمالية إن مضى */
+export function tenureLabel(join: string | null, end?: string | null): string | null {
   if (!join) return null
   const a = ymd(join)
-  const b = ymd(todayISO())
+  const today = todayISO()
+  const b = ymd(end && end < today ? end : today)
   let months = (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth())
   if (b.getDate() < a.getDate()) months -= 1
   if (months < 0) return null
@@ -134,7 +138,9 @@ export function MemberHero({
   completeness?: number
   onCompleteness?: () => void
 }) {
-  const tenure = tenureLabel(member.join_date)
+  const tenure = tenureLabel(member.join_date, member.end_date)
+  const ended = !!member.end_date && member.end_date <= todayISO()
+  const reason = endReasonLabel(member.end_reason)
   const bday = nextBirthday(member.date_of_birth)
   const initial = member.avatar_initial || member.name?.charAt(0) || '؟'
 
@@ -183,10 +189,17 @@ export function MemberHero({
               <Badge variant={member.is_active ? 'success' : 'secondary'}>{member.is_active ? 'نشط' : 'موقوف'}</Badge>
               {member.member_type === 'collaborator' && <Badge variant="outline">متعاون خارجي</Badge>}
               {!member.auth_id && <Badge variant="warning">بلا حساب دخول</Badge>}
+              {member.end_date && (
+                <Badge variant={ended ? 'secondary' : 'warning'}>
+                  {ended
+                    ? 'انتهت العلاقة العمالية'
+                    : `تنتهي علاقته بعد ${daysLabel(Math.round((ymd(member.end_date).getTime() - ymd(todayISO()).getTime()) / 864e5))}`}
+                </Badge>
+              )}
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
               {member.role || 'موظف'}
-              {tenure && <> · معنا منذ {tenure}</>}
+              {tenure && <> · {ended ? `خدم ${tenure}` : `معنا منذ ${tenure}`}</>}
             </p>
           </div>
 
@@ -210,6 +223,13 @@ export function MemberHero({
             <span className={chip}>
               <CalendarDays className="h-3.5 w-3.5 text-gold-600 dark:text-gold-300" />
               انضم {fmtDatePref(member.join_date)}
+            </span>
+          )}
+          {member.end_date && (
+            <span className={cn(chip, !ended && 'border-amber-400/50 bg-amber-50 dark:bg-amber-500/10')}>
+              <CalendarOff className="h-3.5 w-3.5 text-gold-600 dark:text-gold-300" />
+              {ended ? 'انتهت العلاقة' : 'تنتهي العلاقة'} {fmtDatePref(member.end_date)}
+              {reason && <span className="text-muted-foreground">({reason})</span>}
             </span>
           )}
           {bday && (
@@ -611,6 +631,15 @@ export function MemberInfoTab({
             <Field label="رقم الهوية" value={member.id_number} ltr action={member.id_number && <CopyBtn text={member.id_number} what="رقم الهوية" />} />
             <Field label="تاريخ الميلاد" value={member.date_of_birth ? fmtDatePref(member.date_of_birth) : null} />
             <Field label="تاريخ التعيين" value={member.join_date ? fmtDatePref(member.join_date) : null} />
+            {member.end_date && (
+              <Field
+                label="انتهاء العلاقة العمالية"
+                value={`${fmtDatePref(member.end_date)}${endReasonLabel(member.end_reason) ? ` — ${endReasonLabel(member.end_reason)}` : ''}`}
+              />
+            )}
+            {member.join_date && (
+              <Field label="مدة الخدمة" value={tenureLabel(member.join_date, member.end_date) ?? 'أقل من شهر'} />
+            )}
             <Field label="العنوان الوطني" value={member.national_address} />
             <Field label="المؤهلات" value={member.qualifications} />
           </dl>

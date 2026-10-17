@@ -21,6 +21,9 @@ export interface TeamMember {
   id_number: string | null
   national_address: string | null
   join_date: string | null
+  /** انتهاء العلاقة العمالية — تسجيل فقط، لا يوقف الحساب */
+  end_date: string | null
+  end_reason: 'resignation' | 'termination' | 'contract_end' | 'mutual' | 'other' | null
   bank_name: string | null
   bank_iban: string | null
   qualifications: string | null

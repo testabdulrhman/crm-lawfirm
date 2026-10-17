@@ -33,6 +33,7 @@ import { toast } from '@/hooks/use-toast'
 import type { TeamMember, TeamMemberInput } from '@/types/db'
 import { errMessage } from '@/lib/errors'
 import { normalizeSaudiPhone } from '@/lib/format'
+import { END_REASONS } from './endReason'
 
 // حقل نصي اختياري: يقبل الفراغ
 const optionalText = z.string().optional()
@@ -62,6 +63,8 @@ const schema = z.object({
   date_of_birth: optionalText,
   id_number: optionalText,
   join_date: optionalText,
+  end_date: optionalText,
+  end_reason: optionalText,
   national_address: optionalText,
   bank_name: optionalText,
   bank_iban: optionalText,
@@ -86,6 +89,8 @@ function toDefaults(member?: TeamMember | null): FormValues {
     date_of_birth: member?.date_of_birth ?? '',
     id_number: member?.id_number ?? '',
     join_date: member?.join_date ?? '',
+    end_date: member?.end_date ?? '',
+    end_reason: member?.end_reason ?? '',
     national_address: member?.national_address ?? '',
     bank_name: member?.bank_name ?? '',
     bank_iban: member?.bank_iban ?? '',
@@ -349,14 +354,47 @@ export function TeamMemberForm({ member, onDone }: Props) {
           <Field label="رقم الهوية" htmlFor="id_number">
             <Input id="id_number" dir="ltr" {...register('id_number')} />
           </Field>
+          <Field label="العنوان الوطني" htmlFor="national_address">
+            <Input id="national_address" {...register('national_address')} />
+          </Field>
+        </Section>
+
+        {/* العلاقة العمالية — بدايتها ونهايتها (انتهاء العلاقة تسجيل فقط: الحساب يُوقف يدوياً من «الحالة») */}
+        <Section title="العلاقة العمالية">
           <DualDatePicker
             label="تاريخ الالتحاق"
             value={watch('join_date') || null}
             onChange={(v) => setValue('join_date', v ?? '')}
           />
-          <Field label="العنوان الوطني" htmlFor="national_address">
-            <Input id="national_address" {...register('national_address')} />
-          </Field>
+          <DualDatePicker
+            label="تاريخ انتهاء العلاقة"
+            value={watch('end_date') || null}
+            onChange={(v) => {
+              setValue('end_date', v ?? '')
+              if (!v) setValue('end_reason', '')
+            }}
+          />
+          {watch('end_date') && (
+            <Field label="سبب الانتهاء (اختياري)" htmlFor="end_reason">
+              <Select
+                value={watch('end_reason') || 'none'}
+                onValueChange={(v) => setValue('end_reason', v === 'none' ? '' : v)}
+              >
+                <SelectTrigger id="end_reason">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">— بلا سبب —</SelectItem>
+                  {Object.entries(END_REASONS).map(([k, label]) => (
+                    <SelectItem key={k} value={k}>{label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+          )}
+          {watch('end_date') && watch('join_date') && watch('end_date')! < watch('join_date')! && (
+            <p className="text-xs text-destructive">تاريخ الانتهاء قبل تاريخ الالتحاق.</p>
+          )}
         </Section>
 
         {/* بنكي */}

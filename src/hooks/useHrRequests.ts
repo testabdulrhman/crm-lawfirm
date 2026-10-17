@@ -179,6 +179,10 @@ export interface LeaveBalance {
   join_date: string | null
   missing_join_date?: boolean
   not_started?: boolean
+  /** انتهاء العلاقة العمالية (2026-10-18): الاستحقاق يتوقف عند as_of = أقرب اليوم وتاريخ الانتهاء */
+  end_date?: string | null
+  as_of?: string
+  ended?: boolean
   years_of_service?: number
   service_year_start?: string
   service_year_end?: string
