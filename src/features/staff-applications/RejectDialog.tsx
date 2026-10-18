@@ -85,7 +85,7 @@ export function RejectDialog({
               disabled={!hasPhone}
               onChange={(e) => setSendSms(e.target.checked)}
             />
-            إرسال رسالة اعتذار للمتقدّم عبر SMS
+            إرسال رسالة اعتذار للمتقدّم عبر SMS وواتساب
             {!hasPhone && (
               <span className="text-xs text-muted-foreground">
                 (لا يوجد رقم جوال)

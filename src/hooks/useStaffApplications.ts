@@ -89,6 +89,34 @@ interface SendCredentialsArgs {
   sentBy: string | null
 }
 
+/**
+ * واتساب المتقدّم مع الـSMS (طلب المدير 2026-10-18): النص نفسه حراً إن كانت نافذة الـ٢٤ ساعة مفتوحة
+ * (راسلنا خلالها)، وإلا قالبه المعتمد (crm_law_10/11/12) — كلاهما في نداء واحد لـwhatsapp-send.
+ * غير قاتل: فشله لا يمسّ الـSMS ولا الإجراء. logMessage نصٌّ بديل للسجل (كلمة المرور لا تُحفظ).
+ */
+async function sendApplicantWhatsApp(args: {
+  phone: string
+  name: string
+  message: string
+  template: { name: string; params: string[] }
+  logMessage?: string
+}): Promise<boolean> {
+  try {
+    const { data, error } = await supabase.functions.invoke('whatsapp-send', {
+      body: {
+        phone: args.phone,
+        message: args.message,
+        recipient_name: args.name,
+        fallback_template: { name: args.template.name, lang: 'ar', params: args.template.params },
+        ...(args.logMessage ? { log_message: args.logMessage } : {}),
+      },
+    })
+    return !error && !!data?.success
+  } catch {
+    return false
+  }
+}
+
 // يرسل بيانات الدخول عبر SMS ويُسجّل في sms_log. يُرجع true عند النجاح.
 // لا يرمي أخطاء قاتلة — فشل SMS لا يجب أن يُفشل الاعتماد.
 async function sendCredentialsSms(args: SendCredentialsArgs): Promise<boolean> {
@@ -110,10 +138,19 @@ async function sendCredentialsSms(args: SendCredentialsArgs): Promise<boolean> {
         })
       : `مرحباً ${args.name}، رابط الدخول: ${LOGIN_URL} — البريد: ${args.email} — كلمة المرور: ${args.password}`
 
+    // واتساب: النص كاملاً داخل النافذة، وخارجها crm_law_12 (إبلاغ القبول بلا كلمة مرور — ميتا لا تقبلها في قالب)
+    const wa = sendApplicantWhatsApp({
+      phone: numbers,
+      name: args.name,
+      message,
+      logMessage: redact(message),
+      template: { name: 'crm_law_12', params: [args.name] },
+    })
     const { data, error } = await supabase.functions.invoke('swift-endpoint', {
       body: { numbers, msg: message },
     })
     const ok = !error && (data?.code === '1' || data?.code === 1)
+    await wa
 
     // سجّل النتيجة (بالنسخة المموّهة)
     await supabase.from('sms_log').insert({
@@ -237,7 +274,7 @@ export function useApproveApplication() {
       } else if (res.smsSent) {
         toast({
           variant: 'success',
-          title: 'تم الاعتماد وإرسال بيانات الدخول عبر SMS',
+          title: 'تم الاعتماد وإرسال بيانات الدخول عبر SMS وواتساب',
         })
       } else {
         toast({
@@ -268,10 +305,17 @@ async function sendRejectionSms(
   try {
     const body = await getTemplate('application_rejected')
     message = fillTemplate(body || DEFAULT_REJECTION, { name })
+    const wa = sendApplicantWhatsApp({
+      phone: numbers,
+      name,
+      message,
+      template: { name: 'crm_law_11', params: [name] },
+    })
     const { data, error } = await supabase.functions.invoke('swift-endpoint', {
       body: { numbers, msg: message },
     })
     const ok = !error && (data?.code === '1' || data?.code === 1)
+    await wa
     await supabase.from('sms_log').insert({
       recipient_name: name,
       phone: numbers,
@@ -447,10 +491,17 @@ export async function sendCompletionLinkSms(
     `https://redwan.sa/careers/complete?id=${app.id}\n` +
     `شركة عبدالرحمن بن رضوان المشيقح للمحاماة وإدارة إجراءات الإفلاس`
   try {
+    const wa = sendApplicantWhatsApp({
+      phone: numbers,
+      name: app.full_name ?? 'متقدم',
+      message: msg,
+      template: { name: 'crm_law_10', params: [app.full_name ?? 'المتقدّم', app.id] },
+    })
     const { data, error } = await supabase.functions.invoke('swift-endpoint', {
       body: { numbers, msg },
     })
     const ok = !error && (data?.code === '1' || data?.code === 1)
+    await wa
     await supabase.from('sms_log').insert({
       recipient_name: app.full_name ?? 'متقدم',
       phone: numbers,

@@ -182,7 +182,7 @@ export function ApproveDialog({
                 </p>
               )}
               <p className="text-xs text-muted-foreground">
-                ستُرسل للموظف عبر SMS ولن تُخزَّن في النظام.
+                ستُرسل للموظف عبر SMS وواتساب ولن تُخزَّن في النظام.
               </p>
             </div>
 

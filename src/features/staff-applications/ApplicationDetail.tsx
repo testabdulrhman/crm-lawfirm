@@ -292,7 +292,7 @@ export function ApplicationDetail({ id }: { id: string }) {
               size="sm"
               onClick={sendLink}
               disabled={sendingLink || !a.phone}
-              title="يرسل للمتقدم SMS برابط يرفع فيه مستنداته على نفس الطلب"
+              title="يرسل للمتقدم SMS وواتساب برابط يرفع فيه مستنداته على نفس الطلب"
             >
               {sendingLink ? (
                 <Loader2 className="h-4 w-4 animate-spin" />

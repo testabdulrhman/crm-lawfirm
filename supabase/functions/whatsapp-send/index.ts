@@ -2,6 +2,9 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // =============================================================
 // whatsapp-send — إرسال واتساب للمحاماة.
+// v16 (2026-10-18): fallback_template {name, lang?, params?} — يُرسل النص الحر أولاً، فإن كانت نافذة الـ٢٤ ساعة
+//   مغلقة أُرسل القالب في النداء نفسه (رسائل المتقدّمين للوظائف). وlog_message نصٌّ بديل للسجل
+//   (رسالة بيانات الدخول: كلمة المرور لا تُحفظ في sms_log).
 // v15 (2026-09-24): يمرّ عبر send-message في redwan-hub، البوابة الصادرة الوحيدة، فتشمله قائمة
 //   الإيقاف وقاطع الطوارئ وتولّي الموظف وسجلٌّ واحد للصادر. ولا يُكلَّم هاتف من هنا بعد اليوم.
 //   (النسخ السابقة كانت تكلّم هاتف مباشرة.)
@@ -78,7 +81,7 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { phone, message, recipient_name, media_url, file_name, template } = body ?? {};
+    const { phone, message, recipient_name, media_url, file_name, template, fallback_template, log_message } = body ?? {};
 
     if (!phone) return json({ error: "phone مطلوب" }, 400);
     if (!message && !media_url && !template?.name)
@@ -93,17 +96,22 @@ Deno.serve(async (req) => {
     let queued = false;
 
     const idem = String(body?.idempotency_key ?? "").trim() || `whatsapp-send:${crypto.randomUUID()}`;
+    // deno-lint-ignore no-explicit-any
+    const templateReq = (t: any) => ({
+      template: String(t.name),
+      language: String(t.lang || "ar"),
+      params: Array.isArray(t.params) ? t.params.map(String) : [],
+      ...(t.document?.url
+        ? { document: { url: String(t.document.url), name: String(t.document.name || "document.pdf") } }
+        : {}),
+    });
     let hubReq: Record<string, unknown>;
+    // القالب الذي خرج فعلاً (للسجل): المطلوب، أو الاحتياطي إن أُغلقت النافذة
+    // deno-lint-ignore no-explicit-any
+    let usedTemplate: any = template?.name ? template : null;
     if (template?.name) {
       // قالب معتمد مسبقاً — يفتح المحادثة حتى خارج نافذة الـ٢٤ ساعة، وترويسة المستند (PDF) إن وُجدت
-      hubReq = {
-        template: String(template.name),
-        language: String(template.lang || "ar"),
-        params: Array.isArray(template.params) ? template.params.map(String) : [],
-        ...(template.document?.url
-          ? { document: { url: String(template.document.url), name: String(template.document.name || "document.pdf") } }
-          : {}),
-      };
+      hubReq = templateReq(template);
     } else if (media_url) {
       // ملف (مستند/PDF) مع تعليق اختياري — داخل النافذة
       hubReq = {
@@ -114,7 +122,12 @@ Deno.serve(async (req) => {
       hubReq = { body: String(message) };
     }
     try {
-      const r = await viaHub({ phone_e164: num, idempotency_key: idem, ...hubReq });
+      let r = await viaHub({ phone_e164: num, idempotency_key: idem, ...hubReq });
+      // النافذة مغلقة والمستدعي أعطى قالباً احتياطياً: يُرسل في النداء نفسه بمفتاح مستقل
+      if (r.status === "failed" && r.code === WINDOW_CODE && !template?.name && fallback_template?.name) {
+        usedTemplate = fallback_template;
+        r = await viaHub({ phone_e164: num, idempotency_key: `${idem}:tpl`, ...templateReq(fallback_template) });
+      }
       status = r.status;
       detail = r.detail;
       errCode = r.code;
@@ -128,15 +141,15 @@ Deno.serve(async (req) => {
       await supabase.from("sms_log").insert({
         recipient_name: recipient_name || "واتساب",
         phone: num,
-        message: template?.name
-          ? `[قالب: ${template.name}] ${(Array.isArray(template.params) ? template.params : []).join(" | ")}`.trim()
-          : media_url ? `[ملف: ${file_name || "مستند"}] ${message || ""}`.trim() : message,
+        message: usedTemplate
+          ? `[قالب: ${usedTemplate.name}] ${(Array.isArray(usedTemplate.params) ? usedTemplate.params : []).join(" | ")}`.trim()
+          : media_url ? `[ملف: ${file_name || "مستند"}] ${log_message || message || ""}`.trim() : (log_message || message),
         status,
         sent_by: "whatsapp",
       });
     } catch (_) { /* تجاهل */ }
 
-    if (status === "sent") return json({ success: true, ...(queued ? { queued: true } : {}) });
+    if (status === "sent") return json({ success: true, ...(queued ? { queued: true } : {}), ...(usedTemplate && !template?.name ? { via_template: usedTemplate.name } : {}) });
     return json({ error: "تعذّر الإرسال عبر الواتساب", detail, code: errCode }, 502);
   } catch (e) {
     return json({ error: "خطأ غير متوقّع", detail: String((e as Error)?.message || e) }, 500);
