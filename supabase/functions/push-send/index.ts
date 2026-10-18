@@ -1,7 +1,7 @@
 // إرسال إشعار فوري (APNs) لأجهزة موظف — يخدم غرفة عمل المهام:
 // منشن في نقاش، إسناد مهمة، طلب اعتماد، نتيجة اعتماد.
 //
-// ⚠️ الأسرار من Supabase Secrets ولا تُكتب في الكود إطلاقاً:
+// ⚠️ الأسرار من env أو جدول app_secrets المغلق ولا تُكتب في الكود إطلاقاً:
 //    APNS_KEY_ID · APNS_TEAM_ID · APNS_BUNDLE_ID · APNS_PRIVATE_KEY (نص .p8)
 //    APNS_ENV = sandbox | production   (التطوير sandbox، التوزيع production)
 //
@@ -33,7 +33,7 @@ async function cfg(key: string, fallback = ""): Promise<string> {
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+    "authorization, x-client-info, apikey, content-type, x-ai-secret",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
@@ -82,7 +82,8 @@ async function sendOne(
   title: string,
   body: string,
   badge: number,
-  data: Record<string, unknown>
+  data: Record<string, unknown>,
+  sound: string
 ): Promise<SendResult> {
   try {
     const res = await fetch(`${host}/3/device/${token}`, {
@@ -96,7 +97,7 @@ async function sendOne(
       body: JSON.stringify({
         aps: {
           alert: { title, body },
-          sound: "default",
+          sound,
           badge,
         },
         ...data, // route/taskId — يفتحها التطبيق عند الضغط
@@ -150,6 +151,10 @@ Deno.serve(async (req) => {
   const title = String(body?.title ?? "").trim();
   const message = String(body?.message ?? "").trim();
   const route = body?.route ? String(body.route) : null;
+  // صوت المحادثة يختلف عن صوت المهام (طلب المدير 2026-10-18): الترقر يرسل sound بحسب نوع الإشعار.
+  // ملف chat.caf داخل التطبيق؛ والنسخة التي لا تحمله تشغّل الصوت الافتراضي (سلوك iOS) فلا يُفقد التنبيه.
+  const SOUNDS = new Set(["default", "chat.caf"]);
+  const sound = SOUNDS.has(String(body?.sound)) ? String(body.sound) : "default";
   const notificationIds: string[] = Array.isArray(body?.notification_ids)
     ? body.notification_ids
     : [];
@@ -193,7 +198,8 @@ Deno.serve(async (req) => {
       sendOne(
         jwt, host, topic, d.token as string, title, message,
         unreadByMember.get(d.member_id as string) ?? 1,
-        route ? { route } : {}
+        route ? { route } : {},
+        sound
       )
     )
   );
