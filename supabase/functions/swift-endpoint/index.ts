@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { staffOrService } from "../_shared/staffGuard.ts";
 
 // swift-endpoint — إنشاء حسابات الدخول وإرسال SMS عبر Msegat.
 //
@@ -265,7 +266,11 @@ serve(async (req) => {
       return json({ success: true });
     }
 
-    /* ============ إرسال SMS (لكل موظف موثّق) ============ */
+    /* ============ إرسال SMS (لموظف نشط أو لنداء خادمي) ============ */
+    // كان مفتاح anon العام وحده يكفي للإرسال باسم المكتب ومن رصيده (فحص 2026-10-19)
+    if (!(await staffOrService(req))) {
+      return json({ error: 'الإرسال لموظف نشط فقط' }, 401);
+    }
     const { numbers, msg } = body;
     if (!numbers || !msg) {
       return json({ error: 'بيانات ناقصة (numbers, msg مطلوبة)' }, 400);

@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { staffOrService } from "../_shared/staffGuard.ts";
 
 // =============================================================
 // whatsapp-send — إرسال واتساب للمحاماة.
@@ -76,6 +77,9 @@ async function viaHub(req: Record<string, unknown>): Promise<{ status: "sent" | 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "method not allowed" }, 405);
+
+  // موظف نشط أو نداء خادمي فقط — مفتاح anon العام كان يكفي للإرسال باسم المكتب (فحص 2026-10-19)
+  if (!(await staffOrService(req))) return json({ error: "الإرسال لموظف نشط فقط" }, 401);
 
   const supabase = createClient(SUPABASE_URL, SERVICE_ROLE);
 
