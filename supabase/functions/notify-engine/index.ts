@@ -1,3 +1,4 @@
+import { staffServiceOrInternal } from "../_shared/staffGuard.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // =============================================================
@@ -240,6 +241,9 @@ async function dueFor(rule: Rule, date: string): Promise<Due[]> {
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "POST only" }, 405);
+  // المجدول أو المدير وحده — المعاينة تعيد أسماء وجوالات (فحص 2026-10-19)
+  const who = await staffServiceOrInternal(req);
+  if (!who || (who.kind === "staff" && !who.director)) return json({ error: "للمدير والمجدول فقط" }, 401);
   const body = await req.json().catch(() => ({}));
   const today: string = body.date ?? riyadhToday();
   const dryRun: boolean = body.dry_run === true;

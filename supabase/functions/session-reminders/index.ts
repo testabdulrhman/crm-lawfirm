@@ -1,3 +1,4 @@
+import { staffServiceOrInternal } from "../_shared/staffGuard.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // =============================================================
@@ -32,6 +33,9 @@ function formatTime(t: string | null): string {
 }
 
 Deno.serve(async (req) => {
+  // المجدول وحده (أو مفتاح الخادم): كانت تُنادى بمفتاح anon العام فيعيد أي زائر أسماء المحامين وعناوين القضايا
+  const who = await staffServiceOrInternal(req);
+  if (!who || who.kind === "staff") return new Response(JSON.stringify({ error: "للمجدول فقط" }), { status: 401 });
   const results = { type: "", sent: 0, failed: 0, details: [] as string[] };
 
   let reminderType = "day";

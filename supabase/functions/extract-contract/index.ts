@@ -6,6 +6,7 @@
 //
 // الدالة تقرأ فقط ولا تكتب في القاعدة — الواجهة تعرض النتيجة للمراجعة قبل الحفظ،
 // لأن الاستخراج الآلي يخطئ ولا يصح أن يُنشئ التزامات دون إقرار موظف.
+import { staffOrService } from "../_shared/staffGuard.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { HIJRI_RULE, pickDate } from "../_shared/hijri.ts";
 
@@ -147,6 +148,8 @@ ${HIJRI_RULE}
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "POST only" }, 405);
+  // موظف نشط فقط — كان مفتاح anon العام يكفي لاستهلاك الذكاء على حساب المكتب (فحص 2026-10-19)
+  if (!(await staffOrService(req))) return json({ error: "لموظف نشط فقط" }, 401);
   if (!ANTHROPIC_API_KEY) {
     return json({ error: "مفتاح Anthropic غير مُعدّ على الخادم." }, 500);
   }

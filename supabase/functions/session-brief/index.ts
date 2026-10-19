@@ -5,6 +5,8 @@
 //
 // النداء: {session_id} يدوياً من الواجهة، أو {mode:"upcoming"} من cron الصباح
 // (جلسات الغد وبعده بلا ملخص). لا يُعاد التوليد إن وُجد ملخص إلا بـ force.
+import { staffServiceOrInternal } from "../_shared/staffGuard.ts";
+import { canSeeCase, loadScope } from "../_shared/aiScope.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
@@ -126,9 +128,14 @@ Deno.serve(async (req) => {
   if (!ANTHROPIC_API_KEY) return json({ error: "مفتاح الذكاء غير مضبوط" }, 500);
   try {
     const body = await req.json().catch(() => ({}));
+    // هوية المنادي (فحص 2026-10-19): كانت بلا تحقق، و«force» واسم المنفّذ من الطلب — فيعيد أي زائر توليد
+    // ملخص جلسة معروفة على حساب المكتب وينسبه لاسم يختاره
+    const who = await staffServiceOrInternal(req);
+    if (!who) return json({ error: "لموظف نشط فقط" }, 401);
 
     // cron الصباح: جلسات الغد وبعد الغد بلا ملخص
     if (body?.mode === "upcoming") {
+      if (who.kind === "staff") return json({ error: "للمجدول فقط" }, 403);
       const today = new Date(); const d1 = new Date(today.getTime() + 86_400_000); const d2 = new Date(today.getTime() + 2 * 86_400_000);
       const iso = (d: Date) => d.toISOString().slice(0, 10);
       const { data: sessions } = await admin.from("sessions").select("id")
@@ -142,7 +149,15 @@ Deno.serve(async (req) => {
 
     const sessionId = String(body?.session_id ?? "");
     if (!sessionId) return json({ error: "session_id مطلوب" }, 400);
-    const r = await buildBrief(sessionId, body?.user_name ? String(body.user_name) : null, !!body?.force);
+    let by: string | null = body?.user_name ? String(body.user_name) : null;
+    if (who.kind === "staff") {
+      // الموظف: جلسة في ملف يراه، والاسم من القاعدة لا من الطلب
+      const { data: ses } = await admin.from("sessions").select("case:cases!sessions_case_id_fkey(id, kind, office_num)").eq("id", sessionId).maybeSingle();
+      const scope = await loadScope(admin, who.memberId);
+      if (!ses || !scope || !canSeeCase(scope, (ses as any).case ?? null)) return json({ error: "لا صلاحية لك على هذه الجلسة" }, 403);
+      by = who.name;
+    }
+    const r = await buildBrief(sessionId, by, !!body?.force);
     return json(r, r.ok ? 200 : 404);
   } catch (e) {
     return json({ error: "تعذّر إعداد الملخص", detail: String((e as Error)?.message || e) }, 500);
