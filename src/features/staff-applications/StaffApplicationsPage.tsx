@@ -10,19 +10,23 @@ import {
   Sparkles,
   Loader2,
   Square,
+  GraduationCap,
+  ArrowDownWideNarrow,
+  X,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Card, CardContent } from '@/components/ui/card'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { EmptyState, FilteredEmptyState } from '@/components/EmptyState'
 import { QueryErrorState } from '@/components/QueryErrorState'
 import { fmtDatePref, fmtNumber } from '@/lib/format'
 import { toast } from '@/hooks/use-toast'
 import { useAuth } from '@/stores/auth'
 import { useStaffApplications } from '@/hooks/useStaffApplications'
-import { useAnalyzeApplicant, useApplicantAnalyses } from '@/hooks/useAiAnalysis'
+import { useAnalyzeApplicant, useApplicantAnalyses, type SavedAnalysis } from '@/hooks/useAiAnalysis'
 import { usePageState } from '@/hooks/usePageState'
 import {
   APP_STATUS_OPTIONS,
@@ -35,10 +39,38 @@ import { TeamNavTabs } from '@/features/team/TeamNavTabs'
 
 type Filter = StaffApplicationStatus | 'all'
 
+/** فرز السير وتصفيتها بما قرأه الذكاء منها (طلب المدير 2026-10-19) */
+type SortKey = 'newest' | 'fit' | 'gpa' | 'experience' | 'graduation'
+const SORTS: { value: SortKey; label: string }[] = [
+  { value: 'newest', label: 'الأحدث تقديماً' },
+  { value: 'fit', label: 'مؤشر الملاءمة' },
+  { value: 'gpa', label: 'المعدل' },
+  { value: 'experience', label: 'سنوات الخبرة' },
+  { value: 'graduation', label: 'الأحدث تخرجاً' },
+]
+type FacetKey = 'university' | 'major' | 'degree' | 'suggested_role'
+const FACETS: { key: FacetKey; label: string }[] = [
+  { key: 'university', label: 'الجامعة' },
+  { key: 'major', label: 'التخصص' },
+  { key: 'degree', label: 'الدرجة' },
+  { key: 'suggested_role', label: 'الوظيفة المقترحة' },
+]
+const ANY = '__any'
+const sortValue = (an: SavedAnalysis | undefined, k: SortKey): number => {
+  if (!an) return -1
+  if (k === 'fit') return an.fit_score ?? -1
+  if (k === 'gpa') return an.gpa_pct ?? -1
+  if (k === 'experience') return an.experience_num ?? -1
+  if (k === 'graduation') return Number(an.graduation_year) || -1
+  return -1
+}
+
 export function StaffApplicationsPage() {
   const { data, isLoading, isError, error, refetch } = useStaffApplications('all')
   const [, navigate] = useLocation()
   const [filter, setFilter] = usePageState<Filter>('apps:filter', 'all')
+  const [sort, setSort] = usePageState<SortKey>('apps:sort', 'newest')
+  const [facet, setFacet] = usePageState<Partial<Record<FacetKey, string>>>('apps:facet', {})
   const { teamMember } = useAuth()
   const analyzeM = useAnalyzeApplicant()
   const { data: analyses } = useApplicantAnalyses()
@@ -114,10 +146,36 @@ export function StaffApplicationsPage() {
     return c
   }, [data])
 
+  const byApp = useMemo(() => new Map((analyses ?? []).map((x) => [x.application_id, x])), [analyses])
+
+  // قيم كل فلتر من التحليلات نفسها، بعددها — الأكثر أولاً
+  const facetOptions = useMemo(() => {
+    const out = {} as Record<FacetKey, { value: string; count: number }[]>
+    for (const f of FACETS) {
+      const m = new Map<string, number>()
+      for (const x of analyses ?? []) {
+        const v = (x[f.key] ?? '').trim()
+        if (v) m.set(v, (m.get(v) ?? 0) + 1)
+      }
+      out[f.key] = [...m].map(([value, count]) => ({ value, count })).sort((a, b) => b.count - a.count)
+    }
+    return out
+  }, [analyses])
+
+  const facetActive = FACETS.some((f) => facet[f.key])
   const list = useMemo(() => {
-    if (filter === 'all') return data ?? []
-    return (data ?? []).filter((a) => (a.status ?? 'pending') === filter)
-  }, [data, filter])
+    let rows = filter === 'all' ? data ?? [] : (data ?? []).filter((a) => (a.status ?? 'pending') === filter)
+    if (facetActive) {
+      rows = rows.filter((a) => {
+        const an = byApp.get(a.id)
+        return FACETS.every((f) => !facet[f.key] || (an?.[f.key] ?? '').trim() === facet[f.key])
+      })
+    }
+    if (sort !== 'newest') {
+      rows = [...rows].sort((x, y) => sortValue(byApp.get(y.id), sort) - sortValue(byApp.get(x.id), sort))
+    }
+    return rows
+  }, [data, filter, facet, facetActive, sort, byApp])
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -186,6 +244,50 @@ export function StaffApplicationsPage() {
         ))}
       </div>
 
+      {/* الفرز والتصفية بما قرأه الذكاء من السير */}
+      {(analyses?.length ?? 0) > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-violet-200/70 bg-violet-50/40 p-2.5 dark:border-violet-900/50 dark:bg-violet-950/20">
+          <span className="flex items-center gap-1.5 px-1 text-xs font-medium text-violet-700 dark:text-violet-300">
+            <Sparkles className="h-3.5 w-3.5" /> من قراءة السير
+          </span>
+          <Select value={sort} onValueChange={(v) => setSort(v as SortKey)}>
+            <SelectTrigger className="h-8 w-auto min-w-36 gap-1.5 bg-background text-xs">
+              <ArrowDownWideNarrow className="h-3.5 w-3.5 text-muted-foreground" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {SORTS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          {FACETS.map((f) => (
+            facetOptions[f.key].length > 0 && (
+              <Select key={f.key} value={facet[f.key] ?? ANY}
+                onValueChange={(v) => setFacet({ ...facet, [f.key]: v === ANY ? undefined : v })}>
+                <SelectTrigger className={'h-8 w-auto min-w-28 max-w-56 bg-background text-xs ' + (facet[f.key] ? 'border-violet-400' : '')}>
+                  <SelectValue placeholder={f.label} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ANY}>{f.label}: الكل</SelectItem>
+                  {facetOptions[f.key].map((o) => (
+                    <SelectItem key={o.value} value={o.value}>
+                      {o.value} ({fmtNumber(o.count)})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )
+          ))}
+          {(facetActive || sort !== 'newest') && (
+            <Button size="sm" variant="ghost" className="h-8 gap-1 text-xs" onClick={() => { setFacet({}); setSort('newest') }}>
+              <X className="h-3.5 w-3.5" /> مسح
+            </Button>
+          )}
+          {facetActive && (
+            <span className="ms-auto text-xs text-muted-foreground">{fmtNumber(list.length)} متقدماً</span>
+          )}
+        </div>
+      )}
+
       {isLoading ? (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => (
@@ -205,13 +307,14 @@ export function StaffApplicationsPage() {
           description="تصل الطلبات من نموذج التوظيف في الموقع العام."
         />
       ) : list.length === 0 ? (
-        <FilteredEmptyState onClear={() => setFilter('all')} />
+        <FilteredEmptyState onClear={() => { setFilter('all'); setFacet({}) }} />
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {list.map((a) => (
             <ApplicationCard
               key={a.id}
               app={a}
+              analysis={byApp.get(a.id)}
               onOpen={() => navigate(`/staff-applications/${a.id}`)}
             />
           ))}
@@ -267,11 +370,14 @@ function DocChip({
 
 function ApplicationCard({
   app: a,
+  analysis: an,
   onOpen,
 }: {
   app: StaffApplication
+  analysis?: SavedAnalysis
   onOpen: () => void
 }) {
+  const edu = [an?.degree, an?.major, an?.university].filter(Boolean).join(' · ')
   return (
     <Card
       role="button"
@@ -310,6 +416,24 @@ function ApplicationCard({
           <Badge variant="outline">{idTypeLabel(a.id_type)}</Badge>
           <span className="text-muted-foreground">{fmtDatePref(a.created_at)}</span>
         </div>
+
+        {an && (
+          <div className="space-y-1 rounded-xl bg-violet-50/60 px-2.5 py-2 text-xs dark:bg-violet-950/25">
+            {edu && (
+              <p className="flex items-start gap-1.5 text-foreground">
+                <GraduationCap className="mt-0.5 h-3.5 w-3.5 shrink-0 text-violet-600 dark:text-violet-300" />
+                <span className="line-clamp-2">{edu}{an.graduation_year ? ` — ${an.graduation_year}` : ''}</span>
+              </p>
+            )}
+            <p className="flex flex-wrap gap-x-3 gap-y-0.5 text-muted-foreground">
+              {an.fit_score != null && <span>الملاءمة <b className="text-foreground">{fmtNumber(an.fit_score)}/10</b></span>}
+              {an.gpa_pct != null && <span>المعدل <b className="text-foreground">{fmtNumber(an.gpa_pct)}٪</b></span>}
+              {an.experience_num != null && (
+                <span>{an.experience_num === 0 ? 'حديث تخرج' : <>خبرة <b className="text-foreground">{fmtNumber(an.experience_num)}</b> سنة</>}</span>
+              )}
+            </p>
+          </div>
+        )}
 
         <div className="flex flex-wrap gap-1.5">
           <DocChip has={!!a.cv_url} icon={FileText} label="السيرة" />

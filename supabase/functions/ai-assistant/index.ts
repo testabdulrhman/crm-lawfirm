@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { pickDate } from "../_shared/hijri.ts";
+import { docxText } from "../_shared/docx.ts";
 
 // =============================================================
 // ai-assistant — البوابة الموحّدة للذكاء الاصطناعي (Claude API)
@@ -44,6 +45,28 @@ async function resolveCaller(req: Request): Promise<Caller | null> {
   return { id: me.id, name: me.name ?? "موظف", token };
 }
 
+/** تعليم المتقدّم وأرقام الفرز من رد التحليل (2026-10-19) — «غير مذكور»/فارغ = null، والأرقام في نطاقها */
+function educationOf(p: any): Record<string, unknown> {
+  const txt = (v: unknown) => {
+    const t = String(v ?? "").trim();
+    return !t || t === "null" || t.includes("غير مذكور") ? null : t.slice(0, 120);
+  };
+  const num = (v: unknown, max: number) => {
+    if (v === null || v === undefined || v === "") return null;
+    const n = Number(String(v).replace(/[٠-٩]/g, (c) => String("٠١٢٣٤٥٦٧٨٩".indexOf(c))).replace(/[٫,]/g, ".").replace(/[^\d.]/g, ""));
+    return Number.isFinite(n) && n >= 0 && n <= max ? Math.round(n * 10) / 10 : null;
+  };
+  const year = txt(p.graduation_year)?.match(/(19|20)\d{2}/)?.[0] ?? null;
+  return {
+    university: txt(p.university),
+    major: txt(p.major),
+    degree: txt(p.degree),
+    graduation_year: year,
+    gpa_pct: num(p.gpa_pct, 100),
+    experience_num: num(p.experience_num, 60),
+  };
+}
+
 /** سجل المساعد (ai_assistant_runs) — للمدير وحده؛ فشل التسجيل لا يُفشل الرد */
 async function logRun(row: Record<string, unknown>) {
   try {
@@ -83,6 +106,10 @@ function parseLoose(text: string): any | null {
   const first = text.indexOf("{");
   const last = text.lastIndexOf("}");
   if (first !== -1 && last > first) attempts.push(text.slice(first, last + 1));
+  // محاولة أخيرة: النموذج يكتب الأرقام أحياناً بالعربية بلا تنصيص («"gpa_pct": ٩٠») فيبطل JSON (2026-10-19)
+  if (first !== -1 && last > first) {
+    attempts.push(text.slice(first, last + 1).replace(/[٠-٩]/g, (c) => String("٠١٢٣٤٥٦٧٨٩".indexOf(c))).replace(/٫/g, "."));
+  }
   for (const a of attempts) {
     try {
       const v = JSON.parse(a.trim());
@@ -92,7 +119,7 @@ function parseLoose(text: string): any | null {
   return null;
 }
 
-type Doc = { base64: string; mediaType: string; kind: "pdf" | "image" | "other" };
+type Doc = { base64: string; mediaType: string; kind: "pdf" | "image" | "text" | "other"; text?: string };
 
 async function fetchDocAsBase64(url: string): Promise<Doc | null> {
   try {
@@ -111,6 +138,11 @@ async function fetchDocAsBase64(url: string): Promise<Doc | null> {
       buf = new Uint8Array(await res.arrayBuffer());
     }
     if (buf.length > 10 * 1024 * 1024) return null;
+    // Word: نصّه بدل إرساله كأنه PDF (كان يُرسل بصيغة PDF فيُرفض فتضيع السيرة — 2026-10-19)
+    if (/\.docx(\?|$)/i.test(url) || ct.includes("wordprocessingml")) {
+      const t = await docxText(buf).catch(() => "");
+      return t ? { base64: "", mediaType: "text/plain", kind: "text", text: t.slice(0, 80000) } : null;
+    }
     let binary = "";
     const chunk = 8192;
     for (let i = 0; i < buf.length; i += chunk) {
@@ -137,6 +169,7 @@ async function fetchDocAsBase64(url: string): Promise<Doc | null> {
 function buildDocBlock(doc: Doc): any {
   if (doc.kind === "pdf") return { type: "document", source: { type: "base64", media_type: "application/pdf", data: doc.base64 } };
   if (doc.kind === "image") return { type: "image", source: { type: "base64", media_type: doc.mediaType, data: doc.base64 } };
+  if (doc.kind === "text" && doc.text) return { type: "text", text: `نص المستند المرفق:\n${doc.text}` };
   return null;
 }
 
@@ -246,11 +279,14 @@ const AGENT_TOOLS = [
   },
   {
     name: "list_applicant_analyses",
-    description: "ترتيب ومقارنة المتقدمين للوظائف حسب نتائج تحليل الذكاء الاصطناعي المحفوظة: مؤشر الملاءمة (1-10)، المعدل الدراسي GPA، الخبرة، الوظيفة المقترحة، التوصية. استخدمها لأسئلة «من أفضل المتقدمين؟» أو «أعلى المعدلات». النتائج مرتّبة بالمؤشر تنازلياً، وتظهر أيضاً من لم يُحلّل بعد (analyzed=false) فاذكرهم للمستخدم.",
+    description: "ترتيب ومقارنة المتقدمين للوظائف ومن السير المحلَّلة: مؤشر الملاءمة (1-10)، المعدل (gpa ونسبته الموحّدة gpa_pct من 100)، الخبرة (experience_num)، الجامعة، التخصص، الدرجة، سنة التخرج، الوظيفة المقترحة، التوصية، والملخص. استخدمها لأسئلة «من أفضل المتقدمين؟» و«أعلى المعدلات» و«كم متقدم من جامعة كذا / تخصص كذا؟» — صفِّ بالجامعة أو التخصص ورتّب بما يُسأل عنه. وتظهر أيضاً من لم يُحلّل بعد (analyzed=false) ومن لا يُعرف تعليمه (university=null) فاذكر عددهم.",
     input_schema: {
       type: "object",
       properties: {
-        status: { type: "string", enum: ["pending", "approved", "rejected", "all"], description: "حالة الطلبات (افتراضي pending)" },
+        status: { type: "string", enum: ["pending", "approved", "rejected", "all"], description: "حالة الطلبات (افتراضي all لأسئلة العدّ، وpending للمفاضلة)" },
+        university: { type: "string", description: "جزء من اسم الجامعة (مثال: القصيم)" },
+        major: { type: "string", description: "جزء من التخصص (مثال: شريعة، أنظمة)" },
+        sort: { type: "string", enum: ["fit", "gpa", "experience", "graduation"], description: "الترتيب تنازلياً (افتراضي fit)" },
       },
     },
   },
@@ -469,13 +505,13 @@ async function runAgentTool(name: string, input: any, userName: string, actions:
       })));
     }
     if (name === "list_applicant_analyses") {
-      const status = String(input.status || "pending");
+      const status = String(input.status || "all");
       let q = db
         .from("staff_applications")
         .select("id, full_name, phone, status, created_at, cv_url")
         .is("deleted_at", null)
         .order("created_at", { ascending: false })
-        .limit(50);
+        .limit(300);
       if (status !== "all") q = q.eq("status", status);
       const { data: apps, error } = await q;
       if (error) return JSON.stringify({ error: error.message });
@@ -499,15 +535,39 @@ async function runAgentTool(name: string, input: any, userName: string, actions:
             analyzed: !!an,
             fit_score: an?.fit_score ?? null,
             gpa: an?.gpa ?? null,
+            gpa_pct: an?.gpa_pct ?? null,
             experience_years: an?.experience_years ?? null,
+            experience_num: an?.experience_num ?? null,
+            university: an?.university ?? null,
+            major: an?.major ?? null,
+            degree: an?.degree ?? null,
+            graduation_year: an?.graduation_year ?? null,
+            summary: an?.summary ? String(an.summary).slice(0, 300) : null,
             suggested_role: an?.suggested_role ?? null,
             recommendation: an?.recommendation ?? null,
             analyzed_at: an?.analyzed_at ?? null,
             link: `https://app.redwan.sa/#/staff-applications/${a.id}`,
           };
         })
-        .sort((x: any, y: any) => (y.fit_score ?? -1) - (x.fit_score ?? -1));
-      return JSON.stringify(rows);
+        .sort((x: any, y: any) => {
+          const key = ({ gpa: "gpa_pct", experience: "experience_num", graduation: "graduation_year" } as any)[input.sort] ?? "fit_score";
+          return Number(y[key] ?? -1) - Number(x[key] ?? -1);
+        });
+      // تصفية بالجامعة/التخصص — تطبيع عربي بسيط (أ/إ/آ ← ا، ة ← ه، بلا «ال») فيطابق «القصيم» و«قصيم»
+      const norm = (t: unknown) => String(t ?? "").replace(/[أإآ]/g, "ا").replace(/ة/g, "ه").replace(/(^|\s)ال/g, "$1").trim();
+      const uniQ = norm(input.university), majQ = norm(input.major);
+      const matched = rows.filter((r: any) =>
+        (!uniQ || norm(r.university).includes(uniQ)) && (!majQ || norm(r.major).includes(majQ)));
+      return JSON.stringify({
+        counts: {
+          applications: rows.length,
+          analyzed: rows.filter((r: any) => r.analyzed).length,
+          education_unknown: rows.filter((r: any) => r.analyzed && !r.university).length,
+          not_analyzed: rows.filter((r: any) => !r.analyzed).length,
+          matched: matched.length,
+        },
+        applicants: (uniQ || majQ ? matched : rows).slice(0, 60),
+      });
     }
     if (name === "save_attachment") {
       if (!attachment?.url) {
@@ -978,7 +1038,7 @@ function buildPrompt(task: string, payload: any): { system: string; user: string
     case "analyze_applicant":
       return {
         system: "أنت مساعد موارد بشرية لشركة محاماة سعودية. حلّل طلب التوظيف بموضوعية وإيجاز، واستفد من السيرة الذاتية إن وُجدت. أجب بالعربية فقط وبصيغة JSON دون أي نص إضافي.",
-        user: `حلّل هذا المتقدّم لوظيفة في شركة محاماة:\n\nالاسم: ${payload.full_name || "غير مذكور"}\nالمؤهل: ${payload.qualifications || "غير مذكور"}\nالبريد: ${payload.email || "غير مذكور"}\n${payload.has_cv ? "السيرة الذاتية مرفقة أدناه — اقرأها وحلّلها." : "لا توجد سيرة ذاتية مرفقة."}\n\nأرجِع JSON بالحقول التالية:\n{\n  \"summary\": \"ملخّص موجز للمتقدّم (سطران-ثلاثة)\",\n  \"suggested_role\": \"الوظيفة الأنسب (محامٰ/باحث قانوني/إداري/محاسب/أخرى)\",\n  \"strengths\": [\"نقاط القوة\"],\n  \"concerns\": [\"ملاحظات أو نقاط تحتاج توضيح\"],\n  \"gpa\": \"المعدل الدراسي كما ورد في السيرة مع مقياسه (مثال: 4.5 من 5 أو 88%) أو غير مذكور\",\n  \"experience_years\": \"سنوات الخبرة التقريبية إن وُجدت في السيرة (أو غير مذكور)\",\n  \"fit_score\": رقم من 1 إلى 10,\n  \"recommendation\": \"توصية موجزة (مقابلة/اعتذار/تحت الدراسة)\"\n}`,
+        user: `حلّل هذا المتقدّم لوظيفة في شركة محاماة:\n\nالاسم: ${payload.full_name || "غير مذكور"}\nالمؤهل: ${payload.qualifications || "غير مذكور"}\nالبريد: ${payload.email || "غير مذكور"}\n${payload.has_cv ? "السيرة الذاتية مرفقة أدناه — اقرأها وحلّلها." : "لا توجد سيرة ذاتية مرفقة."}${payload.has_cert ? "\nوشهادة المؤهل (الوثيقة/السجل الأكاديمي) مرفقة أيضاً بعد السيرة — خذ منها المعدل والجامعة والتخصص والدرجة وسنة التخرج، ولا تقل إن المعدل غير مذكور إن كان فيها." : ""}${payload.has_license ? "\nورخصة المحاماة مرفقة أيضاً (آخر المرفقات) — اذكرها في الملخص (رقمها/صلاحيتها إن ظهرت) وراعِها في الوظيفة المقترحة والملاءمة." : ""}\nالمرفقات بالترتيب: ${[payload.has_cv && "السيرة الذاتية", payload.has_cert && "شهادة المؤهل", payload.has_license && "رخصة المحاماة"].filter(Boolean).join("، ") || "لا شيء"}.\n\nأرجِع JSON بالحقول التالية:\n{\n  \"summary\": \"ملخّص موجز للمتقدّم (سطران-ثلاثة)\",\n  \"suggested_role\": \"الوظيفة الأنسب (محامٰ/باحث قانوني/إداري/محاسب/أخرى)\",\n  \"strengths\": [\"نقاط القوة\"],\n  \"concerns\": [\"ملاحظات أو نقاط تحتاج توضيح\"],\n  \"gpa\": \"المعدل الدراسي كما ورد في السيرة مع مقياسه (مثال: 4.5 من 5 أو 88%) أو غير مذكور\",\n  \"experience_years\": \"سنوات الخبرة التقريبية إن وُجدت في السيرة (أو غير مذكور)\",\n  \"university\": \"اسم الجامعة الرسمي بالعربية لآخر مؤهل (مثال: جامعة القصيم، جامعة الملك سعود) أو null\",\n  \"major\": \"التخصص بالعربية (مثال: الشريعة، الأنظمة، القانون، المحاسبة) أو null\",\n  \"degree\": \"الدرجة: دبلوم أو بكالوريوس أو ماجستير أو دكتوراه، أو null\",\n  \"graduation_year\": \"سنة التخرج ميلادياً بأربعة أرقام (حوّل الهجري) أو null\",\n  \"gpa_pct\": المعدل نسبةً من ١٠٠ رقماً (4.5 من 5 = 90، 3.2 من 4 = 80، 88% = 88) أو null,\n  \"experience_num\": سنوات الخبرة رقماً (0 لحديث التخرج) أو null,\n  \"fit_score\": رقم من 1 إلى 10,\n  \"recommendation\": \"توصية موجزة (مقابلة/اعتذار/تحت الدراسة)\"\n}`,
         maxTokens: 6000,
       };
 
@@ -1030,22 +1090,48 @@ Deno.serve(async (req) => {
     return json({ error: "مفتاح Anthropic غير مُعدّ.", missing_key: true }, 500);
   }
 
-  const caller = await resolveCaller(req);
-  if (!caller) return json({ error: "غير مصرّح — سجّل الدخول أولاً" }, 401);
+  // مفتاح الخادم = إعادة تحليل جماعية من الخادم نفسه (2026-10-19) — لمهمة analyze_applicant وحدها لا للمحادثة
+  const bearer = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
+  const isService = !!bearer && bearer === (Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "");
+  const caller = isService ? null : await resolveCaller(req);
+  if (!caller && !isService) return json({ error: "غير مصرّح — سجّل الدخول أولاً" }, 401);
 
   try {
     const body = await req.json();
     const { task, payload } = body ?? {};
     if (!task) return json({ error: "task مطلوب" }, 400);
+    if (isService && task !== "analyze_applicant") return json({ error: "غير مسموح" }, 403);
 
-    if (task === "agent") return await runAgent(payload ?? {}, caller);
+    if (task === "agent") return await runAgent(payload ?? {}, caller!);
     if (task === "ruling_outcomes") return await rulingOutcomes(payload ?? {}, req.headers.get("Authorization") ?? "");
 
     const p = payload ?? {};
     let doc: Doc | null = null;
+    // شهادة المؤهل تُقرأ مع السيرة (بلاغ المدير 2026-10-19: «عدم ذكر المعدل في السيرة» والمتقدّم أرفق شهادته
+    // الجامعية — كان التحليل يقرأ السيرة وحدها). الروابط من الطلب نفسه في القاعدة إن لم يرسلها المتصفح.
+    // وكل ملفات الطلب: السيرة والشهادة ورخصة المحاماة (طلب المدير: «يقرا كل الملفات المقدمة»)
+    let cert: Doc | null = null;
+    let license: Doc | null = null;
+    if (task === "analyze_applicant" && p.application_id) {
+      const { data: ap } = await admin.from("staff_applications")
+        .select("cv_url, qualification_doc_url, lawyer_license_url").eq("id", String(p.application_id)).maybeSingle();
+      if (ap) {
+        p.cv_url = p.cv_url || ap.cv_url;
+        p.qualification_doc_url = p.qualification_doc_url || ap.qualification_doc_url;
+        p.lawyer_license_url = p.lawyer_license_url || ap.lawyer_license_url;
+      }
+    }
+    if (task === "analyze_applicant" && p.lawyer_license_url) {
+      license = await fetchDocAsBase64(p.lawyer_license_url);
+      p.has_license = !!license;
+    }
     if (task === "analyze_applicant" && p.cv_url) {
       doc = await fetchDocAsBase64(p.cv_url);
       p.has_cv = !!doc;
+    }
+    if (task === "analyze_applicant" && p.qualification_doc_url) {
+      cert = await fetchDocAsBase64(p.qualification_doc_url);
+      p.has_cert = !!cert;
     }
     if ((task === "extract_ruling" || task === "extract_session_minutes") && p.doc_url) {
       doc = await fetchDocAsBase64(p.doc_url);
@@ -1055,8 +1141,8 @@ Deno.serve(async (req) => {
     const { system, user, maxTokens } = buildPrompt(task, p);
     if (!user || !String(user).trim()) return json({ error: "لا يوجد محتوى للمعالجة" }, 400);
 
-    const block = doc ? buildDocBlock(doc) : null;
-    const messageContent: any = block ? [block, { type: "text", text: user }] : user;
+    const blocks = [doc, cert, license].filter(Boolean).map((d) => buildDocBlock(d as Doc)).filter(Boolean);
+    const messageContent: any = blocks.length ? [...blocks, { type: "text", text: user }] : user;
 
     const model = await getAssistantModel();
     const aiRes = await fetch(ANTHROPIC_URL, {
@@ -1102,6 +1188,7 @@ Deno.serve(async (req) => {
           experience_years: parsed.experience_years ? String(parsed.experience_years) : null,
           suggested_role: parsed.suggested_role ?? null,
           summary: parsed.summary ?? null,
+          ...educationOf(parsed),
           recommendation: parsed.recommendation ?? null,
           used_cv: !!doc,
           analyzed_at: new Date().toISOString(),

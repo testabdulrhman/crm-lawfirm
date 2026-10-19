@@ -640,6 +640,15 @@ function SavedAnalysisSummary({
         )}
       </div>
       <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
+        {(saved.university || saved.major || saved.degree) && (
+          <span>
+            <span className="text-muted-foreground">المؤهل: </span>
+            <span className="font-medium text-foreground">
+              {[saved.degree, saved.major, saved.university].filter(Boolean).join(' · ')}
+              {saved.graduation_year ? ` — ${saved.graduation_year}` : ''}
+            </span>
+          </span>
+        )}
         {saved.gpa && (
           <span>
             <span className="text-muted-foreground">المعدل: </span>

@@ -44,6 +44,14 @@ export interface SavedAnalysis {
   used_cv: boolean | null
   analyzed_at: string | null
   analyzed_by: string | null
+  /** تعليم المتقدّم وأرقام الفرز — يستخرجها الذكاء من السيرة (2026-10-19) */
+  university: string | null
+  major: string | null
+  degree: string | null
+  graduation_year: string | null
+  /** المعدل نسبةً موحّدة من ١٠٠ — للفرز (gpa نصّه كما ورد) */
+  gpa_pct: number | null
+  experience_num: number | null
 }
 
 export function useSavedApplicantAnalysis(applicationId: string | null) {
