@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useLocation } from 'wouter'
 import {
   ArrowRight,
@@ -21,6 +22,9 @@ import {
   Pencil,
   UploadCloud,
   Send,
+  History,
+  Inbox,
+  MessageSquareText,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -52,7 +56,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 
-import { fmtDatePref, fmtDateTime, fmtNumber } from '@/lib/format'
+import { fmtDatePref, fmtDateTime, fmtNumber, fmtTime } from '@/lib/format'
 import { openExternal } from '@/lib/external'
 import { pickFile, uploadFile } from '@/lib/files'
 import { toast } from '@/hooks/use-toast'
@@ -68,7 +72,10 @@ import {
   useDeleteApplication,
   useReopenApplication,
   useUpdateApplication,
+  useApplicationEvents,
   sendCompletionLinkSms,
+  type AppEvent,
+  type AppEventKind,
 } from '@/hooks/useStaffApplications'
 import { ApproveDialog } from './ApproveDialog'
 import { RejectDialog } from './RejectDialog'
@@ -145,11 +152,13 @@ export function ApplicationDetail({ id }: { id: string }) {
 
   // إرسال رابط الاستكمال SMS
   const [sendingLink, setSendingLink] = useState(false)
+  const qc = useQueryClient()
   const sendLink = async () => {
     if (!a || sendingLink) return
     setSendingLink(true)
     const ok = await sendCompletionLinkSms(a, teamMember?.name ?? null)
     setSendingLink(false)
+    void qc.invalidateQueries({ queryKey: ['staff_applications', 'events', a.id] })
     if (ok)
       toast({ variant: 'success', title: `أُرسل رابط الاستكمال إلى ${a.full_name}` })
     else
@@ -246,6 +255,8 @@ export function ApplicationDetail({ id }: { id: string }) {
 
       {/* تحليل بالذكاء الاصطناعي */}
       <AiAnalysisCard app={a} />
+
+      <ApplicationTimeline applicationId={a.id} />
 
       {/* الأقسام */}
       <Section title="بيانات شخصية">
@@ -486,6 +497,90 @@ function ActionBar({
         </Button>
       </AlertDescription>
     </Alert>
+  )
+}
+
+/* ===================== سجلّ الطلب ===================== */
+
+/** ما جرى في الطلب (طلب المدير 2026-10-19): التقديم، وما أُرسل للمتقدّم بقناته ونتيجته، واستكماله، والتحليل والقرار */
+const EVENT_META: Record<AppEventKind, { label: string; icon: typeof Send; tone: string }> = {
+  submitted: { label: 'قدّم الطلب', icon: Inbox, tone: 'bg-navy text-white' },
+  received_msg: { label: 'أُرسل له تأكيد استلام الطلب', icon: MessageSquareText, tone: 'bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300' },
+  completion_requested: { label: 'طُلب منه استكمال المستندات', icon: Send, tone: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300' },
+  completed: { label: 'استكمل مستنداته', icon: UploadCloud, tone: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' },
+  analyzed: { label: 'حلّله الذكاء الاصطناعي', icon: Sparkles, tone: 'bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300' },
+  rejected: { label: 'رُفض الطلب', icon: XCircle, tone: 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300' },
+  rejection_msg: { label: 'أُرسلت له رسالة الاعتذار', icon: MessageSquareText, tone: 'bg-red-50 text-red-600 dark:bg-red-950/60 dark:text-red-300' },
+  approved: { label: 'قُبل وأُنشئ حسابه', icon: UserCheck, tone: 'bg-emerald-600 text-white' },
+  credentials_msg: { label: 'أُرسلت له بيانات الدخول', icon: MessageSquareText, tone: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300' },
+  reopened: { label: 'أُعيد الطلب إلى قيد المراجعة', icon: RotateCcw, tone: 'bg-muted text-foreground' },
+}
+
+function ApplicationTimeline({ applicationId }: { applicationId: string }) {
+  const { data: events, isLoading } = useApplicationEvents(applicationId)
+  // رسالتا القناتين لنفس الحدث في اللحظة نفسها تُعرضان سطراً واحداً بشارتين
+  const rows = useMemo(() => {
+    const out: { key: string; ev: AppEvent; channels: { channel: 'sms' | 'whatsapp'; ok: boolean | null }[] }[] = []
+    for (const ev of events ?? []) {
+      const prev = out[out.length - 1]
+      if (prev && ev.channel && prev.ev.kind === ev.kind && prev.channels.length
+          && Math.abs(Date.parse(prev.ev.created_at) - Date.parse(ev.created_at)) < 120_000) {
+        prev.channels.push({ channel: ev.channel, ok: ev.ok })
+        continue
+      }
+      out.push({ key: ev.id, ev, channels: ev.channel ? [{ channel: ev.channel, ok: ev.ok }] : [] })
+    }
+    return out
+  }, [events])
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <History className="h-4 w-4 text-gold" />
+          سجلّ الطلب
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <Skeleton className="h-24 w-full" />
+        ) : rows.length === 0 ? (
+          <p className="text-sm text-muted-foreground">لا أحداث مسجّلة بعد.</p>
+        ) : (
+          <ol className="relative space-y-4 ps-1">
+            <span aria-hidden className="absolute bottom-2 top-2 w-px bg-border" style={{ insetInlineStart: 17 }} />
+            {rows.map(({ key, ev, channels }) => {
+              const m = EVENT_META[ev.kind]
+              const Icon = m.icon
+              return (
+                <li key={key} className="relative flex gap-3">
+                  <span className={'relative z-10 grid h-9 w-9 shrink-0 place-items-center rounded-full ring-4 ring-card ' + m.tone}>
+                    <Icon className="h-4 w-4" />
+                  </span>
+                  <div className="min-w-0 flex-1 pt-1">
+                    <p className="flex flex-wrap items-center gap-1.5 text-sm font-medium text-foreground">
+                      {m.label}
+                      {channels.map((c, i) => (
+                        <span key={i} className={'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ' +
+                          (c.ok === false ? 'bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300' : 'bg-muted text-muted-foreground')}>
+                          {c.channel === 'whatsapp' ? 'واتساب' : 'رسالة نصية'}
+                          {c.ok === false ? ' — لم تصل' : ' ✓'}
+                        </span>
+                      ))}
+                    </p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {fmtDatePref(ev.created_at)}، {fmtTime(new Date(ev.created_at).toTimeString().slice(0, 5))}
+                      {ev.actor ? ` · ${ev.actor}` : ''}
+                      {ev.detail ? ` · ${ev.detail}` : ''}
+                    </p>
+                  </div>
+                </li>
+              )
+            })}
+          </ol>
+        )}
+      </CardContent>
+    </Card>
   )
 }
 

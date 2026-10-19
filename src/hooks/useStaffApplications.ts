@@ -78,10 +78,57 @@ export function usePendingApplicationsCount() {
   })
 }
 
+/* ===================== سجلّ الطلب ===================== */
+
+export type AppEventKind =
+  | 'submitted' | 'received_msg' | 'completion_requested' | 'completed' | 'analyzed'
+  | 'rejected' | 'rejection_msg' | 'approved' | 'credentials_msg' | 'reopened'
+
+export interface AppEvent {
+  id: string
+  kind: AppEventKind
+  channel: 'sms' | 'whatsapp' | null
+  ok: boolean | null
+  detail: string | null
+  actor: string | null
+  created_at: string
+}
+
+/** سجلّ طلب التوظيف (طلب المدير 2026-10-19): ما أُرسل للمتقدّم وما فعله هو — مربوطاً بطلبه */
+export function useApplicationEvents(applicationId: string | null) {
+  return useQuery({
+    queryKey: [LIST_KEY, 'events', applicationId],
+    enabled: !!applicationId,
+    queryFn: async (): Promise<AppEvent[]> => {
+      const { data, error } = await supabase
+        .from('staff_application_events')
+        .select('id, kind, channel, ok, detail, actor, created_at')
+        .eq('application_id', applicationId!)
+        .order('created_at', { ascending: false })
+      if (error) throw error
+      return (data ?? []) as AppEvent[]
+    },
+  })
+}
+
+/** يسجّل حدثاً في سجلّ الطلب — فشله لا يمسّ الإجراء نفسه */
+async function logAppEvent(
+  applicationId: string,
+  kind: AppEventKind,
+  extra: { channel?: 'sms' | 'whatsapp'; ok?: boolean; detail?: string | null; actor?: string | null } = {}
+) {
+  try {
+    await supabase.from('staff_application_events').insert({ application_id: applicationId, kind, ...extra })
+  } catch {
+    /* ثانوي */
+  }
+}
+
 /* ===================== مساعد SMS ===================== */
 // بيانات Msegat تُحلّ خادميّاً داخل swift-endpoint (لا تُرسل من المتصفّح).
 
 interface SendCredentialsArgs {
+  applicationId: string
   name: string
   email: string
   password: string
@@ -150,7 +197,9 @@ async function sendCredentialsSms(args: SendCredentialsArgs): Promise<boolean> {
       body: { numbers, msg: message },
     })
     const ok = !error && (data?.code === '1' || data?.code === 1)
-    await wa
+    const waOk = await wa
+    await logAppEvent(args.applicationId, 'credentials_msg', { channel: 'sms', ok, actor: args.sentBy })
+    await logAppEvent(args.applicationId, 'credentials_msg', { channel: 'whatsapp', ok: waOk, actor: args.sentBy })
 
     // سجّل النتيجة (بالنسخة المموّهة)
     await supabase.from('sms_log').insert({
@@ -246,12 +295,14 @@ export function useApproveApplication() {
         })
         .eq('id', a.id)
       if (updErr) throw updErr
+      await logAppEvent(a.id, 'approved', { actor: args.reviewerName, detail: args.role || null })
 
       // 3) إرسال SMS ببيانات الدخول (فشله لا يُفشل العملية)
       const hasPhone = !!a.phone && normalizeSaudiPhone(a.phone) !== ''
       let smsSent = false
       if (hasPhone) {
         smsSent = await sendCredentialsSms({
+          applicationId: a.id,
           name: a.full_name ?? 'الموظف',
           email: args.email,
           password: args.password,
@@ -295,6 +346,7 @@ const DEFAULT_REJECTION =
   'مرحباً {name}، نشكر تقديمكم على الوظيفة لدى شركة عبدالرحمن بن رضوان المشيقح للمحاماة وإدارة إجراءات الإفلاس. نعتذر عن عدم قبول طلبكم حالياً، ونتمنّى لكم التوفيق.'
 
 async function sendRejectionSms(
+  applicationId: string,
   name: string,
   phone: string,
   sentBy: string | null
@@ -315,7 +367,9 @@ async function sendRejectionSms(
       body: { numbers, msg: message },
     })
     const ok = !error && (data?.code === '1' || data?.code === 1)
-    await wa
+    const waOk = await wa
+    await logAppEvent(applicationId, 'rejection_msg', { channel: 'sms', ok, actor: sentBy })
+    await logAppEvent(applicationId, 'rejection_msg', { channel: 'whatsapp', ok: waOk, actor: sentBy })
     await supabase.from('sms_log').insert({
       recipient_name: name,
       phone: numbers,
@@ -365,12 +419,15 @@ export function useRejectApplication() {
         })
         .eq('id', application.id)
       if (error) throw error
+      // السبب داخلي لا يُرسل — يظهر في السجل للمكتب وحده
+      await logAppEvent(application.id, 'rejected', { actor: reviewerName, detail: reason || null })
 
       const hasPhone =
         !!application.phone && normalizeSaudiPhone(application.phone) !== ''
       let smsSent = false
       if (sendSms && hasPhone) {
         smsSent = await sendRejectionSms(
+          application.id,
           application.full_name ?? 'المتقدّم',
           application.phone!,
           reviewerName
@@ -412,6 +469,7 @@ export function useReopenApplication() {
         })
         .eq('id', id)
       if (error) throw error
+      await logAppEvent(id, 'reopened')
     },
     onSuccess: () => {
       invalidate(qc)
@@ -501,7 +559,9 @@ export async function sendCompletionLinkSms(
       body: { numbers, msg },
     })
     const ok = !error && (data?.code === '1' || data?.code === 1)
-    await wa
+    const waOk = await wa
+    await logAppEvent(app.id, 'completion_requested', { channel: 'sms', ok, actor: sentBy })
+    await logAppEvent(app.id, 'completion_requested', { channel: 'whatsapp', ok: waOk, actor: sentBy })
     await supabase.from('sms_log').insert({
       recipient_name: app.full_name ?? 'متقدم',
       phone: numbers,

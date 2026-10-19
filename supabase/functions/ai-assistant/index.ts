@@ -1194,6 +1194,13 @@ Deno.serve(async (req) => {
           analyzed_at: new Date().toISOString(),
           analyzed_by: p.analyzed_by ? String(p.analyzed_by) : null,
         }, { onConflict: "application_id" });
+        // سجلّ الطلب: حُلّل، وبأي ملفات
+        const files = [p.has_cv && "السيرة", p.has_cert && "الشهادة", p.has_license && "الرخصة"].filter(Boolean).join("، ");
+        await admin.from("staff_application_events").insert({
+          application_id: String(p.application_id), kind: "analyzed",
+          actor: p.analyzed_by ? String(p.analyzed_by) : null,
+          detail: [Number(parsed.fit_score) ? `مؤشر الملاءمة ${Number(parsed.fit_score)}/10` : null, files ? `قرأ: ${files}` : null].filter(Boolean).join(" · ") || null,
+        });
       } catch (_) { /* الحفظ ثانوي */ }
     }
 

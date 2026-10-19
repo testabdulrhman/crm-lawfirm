@@ -60,10 +60,16 @@ async function uploadDoc(supabase: any, base64: string, name: string, tag: strin
   return pub.publicUrl;
 }
 
-/** واتساب تأكيد الاستلام — غير قاتل: فشله لا يمسّ الطلب ولا الـSMS */
-async function sendApplicantWhatsApp(name: string, phone: string, msg: string) {
+/** سجلّ الطلب (staff_application_events — 2026-10-19): كل حدث مربوط بطلبه، وفشل التسجيل لا يمسّ شيئاً */
+async function logEvent(supabase: any, appId: string | null, kind: string, extra: Record<string, unknown> = {}) {
+  if (!appId) return;
+  try { await supabase.from("staff_application_events").insert({ application_id: appId, kind, ...extra }); } catch (_) {}
+}
+
+/** واتساب تأكيد الاستلام — غير قاتل: فشله لا يمسّ الطلب ولا الـSMS. يُرجع هل خرج */
+async function sendApplicantWhatsApp(name: string, phone: string, msg: string): Promise<boolean> {
   try {
-    await fetch(`${SUPABASE_URL}/functions/v1/whatsapp-send`, {
+    const r = await fetch(`${SUPABASE_URL}/functions/v1/whatsapp-send`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${SERVICE_ROLE}` },
       body: JSON.stringify({
@@ -72,10 +78,12 @@ async function sendApplicantWhatsApp(name: string, phone: string, msg: string) {
       }),
       signal: AbortSignal.timeout(30_000),
     });
-  } catch (_) { /* تجاهل */ }
+    const d = await r.json().catch(() => ({}));
+    return r.ok && !!d?.success;
+  } catch (_) { return false; }
 }
 
-async function sendApplicantSMS(supabase: any, name: string, phone: string) {
+async function sendApplicantSMS(supabase: any, name: string, phone: string, appId: string | null) {
   try {
     const { data: cfgRow } = await supabase.from("lookup_values").select("value").eq("type", "sms_config").limit(1).maybeSingle();
     const { data: tplRow } = await supabase.from("message_templates").select("body").eq("key", "application_received").maybeSingle();
@@ -90,12 +98,14 @@ async function sendApplicantSMS(supabase: any, name: string, phone: string) {
       body: JSON.stringify({ userName: cfg.userName, apiKey: cfg.apiKey, userSender: cfg.sender, numbers: num, msg }),
     });
     const out = await res.text();
+    const smsOk = out.includes("\"code\":\"1\"") || out.includes("1");
     await supabase.from("sms_log").insert({
       recipient_name: name, phone: num, message: msg,
-      status: out.includes("\"code\":\"1\"") || out.includes("1") ? "sent" : "failed",
+      status: smsOk ? "sent" : "failed",
       sent_by: "نظام (تقديم وظيفة)",
     });
-    await wa;
+    await logEvent(supabase, appId, "received_msg", { channel: "sms", ok: smsOk });
+    await logEvent(supabase, appId, "received_msg", { channel: "whatsapp", ok: await wa });
   } catch (_) {}
 }
 
@@ -147,6 +157,10 @@ Deno.serve(async (req) => {
 
       const { error: updErr } = await supabase.from("staff_applications").update(updates).eq("id", app.id);
       if (updErr) { await logError(supabase, "complete_update", updErr.message); return json({ error: "تعذّر حفظ المستندات" }, 500); }
+      const labels: Record<string, string> = { cv_url: "السيرة الذاتية", qualification_doc_url: "شهادة المؤهل", lawyer_license_url: "رخصة المحاماة" };
+      await logEvent(supabase, app.id, "completed", {
+        detail: Object.keys(updates).filter((k) => labels[k]).map((k) => labels[k]).join("، "),
+      });
       return json({ success: true, uploaded });
     }
 
@@ -177,15 +191,17 @@ Deno.serve(async (req) => {
       }
     }
 
-    const { error: insErr } = await supabase.from("staff_applications").insert({
+    const { data: inserted, error: insErr } = await supabase.from("staff_applications").insert({
       full_name: cleanName, phone: cleanPhone,
       email: email ? String(email).trim() : null,
       qualifications: qualifications ? String(qualifications).trim() : null,
       cv_url, cv_name: stored_cv_name, status: "pending",
-    });
+    }).select("id").single();
     if (insErr) { await logError(supabase, "insert", insErr.message); return json({ error: "تعذّر حفظ الطلب" }, 500); }
+    const appId: string | null = inserted?.id ?? null;
+    await logEvent(supabase, appId, "submitted", { detail: cv_url ? "مع السيرة الذاتية" : (cvFailed ? "تعذّر إرفاق السيرة" : "بلا سيرة ذاتية") });
 
-    await sendApplicantSMS(supabase, cleanName, cleanPhone);
+    await sendApplicantSMS(supabase, cleanName, cleanPhone, appId);
 
     if (cvFailed) {
       return json({ success: true, cv_warning: true, message: "تم استلام طلبك، لكن تعذّر إرفاق السيرة الذاتية. يمكنك إرسالها لاحقاً." });
