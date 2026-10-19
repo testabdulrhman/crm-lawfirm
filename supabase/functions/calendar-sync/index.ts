@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { canSeeCase, isOfficeStaff, loadScope, type AiScope } from "../_shared/aiScope.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // كل الأسرار تُقرأ من Supabase Secrets (لا تُكتب في الكود).
@@ -268,21 +269,37 @@ function jwtRole(t: string): string | null {
  * العام بلا دخول). المسموح أربعة: الترقر والجدولة بالسرّ الداخلي، ودالة الحجز بمفتاح الخادم، وموظف
  * نشط بجلسته من الويب أو الآيفون — لا حساب مراجعة أبل ولا زائر.
  */
-async function isAllowedCaller(req: Request): Promise<boolean> {
-  if (await hasInternalSecret(req)) return true;
+/** null = مرفوض · {full} = السرّ الداخلي أو مفتاح الخادم · {scope} = موظف بنطاقه (فحص 2026-10-19: كان أي موظف —
+ *  والمتعاون الخارجي — يحذف أي حدث بمعرّفه، ويُزامن جلسة ملف محجوب فيعرف حدثها) */
+type CalCaller = { full: true } | { full: false; scope: AiScope };
+async function resolveCaller(req: Request): Promise<CalCaller | null> {
+  if (await hasInternalSecret(req)) return { full: true };
   const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
-  if (!token) return false;
+  if (!token) return null;
   // البوابة (verify_jwt) تحققت من التوقيع؛ ومفتاح الخادم الجديد ليس JWT فيُطابق نصاً
-  if (token === SERVICE_ROLE || jwtRole(token) === "service_role") return true;
+  if (token === SERVICE_ROLE || jwtRole(token) === "service_role") return { full: true };
   const sb = createClient(SUPABASE_URL, SERVICE_ROLE);
   const { data: u } = await sb.auth.getUser(token);
-  if (!u?.user) return false;
+  if (!u?.user) return null;
   const { data: me } = await sb
     .from("team_members")
-    .select("is_active, is_reviewer")
+    .select("id, is_active, is_reviewer")
     .eq("auth_id", u.user.id)
     .maybeSingle();
-  return !!me && me.is_active !== false && !me.is_reviewer;
+  if (!me || me.is_active === false || me.is_reviewer) return null;
+  const scope = await loadScope(sb, me.id);
+  return scope ? { full: false, scope } : null;
+}
+
+/** هل يملك الموظف حدث التقويم هذا؟ جلسة في ملف يراه، أو موعد وهو من موظفي المكتب */
+async function ownsEvent(scope: AiScope, eventId: string): Promise<boolean> {
+  const sb = createClient(SUPABASE_URL, SERVICE_ROLE);
+  const { data: ses } = await sb.from("sessions").select("case:cases!sessions_case_id_fkey(id, kind, office_num)")
+    .eq("gcal_event_id", eventId).limit(1).maybeSingle();
+  if (ses) return canSeeCase(scope, (ses as any).case ?? null);
+  const { data: ap } = await sb.from("appointments").select("id").eq("gcal_event_id", eventId).limit(1).maybeSingle();
+  if (ap) return isOfficeStaff(scope);
+  return false;
 }
 
 serve(async (req) => {
@@ -299,7 +316,12 @@ serve(async (req) => {
     // للتوافق مع v1: action='add' بدون type يعامل كجلسة
     const { action, type, session, appointment, caseTitle, googleEventId, session_id } = body;
     const json = (o: any, status = 200) => new Response(JSON.stringify(o), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    if (!(await isAllowedCaller(req))) return json({ error: "غير مصرّح — سجّل الدخول أولاً" }, 401);
+    const caller = await resolveCaller(req);
+    if (!caller) return json({ error: "غير مصرّح — سجّل الدخول أولاً" }, 401);
+    // المتعاون الخارجي: لا مواعيد المكتب ولا تقويمه العام
+    if (!caller.full && !isOfficeStaff(caller.scope) && action !== "sync-session") {
+      return json({ error: "لا صلاحية لك على تقويم المكتب" }, 403);
+    }
 
     const cfg = await getCalendarConfig();
 
@@ -328,6 +350,12 @@ serve(async (req) => {
     // جلسة واحدة بمعرّفها — من الترقر عند الإدراج، ومن زرّ «أضِفها» في الويب
     if (action === "sync-session") {
       if (!session_id) return json({ error: "session_id required" }, 400);
+      if (!caller.full) {
+        const sb = createClient(SUPABASE_URL, SERVICE_ROLE);
+        const { data: ses } = await sb.from("sessions").select("case:cases!sessions_case_id_fkey(id, kind, office_num)")
+          .eq("id", String(session_id)).maybeSingle();
+        if (!ses || !canSeeCase(caller.scope, (ses as any).case ?? null)) return json({ error: "لا صلاحية لك على هذه الجلسة" }, 403);
+      }
       return json({ success: true, ...(await syncOneSession(accessToken, cfg.calendarId, String(session_id))) });
     }
 
@@ -354,6 +382,9 @@ serve(async (req) => {
 
     if (action === "delete") {
       if (!googleEventId) return json({ error: "googleEventId required" }, 400);
+      if (!caller.full && !(await ownsEvent(caller.scope, String(googleEventId)))) {
+        return json({ error: "لا صلاحية لك على هذا الحدث" }, 403);
+      }
       await deleteCalendarEvent(accessToken, cfg.calendarId, googleEventId);
       return json({ success: true });
     }

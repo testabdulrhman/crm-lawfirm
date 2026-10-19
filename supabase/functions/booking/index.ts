@@ -425,15 +425,14 @@ Deno.serve(async (req) => {
         const tail = phone.slice(-9);
         const { data: c } = await admin
           .from("contacts")
-          .select("id, email")
+          .select("id")
           .ilike("phone", `%${tail}%`)
           .limit(1)
           .maybeSingle();
         clientId = c?.id ?? null;
-        // البريد الرسمي مكانه contacts.email — نملأه إن كان فارغاً ولا نستبدله
-        if (clientId && email && !c?.email) {
-          await admin.from("contacts").update({ email }).eq("id", clientId);
-        }
+        // ⚠️ لا يُكتب بريد الزائر في سجل العميل (فحص 2026-10-19): الجوال وحده لا يُثبت أنه صاحب الرقم، فكان
+        // أي أحد يحجز بجوال موكّل وبريده هو فيُزرع بريده في ملف الموكّل وتذهب المراسلات إليه.
+        // البريد محفوظ في الموعد نفسه (client_email) ويُعتمد يدوياً.
       } catch (_) { /* الربط ثانوي */ }
 
       // ---- الإدراج: قيد appointments_no_overlap هو الحَكَم النهائي ----
