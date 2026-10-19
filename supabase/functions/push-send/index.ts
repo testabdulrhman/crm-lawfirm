@@ -83,7 +83,8 @@ async function sendOne(
   body: string,
   badge: number,
   data: Record<string, unknown>,
-  sound: string
+  sound: string,
+  category: string | null
 ): Promise<SendResult> {
   try {
     const res = await fetch(`${host}/3/device/${token}`, {
@@ -99,6 +100,7 @@ async function sendOne(
           alert: { title, body },
           sound,
           badge,
+          ...(category ? { category } : {}),
         },
         ...data, // route/taskId — يفتحها التطبيق عند الضغط
       }),
@@ -155,6 +157,16 @@ Deno.serve(async (req) => {
   // ملف chat.caf داخل التطبيق؛ والنسخة التي لا تحمله تشغّل الصوت الافتراضي (سلوك iOS) فلا يُفقد التنبيه.
   const SOUNDS = new Set(["default", "chat.caf"]);
   const sound = SOUNDS.has(String(body?.sound)) ? String(body.sound) : "default";
+  // الرد من الإشعار نفسه (طلب المدير 2026-10-19): category تُظهر زرّ «رد» في الآيفون، وcase_id/parent_id
+  // يحدّدان أين يُكتب الرد. قيم بيضاء فقط.
+  const UUID = /^[0-9a-f-]{36}$/i;
+  const category = body?.category === "DISCUSSION_REPLY" ? "DISCUSSION_REPLY" : null;
+  const extra: Record<string, unknown> = {};
+  if (category) {
+    extra.reply = true;
+    if (UUID.test(String(body?.case_id ?? ""))) extra.case_id = String(body.case_id);
+    if (UUID.test(String(body?.parent_id ?? ""))) extra.parent_id = String(body.parent_id);
+  }
   const notificationIds: string[] = Array.isArray(body?.notification_ids)
     ? body.notification_ids
     : [];
@@ -198,8 +210,9 @@ Deno.serve(async (req) => {
       sendOne(
         jwt, host, topic, d.token as string, title, message,
         unreadByMember.get(d.member_id as string) ?? 1,
-        route ? { route } : {},
-        sound
+        { ...(route ? { route } : {}), ...extra },
+        sound,
+        category
       )
     )
   );

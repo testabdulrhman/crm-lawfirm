@@ -199,6 +199,8 @@ struct CaseStreamView: View {
     @State private var draft = ""
     @State private var sending = false
     @State private var sendError: String?
+    /// ملاحظة صوتية فشل إرسالها — تبقى لإعادة الإرسال بدل أن تُحذف (فحص 2026-10-19: كانت تضيع مع انقطاع الشبكة)
+    @State private var unsentVoice: PendingVoice?
 
     // المرفقات
     @State private var photoItem: PhotosPickerItem?
@@ -449,6 +451,12 @@ struct CaseStreamView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 12)
             }
+            if let v = unsentVoice {
+                UnsentVoiceBar(seconds: v.seconds, onRetry: { send(voice: v) }, onDiscard: {
+                    try? FileManager.default.removeItem(at: v.url)
+                    unsentVoice = nil
+                })
+            }
             if uploading {
                 HStack(spacing: 6) {
                     ProgressView().scaleEffect(0.8)
@@ -588,7 +596,7 @@ struct CaseStreamView: View {
                 // تراجع: أزل الرسالة المتفائلة وأعد النص للحقل كي لا يضيع
                 msgs.removeAll { $0.id == tempId }
                 draft = body
-                sendError = error.localizedDescription
+                sendError = uiErrorText(error) ?? error.localizedDescription
             }
         }
     }
@@ -606,19 +614,24 @@ struct CaseStreamView: View {
             return
         }
         Usage.shared.action("ملاحظة صوتية")
+        send(voice: PendingVoice(url: note.url, seconds: note.seconds))
+    }
+
+    private func send(voice v: PendingVoice) {
+        unsentVoice = nil
         Task {
-            guard let data = try? Data(contentsOf: note.url) else {
-                try? FileManager.default.removeItem(at: note.url)
+            guard let data = try? Data(contentsOf: v.url) else {
+                try? FileManager.default.removeItem(at: v.url)
                 sendError = "تعذّرت قراءة التسجيل"
                 return
             }
             let id = UUID().uuidString.lowercased()
-            let sent = await uploadData(data, fileName: VoiceNote.fileName(seconds: note.seconds), mime: "audio/mp4", messageId: id)
+            let sent = await uploadData(data, fileName: VoiceNote.fileName(seconds: v.seconds), mime: "audio/mp4", messageId: id)
             // النص بعد الإرسال وفي الخلفية — والملف المؤقت يُحذف عند انتهائه
             if sent {
-                VoiceTranscriber.attach(messageId: id, fileURL: note.url, sb: sb) { Task { await load() } }
+                VoiceTranscriber.attach(messageId: id, fileURL: v.url, sb: sb) { Task { await load() } }
             } else {
-                try? FileManager.default.removeItem(at: note.url)
+                unsentVoice = v // يبقى التسجيل — «أعد الإرسال» أو «احذف»
             }
         }
     }
@@ -661,7 +674,7 @@ struct CaseStreamView: View {
             uploading = false
             return true
         } catch {
-            sendError = error.localizedDescription
+            sendError = uiErrorText(error) ?? error.localizedDescription
         }
         uploading = false
         return false
@@ -1080,6 +1093,8 @@ private struct ThreadView: View {
     @State private var alsoToStream = false
     @State private var sending = false
     @State private var sendError: String?
+    /// ملاحظة صوتية فشل إرسالها — تبقى لإعادة الإرسال بدل أن تُحذف (فحص 2026-10-19: كانت تضيع مع انقطاع الشبكة)
+    @State private var unsentVoice: PendingVoice?
     @State private var editingReply: ThreadMsg?
     @State private var editDraft = ""
     @State private var staff: [TeamMember] = []
@@ -1316,6 +1331,12 @@ private struct ThreadView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 12)
             }
+            if let v = unsentVoice {
+                UnsentVoiceBar(seconds: v.seconds, onRetry: { send(voice: v) }, onDiscard: {
+                    try? FileManager.default.removeItem(at: v.url)
+                    unsentVoice = nil
+                })
+            }
             MentionSuggestBar(staff: staff, draft: $draft)
 
             // نفس ترتيب الواتساب: الإرسال يمين و«+» يسار (أول الكود = يمين في RTL)
@@ -1436,7 +1457,7 @@ private struct ThreadView: View {
             } catch {
                 replies.removeAll { $0.id == tempId }
                 draft = body
-                sendError = error.localizedDescription
+                sendError = uiErrorText(error) ?? error.localizedDescription
             }
         }
     }
@@ -1453,6 +1474,11 @@ private struct ThreadView: View {
             sendError = "التسجيل أقصر من ثانية — اضغط الميكروفون وتكلّم"
             return
         }
+        send(voice: PendingVoice(url: note.url, seconds: note.seconds))
+    }
+
+    private func send(voice note: PendingVoice) {
+        unsentVoice = nil
         let wasAlsoToStream = alsoToStream
         sending = true
         sendError = nil
@@ -1477,7 +1503,8 @@ private struct ThreadView: View {
                     Task { await load(); onChange() }
                 }
             } catch {
-                try? FileManager.default.removeItem(at: note.url)
+                // يبقى التسجيل لإعادة الإرسال — كان يُحذف فتضيع الملاحظة مع انقطاع الشبكة
+                if FileManager.default.fileExists(atPath: note.url.path) { unsentVoice = note }
                 sendError = uiErrorText(error)
             }
         }
@@ -1541,5 +1568,43 @@ struct StreamRow: Identifiable {
             }
         }
         return out
+    }
+}
+
+
+/// ملاحظة صوتية مسجّلة لم تُرسل بعد
+struct PendingVoice {
+    let url: URL
+    let seconds: Int
+}
+
+/// شريط «لم تُرسل ملاحظتك الصوتية» — أعد الإرسال أو احذف
+struct UnsentVoiceBar: View {
+    let seconds: Int
+    let onRetry: () -> Void
+    let onDiscard: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "mic.slash.fill").foregroundStyle(Theme.danger)
+            Text("لم تُرسل ملاحظتك الصوتية (\(seconds / 60):\(String(format: "%02d", seconds % 60)))")
+                .font(.system(size: 13, weight: .medium))
+                .lineLimit(1)
+            Spacer(minLength: 4)
+            Button("أعد الإرسال", action: onRetry)
+                .font(.system(size: 13, weight: .semibold))
+                .buttonStyle(.borderedProminent)
+                .tint(Theme.gold)
+                .controlSize(.small)
+            Button(role: .destructive, action: onDiscard) {
+                Image(systemName: "trash")
+            }
+            .controlSize(.small)
+            .accessibilityLabel("احذف التسجيل")
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Theme.danger.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+        .padding(.horizontal, 10)
     }
 }

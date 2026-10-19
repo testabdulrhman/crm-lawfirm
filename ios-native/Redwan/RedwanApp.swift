@@ -64,6 +64,19 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         UNUserNotificationCenter.current().delegate = self
+        // الرد من الإشعار نفسه (طلب المدير 2026-10-19 «أسحب الإشعار وأرد عليه بدون ما أدخل التطبيق»):
+        // الخادم يرسل رسائل النقاش بـ category = DISCUSSION_REPLY ومعها case_id والخيط
+        let reply = UNTextInputNotificationAction(
+            identifier: NotificationReply.actionId,
+            title: "رد",
+            options: [],
+            textInputButtonTitle: "إرسال",
+            textInputPlaceholder: "اكتب ردك…"
+        )
+        UNUserNotificationCenter.current().setNotificationCategories([
+            UNNotificationCategory(identifier: NotificationReply.category, actions: [reply],
+                                   intentIdentifiers: [], options: []),
+        ])
         return true
     }
 
@@ -90,6 +103,12 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         didReceive response: UNNotificationResponse
     ) async {
         let info = response.notification.request.content.userInfo
+        // «رد» من الإشعار: يُرسل في الخلفية دون فتح التطبيق
+        if response.actionIdentifier == NotificationReply.actionId,
+           let text = (response as? UNTextInputNotificationResponse)?.userText {
+            await NotificationReply.send(text: text, info: info)
+            return
+        }
         if let route = info["route"] as? String, route.hasPrefix("/") {
             await MainActor.run {
                 // منشن: افتح الرسالة نفسها لا النقاش وحده (آخر منشن لي فيه)
@@ -197,5 +216,36 @@ struct MainTabs: View {
         else if r.hasPrefix("/cases/") { tab = 1 }
         else if r.hasPrefix("/appointments") { tab = 3 }   // التقويم يحمل قائمة المواعيد
         else if r == "/me" || r.hasPrefix("/hr") || r == "/office-documents" { tab = 0 }  // صفحتي والاعتمادات ومستندات المكتب من الرئيسية
+    }
+}
+
+
+/// إرسال الرد المكتوب في الإشعار — في المكان نفسه: خيط الرسالة إن كانت في خيط، وإلا مجرى النقاش.
+/// إن فشل (لا شبكة / انتهت الجلسة) يصل إشعار محلي بالنص نفسه فلا يضيع.
+enum NotificationReply {
+    static let category = "DISCUSSION_REPLY"
+    static let actionId = "REPLY"
+
+    @MainActor
+    static func send(text: String, info: [AnyHashable: Any]) async {
+        let body = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !body.isEmpty else { return }
+        let caseId = info["case_id"] as? String
+        let parentId = info["parent_id"] as? String
+        let sb = SB.shared
+        do {
+            guard sb.session != nil else { throw SBError(message: "انتهت الجلسة") }
+            if sb.member == nil { await sb.loadMember() }
+            try await sb.postMessage(caseId: caseId, body: body, parentId: parentId)
+        } catch {
+            let c = UNMutableNotificationContent()
+            c.title = "لم يُرسل ردك"
+            c.body = "افتح التطبيق وأعد الإرسال: «\(body.prefix(120))»"
+            c.sound = .default
+            if let route = info["route"] { c.userInfo = ["route": route] }
+            try? await UNUserNotificationCenter.current().add(
+                UNNotificationRequest(identifier: UUID().uuidString, content: c, trigger: nil)
+            )
+        }
     }
 }
