@@ -10,6 +10,8 @@ import { pickDate } from "../_shared/hijri.ts";
 // =============================================================
 
 import { EXTRA_TOOLS, runExtraTool, EXTRA_SYSTEM_RULES } from "../_shared/agent-tools.ts";
+import { loadScope, type AiScope } from "../_shared/aiScope.ts";
+import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { cachedText, ephemeral, logCacheUsage } from "../_shared/prompt-cache.ts";
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
@@ -27,7 +29,7 @@ const admin = createClient(
  * الطلب، وأدواتها تعمل بمفتاح الخادم — إنشاء ملفات وإرسال SMS وقراءة القضايا لأي أحد.)
  * الآن: موظف نشط بجلسته، لا حساب مراجعة ولا متعاون خارجي (الأدوات تتجاوز حواجزهما). والاسم من القاعدة.
  */
-interface Caller { id: string; name: string }
+interface Caller { id: string; name: string; token: string }
 async function resolveCaller(req: Request): Promise<Caller | null> {
   const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
   if (!token) return null;
@@ -39,7 +41,7 @@ async function resolveCaller(req: Request): Promise<Caller | null> {
     .eq("auth_id", u.user.id)
     .maybeSingle();
   if (!me || me.is_active === false || me.is_reviewer || me.member_type === "collaborator") return null;
-  return { id: me.id, name: me.name ?? "موظف" };
+  return { id: me.id, name: me.name ?? "موظف", token };
 }
 
 /** سجل المساعد (ai_assistant_runs) — للمدير وحده؛ فشل التسجيل لا يُفشل الرد */
@@ -344,16 +346,21 @@ function isoPlusDays(days: number): string {
   return new Date(Date.now() + days * 86400000).toISOString().slice(0, 10);
 }
 
-async function runAgentTool(name: string, input: any, userName: string, actions: string[], attachment: any = null): Promise<string> {
+/** بيئة الأداة: db = عميل بجلسة الموظف (قراءاته تمرّ من RLS)، وscope = نطاقه للأدوات المشتركة (فحص 2026-10-19:
+ *  كانت كل الأدوات بمفتاح الخادم فيقرأ الموظف عبر المساعد ملفات خارج نطاقه وطلبات التوظيف وتحليلاتها) */
+interface ToolCtx { db: SupabaseClient; scope: AiScope | null }
+
+async function runAgentTool(name: string, input: any, userName: string, actions: string[], attachment: any, ctx: ToolCtx): Promise<string> {
+  const db = ctx.db;
   try {
     // الأدوات الموسّعة أولاً — تُرجع null إن لم تكن منها
-    const extra = await runExtraTool(name, input, userName, actions);
+    const extra = await runExtraTool(name, input, userName, actions, ctx.scope);
     if (extra !== null) return extra;
 
     if (name === "search_poas") {
       const q = String(input.query ?? "").trim();
       // لا يوجد FK مباشر بين الوكالات وجهات الاتصال — نجلب الجوال بخطوة ثانية
-      const { data, error } = await admin
+      const { data, error } = await db
         .from("powers_of_attorney")
         .select("id, poa_number, poa_date, expiry_date, status, client_id, client_name, agent_name")
         .or(`poa_number.ilike.%${q}%,client_name.ilike.%${q}%,agent_name.ilike.%${q}%`)
@@ -364,14 +371,14 @@ async function runAgentTool(name: string, input: any, userName: string, actions:
       const ids = rows.map((r) => r.client_id).filter(Boolean);
       const phones: Record<string, string | null> = {};
       if (ids.length) {
-        const { data: cts } = await admin.from("contacts").select("id, phone").in("id", ids);
+        const { data: cts } = await db.from("contacts").select("id, phone").in("id", ids);
         for (const c of (cts ?? []) as any[]) phones[c.id] = c.phone;
       }
       return JSON.stringify(rows.map((r) => ({ ...r, client_phone: r.client_id ? phones[r.client_id] ?? null : null })));
     }
     if (name === "search_cases") {
       const q = String(input.query ?? "").trim();
-      const { data, error } = await admin
+      const { data, error } = await db
         .from("cases")
         .select("id, office_num, title, status, court, contact:contacts(name, phone), assignee:team_members!cases_assignee_id_fkey(name)")
         .or(`office_num.ilike.%${q}%,title.ilike.%${q}%,court_num.ilike.%${q}%`)
@@ -381,7 +388,7 @@ async function runAgentTool(name: string, input: any, userName: string, actions:
     }
     if (name === "search_contacts") {
       const q = String(input.query ?? "").trim();
-      const { data, error } = await admin
+      const { data, error } = await db
         .from("contacts")
         .select("id, name, phone, phone2, category, city")
         .or(`name.ilike.%${q}%,phone.ilike.%${q}%,phone2.ilike.%${q}%`)
@@ -392,7 +399,7 @@ async function runAgentTool(name: string, input: any, userName: string, actions:
     if (name === "list_sessions") {
       const from = String(input.from_date || isoToday());
       const to = String(input.to_date || isoPlusDays(7));
-      const { data, error } = await admin
+      const { data, error } = await db
         .from("sessions")
         .select("id, session_number, title, session_date, session_time, court, status, closed_at, case:cases!sessions_case_id_fkey(office_num, title, assignee:team_members!cases_assignee_id_fkey(name))")
         .gte("session_date", from)
@@ -404,7 +411,7 @@ async function runAgentTool(name: string, input: any, userName: string, actions:
       return JSON.stringify({ from, to, sessions: data ?? [] });
     }
     if (name === "list_tasks") {
-      let q = admin
+      let q = db
         .from("tasks")
         // ⚠️ tasks فيه عمودان يشيران إلى team_members (assignee_id و created_by)
         //    فلا بد من تسمية القيد صراحةً وإلا رفضت PostgREST الاستعلام (PGRST201)
@@ -425,7 +432,7 @@ async function runAgentTool(name: string, input: any, userName: string, actions:
     if (name === "list_expiring_poas") {
       const days = Number.isFinite(Number(input.days)) && Number(input.days) > 0 ? Number(input.days) : 30;
       const from = input.include_expired ? "1900-01-01" : isoToday();
-      const { data, error } = await admin
+      const { data, error } = await db
         .from("powers_of_attorney")
         .select("id, poa_number, expiry_date, status, client_id, client_name")
         .gte("expiry_date", from)
@@ -438,7 +445,7 @@ async function runAgentTool(name: string, input: any, userName: string, actions:
     }
     if (name === "list_staff_applications") {
       const status = String(input.status || "pending");
-      let q = admin
+      let q = db
         .from("staff_applications")
         .select("id, full_name, phone, email, status, created_at, cv_url, qualifications")
         .is("deleted_at", null)
@@ -463,7 +470,7 @@ async function runAgentTool(name: string, input: any, userName: string, actions:
     }
     if (name === "list_applicant_analyses") {
       const status = String(input.status || "pending");
-      let q = admin
+      let q = db
         .from("staff_applications")
         .select("id, full_name, phone, status, created_at, cv_url")
         .is("deleted_at", null)
@@ -475,7 +482,7 @@ async function runAgentTool(name: string, input: any, userName: string, actions:
       const ids = (apps ?? []).map((a: any) => a.id);
       const byApp: Record<string, any> = {};
       if (ids.length) {
-        const { data: ans } = await admin
+        const { data: ans } = await db
           .from("staff_application_analysis")
           .select("*")
           .in("application_id", ids);
@@ -507,7 +514,7 @@ async function runAgentTool(name: string, input: any, userName: string, actions:
         return JSON.stringify({ ok: false, error: "لا يوجد ملف مرفق في هذه الرسالة — اطلب من الموظف إرفاقه بزر المشبك." });
       }
       const officeNum = String(input.case_office_num ?? "").trim();
-      const { data: cs } = await admin.from("cases").select("id, title, court").ilike("office_num", `%${officeNum}%`).limit(1);
+      const { data: cs } = await db.from("cases").select("id, title, court").ilike("office_num", `%${officeNum}%`).limit(1);
       const caseRow = cs?.[0];
       if (!caseRow) return JSON.stringify({ ok: false, error: `لم أجد قضية برقم ${officeNum}` });
 
@@ -638,7 +645,7 @@ async function runAgentTool(name: string, input: any, userName: string, actions:
     }
     if (name === "create_session") {
       const officeNum = String(input.case_office_num ?? "").trim();
-      const { data: cs } = await admin.from("cases").select("id, title, court").ilike("office_num", `%${officeNum}%`).limit(1);
+      const { data: cs } = await db.from("cases").select("id, title, court").ilike("office_num", `%${officeNum}%`).limit(1);
       const caseRow = cs?.[0];
       if (!caseRow) return JSON.stringify({ ok: false, error: `لم أجد قضية برقم ${officeNum}` });
 
@@ -709,7 +716,7 @@ async function runAgentTool(name: string, input: any, userName: string, actions:
 
       let caseId: string | null = null;
       if (input.case_office_num) {
-        const { data: cs } = await admin.from("cases").select("id").ilike("office_num", `%${input.case_office_num}%`).limit(1);
+        const { data: cs } = await db.from("cases").select("id").ilike("office_num", `%${input.case_office_num}%`).limit(1);
         caseId = cs?.[0]?.id ?? null;
         if (!caseId) return JSON.stringify({ ok: false, error: `لم أجد قضية برقم ${input.case_office_num}` });
       }
@@ -853,6 +860,13 @@ async function runAgent(payload: any, caller: Caller): Promise<Response> {
 
   const model = await getAssistantModel();
   const actions: string[] = [];
+  const ctx: ToolCtx = {
+    db: createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
+      global: { headers: { Authorization: `Bearer ${caller.token}` } },
+      auth: { persistSession: false, autoRefreshToken: false },
+    }),
+    scope: await loadScope(admin, caller.id),
+  };
   let finalText = "";
   // هل انتهى النموذج فعلاً، أم نفدت الجولات وهو في منتصف أدواته؟
   let finished = false;
@@ -912,7 +926,7 @@ async function runAgent(payload: any, caller: Caller): Promise<Response> {
     messages.push({ role: "assistant", content });
     const results: any[] = [];
     for (const tu of toolUses) {
-      const out = await runAgentTool(tu.name, tu.input ?? {}, userName, actions, attachment);
+      const out = await runAgentTool(tu.name, tu.input ?? {}, userName, actions, attachment, ctx);
       toolLog.push(`${tu.name}${/"error"|"ok":\s*false/.test(out) ? "✗" : ""}`);
       results.push({ type: "tool_result", tool_use_id: tu.id, content: out });
     }

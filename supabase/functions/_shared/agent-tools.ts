@@ -8,6 +8,7 @@
 // وترفض بدونه — فحتى لو أخطأ النموذج لا يقع الفعل بلا موافقة صريحة.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { canSeeCase, isOfficeStaff, outOfScope, type AiScope } from "./aiScope.ts";
 
 export const admin = createClient(
   Deno.env.get("SUPABASE_URL") ?? "",
@@ -266,16 +267,35 @@ async function memberIdByName(name?: string): Promise<string | null> {
 }
 
 /** يُرجع نصاً JSON، أو null إن لم تكن الأداة من هذه المجموعة */
+const EXTRA_NAMES = new Set([
+  "get_case_details", "search_documents", "list_appointments", "search_messages", "search_discussions",
+  "office_overview", "create_contact", "create_matter", "create_appointment", "post_discussion_message",
+  "create_outgoing_letter", "update_task", "update_contact", "update_case", "link_document_to_case",
+]);
+// أدوات عامة على المكتب (لا ملف بعينه): لموظفي المكتب وحدهم لا للمتعاون ولا لحساب المراجعة
+const STAFF_ONLY = new Set([
+  "list_appointments", "search_messages", "office_overview", "create_contact", "create_matter",
+  "create_appointment", "update_contact",
+]);
+
+/** يُرجع نصاً JSON، أو null إن لم تكن الأداة من هذه المجموعة.
+ *  scope: نطاق المنادي (member_case_scope) — كل قراءة وكتابة تُقيَّد به (فحص 2026-10-19). بلا نطاق = رفض. */
 export async function runExtraTool(
   name: string,
   input: any,
   userName: string,
   actions: string[],
+  scope: AiScope | null,
 ): Promise<string | null> {
+  if (!EXTRA_NAMES.has(name)) return null;
+  if (!scope) return JSON.stringify({ error: "تعذّر التحقق من صلاحياتك — لا تُنفَّذ الأداة" });
+  if (STAFF_ONLY.has(name) && !isOfficeStaff(scope)) return outOfScope("هذه الأداة");
+
   /* ---------- قراءة ---------- */
   if (name === "get_case_details") {
     const c = await caseByOfficeNum(input.office_num);
     if (!c) return JSON.stringify({ error: "لم أجد ملفاً بهذا الرقم" });
+    if (!canSeeCase(scope, c)) return outOfScope();
     const [sessions, tasks, docs, rulings, parties, disc] = await Promise.all([
       admin.from("sessions").select("session_date, session_time, title, court, status").eq("case_id", c.id).order("session_date"),
       admin.from("tasks").select("id, title, due_date, status, priority").eq("case_id", c.id).is("deleted_at", null).neq("status", "done"),
@@ -308,35 +328,41 @@ export async function runExtraTool(
     const q = String(input.query ?? "").trim();
     let qb = admin
       .from("documents")
-      .select("id, name, description, category, case_id, file_url, created_at")
+      .select("id, name, description, category, case_id, file_url, created_at, case:cases!documents_case_id_fkey(id, kind, office_num)")
       .is("deleted_at", null)
       .or(`name.ilike.%${q}%,description.ilike.%${q}%`)
-      .limit(10);
+      .limit(60);
     if (input.case_office_num) {
       const c = await caseByOfficeNum(input.case_office_num);
+      if (c && !canSeeCase(scope, c)) return outOfScope();
       if (c) qb = qb.eq("case_id", c.id);
     }
     const { data, error } = await qb;
-    return JSON.stringify(error ? { error: error.message } : data ?? []);
+    if (error) return JSON.stringify({ error: error.message });
+    const rows = ((data ?? []) as any[]).filter((d) => canSeeCase(scope, d.case_id ? d.case : null)).slice(0, 10);
+    return JSON.stringify(rows.map(({ case: _c, ...d }) => d));
   }
 
   if (name === "search_discussions") {
     const q = String(input.query ?? "").trim();
     let qb = admin
       .from("case_comments")
-      .select("body, kind, created_at, case_id, case:cases(office_num, title), author:team_members(short_name, name)")
+      .select("body, kind, created_at, case_id, case:cases(id, kind, office_num, title), author:team_members(short_name, name)")
       .is("deleted_at", null)
       .neq("kind", "system")
       .ilike("body", `%${q}%`)
       .order("created_at", { ascending: false })
-      .limit(15);
+      .limit(80);
     if (input.case_office_num) {
       const c = await caseByOfficeNum(input.case_office_num);
+      if (c && !canSeeCase(scope, c)) return outOfScope();
       if (c) qb = qb.eq("case_id", c.id);
     }
     const { data, error } = await qb;
     if (error) return JSON.stringify({ error: error.message });
-    return JSON.stringify(((data ?? []) as any[]).map((m) => ({
+    // المحادثات الخاصة والقنوات وملفات الغير لا تُبحث — النطاق نفسه الذي يحكم شاشة النقاشات
+    const seen = ((data ?? []) as any[]).filter((m) => canSeeCase(scope, m.case_id ? m.case : null)).slice(0, 15);
+    return JSON.stringify(seen.map((m) => ({
       at: (m.created_at ?? "").slice(0, 10),
       by: m.kind === "ai" ? "الذكاء" : (m.author?.short_name ?? m.author?.name ?? "موظف"),
       matter: m.case?.title ?? "عام — المكتب",
@@ -495,7 +521,10 @@ export async function runExtraTool(
     if (input.case_office_num) {
       const c = await caseByOfficeNum(input.case_office_num);
       if (!c) return JSON.stringify({ error: "لم أجد ملفاً بهذا الرقم" });
+      if (!canSeeCase(scope, c)) return outOfScope();
       caseId = c.id;
+    } else if (!isOfficeStaff(scope)) {
+      return outOfScope("النقاش العام");
     }
     const { error } = await admin.from("case_comments").insert({
       case_id: caseId,
@@ -520,7 +549,10 @@ export async function runExtraTool(
     let caseId: string | null = null;
     if (input.case_office_num) {
       const c = await caseByOfficeNum(input.case_office_num);
+      if (c && !canSeeCase(scope, c)) return outOfScope();
       caseId = c?.id ?? null;
+    } else if (!isOfficeStaff(scope)) {
+      return outOfScope("الصادر العام");
     }
     const { data, error } = await admin
       .from("outgoing_letters")
@@ -543,6 +575,9 @@ export async function runExtraTool(
   /* ---------- تعديل ---------- */
   if (name === "update_task") {
     const id = String(input.task_id ?? "").trim();
+    const { data: t } = await admin.from("tasks").select("id, case:cases(id, kind, office_num)").eq("id", id).maybeSingle();
+    if (!t) return JSON.stringify({ error: "لم أجد المهمة" });
+    if (!canSeeCase(scope, (t as any).case ?? null)) return outOfScope("هذه المهمة");
     const patch: Record<string, unknown> = {};
     if (input.action === "complete") { patch.status = "done"; patch.done_at = new Date().toISOString(); }
     else if (input.action === "reopen") { patch.status = "todo"; patch.done_at = null; }
@@ -580,6 +615,7 @@ export async function runExtraTool(
     if (input.confirmed !== true) return needsConfirm("تغيير بيانات ملف");
     const c = await caseByOfficeNum(input.office_num);
     if (!c) return JSON.stringify({ error: "لم أجد ملفاً بهذا الرقم" });
+    if (!canSeeCase(scope, c)) return outOfScope();
     const patch: Record<string, unknown> = {};
     if (input.status) patch.status = input.status;
     if (input.court_num) patch.court_num = input.court_num;
@@ -599,6 +635,11 @@ export async function runExtraTool(
   if (name === "link_document_to_case") {
     const c = await caseByOfficeNum(input.office_num);
     if (!c) return JSON.stringify({ error: "لم أجد ملفاً بهذا الرقم" });
+    if (!canSeeCase(scope, c)) return outOfScope();
+    // والمستند نفسه: لا يُنقل مستند من ملف لا يراه
+    const { data: d } = await admin.from("documents").select("id, case:cases!documents_case_id_fkey(id, kind, office_num)").eq("id", input.document_id).maybeSingle();
+    if (!d) return JSON.stringify({ error: "لم أجد المستند" });
+    if ((d as any).case && !canSeeCase(scope, (d as any).case)) return outOfScope("هذا المستند");
     const { data, error } = await admin
       .from("documents").update({ case_id: c.id }).eq("id", input.document_id).select("id, name").single();
     if (error) return JSON.stringify({ error: error.message });

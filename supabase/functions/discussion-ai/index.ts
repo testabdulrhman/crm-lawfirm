@@ -20,6 +20,7 @@
 //   المسافة القديم كان يُسند مهاماً لموظف short_name له null.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { EXTRA_TOOLS, runExtraTool, EXTRA_SYSTEM_RULES } from "../_shared/agent-tools.ts";
+import { canSeeCase, loadScope, type AiScope } from "../_shared/aiScope.ts";
 import { ephemeral, logCacheUsage, withCachedLastTool } from "../_shared/prompt-cache.ts";
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
@@ -169,7 +170,7 @@ const MOVE_TOOL = {
  * التسلسل عبر عدة جولات. النقل يبقى مؤجَّلاً للمنادي (له ترتيب قفل خاص).
  */
 async function callClaudeWithMoveTool(
-  model: string, system: string, user: string
+  model: string, system: string, user: string, scope: AiScope | null
 ): Promise<{ text: string; move: { message_id?: string; target_case_id?: string } | null }> {
   const messages: any[] = [{ role: "user", content: user }];
   const actions: string[] = [];
@@ -215,7 +216,8 @@ async function callClaudeWithMoveTool(
         results.push({ type: "tool_result", tool_use_id: t.id, content: JSON.stringify({ queued: true }) });
         continue;
       }
-      const out = await runExtraTool(t.name, t.input, "الذكاء", actions);
+      // الأدوات بنطاق كاتب الرسالة لا بمفتاح الخادم (فحص 2026-10-19)
+      const out = await runExtraTool(t.name, t.input, "الذكاء", actions, scope);
       results.push({
         type: "tool_result",
         tool_use_id: t.id,
@@ -267,18 +269,20 @@ async function threadContext(comment: any, limit = 8): Promise<string> {
 /* ===================== وضع الرد (منشن) ===================== */
 
 /** سياق «عام — المكتب»: نظرة المكتب كله بدل قضية واحدة */
-async function officeContext(): Promise<string> {
+/** نظرة المكتب في القناة العامة — بنطاق السائل: لا عناوين ملفات خارج ما يراه (فحص 2026-10-19) */
+async function officeContext(scope: AiScope | null): Promise<string> {
+  const see = (c: any) => !!scope && canSeeCase(scope, c ?? null);
   const { iso } = riyadhToday();
   const week = new Date(Date.now() + 10 * 86_400_000).toISOString().slice(0, 10);
   const [sessions, tasks, poas, recent] = await Promise.all([
     admin.from("sessions")
-      .select("session_date, session_time, court, cases(title)")
+      .select("session_date, session_time, court, cases:cases!sessions_case_id_fkey(id, kind, office_num, title)")
       .gte("session_date", iso).lte("session_date", week)
-      .order("session_date").limit(10),
+      .order("session_date").limit(60),
     admin.from("tasks")
-      .select("title, due_date, cases(title), assignee:team_members!tasks_assignee_id_fkey(short_name)")
+      .select("title, due_date, cases(id, kind, office_num, title), assignee:team_members!tasks_assignee_id_fkey(short_name)")
       .eq("status", "todo").is("deleted_at", null)
-      .order("due_date", { ascending: true, nullsFirst: false }).limit(12),
+      .order("due_date", { ascending: true, nullsFirst: false }).limit(80),
     admin.from("powers_of_attorney")
       .select("client_name, expiry_date")
       .eq("status", "active").is("deleted_at", null)
@@ -290,6 +294,10 @@ async function officeContext(): Promise<string> {
       .is("case_id", null).is("deleted_at", null)
       .order("created_at", { ascending: false }).limit(30),
   ]);
+  if (sessions.data) sessions.data = (sessions.data as any[]).filter((x) => see(x.cases)).slice(0, 10);
+  if (tasks.data) tasks.data = (tasks.data as any[]).filter((x) => see(x.cases)).slice(0, 12);
+  // الوكالات للمدير ومن يرى الكل وحدهم
+  if (!scope?.viewer && poas.data) poas.data = [];
   return [
     "هذه القناة العامة للمكتب — السياق نظرة المكتب كله:",
     "",
@@ -317,6 +325,8 @@ async function officeContext(): Promise<string> {
 
 async function handleMention(comment: any, caseRow: any) {
   const { iso, weekday } = riyadhToday();
+  // نطاق كاتب الرسالة — الأدوات والسياق لا يتجاوزانه
+  const scope = await loadScope(admin, comment.author_id);
 
   if (!caseRow) {
     const system =
@@ -334,10 +344,12 @@ async function handleMention(comment: any, caseRow: any) {
         .is("case_id", null).is("deleted_at", null).is("parent_id", null)
         .order("created_at", { ascending: false }).limit(15),
       admin.from("cases")
-        .select("id, title, office_num")
+        .select("id, title, office_num, kind")
         .is("deleted_at", null)
-        .order("created_at", { ascending: false }).limit(150),
+        .order("created_at", { ascending: false }).limit(400),
     ]);
+    // قائمة الملفات (وهدف النقل) بنطاق السائل فقط
+    if (activeCases.data) activeCases.data = (activeCases.data as any[]).filter((c) => !!scope && canSeeCase(scope, c)).slice(0, 150);
     const moveCtx = [
       "",
       "آخر رسائل العامة بمعرّفاتها (للنقل عند الطلب — الأحدث أولاً):",
@@ -353,7 +365,8 @@ async function handleMention(comment: any, caseRow: any) {
 
     const { text, move } = await callClaudeWithMoveTool(
       await getReplyModel(), system,
-      `${await officeContext()}${moveCtx}\n\n=====\nسؤال ${comment.author_name ?? "موظف"}: ${question || "أعطني نظرة على أسبوع المكتب"}`
+      `${await officeContext(scope)}${moveCtx}\n\n=====\nسؤال ${comment.author_name ?? "موظف"}: ${question || "أعطني نظرة على أسبوع المكتب"}`,
+      scope
     );
 
     // تنفيذ النقل إن طلبته الأداة — الجذر وكل ردوده ومرفقاتها
@@ -461,7 +474,8 @@ async function handleMention(comment: any, caseRow: any) {
   const { text: answer } = await callClaudeWithMoveTool(
     await getReplyModel(),
     system,
-    `${ctx}\n\n=====\nسؤال ${comment.author_name ?? "موظف"}: ${question || "لخّص حالة القضية"}`
+    `${ctx}\n\n=====\nسؤال ${comment.author_name ?? "موظف"}: ${question || "لخّص حالة القضية"}`,
+    scope
   );
 
   await postInThread(comment.case_id ?? null, comment, answer, "ai");
