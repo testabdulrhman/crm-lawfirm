@@ -16,8 +16,9 @@ export const HIJRI_MONTHS = [
   'ذو الحجّة',
 ] as const
 
-// نطاق سنوات هجرية معقول للقوائم
-export const HIJRI_YEAR_MIN = 1440
+// نطاق سنوات هجرية للقوائم — يبدأ من ١٣٤٠ (≈ ١٩٢١م) ليتسع لتواريخ الميلاد وإصدار الوكالات والمستندات
+// القديمة (كان ١٤٤٠ فلا يُدخل ميلاد موكّل ١٤٠٥ بالهجري — فحص 2026-10-19)
+export const HIJRI_YEAR_MIN = 1340
 export const HIJRI_YEAR_MAX = 1475
 
 export interface HijriParts {

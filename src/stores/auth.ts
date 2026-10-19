@@ -22,6 +22,23 @@ interface AuthState {
   fetchTeamMember: (userId: string) => Promise<boolean>
 }
 
+/**
+ * ذاكرة البيانات (React Query) تُمسح كلما تبدّل صاحب الجلسة أو خرج — فحص 2026-10-19: كان الخروج لا يمسحها
+ * ومفاتيحها بلا معرّف المستخدم، فيرى الداخل بعده في التبويب نفسه ملفات السابق ومهامه حتى يُعاد الجلب.
+ * (استيراد متأخر: queryClient ← errorLog ← هذا الملف)
+ */
+let cacheOwner: string | null = null
+function resetCacheFor(userId: string | null) {
+  if (userId === cacheOwner) return
+  const hadOwner = cacheOwner !== null
+  cacheOwner = userId
+  if (!hadOwner) return // أول جلسة في الصفحة: الذاكرة فارغة أصلاً
+  void import('@/lib/queryClient').then(({ queryClient }) => {
+    void queryClient.cancelQueries()
+    queryClient.clear()
+  })
+}
+
 export const useAuth = create<AuthState>((set, get) => ({
   user: null,
   session: null,
@@ -31,10 +48,12 @@ export const useAuth = create<AuthState>((set, get) => ({
     set({ loading: true })
     const { data } = await supabase.auth.getSession()
     if (data.session) {
+      resetCacheFor(data.session.user.id)
       set({ session: data.session, user: data.session.user })
       await get().fetchTeamMember(data.session.user.id)
     }
     supabase.auth.onAuthStateChange(async (_e, session) => {
+      resetCacheFor(session?.user?.id ?? null)
       set({ session, user: session?.user ?? null })
       if (session?.user) await get().fetchTeamMember(session.user.id)
       else set({ teamMember: null })
@@ -66,6 +85,7 @@ export const useAuth = create<AuthState>((set, get) => ({
   },
   logout: async () => {
     await supabase.auth.signOut()
+    resetCacheFor(null)
     set({ user: null, session: null, teamMember: null })
   },
   fetchTeamMember: async (userId) => {
@@ -79,6 +99,7 @@ export const useAuth = create<AuthState>((set, get) => ({
     // الموظف الموقوف (is_active=false) لا يدخل — إنهاء الجلسة فوراً
     if (member && member.is_active === false) {
       await supabase.auth.signOut()
+      resetCacheFor(null)
       set({ user: null, session: null, teamMember: null })
       return false
     }

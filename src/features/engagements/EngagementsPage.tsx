@@ -32,6 +32,7 @@ import {
   engStatusLabel,
   engTypeLabel,
   installmentAmount,
+  installmentRemaining,
   installmentState,
   type InstallmentState,
 } from './labels'
@@ -67,12 +68,14 @@ export function EngagementsPage() {
       const c = map.get(i.engagement_id) ?? { total: fees ?? 0, paid: 0, next: null }
       const amt = installmentAmount(i, fees)
       if (fees == null) c.total += amt ?? 0
-      const st = installmentState(i)
-      if (st === 'paid') c.paid += i.paid_amount ?? amt ?? 0
-      else {
-        if (st === 'overdue') sum.overdue += amt ?? 0
-        else if (st === 'due' || (st === 'upcoming' && i.due_date && i.due_date <= monthEnd)) sum.dueMonth += amt ?? 0
-        else if (st === 'waiting') sum.waiting += amt ?? 0
+      const st = installmentState(i, undefined, fees)
+      // المقبوض يُحسب ولو كان جزءاً، والمتأخر والمستحق بما بقي فقط
+      if (i.paid_at) c.paid += i.paid_amount ?? amt ?? 0
+      if (st !== 'paid') {
+        const left = installmentRemaining(i, fees) ?? amt ?? 0
+        if (st === 'overdue') sum.overdue += left
+        else if (st === 'due' || (st === 'upcoming' && i.due_date && i.due_date <= monthEnd)) sum.dueMonth += left
+        else if (st === 'waiting') sum.waiting += left
         if (!c.next || STATE_ORDER.indexOf(st) < STATE_ORDER.indexOf(c.next.state)) c.next = { inst: i, state: st, amount: amt }
       }
       map.set(i.engagement_id, c)

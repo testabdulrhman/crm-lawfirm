@@ -91,9 +91,27 @@ export const eventLabel = (i: Pick<EngagementInstallment, 'event_kind' | 'event_
 
 export type InstallmentState = 'paid' | 'overdue' | 'due' | 'waiting' | 'upcoming'
 
+/** ما بقي من الدفعة بعد المقبوض — null إن لم تُعرف قيمتها. السداد قد يكون على دفعات (فحص 2026-10-19:
+ *  كان أي مبلغ يُغلق الدفعة كلها فتسكت التذكيرات ويختفي الباقي) */
+export function installmentRemaining(i: EngagementInstallment, feesTotal: number | null | undefined): number | null {
+  const full = installmentAmount(i, feesTotal)
+  if (full == null) return null
+  if (!i.paid_at) return full
+  if (i.paid_amount == null) return 0 // سجل قديم بلا مبلغ = سداد كامل
+  return Math.max(0, full - i.paid_amount)
+}
+
+/** سُدّد بعضها وبقي شيء — تبقى بحالة جدولها (مستحقة/متأخرة) بالمتبقي */
+export const isPartiallyPaid = (i: EngagementInstallment, feesTotal: number | null | undefined) =>
+  !!i.paid_at && (installmentRemaining(i, feesTotal) ?? 0) > 0.5
+
 /** حالة الدفعة من وقائعها — لا عمود حالة يتقادم */
-export function installmentState(i: EngagementInstallment, today = new Date().toISOString().slice(0, 10)): InstallmentState {
-  if (i.paid_at) return 'paid'
+export function installmentState(
+  i: EngagementInstallment,
+  today = new Date().toISOString().slice(0, 10),
+  feesTotal?: number | null
+): InstallmentState {
+  if (i.paid_at && !isPartiallyPaid(i, feesTotal)) return 'paid'
   if (i.trigger === 'on_signing') return 'due'
   if (i.trigger === 'date') {
     if (!i.due_date) return 'upcoming'

@@ -29,6 +29,9 @@ const YEARS = Array.from(
   { length: HIJRI_YEAR_MAX - HIJRI_YEAR_MIN + 1 },
   (_, i) => HIJRI_YEAR_MIN + i
 )
+/** القائمة تشمل سنة القيمة المحفوظة دائماً ولو خرجت عن النطاق — وإلا عُرضت سنة غير سنتها */
+const yearsWith = (y: number | null | undefined) =>
+  y && !YEARS.includes(y) ? [...YEARS, y].sort((a, b) => a - b) : YEARS
 
 export function DualDatePicker({
   value,
@@ -180,7 +183,7 @@ export function DualDatePicker({
                 السنة
               </option>
             )}
-            {YEARS.map((y) => (
+            {yearsWith(hijri?.y).map((y) => (
               <option key={y} value={y}>
                 {y}
               </option>

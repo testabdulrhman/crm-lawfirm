@@ -29,7 +29,9 @@ import {
   VAT_OPTIONS,
   eventLabel,
   installmentAmount,
+  installmentRemaining,
   installmentState,
+  isPartiallyPaid,
   type InstallmentState,
 } from './labels'
 
@@ -54,6 +56,7 @@ export function InstallmentsCard({ e }: { e: Engagement }) {
 
   const total = e.fees_total ?? list.reduce((s, i) => s + (installmentAmount(i, null) ?? 0), 0)
   const paid = list.reduce((s, i) => s + (i.paid_at ? (i.paid_amount ?? installmentAmount(i, e.fees_total) ?? 0) : 0), 0)
+  const today = todayISO()
   const pct = total > 0 ? Math.min(100, Math.round((paid / total) * 100)) : 0
   const model = FEE_MODEL_OPTIONS.find((o) => o.value === e.fee_model)?.label
   const vat = VAT_OPTIONS.find((o) => o.value === e.vat_mode)?.label
@@ -99,8 +102,10 @@ export function InstallmentsCard({ e }: { e: Engagement }) {
         ) : (
           <div className="divide-y rounded-xl border">
             {list.map((i) => {
-              const st = installmentState(i)
+              const st = installmentState(i, today, e.fees_total)
               const amt = installmentAmount(i, e.fees_total)
+              const partial = isPartiallyPaid(i, e.fees_total)
+              const left = installmentRemaining(i, e.fees_total)
               return (
                 <div key={i.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2.5 text-sm">
                   <div className="min-w-0 flex-1">
@@ -115,6 +120,11 @@ export function InstallmentsCard({ e }: { e: Engagement }) {
                   <span className="w-28 text-left font-semibold tabular-nums">{amt != null ? fmtNumber(amt) : '—'}</span>
                   <span className={cn('w-36 text-xs', STATE_TONE[st])}>
                     {st === 'paid' ? `✓ سُدّدت ${fmtDatePref(i.paid_at)}` : STATE_LABEL[st]}
+                    {partial && left != null && (
+                      <span className="block text-muted-foreground">
+                        قُبض {fmtNumber(i.paid_amount ?? 0)} · يتبقى {fmtNumber(left)}
+                      </span>
+                    )}
                   </span>
                   <span className="flex items-center gap-1">
                     {st !== 'paid' && i.trigger === 'event' && !i.event_reached_at && (
@@ -259,8 +269,12 @@ function PayDialog({
   const [date, setDate] = useState(todayISO())
   const [amount, setAmount] = useState('')
   const [method, setMethod] = useState('تحويل بنكي')
+  // دفعة سُدّد بعضها: المقترح هو المتبقي، والمقبوض يُضاف لما قبله
+  const prior = inst?.paid_at ? (inst.paid_amount ?? 0) : 0
+  const left = inst ? installmentRemaining(inst, feesTotal) : null
   useEffect(() => {
-    if (inst) { setDate(todayISO()); setAmount(String(installmentAmount(inst, feesTotal) ?? '')); setMethod('تحويل بنكي') }
+    if (inst) { setDate(todayISO()); setAmount(String(left ?? '')); setMethod('تحويل بنكي') }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inst, feesTotal])
   return (
     <Dialog open={!!inst} onOpenChange={(o) => !o && onClose()}>
@@ -271,7 +285,7 @@ function PayDialog({
             <DualDatePicker label="تاريخ السداد" value={date} onChange={(d) => setDate(d ?? '')} />
           </div>
           <div className="space-y-1.5">
-            <Label>المبلغ المستلم</Label>
+            <Label>المبلغ المستلم{prior > 0 ? ` (سبق قبض ${fmtNumber(prior)})` : ''}</Label>
             <Input dir="ltr" type="number" min={0} step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} />
           </div>
           <div className="space-y-1.5">
@@ -287,7 +301,7 @@ function PayDialog({
         <DialogFooter className="gap-2">
           <Button variant="outline" onClick={onClose}>إلغاء</Button>
           <Button variant="gold" disabled={saving || !date || !(Number(amount) > 0)}
-            onClick={() => inst && onSave({ id: inst.id, paid_at: date, paid_amount: Number(amount), payment_method: method })}>
+            onClick={() => inst && onSave({ id: inst.id, paid_at: date, paid_amount: prior + Number(amount), payment_method: method })}>
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
             سُدّدت
           </Button>
