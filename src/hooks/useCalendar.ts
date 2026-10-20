@@ -44,7 +44,7 @@ export function gridDays(anchor: Date): Date[] {
  * زمنية اليوم رغم أن فواتها يُعطّل التمثيل أمام المحكمة.
  *
  * النطاق «لوحتي» يقصر الجلسات على قضايا المستخدم والمهام على المُسندة إليه؛
- * المواعيد والوكالات تخصّ المكتب كله في الوضعين.
+ * المواعيد تخصّ المكتب كله، والوكالات بنطاق الموظف (ملفاته وموكّلوه) — والمدير يرى الكل.
  */
 export function useCalendarRange(
   from: Date,
@@ -84,11 +84,11 @@ export function useCalendarRange(
         .gte('appointment_date', fromISO)
         .lte('appointment_date', toISO)
 
+      // من العرض لا من الجدول (بلاغ المدير 2026-10-20): الموظف يرى انتهاء وكالات ملفاته وموكّليه فقط، والمدير
+      // ومن يرى الكل كل الوكالات — وهو مصدر تقويم الآيفون نفسه
       const poaQ = supabase
-        .from('powers_of_attorney')
+        .from('poas_needing_renewal')
         .select('id, poa_number, client_name, expiry_date')
-        .is('deleted_at', null)
-        .eq('status', 'active')
         .gte('expiry_date', fromISO)
         .lte('expiry_date', toISO)
 
