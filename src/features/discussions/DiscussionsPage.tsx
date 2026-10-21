@@ -24,6 +24,8 @@ import {
   X,
   MessageSquareReply,
   Image as ImageIcon,
+  UserPlus,
+  Lock,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -63,6 +65,7 @@ import { DiscussionMediaDialog } from './DiscussionMediaDialog'
 import { URL_RE, cleanUrl, hrefOf } from './links'
 import { openExternal } from '@/lib/external'
 import { errMessage } from '@/lib/errors'
+import { supabase } from '@/lib/supabase'
 import {
   findMessageAt,
   newMessageId,
@@ -155,6 +158,87 @@ function extractMentions(body: string, people: Mentionable[]): string[] {
   return people
     .filter((p) => new RegExp('@' + escRe(p.label) + '(?![\\p{L}\\p{N}_])', 'u').test(body))
     .map((p) => p.id)
+}
+
+/**
+ * المنشن خارج فريق الملف (اقتراح 90c17630 + قرار المدير 2026-10-21): كان المذكور يصله الإشعار ولا يرى
+ * النقاش. قبل الإرسال يُسأل الكاتب «فلان لا يرى هذا الملف — أضفه للفريق؟»، والإضافة للمدير ومسؤول الملف.
+ * guard(mentions) ⇐ true = أرسل · false = أُلغي (والمسودة باقية).
+ */
+function useMentionGuard(caseId: string | null) {
+  const { teamMember } = useAuth()
+  const qc = useQueryClient()
+  const [ask, setAsk] = useState<{
+    people: { id: string; name: string }[]
+    canAdd: boolean
+    resolve: (go: boolean) => void
+  } | null>(null)
+  const [adding, setAdding] = useState(false)
+
+  const guard = async (mentions: string[]): Promise<boolean> => {
+    if (!caseId || !mentions.length) return true
+    const { data, error } = await supabase.rpc('mention_outsiders', { p_case: caseId, p_members: mentions })
+    const out = (data?.outsiders ?? []) as { id: string; name: string }[]
+    if (error || !out.length) return true // التحقق ثانوي — لا يعطّل الإرسال
+    return new Promise<boolean>((resolve) => setAsk({ people: out, canAdd: !!data?.can_add, resolve }))
+  }
+
+  const close = (go: boolean) => {
+    ask?.resolve(go)
+    setAsk(null)
+  }
+
+  const addAndSend = async () => {
+    if (!ask || !caseId) return
+    setAdding(true)
+    const { error } = await supabase.from('case_members').insert(
+      ask.people.map((p) => ({ case_id: caseId, member_id: p.id, added_by: teamMember?.id ?? null }))
+    )
+    setAdding(false)
+    if (error) {
+      toast({ variant: 'destructive', title: 'تعذّرت الإضافة للفريق', description: errMessage(error) })
+      return
+    }
+    void qc.invalidateQueries({ queryKey: ['case_members'] })
+    toast({ variant: 'success', title: `أُضيف ${ask.people.map((p) => p.name).join('، ')} لفريق الملف` })
+    close(true)
+  }
+
+  const names = ask?.people.map((p) => p.name).join('، ') ?? ''
+  const one = (ask?.people.length ?? 0) === 1
+  const dialog = (
+    <Dialog open={!!ask} onOpenChange={(o) => !o && close(false)}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Lock className="h-4 w-4 text-gold" />
+            {one ? `${names} لا يرى هذا الملف` : `${names} لا يرون هذا الملف`}
+          </DialogTitle>
+        </DialogHeader>
+        <p className="text-sm leading-relaxed text-muted-foreground">
+          {one ? 'ليس في فريق الملف' : 'ليسوا في فريق الملف'}، فيصل الإشعار ولا يُفتح النقاش.{' '}
+          {ask?.canAdd
+            ? `${one ? 'أضفه' : 'أضفهم'} للفريق ليرى النقاش ويصله المنشن.`
+            : 'إضافة الأعضاء لمسؤول الملف أو المدير — اطلبها منهما، أو أرسل على أي حال.'}
+        </p>
+        <DialogFooter className="gap-2 sm:justify-start">
+          {ask?.canAdd ? (
+            <>
+              <Button variant="gold" disabled={adding} onClick={() => void addAndSend()}>
+                {adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
+                {one ? 'أضفه وأرسل' : 'أضفهم وأرسل'}
+              </Button>
+              <Button variant="outline" disabled={adding} onClick={() => close(true)}>أرسل دون إضافة</Button>
+            </>
+          ) : (
+            <Button variant="outline" onClick={() => close(true)}>أرسل على أي حال</Button>
+          )}
+          <Button variant="ghost" disabled={adding} onClick={() => close(false)}>إلغاء</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+  return { guard, dialog }
 }
 
 /** نص رسالة مع تلوين @الأسماء (الموظفون + الذكاء) */
@@ -506,6 +590,15 @@ export function DiscussionsPage() {
               icon={MessagesSquare}
               title="اختر نقاشاً"
               description="كل مشروع له نقاشه — وقناة «عام — المكتب» لما سواه"
+            />
+          </div>
+        ) : selected !== null && channels && !current ? (
+          // ذُكر في نقاش ملف ليس في فريقه (الإشعار يصل والحواجز تحجب) — كانت صفحة فارغة بلا تفسير
+          <div className="flex items-center justify-center rounded-2xl border border-border/70 bg-card p-6">
+            <EmptyState
+              icon={Lock}
+              title="هذا النقاش ليس ضمن نقاشاتك"
+              description="ذُكرت في نقاش ملف لست في فريقه، فلا يظهر لك. اطلب من مسؤول الملف أو المدير إضافتك للفريق — وعندها يظهر النقاش ورسالتك فيه."
             />
           </div>
         ) : (
@@ -934,15 +1027,18 @@ function StreamPane({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [msgs?.length])
 
-  const send = () => {
+  const mentionGuard = useMentionGuard(caseId)
+  const send = async () => {
     const body = draft.trim()
     if (!body) return
+    const mentions = extractMentions(body, people)
+    if (!(await mentionGuard.guard(mentions))) return
     const id = sendId(pendingSend, body)
     // تفريغ فوري + عرض متفائل في usePostMessage = إحساس الواتساب؛
     // الفشل يرجع النص للحقل كي لا يضيع
     setDraft('')
     post.mutate(
-      { id, caseId, body, mentions: extractMentions(body, people) },
+      { id, caseId, body, mentions },
       {
         onError: () => setDraft(body),
         onSuccess: () => {
@@ -977,6 +1073,8 @@ function StreamPane({
     const ok = files.filter((f) => f.size <= MAX_DROP_BYTES)
     if (!ok.length) return
     const caption = draft.trim()
+    const capMentions = caption ? extractMentions(caption, people) : []
+    if (!(await mentionGuard.guard(capMentions))) return
     setDraft('')
     for (const [i, file] of ok.entries()) {
       try {
@@ -984,7 +1082,7 @@ function StreamPane({
           caseId,
           file,
           caption: i === 0 && caption ? caption : undefined,
-          mentions: i === 0 && caption ? extractMentions(caption, people) : undefined,
+          mentions: i === 0 && caption ? capMentions : undefined,
         })
       } catch {
         // الخطأ يعرضه الهوك نفسه — ونكمل البقية
@@ -1115,6 +1213,7 @@ function StreamPane({
       {mediaOpen && (
         <DiscussionMediaDialog open onOpenChange={setMediaOpen} caseId={caseId} title={title} />
       )}
+      {mentionGuard.dialog}
 
       {kind === 'channel' && caseId && (
         <ChannelMembersDialog
@@ -1642,15 +1741,18 @@ function ThreadPane({
   const listRef = useRef<HTMLDivElement>(null)
   const flashId = useFocusFlash(listRef, focusId, replies, onFocused)
 
-  const send = () => {
+  const mentionGuard = useMentionGuard(caseId)
+  const send = async () => {
     const body = draft.trim()
     if (!body) return
+    const mentions = extractMentions(body, people)
+    if (!(await mentionGuard.guard(mentions))) return
     const id = sendId(pendingSend, body)
     // تفريغ فوري + عرض متفائل — نفس نمط المجرى
     setDraft('')
     setAlsoToStream(false)
     post.mutate(
-      { id, caseId, body, parentId: root.id, alsoToStream, mentions: extractMentions(body, people) },
+      { id, caseId, body, parentId: root.id, alsoToStream, mentions },
       {
         onError: () => setDraft(body),
         onSuccess: () => {
@@ -1663,6 +1765,7 @@ function ThreadPane({
 
   return (
     <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-border/70 bg-card">
+      {mentionGuard.dialog}
       <div className="flex items-center gap-2 border-b border-border/60 px-4 py-3">
         <p className="flex-1 text-[15px] font-semibold text-foreground">خيط</p>
         <button
