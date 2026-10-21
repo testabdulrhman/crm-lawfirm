@@ -41,6 +41,8 @@ import {
   useDeleteLookup,
 } from '@/hooks/useSettings'
 import type { LookupValue } from '@/types/db'
+import { useIsDirector } from '@/hooks/useIsDirector'
+import { McpConnectorCard } from './McpConnectorCard'
 
 // روابط التكاملات تُخزَّن في lookup_values تحت هذا النوع (بلا جداول جديدة)
 export const INTEGRATION_LINK_TYPE = 'integration_link'
@@ -59,6 +61,7 @@ export function IntegrationsTab() {
   const createM = useCreateLookup()
   const updateM = useUpdateLookup()
   const deleteM = useDeleteLookup()
+  const isDirector = useIsDirector()
   // نسختان مستقلتان لإعدادات التقويم — كي لا يتشارك مفتاح التفعيل وحفظ
   // المعرّف وحوار الروابط علم pending واحداً
   const createCfgM = useCreateLookup()
@@ -301,6 +304,9 @@ export function IntegrationsTab() {
           </div>
         </CardContent>
       </Card>
+
+      {/* موصّل MCP — للمدير وحده (بصمة رمزه في نوع *config* المحجوب عن غيره) */}
+      {isDirector && !isLoading && !isError && <McpConnectorCard lookups={data ?? []} />}
 
       {/* نموذج إضافة/تعديل */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
