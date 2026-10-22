@@ -226,6 +226,36 @@ export interface StreamHandlers {
   onMeta?: (chatId: string) => void
   onStatus?: (text: string) => void
   onDelta?: (text: string) => void
+  /** أعاد الخادم الكتابة بملاحظات الموظف — النص المعروض يُستبدل بهذا */
+  onReset?: (text: string) => void
+  /** ملاحظات قرأها الباحث وأخذ بها */
+  onNotes?: (ids: string[]) => void
+}
+
+const fnHeaders = (token: string) => ({
+  Authorization: `Bearer ${token}`,
+  apikey: import.meta.env.VITE_SUPABASE_ANON_KEY as string,
+  'Content-Type': 'application/json',
+  'x-region': 'eu-west-1',
+})
+const FN_URL = () => `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/research?forceFunctionRegion=eu-west-1`
+
+/**
+ * ملاحظة للباحث وهو يكتب أو يبحث (طلب المدير 2026-10-22): تُحفظ في المحادثة، والتشغيلة الجارية تلتقطها
+ * وتأخذ بها قبل أن ترسل إجابتها. يُرجع رقم الرسالة.
+ */
+export async function postResearchNote(chatId: string, text: string): Promise<string> {
+  const { data: sess } = await supabase.auth.getSession()
+  const token = sess.session?.access_token
+  if (!token) throw new Error('انتهت الجلسة — سجّل الدخول من جديد')
+  const res = await fetch(FN_URL(), {
+    method: 'POST',
+    headers: fnHeaders(token),
+    body: JSON.stringify({ mode: 'note', chat_id: chatId, text }),
+  })
+  const b = await res.json().catch(() => null)
+  if (!res.ok || !b?.id) throw new Error(b?.error || `تعذّر إرسال الملاحظة (${res.status})`)
+  return b.id as string
 }
 
 /**
@@ -233,22 +263,20 @@ export interface StreamHandlers {
  * يُرجع ما حُفظ: المحادثة ورسالة الإجابة وإحالاتها.
  */
 export async function askResearch(
-  params: { chatId: string | null; message: string; caseId?: string | null; runId?: string },
+  params: { chatId: string | null; message: string; caseId?: string | null; runId?: string; reuseIds?: string[] },
   h: StreamHandlers,
   signal?: AbortSignal
-): Promise<{ chatId: string; messageId: string | null; citations: ResearchCitation[] }> {
+): Promise<{ chatId: string; messageId: string | null; citations: ResearchCitation[]; notes: string[] }> {
   const { data: sess } = await supabase.auth.getSession()
   const token = sess.session?.access_token
   if (!token) throw new Error('انتهت الجلسة — سجّل الدخول من جديد')
-  const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/research?forceFunctionRegion=eu-west-1`, {
+  const res = await fetch(FN_URL(), {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      apikey: import.meta.env.VITE_SUPABASE_ANON_KEY as string,
-      'Content-Type': 'application/json',
-      'x-region': 'eu-west-1',
-    },
-    body: JSON.stringify({ chat_id: params.chatId, message: params.message, case_id: params.caseId ?? null, run_id: params.runId ?? null }),
+    headers: fnHeaders(token),
+    body: JSON.stringify({
+      chat_id: params.chatId, message: params.message, case_id: params.caseId ?? null, run_id: params.runId ?? null,
+      reuse_ids: params.reuseIds?.length ? params.reuseIds : undefined,
+    }),
     signal,
   })
   if (!res.ok || !res.body) {
@@ -259,7 +287,7 @@ export async function askResearch(
   const dec = new TextDecoder()
   let buf = ''
   let chatId = params.chatId ?? ''
-  let result: { messageId: string | null; citations: ResearchCitation[] } | null = null
+  let result: { messageId: string | null; citations: ResearchCitation[]; notes: string[] } | null = null
   while (true) {
     const { done, value } = await reader.read()
     if (done) break
@@ -275,7 +303,9 @@ export async function askResearch(
       if (ev === 'meta') { chatId = data.chat_id; h.onMeta?.(chatId) }
       else if (ev === 'status') h.onStatus?.(data.text)
       else if (ev === 'delta') h.onDelta?.(data.text)
-      else if (ev === 'done') result = { messageId: data.message_id, citations: data.citations ?? [] }
+      else if (ev === 'reset') h.onReset?.(data.text ?? '')
+      else if (ev === 'notes') h.onNotes?.(data.ids ?? [])
+      else if (ev === 'done') result = { messageId: data.message_id, citations: data.citations ?? [], notes: data.notes ?? [] }
       else if (ev === 'error') throw new Error(data.message)
     }
   }

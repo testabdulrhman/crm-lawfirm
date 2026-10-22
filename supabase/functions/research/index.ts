@@ -29,7 +29,7 @@ const json = (b: unknown, s = 200) =>
   new Response(JSON.stringify(b), { status: s, headers: { ...cors, "Content-Type": "application/json; charset=utf-8" } });
 
 const FALLBACK_MODEL = "claude-opus-5-5";
-const MAX_ROUNDS = 8;
+const MAX_ROUNDS = 12; // تتسع لجولات إعادة الكتابة بملاحظات الموظف
 const HISTORY = 20;
 const MAX_SOURCE_CHARS = 600_000; // مجموع نصوص المصادر في الطلب (~٢٠٠ ألف رمز)
 const MAX_PDF_BYTES = 20 * 1024 * 1024;
@@ -262,14 +262,34 @@ Deno.serve(async (req) => {
   const { data: me } = await admin.from("team_members").select("id, name, is_active, member_type, is_reviewer").eq("auth_id", u.user.id).maybeSingle();
   if (!me || me.is_active === false || me.member_type === "collaborator" || me.is_reviewer) return json({ error: "«الباحث» غير متاح لهذا الحساب" }, 403);
 
-  const message = String(body?.message ?? "").trim();
-  if (!message) return json({ error: "اكتب سؤالك" }, 400);
-  if (message.length > 20_000) return json({ error: "السؤال أطول من ٢٠ ألف حرف — أضفه مصدراً بدل ذلك" }, 400);
-
-  const asUser = createClient(URL_, ANON, {
+  const asUserEarly = createClient(URL_, ANON, {
     global: { headers: { Authorization: auth } },
     auth: { persistSession: false, autoRefreshToken: false },
   });
+
+  // ملاحظة أثناء الكتابة (طلب المدير 2026-10-22: «وانت تكتب لي او تبحث… اكتب لك بنفس الوقت ثم تشوف
+  // اللي كتبته انا وترسل مرة وحده»): تُحفظ رسالةً في المحادثة، والتشغيلة الجارية تلتقطها بالاستطلاع.
+  if (body?.mode === "note") {
+    const text = String(body?.text ?? "").trim();
+    if (!text) return json({ error: "اكتب الملاحظة" }, 400);
+    if (text.length > 5000) return json({ error: "الملاحظة أطول من ٥ آلاف حرف" }, 400);
+    const cid = typeof body?.chat_id === "string" ? body.chat_id : "";
+    const { data: own } = await asUserEarly.from("research_chats").select("id").eq("id", cid).is("deleted_at", null).maybeSingle();
+    if (!own) return json({ error: "المحادثة غير موجودة" }, 404);
+    const { data: row, error } = await admin.from("research_messages").insert({ chat_id: cid, role: "user", content: text }).select("id").single();
+    if (error || !row) return json({ error: "تعذّر حفظ الملاحظة" }, 500);
+    return json({ id: row.id });
+  }
+
+  // ملاحظات وصلت بعد أن حُفظت الإجابة: تُجاب الآن دون إعادة إدراجها
+  const reuseIds: string[] = Array.isArray(body?.reuse_ids)
+    ? body.reuse_ids.filter((x: unknown) => typeof x === "string" && /^[0-9a-f-]{36}$/i.test(x)).slice(0, 20)
+    : [];
+  let message = String(body?.message ?? "").trim();
+  if (!message && !reuseIds.length) return json({ error: "اكتب سؤالك" }, 400);
+  if (message.length > 20_000) return json({ error: "السؤال أطول من ٢٠ ألف حرف — أضفه مصدراً بدل ذلك" }, 400);
+
+  const asUser = asUserEarly;
 
   // المحادثة: القائمة بصلاحية صاحبها، أو جديدة باسم أول سؤال — ومربوطة بملف إن بدأت من صفحته
   let chatId = typeof body?.chat_id === "string" ? body.chat_id : null;
@@ -315,6 +335,29 @@ Deno.serve(async (req) => {
       };
       let stopped = false;
       let stopTimer: number | null = null;
+      // ملاحظات الموظف أثناء العمل: كل رسالة منه في المحادثة بعد سؤال هذه التشغيلة
+      let since = new Date().toISOString();
+      const consumed = new Set<string>();
+      let pending: { id: string; content: string }[] = [];
+      const fetchNotes = async () => {
+        const { data } = await admin.from("research_messages").select("id, content")
+          .eq("chat_id", chatId).eq("role", "user").gt("created_at", since).order("created_at");
+        const fresh = (data ?? []).filter((r) => !consumed.has(r.id) && !pending.some((p) => p.id === r.id));
+        pending = [...pending, ...fresh];
+        return fresh.length > 0;
+      };
+      // تُسلَّم الملاحظات للنموذج نصاً واحداً، وتُعلَّم مقروءة عند المتصفح
+      const takeNotes = (rewrite: boolean) => {
+        const ids = pending.map((p) => p.id);
+        ids.forEach((id) => consumed.add(id));
+        const text = `ملاحظات من ${me.name} كتبها وأنت تعمل — خذ بها كلها:\n` + pending.map((p) => `- ${p.content}`).join("\n") +
+          (rewrite ? "\n\nأعد كتابة إجابتك كاملة بعد الأخذ بها — النسخة النهائية وحدها، بلا تعليق على ما عدّلت." : "");
+        pending = [];
+        send("notes", { ids });
+        return text;
+      };
+      let restart = false;      // ملاحظة وصلت والنموذج يكتب نص الإجابة ⇒ نقطع ونعيد الجولة بها
+      let roundText = 0;        // ما كُتب من نص في الجولة الجارية
       const work = (async () => {
       const tools: string[] = [];
       let answer = "";
@@ -322,7 +365,18 @@ Deno.serve(async (req) => {
       let error: string | null = null;
       try {
         send("meta", { chat_id: chatId });
-        await admin.from("research_messages").insert({ chat_id: chatId, role: "user", content: message });
+        if (reuseIds.length) {
+          const { data: rows } = await admin.from("research_messages").select("id, content, created_at")
+            .eq("chat_id", chatId).eq("role", "user").in("id", reuseIds).order("created_at");
+          if (!rows?.length) throw new Error("الملاحظات غير موجودة");
+          rows.forEach((r) => consumed.add(r.id));
+          message = rows.map((r) => r.content).join("\n");
+          since = rows[rows.length - 1].created_at;
+        } else {
+          const { data: mine } = await admin.from("research_messages").insert({ chat_id: chatId, role: "user", content: message })
+            .select("created_at").single();
+          since = mine?.created_at ?? new Date().toISOString();
+        }
 
         const [{ data: hist }, { data: links }, m] = await Promise.all([
           admin.from("research_messages").select("role, content").eq("chat_id", chatId)
@@ -340,7 +394,14 @@ Deno.serve(async (req) => {
         if (skipped.length) send("status", { text: `تعذّرت قراءة: ${skipped.join("، ")}` });
 
         // السجل من الأقدم؛ والمصادر أول المحادثة (ثابتة فتُخزَّن) قبل أول سؤال
-        const turns = (hist ?? []).reverse().filter((x) => x.content?.trim());
+        const turns = (hist ?? []).reverse().filter((x) => x.content?.trim())
+          // السؤال وملاحظاته رسائل متتالية من الموظف ⇒ دور واحد
+          .reduce((acc: { role: string; content: string }[], t) => {
+            const last = acc[acc.length - 1];
+            if (last && last.role === t.role) last.content += "\n\n" + t.content;
+            else acc.push({ role: t.role, content: t.content });
+            return acc;
+          }, []);
         while (turns.length && turns[0].role !== "user") turns.shift();
         const messages: Anthropic.Beta.BetaMessageParam[] = turns.map((t, i) => ({
           role: t.role as "user" | "assistant",
@@ -350,17 +411,23 @@ Deno.serve(async (req) => {
         // «إيقاف»: نقرأ stop_run كل ١٫٥ ثانية (لا مع الأحداث وحدها — البحث في الإنترنت يسكت ثواني)،
         // فإن طابق تشغيلتنا قُطع البث الجاري وحُفظ ما كُتب
         let current: { abort(): void } | null = null;
-        if (runId) {
-          stopTimer = setInterval(async () => {
-            if (stopped) return;
+        stopTimer = setInterval(async () => {
+          if (stopped || restart) return;
+          if (runId) {
             const { data } = await admin.from("research_chats").select("stop_run").eq("id", chatId).maybeSingle();
-            if (data?.stop_run === runId) { stopped = true; current?.abort(); }
-          }, 1500);
-        }
+            if (data?.stop_run === runId) { stopped = true; current?.abort(); return; }
+          }
+          // ملاحظة جديدة والنموذج يكتب نص الإجابة: ما يكتبه سيُعاد على كل حال ⇒ نقطعه الآن
+          if (await fetchNotes() && roundText > 0 && messages[messages.length - 1]?.role === "user") {
+            restart = true; current?.abort();
+          }
+        }, 1500);
 
         const citations = new Map<string, Cite>();
         for (let round = 0; round < MAX_ROUNDS; round++) {
           if (stopped) break;
+          const answerBefore = answer;
+          roundText = 0;
           const s = anthropic.beta.messages.stream({
             model,
             max_tokens: 64000,
@@ -391,13 +458,26 @@ Deno.serve(async (req) => {
               }
             } else if (ev.type === "content_block_delta" && ev.delta.type === "text_delta") {
               answer += ev.delta.text;
+              roundText += ev.delta.text.length;
               send("delta", { text: ev.delta.text });
             }
           }
           } catch (e) {
-            if (!stopped) throw e; // قطعُنا نحن البث
+            if (!stopped && !restart) throw e; // قطعُنا نحن البث
           }
           if (stopped) break;
+          if (restart) {
+            // يُمحى نص هذه الجولة، وتُلحق الملاحظات بآخر رسالة من الموظف، وتُعاد الجولة
+            restart = false;
+            answer = answerBefore;
+            send("reset", { text: answer });
+            const last = messages[messages.length - 1];
+            const note = { type: "text" as const, text: takeNotes(false) };
+            last.content = typeof last.content === "string"
+              ? [{ type: "text", text: last.content }, note]
+              : [...(last.content as Anthropic.Beta.BetaContentBlockParam[]), note];
+            continue;
+          }
           const msg = await s.finalMessage();
           collectCitations(msg.content as unknown[] as Record<string, unknown>[], docIndex, citations);
 
@@ -409,7 +489,17 @@ Deno.serve(async (req) => {
             messages.push({ role: "assistant", content: msg.content as Anthropic.Beta.BetaContentBlockParam[] });
             continue;
           }
-          if (msg.stop_reason !== "tool_use") break;
+          if (msg.stop_reason !== "tool_use") {
+            // آخر فرصة قبل الحفظ: ملاحظة وصلت والمسودة اكتملت ⇒ تُعاد كاملة بها، ويُرسل الأخير وحده
+            if (msg.stop_reason === "end_turn" && round < MAX_ROUNDS - 1 && (pending.length || await fetchNotes())) {
+              messages.push({ role: "assistant", content: msg.content as Anthropic.Beta.BetaContentBlockParam[] });
+              messages.push({ role: "user", content: takeNotes(true) });
+              answer = "";
+              send("reset", { text: "" });
+              continue;
+            }
+            break;
+          }
 
           const uses = msg.content.filter((b) => b.type === "tool_use") as Anthropic.Beta.BetaToolUseBlock[];
           const results = await Promise.all(uses.map(async (tu) => {
@@ -418,7 +508,9 @@ Deno.serve(async (req) => {
           }));
           if (stopped) break;
           messages.push({ role: "assistant", content: msg.content as Anthropic.Beta.BetaContentBlockParam[] });
-          messages.push({ role: "user", content: results });
+          // ملاحظات وصلت أثناء البحث تُسلَّم مع نتائجه، فيبني عليها قبل أن يكتب
+          await fetchNotes();
+          messages.push({ role: "user", content: pending.length ? [...results, { type: "text" as const, text: takeNotes(false) }] : results });
           if (answer && !answer.endsWith("\n")) { answer += "\n\n"; send("delta", { text: "\n\n" }); }
         }
 
@@ -432,7 +524,7 @@ Deno.serve(async (req) => {
           .insert({ chat_id: chatId, role: "assistant", content: answer.trim(), citations: cites, tools: [...new Set(tools)], model })
           .select("id").single();
         await admin.from("research_chats").update({ updated_at: new Date().toISOString() }).eq("id", chatId);
-        send("done", { message_id: saved?.id ?? null, citations: cites });
+        send("done", { message_id: saved?.id ?? null, citations: cites, notes: [...consumed] });
       } catch (e) {
         error = e instanceof Anthropic.APIError ? `مزوّد الذكاء ${e.status}: ${e.message}` : String((e as Error).message);
         console.error("research", error);

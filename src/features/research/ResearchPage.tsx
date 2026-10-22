@@ -21,14 +21,14 @@ import { arNorm } from '@/lib/arabic'
 import { cn } from '@/lib/utils'
 import { usePageState } from '@/hooks/usePageState'
 import {
-  isAwaitingAnswer, useChatSources, useCreateChat, useDeleteChat, useResearchCase, useResearchChats, useResearchMessages,
+  isAwaitingAnswer, postResearchNote, useChatSources, useCreateChat, useDeleteChat, useResearchCase, useResearchChats, useResearchMessages,
   type ResearchCitation, type ResearchMessage,
 } from '@/hooks/useResearch'
 import { useOfficeInfo } from '@/hooks/useSettings'
 import { addDocumentDirect } from '@/hooks/useCaseDocuments'
 import { useAuth } from '@/stores/auth'
 import { buildLetterDocx, letterFileName } from '@/lib/letterDocx'
-import { releaseNewRuns, startRun, stopRun, useResearchRuns, type Run } from './liveRuns'
+import { addNote, releaseNewRuns, startRun, stopRun, useResearchRuns, type Run } from './liveRuns'
 import { downloadBlob } from '@/lib/docxTemplate'
 import { clearQueryParam, queryParam } from '@/lib/queryParam'
 import { Markdown } from './Markdown'
@@ -81,6 +81,7 @@ export function ResearchPage() {
   // سؤال محفوظ بلا إجابة ولا بثّ هنا: الخادم يكملها (غادرت أو حدّثت الصفحة) — نعرض ذلك ونتابع القاعدة
   const awaiting = !live && isAwaitingAnswer(messages)
   const stalled = !live && !awaiting && messages.length > 0 && messages[messages.length - 1].role === 'user'
+  const lastAssistant = messages.map((m) => m.role).lastIndexOf('assistant')
 
   // «محادثة جديدة» عُرف رقمها وأنت ما زلت عليها ⇒ افتحها
   useEffect(() => {
@@ -112,8 +113,24 @@ export function ResearchPage() {
 
   const send = async (text?: string) => {
     const q = (text ?? input).trim()
-    if (!q || busy || awaiting) return
+    if (!q) return
     setInput('')
+    // وهو يكتب أو يبحث: ما تكتبه ملاحظة يأخذ بها قبل أن يرسل (طلب المدير 2026-10-22)
+    if (busy && live) {
+      addNote(qc, live.key, q)
+      return
+    }
+    // يكمل في الخادم بعد تحديث الصفحة: الملاحظة تُحفظ في المحادثة فيلتقطها
+    if (awaiting && chatId) {
+      try {
+        await postResearchNote(chatId, q)
+        void qc.invalidateQueries({ queryKey: ['research', 'messages', chatId] })
+      } catch (e) {
+        setInput(q)
+        toast({ variant: 'destructive', title: 'تعذّر إرسال الملاحظة', description: errMessage(e) })
+      }
+      return
+    }
     startRun(qc, { chatId, message: q, caseId: chatId ? null : pendingCase })
   }
 
@@ -217,9 +234,19 @@ export function ResearchPage() {
               {messages.map((m) => <MessageView key={m.id} m={m} caseId={activeCaseId} />)}
               {live && (
                 <>
-                  {!messages.some((m) => m.role === 'user' && m.content === live.question && messages[messages.length - 1] === m) && (
+                  {!live.reuse && !messages.slice(lastAssistant + 1).some((m) => m.role === 'user' && m.content === live.question) && (
                     <UserBubble text={live.question} />
                   )}
+                  {live.notes
+                    .filter((n) => !n.id || !messages.some((m) => m.id === n.id))
+                    .map((n) => (
+                      <UserBubble
+                        key={n.key}
+                        text={n.text}
+                        note={n.failed ? 'لم تصل — أعد كتابتها' : n.seen ? '✓ قرأها وأخذ بها' : 'سيأخذ بها قبل أن يرسل'}
+                        failed={n.failed}
+                      />
+                    ))}
                   <div className="space-y-2">
                     {live.text ? <Markdown text={live.text} /> : null}
                     {live.status && (
@@ -263,10 +290,18 @@ export function ResearchPage() {
                 }
               }}
               rows={1}
-              placeholder="اسأل الباحث عن أي شيء — نظام، حكم، صياغة، ملف في المكتب…"
+              placeholder={
+                busy || awaiting
+                  ? 'اكتب ملاحظتك وهو يعمل — يأخذ بها قبل أن يرسل الإجابة…'
+                  : 'اسأل الباحث عن أي شيء — نظام، حكم، صياغة، ملف في المكتب…'
+              }
               className="max-h-48 min-h-[40px] resize-none border-0 bg-transparent p-1 shadow-none focus-visible:ring-0"
             />
-            {awaiting ? (
+            {(busy || awaiting) && input.trim() ? (
+              <Button size="icon" variant="gold" className="h-9 w-9 shrink-0 rounded-full" onClick={() => void send()} aria-label="أضف ملاحظة" title="أضف ملاحظة — يأخذ بها قبل أن يرسل">
+                <ArrowUp className="h-4 w-4" />
+              </Button>
+            ) : awaiting ? (
               <Button size="icon" variant="outline" className="h-9 w-9 shrink-0 rounded-full" disabled aria-label="يكمل الإجابة">
                 <Loader2 className="h-4 w-4 animate-spin" />
               </Button>
@@ -324,10 +359,11 @@ function Welcome({ onPick, forCase }: { onPick: (t: string) => void; forCase: bo
   )
 }
 
-function UserBubble({ text }: { text: string }) {
+function UserBubble({ text, note, failed }: { text: string; note?: string; failed?: boolean }) {
   return (
-    <div className="flex justify-start">
+    <div className="flex flex-col items-start gap-1">
       <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-tr-sm bg-gold/15 px-4 py-2.5 text-[15px] leading-7">{text}</div>
+      {note && <span className={cn('px-2 text-[11px]', failed ? 'text-destructive' : 'text-muted-foreground')}>{note}</span>}
     </div>
   )
 }
