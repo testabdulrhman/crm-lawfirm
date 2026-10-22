@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { toast } from '@/hooks/use-toast'
 import { errMessage } from '@/lib/errors'
+import type { Engagement, EngagementInstallment } from '@/types/db'
 
 // نتيجة تحليل المتقدّم المحلَّلة (قد تكون null لو تعذّر تحليل JSON)
 export interface ApplicantAnalysis {
@@ -228,15 +229,38 @@ export interface ContractExtraction {
   summary: string | null
   obligations: ContractObligation[]
   hijri_note: string | null
+  // من تحليل ١١٢ عقداً (2026-10-14) — تُقرأ منذ 2026-10-22
+  client_phone?: string | null
+  client_id_number?: string | null
+  fee_model?: Engagement['fee_model']
+  fee_percentage?: number | null
+  percentage_base?: string | null
+  vat_mode?: Engagement['vat_mode'] | null
+  first_party?: Engagement['first_party']
+  client_side?: string | null
+  client_rep_name?: string | null
+  client_rep_capacity?: string | null
+  beneficiary_name?: string | null
+  beneficiary_relation?: string | null
+  opponent_name?: string | null
+  stages_covered?: string[]
+  ends_on?: string | null
+  dispute_venue?: string | null
+  expenses_on_client?: boolean | null
+  poa_required?: boolean | null
+  fees_due_on_settlement?: boolean | null
+  advance_refundable?: boolean | null
+  installments?: Pick<EngagementInstallment, 'label' | 'trigger' | 'due_date' | 'event_kind' | 'event_label' | 'amount' | 'percent'>[]
 }
 
 // الدالة تقرأ ولا تكتب — الواجهة تعرض النتيجة للمراجعة قبل الحفظ،
 // لأن الاستخراج الآلي يخطئ ولا يصح أن يكتب في العقد دون إقرار موظف.
 export function useExtractContract() {
   return useMutation({
-    mutationFn: async (docUrl: string): Promise<ContractExtraction> => {
+    /** رابط ملف، أو روابط نسخ العقد نفسه (Word وPDF) فتُقرأ معاً */
+    mutationFn: async (docUrl: string | string[]): Promise<ContractExtraction> => {
       const { data, error } = await supabase.functions.invoke('extract-contract', {
-        body: { doc_url: docUrl },
+        body: Array.isArray(docUrl) ? { doc_urls: docUrl } : { doc_url: docUrl },
       })
       // كما في المحاضر: نقرأ الرد الأصلي لنُظهر السبب الحقيقي لا رسالة عامة
       if (error) {

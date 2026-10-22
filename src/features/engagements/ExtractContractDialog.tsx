@@ -21,6 +21,7 @@ import { useExtractContract, type ContractExtraction } from '@/hooks/useAiAnalys
 import { useUpdateEngagement } from '@/hooks/useEngagements'
 import { useCreateDeadlines, obligationTypeLabel } from '@/hooks/useDeadlines'
 import type { Engagement } from '@/types/db'
+import { engTypeLabel } from './labels'
 
 export function ExtractContractDialog({
   open,
@@ -282,7 +283,7 @@ function fieldChanges(e: Engagement, r: ContractExtraction): FieldChange[] {
     out.push({ key, label, next, display: display ?? String(next) })
   }
 
-  add('type', 'نوع العقد', e.type, r.type)
+  add('type', 'نوع العقد', e.type, r.type, r.type ? engTypeLabel(r.type) : undefined)
   add('signed_date', 'تاريخ التوقيع', e.signed_date, r.signed_date,
     r.signed_date ? fmtDatePref(r.signed_date) : undefined)
   add('start_date', 'بداية السريان', e.start_date, r.start_date,
