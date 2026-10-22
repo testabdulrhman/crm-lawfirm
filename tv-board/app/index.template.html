@@ -64,8 +64,8 @@ body{color:var(--text);font-family:'IBM Plex Sans Arabic',Tahoma,Arial,sans-seri
 .stat b{font-size:38px;font-weight:300;line-height:1}
 .stat span{font-size:16px;color:var(--muted);line-height:1.25}
 .stat.late b{color:var(--late)} .stat.wa b{color:var(--wa)}
-.bars{flex:1 1 0;display:flex;flex-direction:column;gap:11px;overflow:hidden;min-height:0}
-.bar{display:grid;grid-template-columns:170px 1fr 74px;align-items:center;gap:16px;font-size:19px;height:30px;line-height:30px}
+.bars{flex:1 1 0;display:flex;flex-direction:column;gap:8px;overflow:hidden;min-height:0}
+.bar{display:grid;grid-template-columns:170px 1fr 74px;align-items:center;gap:16px;font-size:19px;height:28px;line-height:28px}
 .bar .n{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500}
 .track{height:10px;border-radius:5px;background:rgba(255,255,255,.07);overflow:hidden;display:flex}
 .fill{height:100%;background:linear-gradient(90deg,var(--gold) 0%,var(--gold-2) 100%);border-radius:5px}
@@ -151,8 +151,8 @@ body{color:var(--text);font-family:'IBM Plex Sans Arabic',Tahoma,Arial,sans-seri
       <div class="cam-badge" id="camBadge" style="display:none"><span class="dot"></span><span id="camLabel">بث مباشر</span></div>
     </div>
 
+    <!-- بلا عنوان — الأرقام تشرح نفسها، ومساحته لأشرطة الموظفين (طلب المدير 2026-10-22) -->
     <div class="glass card work">
-      <div class="title"><h2>العمل المفتوح</h2></div>
       <div class="stats">
         <div class="stat"><b id="stOpen">—</b><span>مهمة مفتوحة</span></div>
         <div class="stat late"><b id="stLate">—</b><span>متأخرة</span></div>
