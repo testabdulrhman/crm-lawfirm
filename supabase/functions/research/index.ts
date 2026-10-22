@@ -13,6 +13,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import Anthropic from "npm:@anthropic-ai/sdk@0.132.1";
 import { docxText } from "../_shared/docx.ts";
+import { riyadhToday } from "../_shared/riyadh.ts";
 
 const URL_ = Deno.env.get("SUPABASE_URL")!;
 const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -520,7 +521,7 @@ Deno.serve(async (req) => {
             max_tokens: 64000,
             output_config: { effort: "high" },
             system: [{ type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } },
-                     { type: "text", text: `الموظف: ${me.name}. اليوم: ${new Date().toISOString().slice(0, 10)}.${caseNote}` }],
+                     { type: "text", text: `الموظف: ${me.name}. اليوم: ${riyadhToday()}.${caseNote}` }],
             tools: [
               { type: "web_search_20260209", name: "web_search", max_uses: 8, user_location: { type: "approximate", country: "SA", city: "Buraydah", timezone: "Asia/Riyadh" } },
               { type: "web_fetch_20260209", name: "web_fetch", max_uses: 5 },

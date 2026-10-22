@@ -9,15 +9,16 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { canSeeCase, isOfficeStaff, outOfScope, type AiScope } from "./aiScope.ts";
+import { riyadhToday, riyadhYear } from "./riyadh.ts";
 
 export const admin = createClient(
   Deno.env.get("SUPABASE_URL") ?? "",
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
 );
 
-const isoToday = () => new Date().toISOString().slice(0, 10);
-const isoPlusDays = (d: number) =>
-  new Date(Date.now() + d * 86400000).toISOString().slice(0, 10);
+// بتوقيت الرياض لا UTC (فحص 2026-10-22)
+const isoToday = () => riyadhToday();
+const isoPlusDays = (d: number) => riyadhToday(d);
 
 /** رفض موحّد للأداة الحساسة بلا تأكيد — النص يوجّه النموذج لطلب الإذن */
 const needsConfirm = (what: string) =>
@@ -457,7 +458,7 @@ export async function runExtraTool(
     if (!title) return JSON.stringify({ error: "العنوان مطلوب" });
 
     // رقم المكتب: CASE + آخر رقمين من السنة + تسلسل
-    const yy = new Date().getFullYear().toString().slice(-2);
+    const yy = riyadhYear().toString().slice(-2);
     const { data: last } = await admin
       .from("cases")
       .select("office_num")
@@ -537,7 +538,7 @@ export async function runExtraTool(
   }
 
   if (name === "create_outgoing_letter") {
-    const yy = new Date().getFullYear().toString().slice(-2);
+    const yy = riyadhYear().toString().slice(-2);
     const { data: last } = await admin
       .from("outgoing_letters")
       .select("letter_number")

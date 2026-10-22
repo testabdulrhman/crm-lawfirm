@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
-import { fmtDual } from '@/lib/format'
+import { fmtDual, todayISO } from '@/lib/format'
 import { usePrefs } from '@/stores/prefs'
 import {
   HIJRI_MONTHS,
@@ -55,7 +55,8 @@ export function DualDatePicker({
   }, [value])
 
   // عند غياب قيمة: تبدأ قوائم أم القرى من تاريخ اليوم (لا من بداية سنة ثابتة)
-  const todayHijri = useMemo(() => gregorianToHijri(new Date()), [])
+  // هجري اليوم المحلي: gregorianToHijri يقرأ بـUTC، فيُمرَّر منتصف ليل اليوم المحلي (لا اللحظة الآن)
+  const todayHijri = useMemo(() => gregorianToHijri(new Date(`${todayISO()}T00:00:00Z`)), [])
   const [hy, setHy] = useState<number>(hijri?.y ?? todayHijri.y)
   const [hm, setHm] = useState<number>(hijri?.m ?? todayHijri.m)
   const [hd, setHd] = useState<number>(hijri?.d ?? todayHijri.d)

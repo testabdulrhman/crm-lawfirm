@@ -14,6 +14,7 @@ import { EXTRA_TOOLS, runExtraTool, EXTRA_SYSTEM_RULES } from "../_shared/agent-
 import { loadScope, type AiScope } from "../_shared/aiScope.ts";
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { cachedText, ephemeral, logCacheUsage } from "../_shared/prompt-cache.ts";
+import { riyadhToday } from "../_shared/riyadh.ts";
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
@@ -375,11 +376,12 @@ async function resolveMemberId(name: string): Promise<string | null> {
   return id;
 }
 
+// بتوقيت الرياض لا UTC (فحص 2026-10-22)
 function isoToday(): string {
-  return new Date().toISOString().slice(0, 10);
+  return riyadhToday();
 }
 function isoPlusDays(days: number): string {
-  return new Date(Date.now() + days * 86400000).toISOString().slice(0, 10);
+  return riyadhToday(days);
 }
 
 /** بيئة الأداة: db = عميل بجلسة الموظف (قراءاته تمرّ من RLS)، وscope = نطاقه للأدوات المشتركة (فحص 2026-10-19:

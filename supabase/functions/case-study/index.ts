@@ -20,6 +20,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { cachedText, logCacheUsage } from "../_shared/prompt-cache.ts";
 import { docxText } from "../_shared/docx.ts";
+import { riyadhToday } from "../_shared/riyadh.ts";
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
@@ -503,10 +504,9 @@ ${blocks.length > 0 ? `المستندات المرفقة أعلاه (${readDocs.
   console.log(`case-study proposals: ${props.length} (case ${caseId}, v${nextVersion})`);
   await admin.from("case_study_proposals").delete().eq("case_id", caseId).eq("status", "proposed");
   if (props.length) {
-    const today = new Date();
     const { error: propErr } = await admin.from("case_study_proposals").insert(props.slice(0, 10).map((p) => {
       const d = Number(p.due_in_days);
-      const due = Number.isFinite(d) && d > 0 ? new Date(today.getTime() + d * 86_400_000).toISOString().slice(0, 10) : null;
+      const due = Number.isFinite(d) && d > 0 ? riyadhToday(d) : null;
       return {
         case_id: caseId, study_version: nextVersion,
         kind: ["task", "risk", "question"].includes(p.kind) ? p.kind : "task",

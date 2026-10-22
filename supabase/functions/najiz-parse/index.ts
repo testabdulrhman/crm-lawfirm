@@ -19,6 +19,7 @@
 // والتاريخ محلول، والثقة ليست منخفضة، ولا جلسة سابقة بالتاريخ نفسه.
 // ما لا يتحقق فيه ذلك يُبلَّغ به المدير بدل أن يُخترع صفٌّ خاطئ.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { riyadhToday } from "../_shared/riyadh.ts";
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
@@ -313,7 +314,7 @@ Deno.serve(async (req) => {
   }
 
   // موعد الجلسة القادمة على بطاقة الملف — يُحدَّث إن كانت هذه أقرب
-  if (date >= new Date().toISOString().slice(0, 10) &&
+  if (date >= riyadhToday() &&
       (!kase?.hearing_date || date < String(kase.hearing_date))) {
     await admin.from("cases")
       .update({ hearing_date: date, hearing_label: sessionTitle.slice(0, 60) })

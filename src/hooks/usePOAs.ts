@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { supabase } from '@/lib/supabase'
 import { toast } from '@/hooks/use-toast'
-import { todayISO } from '@/lib/format'
+import { localISO, todayISO } from '@/lib/format'
 import { SOON_DAYS } from '@/lib/poaLabels'
 import type { POAInput, PowerOfAttorney } from '@/types/db'
 import { errMessage } from '@/lib/errors'
@@ -21,11 +21,11 @@ function errToast(title: string) {
     })
 }
 
+// بالتاريخ المحلي (الرياض): toISOString بعد منتصف الليل المحلي يعطي أمس دائماً (فحص 2026-10-22)
 function plusDaysISO(days: number): string {
   const d = new Date()
-  d.setHours(0, 0, 0, 0)
   d.setDate(d.getDate() + days)
-  return d.toISOString().slice(0, 10)
+  return localISO(d)
 }
 
 /** وكالات مشروع بعينه — بطاقة «الوكالات» في صفحة الملف */

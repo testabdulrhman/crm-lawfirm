@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { toast } from '@/hooks/use-toast'
 import { errMessage } from '@/lib/errors'
-import { todayISO } from '@/lib/format'
+import { localISO, todayISO } from '@/lib/format'
 import { useAuth } from '@/stores/auth'
 import { notify } from '@/hooks/useNotifications'
 import { tapFeedback } from '@/lib/push'
@@ -199,7 +199,7 @@ export function bucketOf(t: TaskRow): BucketKey {
   const today = todayISO()
   if (t.due_date < today) return 'overdue'
   if (t.due_date === today) return 'today'
-  const weekEnd = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)
+  const weekEnd = localISO(new Date(Date.now() + 7 * 86400000))
   return t.due_date <= weekEnd ? 'week' : 'later'
 }
 

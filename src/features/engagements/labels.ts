@@ -1,6 +1,7 @@
 // تسميات وحدة العقود (اتفاقيات الأتعاب)
 import type { BadgeProps } from '@/components/ui/badge'
 import type { EngagementInstallment } from '@/types/db'
+import { todayISO } from '@/lib/format'
 
 export const ENG_STATUS_OPTIONS = [
   { value: 'draft', label: 'مسودة' },
@@ -108,7 +109,7 @@ export const isPartiallyPaid = (i: EngagementInstallment, feesTotal: number | nu
 /** حالة الدفعة من وقائعها — لا عمود حالة يتقادم */
 export function installmentState(
   i: EngagementInstallment,
-  today = new Date().toISOString().slice(0, 10),
+  today = todayISO(),
   feesTotal?: number | null
 ): InstallmentState {
   if (i.paid_at && !isPartiallyPaid(i, feesTotal)) return 'paid'

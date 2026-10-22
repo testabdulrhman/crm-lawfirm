@@ -22,6 +22,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { EXTRA_TOOLS, runExtraTool, EXTRA_SYSTEM_RULES } from "../_shared/agent-tools.ts";
 import { canSeeCase, loadScope, type AiScope } from "../_shared/aiScope.ts";
 import { ephemeral, logCacheUsage, withCachedLastTool } from "../_shared/prompt-cache.ts";
+import { riyadhToday as riyadhPlus } from "../_shared/riyadh.ts";
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
@@ -273,7 +274,7 @@ async function threadContext(comment: any, limit = 8): Promise<string> {
 async function officeContext(scope: AiScope | null): Promise<string> {
   const see = (c: any) => !!scope && canSeeCase(scope, c ?? null);
   const { iso } = riyadhToday();
-  const week = new Date(Date.now() + 10 * 86_400_000).toISOString().slice(0, 10);
+  const week = riyadhPlus(10);
   const [sessions, tasks, poas, recent] = await Promise.all([
     admin.from("sessions")
       .select("session_date, session_time, court, cases:cases!sessions_case_id_fkey(id, kind, office_num, title)")
@@ -287,7 +288,7 @@ async function officeContext(scope: AiScope | null): Promise<string> {
       .select("client_name, expiry_date")
       .eq("status", "active").is("deleted_at", null)
       .gte("expiry_date", iso)
-      .lte("expiry_date", new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10))
+      .lte("expiry_date", riyadhPlus(30))
       .order("expiry_date").limit(10),
     admin.from("case_comments")
       .select("body, kind, author:team_members(short_name)")
@@ -602,7 +603,7 @@ async function handleCommitment(comment: any, caseRow: any) {
   const title = String(d.title ?? "").replace(/@/g, "").trim().slice(0, 120);
   const due = typeof d.due_date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d.due_date) ? d.due_date : null;
   const { iso: today } = riyadhToday();
-  const maxDue = new Date(Date.now() + 90 * 86_400_000).toISOString().slice(0, 10);
+  const maxDue = riyadhPlus(90);
   const dueValid = due !== null && due >= today && due <= maxDue;
 
   // السؤال الوحيد المسموح: مكلَّف واضح وموظف حقيقي وينقص التاريخ فقط.

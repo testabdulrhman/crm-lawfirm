@@ -11,6 +11,7 @@
 // =============================================================
 import { admin, runExtraTool } from "../_shared/agent-tools.ts";
 import { loadScope, type AiScope } from "../_shared/aiScope.ts";
+import { riyadhToday } from "../_shared/riyadh.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -21,8 +22,8 @@ const json = (o: unknown, status = 200) =>
   new Response(JSON.stringify(o), { status, headers: { ...cors, "Content-Type": "application/json" } });
 
 const FIRM = "شركة عبدالرحمن بن رضوان المشيقح للمحاماة وإدارة إجراءات الإفلاس";
-const isoToday = () => new Date().toISOString().slice(0, 10);
-const plusDays = (d: number) => new Date(Date.now() + d * 86400000).toISOString().slice(0, 10);
+const isoToday = () => riyadhToday();
+const plusDays = (d: number) => riyadhToday(d);
 
 async function sha256(t: string): Promise<string> {
   const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(t));
