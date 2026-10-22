@@ -9,7 +9,7 @@
 // الحماية: verify_jwt (مفتاح anon) + سر x-board-secret من lookup_values
 //          (type='tv_board_config'). التلفزيون داخل شبكة المكتب.
 //
-// ما يُرجَع عمداً: لا أسماء موكّلين ولا أرقام هواتف ولا تفاصيل — الشاشة على
+// ما يُرجَع عمداً: لا أسماء موكّلين ولا أرقام هواتف ولا تفاصيل (والمواعيد بلا موكّلها كذلك) — الشاشة على
 // الحائط يراها كل زائر للمكتب. (2026-10-12: أُسقطت عناوين القضايا والمهام — كانت تحمل أسماء الموكّلين.)
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
@@ -74,7 +74,14 @@ Deno.serve(async (req) => {
     while ([5, 6].includes(new Date(nextMs).getUTCDay())) nextMs += 86400000;
     const tomorrow = new Date(nextMs).toISOString().slice(0, 10);
     const mmdd = today.slice(5);
-    const [sessR, tomR, taskR, newsR, teamR, waR] = await Promise.all([
+    // المواعيد (طلب المدير 2026-10-22): الوقت والطريقة ونوع الخدمة والموظف — بلا اسم الموكّل ولا جواله ولا شركته
+    const apptSel = "appointment_time, duration_minutes, status, meeting_method, service_type, " +
+      "assignee:team_members!appointments_assignee_id_fkey(name), " +
+      "members:appointment_members(member:team_members!appointment_members_member_id_fkey(name))";
+    const apptsOn = (day: string) => admin.from("appointments").select(apptSel)
+      .eq("appointment_date", day).not("status", "in", "(cancelled,canceled)")
+      .order("appointment_time", { ascending: true, nullsFirst: false });
+    const [sessR, tomR, taskR, newsR, teamR, waR, apR, apNextR] = await Promise.all([
       admin.from("sessions")
         .select("id, session_time, court, case:cases(office_num, kind, court, court_division, assignee:team_members!cases_assignee_id_fkey(name))")
         .eq("session_date", today)
@@ -92,7 +99,22 @@ Deno.serve(async (req) => {
         .eq("is_active", true).not("date_of_birth", "is", null),
       admin.from("wa_threads").select("phone_e164", { count: "exact", head: true })
         .eq("last_direction", "in").gt("last_in_at", new Date(Date.now() - 7 * 86400000).toISOString()),
+      apptsOn(today),
+      apptsOn(tomorrow),
     ]);
+    if (apR.error) throw apR.error;
+    const SERVICE: Record<string, string> = {
+      law: "أعمال المحاماة", bankruptcy: "أعمال إفلاس", notarization: "التوثيق والتسجيل العيني", other: "استشارة",
+    };
+    const shapeAppts = (rows: any[]) => rows.map((a: any) => ({
+      time: a.appointment_time ? String(a.appointment_time).slice(0, 5) : null,
+      duration: a.duration_minutes ?? null,
+      method: a.meeting_method === "remote" ? "remote" : a.meeting_method === "onsite" ? "onsite" : null,
+      service: a.service_type ? (SERVICE[a.service_type] ?? "") : "",
+      status: a.status ?? "confirmed",
+      // المسؤول المسند، وإلا أول عضو أُضيف للموعد
+      lawyer: displayName(a.assignee?.name) || displayName(a.members?.[0]?.member?.name),
+    }));
     if (sessR.error) throw sessR.error;
     if (tomR.error) throw tomR.error;
     const shape = (rows: any[]) => rows
@@ -137,6 +159,8 @@ Deno.serve(async (req) => {
       sessions: shape((sessR.data ?? []) as any[]),
       next_day: tomorrow,
       next_sessions: nextList,
+      appointments: shapeAppts((apR.data ?? []) as any[]),
+      next_appointments: shapeAppts((apNextR.data ?? []) as any[]),
       // توافق الصفحة القديمة (index.html على الـiMac): صف لكل موظف بعدد مهامه بدل عناوينها
       tasks: byMember.map((m) => ({
         title: `${m.name} — ${m.open} مفتوحة${m.late ? ` · ${m.late} متأخرة` : ""}`,
