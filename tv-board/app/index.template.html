@@ -5,92 +5,131 @@
 <meta name="viewport" content="width=1920, initial-scale=1">
 <title>شاشة المكتب</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
-/* شاشة عرض المكتب — تطبيق سامسونج (Tizen) — 2026-10-12.
-   الشاشة يراها كل زائر: لا أسماء موكّلين ولا عناوين قضايا ولا مهام؛ أرقام الملفات والمحاكم والأعداد فقط.
-   هوية المشروع: كحلي #111D3A · ذهبي #C9A84C · IBM Plex Sans Arabic — نسخة داكنة لشاشة معلّقة طوال اليوم. */
+/* شاشة عرض المكتب — تطبيق سامسونج (Tizen).
+   الشاشة يراها كل زائر: لا أسماء موكّلين ولا عناوين قضايا ولا مهام؛ أرقام الملفات والمحاكم وأسماء الموظفين والأعداد فقط.
+   2026-10-22 «كأني فاتح ويندوز 2000»: أُعيد التصميم — زجاج فوق خلفية بهالتين (كحلي عميق + شامبين)،
+   بلا حدود ذهبية؛ ورموز الهوية الرسمية (ink #0B1220/#131C30 · gold #C9A982). */
 :root{
-  --navy:#0e1832; --card:#16224a; --card-2:#121c3c;
-  --gold:#C9A84C; --gold-soft:rgba(201,168,76,.16);
-  --text:#F4F1E8; --muted:#93a0c0; --line:rgba(201,168,76,.22);
-  --danger:#e0645c; --ok:#4fb37a; --wa:#25b366; --sky:#5aa9e6;
+  --ink:#0B1220; --ink-2:#131C30;
+  --gold:#C9A982; --gold-2:#E4CDA8; --gold-soft:rgba(201,169,130,.14);
+  --text:#F5F1EA; --muted:rgba(232,226,214,.58); --faint:rgba(232,226,214,.34);
+  --glass:rgba(255,255,255,.055); --glass-2:rgba(255,255,255,.035); --edge:rgba(255,255,255,.09);
+  --session:#8FB4FF; --appt:#7FD6BC; --late:#FF8F86; --wa:#6BD49A;
 }
 *{box-sizing:border-box;margin:0;padding:0}
-html,body{height:100%;overflow:hidden;background:var(--navy)}
-body{color:var(--text);font-family:'IBM Plex Sans Arabic',Tahoma,Arial,sans-serif;-webkit-font-smoothing:antialiased}
-.wrap{display:grid;grid-template-columns:42fr 58fr;grid-template-rows:minmax(0,1fr) auto;gap:18px;height:100vh;width:100vw;padding:20px}
-/* عمود الكاميرا (يمين): البث بنسبة ١٦:٩ أعلاه والعمل المفتوح تحته — صُغّرت الكاميرا بطلب المدير 2026-10-13 */
-.camcol{display:flex;flex-direction:column;gap:16px;min-height:0}
+html,body{height:100%;overflow:hidden;background:var(--ink)}
+body{color:var(--text);font-family:'IBM Plex Sans Arabic',Tahoma,Arial,sans-serif;-webkit-font-smoothing:antialiased;
+  background:
+    radial-gradient(900px 700px at 88% -8%, rgba(201,169,130,.20), transparent 62%),
+    radial-gradient(1100px 800px at 4% 108%, rgba(64,104,206,.26), transparent 60%),
+    radial-gradient(700px 600px at 46% 52%, rgba(40,72,140,.16), transparent 70%),
+    linear-gradient(160deg, #0E1730 0%, #0B1220 55%, #090F1C 100%)}
+.wrap{display:grid;grid-template-columns:44fr 56fr;grid-template-rows:minmax(0,1fr) auto;gap:24px;height:100vh;width:100vw;padding:34px 36px}
+.col{display:flex;flex-direction:column;gap:24px;min-height:0}
+
+.glass{background:linear-gradient(180deg,var(--glass) 0%,var(--glass-2) 100%);border:1px solid var(--edge);border-radius:30px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.07),0 24px 60px rgba(0,0,0,.28);
+  -webkit-backdrop-filter:blur(22px) saturate(140%);backdrop-filter:blur(22px) saturate(140%)}
+.card{padding:24px 28px}
+.title{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:16px}
+.title h2{font-size:25px;font-weight:600;letter-spacing:.2px}
+.chips{display:flex;gap:10px}
+.chip{display:inline-flex;align-items:center;gap:8px;font-size:17px;font-weight:500;color:var(--muted);
+  background:rgba(255,255,255,.05);border-radius:999px;padding:6px 14px;white-space:nowrap}
+.chip i{width:9px;height:9px;border-radius:50%;display:inline-block}
 
 /* ===== الكاميرا ===== */
-.cam{position:relative;flex:0 0 auto;aspect-ratio:16/9;border-radius:22px;overflow:hidden;background:#000;border:1px solid var(--line)}
+.cam{position:relative;flex:0 0 auto;aspect-ratio:16/9;border-radius:30px;overflow:hidden;background:#05080f;
+  border:1px solid var(--edge);box-shadow:0 24px 60px rgba(0,0,0,.35)}
 .cam iframe{width:100%;height:100%;border:0;display:block}
-.cam-badge{position:absolute;top:18px;right:18px;z-index:2;display:flex;align-items:center;gap:10px;
-  background:rgba(14,24,50,.85);border:1px solid var(--line);border-radius:999px;padding:8px 16px;font-size:20px;font-weight:600}
-.dot{width:12px;height:12px;border-radius:50%;background:var(--danger);animation:pulse 1.6s infinite}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
-.cam-off{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
-  background:radial-gradient(circle at 50% 40%,#1b2a57 0%,#0e1832 70%);color:var(--muted);font-size:24px;text-align:center;padding:40px}
-.cam-off .big{font-size:84px;font-weight:700;color:var(--gold);line-height:1}
+.cam-badge{position:absolute;top:20px;right:20px;z-index:2;display:flex;align-items:center;gap:10px;
+  background:rgba(11,18,32,.55);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);
+  border:1px solid rgba(255,255,255,.12);border-radius:999px;padding:8px 18px;font-size:19px;font-weight:500}
+.dot{width:10px;height:10px;border-radius:50%;background:#FF5F57;box-shadow:0 0 0 4px rgba(255,95,87,.18);animation:pulse 1.8s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+.cam-off{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;
+  background:radial-gradient(circle at 50% 40%,#1A2850 0%,#0B1220 72%);color:var(--muted);font-size:23px;text-align:center;padding:40px}
+.cam-off .big{font-size:96px;font-weight:300;color:var(--text);line-height:1}
 
-/* ===== الجانب ===== */
-.side{display:flex;flex-direction:column;gap:16px;min-height:0}
-.card{background:var(--card-2);border:1px solid var(--line);border-radius:22px;padding:18px 22px}
-.head{display:flex;align-items:center;justify-content:space-between;gap:16px;background:linear-gradient(160deg,var(--card) 0%,var(--card-2) 100%)}
-.brand{font-size:20px;font-weight:700;color:var(--gold);line-height:1.45}
-.clock{font-size:72px;font-weight:700;line-height:1;letter-spacing:1px;white-space:nowrap}
-.clock small{font-size:28px;color:var(--muted);margin-right:8px;font-weight:600}
-.date{font-size:19px;color:var(--muted);margin-top:6px;line-height:1.5}
-.weather{display:flex;align-items:center;gap:10px;font-size:34px;font-weight:700;white-space:nowrap}
-.weather span.w-ico{font-size:40px}
-.weather small{display:block;font-size:15px;color:var(--muted);font-weight:500}
+/* ===== العمل المفتوح ===== */
+.work{flex:1 1 auto;display:flex;flex-direction:column;min-height:0}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:16px}
+.stat{background:rgba(255,255,255,.045);border-radius:22px;padding:10px 16px}
+.stat b{display:block;font-size:42px;font-weight:300;line-height:1.05}
+.stat span{font-size:17px;color:var(--muted)}
+.stat.late b{color:var(--late)} .stat.wa b{color:var(--wa)}
+.bars{flex:1 1 0;display:flex;flex-direction:column;gap:11px;overflow:hidden;min-height:0}
+.bar{display:grid;grid-template-columns:170px 1fr 74px;align-items:center;gap:16px;font-size:19px;height:30px;line-height:30px}
+.bar .n{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500}
+.track{height:10px;border-radius:5px;background:rgba(255,255,255,.07);overflow:hidden;display:flex}
+.fill{height:100%;background:linear-gradient(90deg,var(--gold) 0%,var(--gold-2) 100%);border-radius:5px}
+.fill.late{background:var(--late);border-radius:5px 0 0 5px}
+.bar .v{color:var(--muted);text-align:left;white-space:nowrap;font-variant-numeric:tabular-nums}
 
-h2{font-size:22px;font-weight:700;color:var(--gold);display:flex;align-items:center;justify-content:space-between;
-   padding-bottom:10px;margin-bottom:10px;border-bottom:1px solid var(--line)}
-h2 .c{font-size:17px;color:var(--muted);font-weight:500}
-.sessions{flex:1 1 auto;display:flex;flex-direction:column;min-height:0}
-.list{overflow:hidden;display:flex;flex-direction:column;gap:6px;min-height:0}
-.row{display:flex;align-items:center;gap:14px;padding:6px 2px}
-.time{flex:0 0 auto;background:var(--gold);color:#0e1832;border-radius:10px;padding:5px 12px;font-size:20px;font-weight:700;white-space:nowrap}
-.rb{min-width:0;flex:1}
-.rt{display:block;font-size:21px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.who{flex:0 0 auto;max-width:150px;font-size:17px;font-weight:600;color:var(--gold);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.rs{display:block;font-size:16px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.empty{color:var(--ok);font-size:21px;font-weight:600;text-align:center;padding:10px 0}
-.tomorrow{font-size:16px;color:var(--muted);text-align:center;padding-top:8px}
-/* جلسات اليوم ويوم العمل التالي يتقاسمان البطاقة (طلب المدير 2026-10-13) */
-.sessions .list{flex:1 1 0}
-h2.next{margin-top:14px}
-.time.soft{background:transparent;color:var(--gold);border:1px solid var(--gold)}
+/* ===== الترويسة ===== */
+.head{display:flex;align-items:center;justify-content:space-between;gap:24px;padding:4px 6px 0}
+/* الشعار وحده — يحمل اسم الشركة داخله، فلا يُكتب الاسم بجانبه (طلب المدير 2026-10-22) */
+.brand img{display:block;height:88px;width:auto}
+.clockbox{display:flex;align-items:center;gap:26px}
+.dl{font-size:18px;line-height:1.55;color:var(--muted);text-align:left;white-space:nowrap}
+.dl b{display:block;color:var(--text);font-weight:500}
+.clock{font-size:88px;font-weight:300;line-height:1;letter-spacing:1px;white-space:nowrap}
+.clock small{font-size:30px;color:var(--muted);margin-right:10px;font-weight:400}
+.weather{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.05);border-radius:22px;padding:10px 18px;white-space:nowrap}
+.weather .i{font-size:36px}
+.weather b{display:block;font-size:30px;font-weight:500;line-height:1.1}
+.weather small{display:block;font-size:15px;color:var(--muted)}
 
-.tasks{flex:1 1 auto;display:flex;flex-direction:column;min-height:0}
-.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px}
-.stat{background:rgba(255,255,255,.04);border-radius:14px;padding:10px 12px;text-align:center}
-.stat b{display:block;font-size:40px;line-height:1.1}
-.stat span{font-size:16px;color:var(--muted)}
-.stat.bad b{color:var(--danger)} .stat.wa b{color:var(--wa)}
-.bars{display:flex;flex-direction:column;gap:9px;overflow:hidden;min-height:0}
-.bar{display:grid;grid-template-columns:120px 1fr 70px;align-items:center;gap:12px;font-size:18px}
-.bar .n{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
-.track{height:14px;border-radius:7px;background:rgba(255,255,255,.07);overflow:hidden;display:flex}
-.fill{height:100%;background:var(--gold)} .fill.late{background:var(--danger)}
-.bar .v{color:var(--muted);text-align:left;white-space:nowrap}
+/* ===== الجدول ===== */
+.agenda{flex:1 1 auto;display:flex;flex-direction:column;min-height:0}
+.next{flex:0 0 290px;display:flex;flex-direction:column;min-height:0}
+.list{flex:1 1 0;overflow:hidden;display:flex;flex-direction:column;gap:8px;min-height:0}
+.item{display:flex;align-items:center;gap:20px;padding:8px 18px;border-radius:22px;background:rgba(255,255,255,.03);border:1px solid transparent}
+.item .t{flex:0 0 118px;text-align:center}
+.item .t b{display:block;font-size:31px;font-weight:500;line-height:36px;height:36px;font-variant-numeric:tabular-nums}
+.item .t small{display:block;font-size:16px;color:var(--muted);line-height:22px;height:22px}
+.item .rail{flex:0 0 4px;align-self:stretch;border-radius:2px}
+.item .body{flex:1;min-width:0}
+/* ارتفاعات ثابتة للأسطر: الإيموجي يختلف ارتفاع سطره بين الأجهزة فيضلّل قياس القصّ */
+.item .l1{display:flex;align-items:center;gap:12px;font-size:23px;font-weight:600;white-space:nowrap;overflow:hidden;height:34px;line-height:34px}
+.item .l1 span.x{overflow:hidden;text-overflow:ellipsis}
+.item .l2{font-size:17px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;height:24px;line-height:24px}
+.kind{flex:0 0 auto;font-size:15px;font-weight:600;border-radius:999px;padding:3px 12px}
+.kind.s{color:var(--session);background:rgba(143,180,255,.13)} .kind.a{color:var(--appt);background:rgba(127,214,188,.13)}
+.rail.s{background:var(--session)} .rail.a{background:var(--appt)}
+.who{flex:0 0 auto;display:flex;align-items:center;gap:10px;max-width:250px;font-size:19px;font-weight:500;color:var(--text)}
+.who .av{flex:0 0 auto;width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-size:18px;font-weight:700;color:#1A1408;background:linear-gradient(140deg,var(--gold-2),var(--gold))}
+.who .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.who.none{color:var(--faint);font-size:17px}
+.item.now{background:rgba(201,169,130,.10);border-color:rgba(201,169,130,.38)}
+.item.past{opacity:.42}
+.soon{flex:0 0 auto;font-size:15px;font-weight:600;color:#1A1408;background:var(--gold);border-radius:999px;padding:3px 12px}
+.next .item{padding:6px 16px}
+.next .item .l2{margin-top:1px}
+.next .who .av{width:34px;height:34px;font-size:16px}
+.next .item .t b{font-size:27px;line-height:32px;height:32px}
+.next .item .l1{font-size:20px;height:30px;line-height:30px}
+.calm{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:var(--muted);font-size:23px;text-align:center}
+.calm .e{font-size:46px}
+.more{font-size:17px;color:var(--muted);text-align:center;height:26px;line-height:26px;flex:0 0 auto}
 
-/* ===== شريط سفلي: خبر اليوم + أعياد الميلاد ===== */
-.ticker{grid-column:1 / -1;display:flex;align-items:center;gap:18px;padding:14px 22px}
-.tag{flex:0 0 auto;background:var(--gold-soft);color:var(--gold);border-radius:999px;padding:6px 16px;font-size:18px;font-weight:700;white-space:nowrap}
+/* ===== الشريط السفلي ===== */
+.ticker{grid-column:1 / -1;display:flex;align-items:center;gap:22px;padding:18px 28px;border-radius:26px}
+.tag{flex:0 0 auto;background:var(--gold-soft);color:var(--gold-2);border-radius:999px;padding:7px 18px;font-size:18px;font-weight:600;white-space:nowrap}
 .news{min-width:0;flex:1}
-.news .t{font-size:23px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.news .w{font-size:17px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
-.bday{flex:0 0 auto;font-size:21px;font-weight:700;color:var(--gold);white-space:nowrap}
-.foot{flex:0 0 auto;font-size:14px;color:var(--muted);white-space:nowrap}
-.err{color:#ffb1ab;font-size:19px;text-align:center;padding:16px 0}
+.news .t{font-size:23px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.news .w{font-size:17px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:3px}
+.bday{flex:0 0 auto;font-size:21px;font-weight:600;color:var(--gold-2);white-space:nowrap}
+.foot{flex:0 0 auto;font-size:15px;color:var(--faint);white-space:nowrap}
+.err{color:#ffb1ab;font-size:20px;text-align:center;padding:18px 0}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <div class="camcol">
+  <div class="col">
     <div class="cam" id="cam">
       <div class="cam-off" id="camOff">
         <div class="big" id="camClock">--:--</div>
@@ -100,38 +139,39 @@ h2.next{margin-top:14px}
       <div class="cam-badge" id="camBadge" style="display:none"><span class="dot"></span><span id="camLabel">بث مباشر</span></div>
     </div>
 
-    <div class="card tasks">
-      <h2>العمل المفتوح</h2>
+    <div class="glass card work">
+      <div class="title"><h2>العمل المفتوح</h2></div>
       <div class="stats">
         <div class="stat"><b id="stOpen">—</b><span>مهمة مفتوحة</span></div>
-        <div class="stat bad"><b id="stLate">—</b><span>متأخرة</span></div>
+        <div class="stat late"><b id="stLate">—</b><span>متأخرة</span></div>
         <div class="stat wa"><b id="stWa">—</b><span>واتساب بانتظار رد</span></div>
       </div>
       <div class="bars" id="bars"></div>
     </div>
   </div>
 
-  <div class="side">
-    <div class="card head">
-      <div>
-        <div class="brand">شركة عبدالرحمن بن رضوان المشيقح<br>للمحاماة وإدارة إجراءات الإفلاس</div>
-        <div class="date" id="dateLine">—</div>
-      </div>
-      <div style="text-align:left">
+  <div class="col">
+    <div class="head">
+      <div class="brand"><img src="logo.png" alt="شركة عبدالرحمن بن رضوان المشيقح للمحاماة وإدارة إجراءات الإفلاس"></div>
+      <div class="clockbox">
+        <div class="weather" id="weather" style="display:none"></div>
+        <div class="dl" id="dateLine">—</div>
         <div class="clock"><span id="clockTime">--:--</span><small id="clockMer"></small></div>
-        <div class="weather" id="weather" style="justify-content:flex-end;margin-top:8px"></div>
       </div>
     </div>
 
-    <div class="card sessions">
-      <h2>جلسات اليوم <span class="c" id="sessCount"></span></h2>
-      <div class="list" id="sessList"><div class="err">جارٍ التحميل…</div></div>
-      <h2 class="next"><span id="nextTitle">جلسات الغد</span> <span class="c" id="nextCount"></span></h2>
+    <div class="glass card agenda">
+      <div class="title"><h2>جدول اليوم</h2><div class="chips" id="todayChips"></div></div>
+      <div class="list" id="todayList"><div class="err" style="color:var(--muted)">جارٍ التحميل…</div></div>
+    </div>
+
+    <div class="glass card next">
+      <div class="title"><h2 id="nextTitle">الغد</h2><div class="chips" id="nextChips"></div></div>
       <div class="list" id="nextList"></div>
     </div>
   </div>
 
-  <div class="card ticker">
+  <div class="glass ticker">
     <span class="tag">خبر اليوم</span>
     <div class="news" id="news"><div class="t">—</div></div>
     <div class="bday" id="bday"></div>
@@ -159,6 +199,7 @@ function $(id){ return document.getElementById(id); }
 var DAYS = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
 var MONTHS = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
 var KIND = { case:'⚖️', legal_service:'📝', property:'🏠', bankruptcy:'🏦' };
+var LAST = null;   /* آخر بيانات — يُعاد رسم الجدول كل نصف دقيقة ليتحرك «التالي» والعدّ التنازلي */
 
 function hijri(d){
   try {
@@ -172,19 +213,21 @@ function tick(){
   var d = new Date();
   $('clockTime').innerHTML = h12(d);
   $('clockMer').innerHTML = mer(d);
-  $('camClock').innerHTML = h12(d) + ' <span style="font-size:34px;color:#93a0c0">' + mer(d) + '</span>';
+  $('camClock').innerHTML = h12(d) + ' <span style="font-size:36px;color:rgba(232,226,214,.58)">' + mer(d) + '</span>';
   var hj = hijri(d);
-  $('dateLine').innerHTML = DAYS[d.getDay()] + ' ' + d.getDate() + ' ' + MONTHS[d.getMonth()] + ' ' + d.getFullYear() +
-    (hj ? '<br>' + esc(hj) : '');
+  $('dateLine').innerHTML = '<b>' + DAYS[d.getDay()] + ' ' + d.getDate() + ' ' + MONTHS[d.getMonth()] + ' ' + d.getFullYear() + '</b>' +
+    (hj ? esc(hj) : '');
 }
 
-function fmtTime(hhmm){
-  if (!hhmm) return '—';
+/* «14:30» ← {h:'2:30', m:'م'} */
+function t12(hhmm){
+  if (!hhmm) return null;
   var p = String(hhmm).split(':'); var h = parseInt(p[0], 10);
-  if (isNaN(h)) return esc(hhmm);
+  if (isNaN(h)) return null;
   var m = h >= 12 ? 'م' : 'ص'; h = h % 12; if (h === 0) h = 12;
-  return h + ':' + (p[1] || '00') + ' ' + m;
+  return { h: h + ':' + (p[1] || '00'), m: m };
 }
+function minutesOf(hhmm){ if (!hhmm) return null; var p = String(hhmm).split(':'); return parseInt(p[0], 10) * 60 + parseInt(p[1] || '0', 10); }
 
 /* ---------- الكاميرا (اختيارية) ---------- */
 function initCamera(){
@@ -214,47 +257,118 @@ function loadWeather(){
     try {
       var c = JSON.parse(x.responseText).current;
       /* «°» تُعزل اتجاهاً كي لا تنقلب في RTL */
-      $('weather').innerHTML = '<span class="w-ico">' + wIcon(c.weather_code) + '</span>' +
-        '<span><span dir="ltr">' + Math.round(c.temperature_2m) + '°</span><small>بريدة</small></span>';
+      $('weather').innerHTML = '<span class="i">' + wIcon(c.weather_code) + '</span>' +
+        '<span><b dir="ltr">' + Math.round(c.temperature_2m) + '°</b><small>بريدة</small></span>';
+      $('weather').style.display = 'flex';
     } catch (e) {}
   };
   x.send();
 }
 
-/* ---------- العرض ---------- */
-function sessionRows(list, soft){
-  var h = '';
-  for (var i = 0; i < list.length; i++){
-    var s = list[i];
-    var sub = s.court || ''; if (s.division) sub = sub ? sub + ' — ' + s.division : s.division;
-    h += '<div class="row"><span class="time' + (soft ? ' soft' : '') + '">' + esc(fmtTime(s.time)) + '</span><span class="rb">' +
-      '<span class="rt">' + (KIND[s.kind] || '⚖️') + ' ' + esc(s.office_num || 'جلسة') + '</span>' +
-      (sub ? '<span class="rs">' + esc(sub) + '</span>' : '') + '</span>' +
-      (s.lawyer ? '<span class="who">👤 ' + esc(s.lawyer) + '</span>' : '') + '</div>';
+/* ---------- الجدول: الجلسات والمواعيد معاً بترتيب الوقت ---------- */
+function merge(sessions, appts){
+  var out = [], i;
+  for (i = 0; i < sessions.length; i++) out.push({ type: 's', time: sessions[i].time, d: sessions[i] });
+  for (i = 0; i < appts.length; i++) out.push({ type: 'a', time: appts[i].time, d: appts[i] });
+  out.sort(function(a, b){
+    var x = minutesOf(a.time), y = minutesOf(b.time);
+    if (x == null) return 1; if (y == null) return -1; return x - y;
+  });
+  return out;
+}
+
+function person(name){
+  if (!name) return '<span class="who none">لم يُسند</span>';
+  return '<span class="who"><span class="av">' + esc(name.charAt(0)) + '</span><span class="nm">' + esc(name) + '</span></span>';
+}
+
+function itemHtml(it, state, soonText){
+  var t = t12(it.time), d = it.d, l1, l2;
+  if (it.type === 's') {
+    l1 = '<span class="kind s">جلسة</span><span class="x">' + (KIND[d.kind] || '⚖️') + ' ' + esc(d.office_num || '') + '</span>';
+    l2 = d.court || ''; if (d.division) l2 = l2 ? l2 + ' — ' + d.division : d.division;
+  } else {
+    var how = d.method === 'remote' ? '💻 عن بُعد' : d.method === 'onsite' ? '🏢 حضوري في المكتب' : '';
+    l1 = '<span class="kind a">موعد</span><span class="x">' + esc(how || 'موعد موكّل') + '</span>';
+    l2 = [d.service, d.duration ? d.duration + ' دقيقة' : ''].filter(Boolean).join(' · ');
   }
+  return '<div class="item ' + state + '">' +
+    '<div class="t">' + (t ? '<b>' + t.h + '</b><small>' + t.m + '</small>' : '<b>—</b>') + '</div>' +
+    '<div class="rail ' + it.type + '"></div>' +
+    '<div class="body"><div class="l1">' + l1 + (soonText ? '<span class="soon">' + soonText + '</span>' : '') + '</div>' +
+    (l2 ? '<div class="l2">' + esc(l2) + '</div>' : '') + '</div>' +
+    person(d.lawyer) + '</div>';
+}
+
+function count(n, one, two, many){ return n === 1 ? one : n === 2 ? two : n + ' ' + many; }
+function chips(nS, nA){
+  var h = '';
+  if (nS) h += '<span class="chip"><i style="background:var(--session)"></i>' + count(nS, 'جلسة واحدة', 'جلستان', 'جلسات') + '</span>';
+  if (nA) h += '<span class="chip"><i style="background:var(--appt)"></i>' + count(nA, 'موعد واحد', 'موعدان', 'مواعيد') + '</span>';
   return h;
 }
 
-/* «الغد» = يوم العمل التالي؛ بعد الخميس يُسمّى اليوم باسمه (جلسات الأحد) */
-function nextTitle(iso){
-  if (!iso) return 'جلسات الغد';
-  var d = new Date(iso + 'T12:00:00');
-  var t = new Date(); t.setHours(12, 0, 0, 0);
-  var diff = Math.round((d - t) / 86400000);
-  return diff === 1 ? 'جلسات الغد' : 'جلسات ' + DAYS[d.getDay()];
+/* الفائت: جلسة مضت عليها ساعة، أو موعد انتهت مدته */
+function renderToday(){
+  if (!LAST) return;
+  var list = merge(LAST.sessions || [], LAST.appointments || []);
+  $('todayChips').innerHTML = chips((LAST.sessions || []).length, (LAST.appointments || []).length);
+  var el = $('todayList');
+  if (!list.length) { el.innerHTML = '<div class="calm"><span class="e">☕</span>لا جلسات ولا مواعيد اليوم</div>'; return; }
+  var now = new Date(), nowMin = now.getHours() * 60 + now.getMinutes(), nextDone = false, h = '';
+  for (var i = 0; i < list.length; i++){
+    var it = list[i], m = minutesOf(it.time), state = '', soon = '';
+    var end = m == null ? null : m + (it.type === 'a' ? (it.d.duration || 60) : 60);
+    if (end != null && end <= nowMin) state = 'past';
+    else if (!nextDone && m != null) {
+      nextDone = true; state = 'now';
+      var diff = m - nowMin;
+      soon = diff <= 0 ? 'الآن' : diff < 60 ? 'بعد ' + diff + ' دقيقة' : 'التالي';
+    }
+    h += itemHtml(it, state, soon);
+  }
+  el.innerHTML = h;
+  trimToday(el);
 }
 
-function renderSessions(list, next, nextDay){
-  var el = $('sessList');
-  $('sessCount').innerHTML = list.length ? '(' + list.length + ')' : '';
-  if (!list.length) el.innerHTML = '<div class="empty">لا جلسات اليوم ✓</div>';
-  else { el.innerHTML = sessionRows(list, false); trim(el, list.length, 'جلسة'); }
+/* حين يضيق الجدول يُطوى ما انتهى أولاً (سطر «✓ ن انتهت» أعلاه) فيبقى القادم ظاهراً، ثم يُقصّ من الآخر */
+function trimToday(el){
+  var past = 0, rest = 0, g = 0, top = null, bottom = null;
+  while (el.scrollHeight > el.clientHeight + 2 && g++ < 60){
+    var items = el.getElementsByClassName('item'), p = el.querySelectorAll('.item.past');
+    if (items.length <= 1) break;
+    if (p.length) { p[0].parentNode.removeChild(p[0]); past++; }
+    else { items[items.length - 1].parentNode.removeChild(items[items.length - 1]); rest++; }
+    if (past) {
+      if (!top) { top = document.createElement('div'); top.className = 'more'; el.insertBefore(top, el.firstChild); }
+      top.innerHTML = '✓ ' + past + (past === 1 ? ' انتهى' : ' انتهت');
+    }
+    if (rest) {
+      if (!bottom) { bottom = document.createElement('div'); bottom.className = 'more'; el.appendChild(bottom); }
+      bottom.innerHTML = '+ ' + rest + ' أخرى';
+    }
+  }
+}
 
-  var nx = $('nextList');
-  $('nextTitle').innerHTML = esc(nextTitle(nextDay));
-  $('nextCount').innerHTML = next.length ? '(' + next.length + ')' : '';
-  if (!next.length) nx.innerHTML = '<div class="empty">لا جلسات ✓</div>';
-  else { nx.innerHTML = sessionRows(next, true); trim(nx, next.length, 'جلسة'); }
+/* «الغد» = يوم العمل التالي؛ بعد الخميس يُسمّى اليوم باسمه */
+function nextTitle(iso){
+  if (!iso) return 'الغد';
+  var d = new Date(iso + 'T12:00:00');
+  var t = new Date(); t.setHours(12, 0, 0, 0);
+  return Math.round((d - t) / 86400000) === 1 ? 'الغد' : 'يوم ' + DAYS[d.getDay()];
+}
+
+function renderNext(){
+  if (!LAST) return;
+  var list = merge(LAST.next_sessions || [], LAST.next_appointments || []);
+  $('nextTitle').innerHTML = esc(nextTitle(LAST.next_day));
+  $('nextChips').innerHTML = chips((LAST.next_sessions || []).length, (LAST.next_appointments || []).length);
+  var el = $('nextList');
+  if (!list.length) { el.innerHTML = '<div class="calm" style="font-size:20px">لا شيء في الجدول بعد</div>'; return; }
+  var h = '';
+  for (var i = 0; i < list.length; i++) h += itemHtml(list[i], '', '');
+  el.innerHTML = h;
+  trim(el, list.length);
 }
 
 function renderTasks(t, wa){
@@ -266,32 +380,51 @@ function renderTasks(t, wa){
     var m = t.by_member[i];
     var ok = m.open - m.late;
     h += '<div class="bar"><span class="n">' + esc(m.name) + '</span><span class="track">' +
-      '<span class="fill late" style="width:' + (m.late / max * 100) + '%"></span>' +
+      (m.late ? '<span class="fill late" style="width:' + (m.late / max * 100) + '%"></span>' : '') +
       '<span class="fill" style="width:' + (ok / max * 100) + '%"></span></span>' +
-      '<span class="v">' + m.open + (m.late ? ' · <span style="color:#e0645c">' + m.late + '</span>' : '') + '</span></div>';
+      '<span class="v">' + m.open + (m.late ? ' · <span style="color:var(--late)">' + m.late + '</span>' : '') + '</span></div>';
   }
-  $('bars').innerHTML = h || '<div class="empty">لا مهام مفتوحة ✓</div>';
+  $('bars').innerHTML = h || '<div class="calm" style="font-size:20px">لا مهام مفتوحة ✓</div>';
+  trimBars();
 }
 
 function renderTicker(news, bdays){
   $('news').innerHTML = news
     ? '<div class="t">' + esc(news.title) + '</div><div class="w">لماذا يهمّنا: ' + esc(news.why) + '</div>'
-    : '<div class="t" style="color:#93a0c0;font-weight:500">لا خبر قانوني جديد اليوم</div>';
+    : '<div class="t" style="color:var(--muted);font-weight:400">لا خبر قانوني جديد اليوم</div>';
   $('bday').innerHTML = bdays && bdays.length ? '🎂 كل عام وأنت بخير يا ' + esc(bdays.join(' و')) : '';
 }
 
 /* القائمة لا تُقصّ بصمت — ما لا يتسع يُعلَن عنه */
-function trim(el, total, noun){
-  var rows = el.getElementsByClassName('row'), g = 0;
+function trim(el, total){
+  var rows = el.getElementsByClassName('item'), g = 0;
   while (el.scrollHeight > el.clientHeight + 2 && rows.length > 1 && g++ < 60) rows[rows.length - 1].parentNode.removeChild(rows[rows.length - 1]);
   if (rows.length < total) {
-    var more = document.createElement('div'); more.className = 'tomorrow';
-    more.innerHTML = '+ ' + (total - rows.length) + ' ' + noun + ' أخرى';
+    var more = document.createElement('div'); more.className = 'more';
+    more.innerHTML = '+ ' + (total - rows.length) + ' أخرى';
     el.appendChild(more);
+    while (el.scrollHeight > el.clientHeight + 2 && rows.length > 1 && g++ < 60) {
+      rows[rows.length - 1].parentNode.removeChild(rows[rows.length - 1]);
+      more.innerHTML = '+ ' + (total - rows.length) + ' أخرى';
+    }
   }
 }
+function trimBars(){
+  var el = $('bars'), rows = el.getElementsByClassName('bar'), g = 0;
+  while (el.scrollHeight > el.clientHeight + 2 && rows.length > 1 && g++ < 30) rows[rows.length - 1].parentNode.removeChild(rows[rows.length - 1]);
+}
 
-function showError(msg){ $('sessList').innerHTML = '<div class="err">' + esc(msg) + '</div>'; }
+/* القصّ يقيس الارتفاع؛ فيُعاد الرسم بعد اكتمال الخط (الخط البديل أطول فيُقصّ أكثر من اللازم) وكل نصف دقيقة */
+function renderAll(){
+  if (!LAST) return;
+  renderToday(); renderNext();
+  renderTasks(LAST.tasks_summary || { open: 0, late: 0, by_member: [] }, LAST.wa_waiting || 0);
+  renderTicker(LAST.news, LAST.birthdays);
+}
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(function(){ renderAll(); });
+window.addEventListener('resize', function(){ renderAll(); });
+
+function showError(msg){ if (!LAST) $('todayList').innerHTML = '<div class="err">' + esc(msg) + '</div>'; else $('lastUpdate').innerHTML = esc(msg); }
 
 function loadData(){
   var x = new XMLHttpRequest();
@@ -302,9 +435,8 @@ function loadData(){
   x.onload = function(){
     var d = null; try { d = JSON.parse(x.responseText); } catch (e) {}
     if (x.status !== 200 || !d || !d.ok) { showError('تعذّر تحديث البيانات — ستُعاد المحاولة تلقائياً'); return; }
-    renderSessions(d.sessions || [], d.next_sessions || [], d.next_day);
-    renderTasks(d.tasks_summary || { open: 0, late: 0, by_member: [] }, d.wa_waiting || 0);
-    renderTicker(d.news, d.birthdays);
+    LAST = d;
+    renderAll();
     var n = new Date(); $('lastUpdate').innerHTML = 'آخر تحديث ' + h12(n) + ' ' + mer(n);
   };
   x.onerror = function(){ showError('تعذّر الوصول للخادم — تحقّق من الشبكة'); };
@@ -318,6 +450,7 @@ document.addEventListener('keydown', function(e){ if (e.keyCode === 10009) e.pre
 tick(); setInterval(tick, 10000);
 initCamera(); loadWeather(); loadData();
 setInterval(loadData, CONFIG.REFRESH_MS);
+setInterval(renderAll, 30 * 1000);
 setInterval(loadWeather, 30 * 60 * 1000);
 setTimeout(function(){ location.reload(); }, CONFIG.RELOAD_MS);
 </script>

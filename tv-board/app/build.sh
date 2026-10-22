@@ -15,5 +15,5 @@ s = open('index.template.html', encoding='utf-8').read()
 s = s.replace('__ANON_KEY__', anon).replace('__BOARD_SECRET__', secret).replace('__CAMERA_URL__', cam)
 open('dist/index.html', 'w', encoding='utf-8').write(s)
 PY
-cp config.xml icon.png dist/
+cp config.xml icon.png logo.png dist/
 echo "✓ dist/ جاهز"
