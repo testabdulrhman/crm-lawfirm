@@ -26,8 +26,12 @@ body{color:var(--text);font-family:'IBM Plex Sans Arabic',Tahoma,Arial,sans-seri
     radial-gradient(1100px 800px at 4% 108%, rgba(64,104,206,.26), transparent 60%),
     radial-gradient(700px 600px at 46% 52%, rgba(40,72,140,.16), transparent 70%),
     linear-gradient(160deg, #0E1730 0%, #0B1220 55%, #090F1C 100%)}
-.wrap{display:grid;grid-template-columns:44fr 56fr;grid-template-rows:minmax(0,1fr) auto;gap:24px;height:100vh;width:100vw;padding:34px 36px}
-.col{display:flex;flex-direction:column;gap:24px;min-height:0}
+/* شبكة صارمة بحواف متطابقة (2026-10-22 «ودي المربعات تكون بمحاذات بعض»):
+   ترويسة بعرض الشاشة · الكاميرا بجانب «جدول اليوم» بارتفاع واحد · «العمل المفتوح» بجانب اليوم التالي · الخبر.
+   في RTL العمود الأول هو الأيمن. */
+.wrap{display:grid;grid-template-columns:40fr 60fr;grid-template-rows:auto auto minmax(0,1fr) auto;
+  grid-template-areas:"head head" "cam agenda" "work next" "tick tick";gap:22px;height:100vh;width:100vw;padding:30px 36px}
+.head{grid-area:head} .cam{grid-area:cam} .agenda{grid-area:agenda} .work{grid-area:work} .next{grid-area:next} .ticker{grid-area:tick}
 
 .glass{background:linear-gradient(180deg,var(--glass) 0%,var(--glass-2) 100%);border:1px solid var(--edge);border-radius:30px;
   box-shadow:inset 0 1px 0 rgba(255,255,255,.07),0 24px 60px rgba(0,0,0,.28);
@@ -41,7 +45,7 @@ body{color:var(--text);font-family:'IBM Plex Sans Arabic',Tahoma,Arial,sans-seri
 .chip i{width:9px;height:9px;border-radius:50%;display:inline-block}
 
 /* ===== الكاميرا ===== */
-.cam{position:relative;flex:0 0 auto;aspect-ratio:16/9;border-radius:30px;overflow:hidden;background:#05080f;
+.cam{position:relative;aspect-ratio:16/9;border-radius:30px;overflow:hidden;background:#05080f;
   border:1px solid var(--edge);box-shadow:0 24px 60px rgba(0,0,0,.35)}
 .cam iframe{width:100%;height:100%;border:0;display:block}
 .cam-badge{position:absolute;top:20px;right:20px;z-index:2;display:flex;align-items:center;gap:10px;
@@ -54,11 +58,11 @@ body{color:var(--text);font-family:'IBM Plex Sans Arabic',Tahoma,Arial,sans-seri
 .cam-off .big{font-size:96px;font-weight:300;color:var(--text);line-height:1}
 
 /* ===== العمل المفتوح ===== */
-.work{flex:1 1 auto;display:flex;flex-direction:column;min-height:0}
-.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:16px}
-.stat{background:rgba(255,255,255,.045);border-radius:22px;padding:10px 16px}
-.stat b{display:block;font-size:42px;font-weight:300;line-height:1.05}
-.stat span{font-size:17px;color:var(--muted)}
+.work{display:flex;flex-direction:column;min-height:0}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
+.stat{display:flex;align-items:center;gap:12px;background:rgba(255,255,255,.045);border-radius:18px;padding:8px 16px;height:62px}
+.stat b{font-size:38px;font-weight:300;line-height:1}
+.stat span{font-size:16px;color:var(--muted);line-height:1.25}
 .stat.late b{color:var(--late)} .stat.wa b{color:var(--wa)}
 .bars{flex:1 1 0;display:flex;flex-direction:column;gap:11px;overflow:hidden;min-height:0}
 .bar{display:grid;grid-template-columns:170px 1fr 74px;align-items:center;gap:16px;font-size:19px;height:30px;line-height:30px}
@@ -69,13 +73,13 @@ body{color:var(--text);font-family:'IBM Plex Sans Arabic',Tahoma,Arial,sans-seri
 .bar .v{color:var(--muted);text-align:left;white-space:nowrap;font-variant-numeric:tabular-nums}
 
 /* ===== الترويسة ===== */
-.head{display:flex;align-items:center;justify-content:space-between;gap:24px;padding:4px 6px 0}
+.head{display:flex;align-items:center;justify-content:space-between;gap:24px;padding:12px 28px}
 /* الشعار وحده — يحمل اسم الشركة داخله، فلا يُكتب الاسم بجانبه (طلب المدير 2026-10-22) */
-.brand img{display:block;height:88px;width:auto}
+.brand img{display:block;height:76px;width:auto}
 .clockbox{display:flex;align-items:center;gap:26px}
 .dl{font-size:18px;line-height:1.55;color:var(--muted);text-align:left;white-space:nowrap}
 .dl b{display:block;color:var(--text);font-weight:500}
-.clock{font-size:88px;font-weight:300;line-height:1;letter-spacing:1px;white-space:nowrap}
+.clock{font-size:76px;font-weight:300;line-height:1;letter-spacing:1px;white-space:nowrap}
 .clock small{font-size:30px;color:var(--muted);margin-right:10px;font-weight:400}
 .weather{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.05);border-radius:22px;padding:10px 18px;white-space:nowrap}
 .weather .i{font-size:36px}
@@ -83,8 +87,8 @@ body{color:var(--text);font-family:'IBM Plex Sans Arabic',Tahoma,Arial,sans-seri
 .weather small{display:block;font-size:15px;color:var(--muted)}
 
 /* ===== الجدول ===== */
-.agenda{flex:1 1 auto;display:flex;flex-direction:column;min-height:0}
-.next{flex:0 0 290px;display:flex;flex-direction:column;min-height:0}
+.agenda{display:flex;flex-direction:column;min-height:0}
+.next{display:flex;flex-direction:column;min-height:0}
 .list{flex:1 1 0;overflow:hidden;display:flex;flex-direction:column;gap:8px;min-height:0}
 .item{display:flex;align-items:center;gap:20px;padding:8px 18px;border-radius:22px;background:rgba(255,255,255,.03);border:1px solid transparent}
 .item .t{flex:0 0 118px;text-align:center}
@@ -117,7 +121,7 @@ body{color:var(--text);font-family:'IBM Plex Sans Arabic',Tahoma,Arial,sans-seri
 .more{font-size:17px;color:var(--muted);text-align:center;height:26px;line-height:26px;flex:0 0 auto}
 
 /* ===== الشريط السفلي ===== */
-.ticker{grid-column:1 / -1;display:flex;align-items:center;gap:22px;padding:18px 28px;border-radius:26px}
+.ticker{display:flex;align-items:center;gap:22px;padding:18px 28px;border-radius:26px}
 .tag{flex:0 0 auto;background:var(--gold-soft);color:var(--gold-2);border-radius:999px;padding:7px 18px;font-size:18px;font-weight:600;white-space:nowrap}
 .news{min-width:0;flex:1}
 .news .t{font-size:23px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -129,7 +133,15 @@ body{color:var(--text);font-family:'IBM Plex Sans Arabic',Tahoma,Arial,sans-seri
 </head>
 <body>
 <div class="wrap">
-  <div class="col">
+    <div class="glass head">
+      <div class="brand"><img src="logo.png" alt="شركة عبدالرحمن بن رضوان المشيقح للمحاماة وإدارة إجراءات الإفلاس"></div>
+      <div class="clockbox">
+        <div class="weather" id="weather" style="display:none"></div>
+        <div class="dl" id="dateLine">—</div>
+        <div class="clock"><span id="clockTime">--:--</span><small id="clockMer"></small></div>
+      </div>
+    </div>
+
     <div class="cam" id="cam">
       <div class="cam-off" id="camOff">
         <div class="big" id="camClock">--:--</div>
@@ -148,20 +160,9 @@ body{color:var(--text);font-family:'IBM Plex Sans Arabic',Tahoma,Arial,sans-seri
       </div>
       <div class="bars" id="bars"></div>
     </div>
-  </div>
-
-  <div class="col">
-    <div class="head">
-      <div class="brand"><img src="logo.png" alt="شركة عبدالرحمن بن رضوان المشيقح للمحاماة وإدارة إجراءات الإفلاس"></div>
-      <div class="clockbox">
-        <div class="weather" id="weather" style="display:none"></div>
-        <div class="dl" id="dateLine">—</div>
-        <div class="clock"><span id="clockTime">--:--</span><small id="clockMer"></small></div>
-      </div>
-    </div>
 
     <div class="glass card agenda">
-      <div class="title"><h2>جدول اليوم</h2><div class="chips" id="todayChips"></div></div>
+      <div class="title"><h2>جدول اليوم</h2><div class="chips"><span id="todayDone"></span><span class="chips" id="todayChips"></span></div></div>
       <div class="list" id="todayList"><div class="err" style="color:var(--muted)">جارٍ التحميل…</div></div>
     </div>
 
@@ -169,7 +170,6 @@ body{color:var(--text);font-family:'IBM Plex Sans Arabic',Tahoma,Arial,sans-seri
       <div class="title"><h2 id="nextTitle">الغد</h2><div class="chips" id="nextChips"></div></div>
       <div class="list" id="nextList"></div>
     </div>
-  </div>
 
   <div class="glass ticker">
     <span class="tag">خبر اليوم</span>
@@ -314,6 +314,7 @@ function renderToday(){
   var list = merge(LAST.sessions || [], LAST.appointments || []);
   $('todayChips').innerHTML = chips((LAST.sessions || []).length, (LAST.appointments || []).length);
   var el = $('todayList');
+  $('todayDone').innerHTML = '';
   if (!list.length) { el.innerHTML = '<div class="calm"><span class="e">☕</span>لا جلسات ولا مواعيد اليوم</div>'; return; }
   var now = new Date(), nowMin = now.getHours() * 60 + now.getMinutes(), nextDone = false, h = '';
   for (var i = 0; i < list.length; i++){
@@ -331,18 +332,15 @@ function renderToday(){
   trimToday(el);
 }
 
-/* حين يضيق الجدول يُطوى ما انتهى أولاً (سطر «✓ ن انتهت» أعلاه) فيبقى القادم ظاهراً، ثم يُقصّ من الآخر */
+/* حين يضيق الجدول يُطوى ما انتهى أولاً (رقاقة «✓ ن انتهت» في رأس البطاقة) فيبقى القادم ظاهراً، ثم يُقصّ من الآخر */
 function trimToday(el){
-  var past = 0, rest = 0, g = 0, top = null, bottom = null;
+  var past = 0, rest = 0, g = 0, bottom = null;
   while (el.scrollHeight > el.clientHeight + 2 && g++ < 60){
     var items = el.getElementsByClassName('item'), p = el.querySelectorAll('.item.past');
     if (items.length <= 1) break;
     if (p.length) { p[0].parentNode.removeChild(p[0]); past++; }
     else { items[items.length - 1].parentNode.removeChild(items[items.length - 1]); rest++; }
-    if (past) {
-      if (!top) { top = document.createElement('div'); top.className = 'more'; el.insertBefore(top, el.firstChild); }
-      top.innerHTML = '✓ ' + past + (past === 1 ? ' انتهى' : ' انتهت');
-    }
+    if (past) $('todayDone').innerHTML = '<span class="chip">✓ ' + past + (past === 1 ? ' انتهى' : ' انتهت') + '</span>';
     if (rest) {
       if (!bottom) { bottom = document.createElement('div'); bottom.className = 'more'; el.appendChild(bottom); }
       bottom.innerHTML = '+ ' + rest + ' أخرى';
