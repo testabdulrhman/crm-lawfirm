@@ -85,7 +85,8 @@ export default function Booking() {
         const { data, error: e } = await supabase.functions.invoke('booking', {
           body: { action: 'slots' },
         })
-        if (e || data?.error) throw new Error(data?.error || 'تعذّر جلب المواعيد')
+        if (e) throw e
+        if (data?.error) throw new Error(data.error)
         setDays(data.days ?? [])
         setOffice(data.office ?? null)
       } catch (e) {
@@ -106,7 +107,8 @@ export default function Booking() {
         const { data, error: e } = await supabase.functions.invoke('booking', {
           body: { action: 'slots', date: selectedDate },
         })
-        if (e || data?.error) throw new Error(data?.error || 'تعذّر جلب الأوقات')
+        if (e) throw e
+        if (data?.error) throw new Error(data.error)
         setSlots(data.slots ?? [])
       } catch (e) {
         setError(errMessage(e) ?? 'تعذّر جلب الأوقات')
@@ -151,9 +153,12 @@ export default function Booking() {
         },
       })
       if (e || data?.error) {
-        // تعارض: الفترة حُجزت للتو
-        if (data?.slots) setSlots(data.slots)
-        throw new Error(data?.error || 'تعذّر إتمام الحجز')
+        // تعارض: الفترة حُجزت للتو — الخادم يردّ 409 ومعه الأوقات المتاحة في جسم الرد (لا في data)
+        const body = e
+          ? await (e as { context?: Response }).context?.clone().json().catch(() => null)
+          : data
+        if (body?.slots) setSlots(body.slots)
+        throw e ?? new Error(data.error)
       }
       setDone({ date: selectedDate, time: selectedTime })
     } catch (e) {

@@ -75,7 +75,9 @@ export function SendLetterDialog({
           file_name: fileName,
         },
       })
-      if (error || data?.error) throw new Error(data?.error || 'فشل الإرسال')
+      // السبب الحقيقي من الخادم (نافذة الـ٢٤ ساعة، رقم غير صالح…) — كان يُستبدل بـ«فشل الإرسال» فلا يُعرف لماذا
+      if (error) throw error
+      if (data?.error) throw new Error(data.detail ? `${data.error} — ${data.detail}` : data.error)
       toast({
         variant: 'success',
         title: `أُرسل الخطاب واتساب إلى ${name || intl}`,

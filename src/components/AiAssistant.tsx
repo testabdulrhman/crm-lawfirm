@@ -131,7 +131,8 @@ export function AiAssistant() {
           },
         },
       })
-      if (error || data?.error) throw new Error(data?.error || 'فشل الطلب')
+      if (error) throw error
+      if (data?.error) throw new Error(data.error)
       setMessages([
         ...next,
         {
