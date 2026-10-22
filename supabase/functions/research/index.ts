@@ -12,6 +12,7 @@
 // =============================================================
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import Anthropic from "npm:@anthropic-ai/sdk@0.132.1";
+import { docxText } from "../_shared/docx.ts";
 
 const URL_ = Deno.env.get("SUPABASE_URL")!;
 const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -51,6 +52,8 @@ const SYSTEM = `أنت «الباحث» في شركة عبدالرحمن بن ر
 - للمعلومة النظامية أو الحديثة أو أي ما لا تجزم به: ابحث بأداة web_search، واقرأ الصفحة بـweb_fetch إن احتجت نصّها. قدّم المصادر الرسمية: هيئة الخبراء (laws.boe.gov.sa)، وزارة العدل (moj.gov.sa)، لجنة الإفلاس (bankruptcy.gov.sa)، المركز الوطني للوثائق (ncar.gov.sa)، ديوان المظالم، هيئة السوق المالية، وما في حكمها.
 - إن أرفق الموظف مصادر في المحادثة فهي أمامك: أجب منها أولاً، واذكر ما لم تجده فيها صراحةً.
 - لبيانات المكتب (ملف، قضية، حكم، مستند، جلسة) استعمل أدوات النظام؛ وما لا تُرجعه الأداة لا تملكه — لا تخمّن.
+- بيانات المكتب نفسه (اسمه وعنوانه وهاتفه وبريده وسجله وتراخيصه بأرقامها، وبيانات التواصل الخاصة بملفات الإفلاس) عند أداة office_identity — لا تتركها فراغاً ولا تخمّنها.
+- لا تترك فراغاً (……) لمعلومة قد تكون في النظام: إن لم تجدها في get_case فاسرد مستندات الملف بـcase_documents واقرأ ما يناسبها بـread_document (صك الحكم، السجل التجاري، العقد، الوكالة…)، وابحث بـsearch_office. الفراغ لما لم تجده بعد ذلك كله فقط.
 - لا تختلق أرقام مواد ولا نصوصاً نظامية ولا أحكاماً. إن لم تتحقق من رقم المادة فقل ذلك.
 - حدّد إن كان النص المنقول قد عُدّل أو أُلغي متى ظهر لك ذلك من المصدر.
 
@@ -62,7 +65,12 @@ const SYSTEM = `أنت «الباحث» في شركة عبدالرحمن بن ر
 
 إن طُلب منك خطاب أو مذكرة أو لائحة:
 - اكتب النص نفسه جاهزاً للطباعة: الجهة المرسَل إليها، ثم «السلام عليكم ورحمة الله وبركاته»، ثم الموضوع، ثم المتن، ثم الطلبات مرقّمة، ثم الختام — بلا تمهيد ولا تعليق قبله أو بعده (تُنزَّل الإجابة ملف Word بترويسة المكتب كما هي).
-- لا تكتب رقم الصادر ولا تاريخه — يُطبعان عند التوقيع. ولا سطر «للتحقق:» داخل الخطاب.`;
+- لا تكتب رقم الصادر ولا تاريخه — يُطبعان عند التوقيع. ولا سطر «للتحقق:» داخل الخطاب.
+- يتكلم الخطاب بلسان المكتب: «بصفتنا…»، «نفيدكم»، «نطلب» — لا «أنا».
+- البيانات فقرات متصلة لا جداول؛ والقوائم المرقّمة للطلبات، ولتفصيل المبالغ إن لزم.
+- اذكر ما له أثر فقط: لا بنود قيمتها صفر، ولا تفاصيل لا تخدم الطلب.
+- لا تعترض على ما هو طبيعي أو مستحق نظاماً (كرسوم البريد ورسوم الخدمة المعتادة)؛ اطلب ما له سند فقط.
+- التوقيع من office_identity كاملاً بلا فراغ: الصفة بحسب الملف (أمين إجراء التصفية أو أمين الإفلاس في ملفات الإفلاس، والمحامي في غيرها)، ثم الاسم، ثم المكتب، ثم رقم الترخيص المناسب للصفة من مستندات المكتب، ثم الجوال والبريد — وفي ملفات الإفلاس بيانات التواصل الخاصة بها إن وُجدت.`;
 
 // ===== أدوات النظام: قراءة فقط وبجلسة الموظف =====
 const SYSTEM_TOOLS = [
@@ -73,6 +81,33 @@ const SYSTEM_TOOLS = [
       type: "object",
       properties: { query: { type: "string", description: "كلمات البحث: اسم، رقم ملف CASE…، رقم قضية، موضوع" } },
       required: ["query"],
+      additionalProperties: false,
+    },
+    eager_input_streaming: true,
+  },
+  {
+    name: "office_identity",
+    description: "بيانات المكتب للخطابات والتوقيع: الاسم والعنوان والهاتف والبريد والسجل التجاري والرقم الضريبي و«تفاصيل إضافية» (ومنها بيانات التواصل لملفات الإفلاس)، ومستندات المكتب الرسمية بأرقامها وجهاتها وتواريخها (ترخيص المحاماة، ترخيص أمين الإفلاس، ترخيص خبير الإفلاس، الشهادات). استعملها قبل كتابة أي خطاب.",
+    input_schema: { type: "object", properties: {}, additionalProperties: false },
+  },
+  {
+    name: "case_documents",
+    description: "قائمة مستندات ملف بصلاحيات الموظف: اسم كل مستند وتصنيفه ووصفه وتاريخه ومعرّفه — لتختار منها ما تقرؤه بـread_document حين ينقصك رقم أو تاريخ أو واقعة.",
+    input_schema: {
+      type: "object",
+      properties: { case_ref: { type: "string", description: "رقم المكتب أو المعرّف" } },
+      required: ["case_ref"],
+      additionalProperties: false,
+    },
+    eager_input_streaming: true,
+  },
+  {
+    name: "read_document",
+    description: "يقرأ مستنداً من مستندات الملفات بمعرّفه (من case_documents أو search_office): PDF وصور وWord. اقرأ المستند المعني وحده — صك الحكم لرقمه وتاريخه، السجل التجاري لرقمه…",
+    input_schema: {
+      type: "object",
+      properties: { document_id: { type: "string", description: "معرّف المستند" } },
+      required: ["document_id"],
       additionalProperties: false,
     },
     eager_input_streaming: true,
@@ -93,8 +128,56 @@ const SYSTEM_TOOLS = [
 const like = (q: string) => `%${q.replace(/[%,()]/g, " ").trim()}%`;
 
 // deno-lint-ignore no-explicit-any
-async function runSystemTool(asUser: any, name: string, input: any): Promise<{ text: string; isError?: boolean }> {
+async function runSystemTool(
+  asUser: any, name: string, input: any,
+): Promise<{ text: string; isError?: boolean; blocks?: Anthropic.Beta.BetaContentBlockParam[] }> {
   try {
+    if (name === "office_identity") {
+      const [o, d] = await Promise.all([
+        asUser.from("office_info").select("office_name, address, phone, email, commercial_register, tax_number, details").limit(1).maybeSingle(),
+        asUser.from("office_documents").select("name, type, doc_number, issuing_authority, issue_date, expiry_date, status, notes")
+          .neq("status", "archived").order("name"),
+      ]);
+      if (o.error) return { text: `تعذّر: ${o.error.message}`, isError: true };
+      return { text: JSON.stringify({ office: o.data ?? null, office_documents: d.data ?? [] }) };
+    }
+    if (name === "case_documents") {
+      const ref = String(input?.case_ref ?? "").trim();
+      const byId = /^[0-9a-f-]{36}$/i.test(ref);
+      const { data: c } = await asUser.from("cases").select("id, office_num")
+        .eq(byId ? "id" : "office_num", byId ? ref : ref.toUpperCase()).is("deleted_at", null).maybeSingle();
+      if (!c) return { text: `لا ملف «${ref}» ضمن صلاحياتك`, isError: true };
+      const { data } = await asUser.from("documents").select("id, name, category, description, document_date, file_type, created_at")
+        .eq("case_id", c.id).is("deleted_at", null).order("created_at", { ascending: false }).limit(80);
+      return { text: JSON.stringify({ case: c.office_num, documents: data ?? [] }) };
+    }
+    if (name === "read_document") {
+      const id = String(input?.document_id ?? "").trim();
+      if (!/^[0-9a-f-]{36}$/i.test(id)) return { text: "معرّف غير صالح", isError: true };
+      // الصلاحية من القراءة بجلسة الموظف؛ والتنزيل بمفتاح الخادم (المخزن لا يُسرد للموظف)
+      const { data: d } = await asUser.from("documents").select("id, name, file_url, file_type").eq("id", id).is("deleted_at", null).maybeSingle();
+      if (!d?.file_url) return { text: "المستند غير موجود ضمن صلاحياتك أو بلا ملف", isError: true };
+      const name = String(d.name || "مستند");
+      const low = `${d.file_type ?? ""} ${d.file_url} ${name}`.toLowerCase();
+      const kind = /pdf/.test(low) ? "pdf" : /wordprocessingml|\.docx\b/.test(low) ? "word" : /image\/|\.(jpe?g|png|webp|gif)\b/.test(low) ? "image" : "other";
+      if (kind === "other") return { text: `«${name}» بصيغة لا تُقرأ`, isError: true };
+      const path = storagePath(d.file_url);
+      const { data: blob } = path ? await admin.storage.from("documents").download(decodeURIComponent(path)) : { data: null };
+      if (!blob) return { text: `تعذّر تنزيل «${name}»`, isError: true };
+      if (blob.size > MAX_PDF_BYTES) return { text: `«${name}» أكبر من ٢٠ م.ب`, isError: true };
+      const u8 = new Uint8Array(await blob.arrayBuffer());
+      if (kind === "word") {
+        const text = (await docxText(u8)).trim().slice(0, 120_000);
+        return { text: text ? `«${name}»:\n${text}` : `«${name}» بلا نص`, isError: !text || undefined };
+      }
+      const head = { type: "text" as const, text: `المستند «${name}»` };
+      if (kind === "image") {
+        const mime = String(blob.type || "").toLowerCase();
+        const mt = (["image/png", "image/jpeg", "image/webp", "image/gif"].includes(mime) ? mime : "image/jpeg") as "image/png";
+        return { text: name, blocks: [head, { type: "image", source: { type: "base64", media_type: mt, data: b64(u8) } }] };
+      }
+      return { text: name, blocks: [head, { type: "document", source: { type: "base64", media_type: "application/pdf", data: b64(u8) }, title: name }] };
+    }
     if (name === "search_office") {
       const q = String(input?.query ?? "").trim().slice(0, 120);
       if (!q) return { text: "اكتب كلمات البحث", isError: true };
@@ -247,6 +330,9 @@ const TOOL_LABEL: Record<string, string> = {
   code_execution: "يرتّب نتائج البحث", // تصفية البحث الآلية في web_search_20260209
   search_office: "يبحث في بيانات المكتب",
   get_case: "يقرأ ملفاً",
+  office_identity: "يقرأ بيانات المكتب وتراخيصه",
+  case_documents: "يسرد مستندات الملف",
+  read_document: "يقرأ مستنداً",
 };
 
 Deno.serve(async (req) => {
@@ -315,8 +401,9 @@ Deno.serve(async (req) => {
   // الملف المربوط: رقمه وعنوانه في التعليمات، وتفاصيله بأداة get_case (بصلاحية الموظف)
   let caseNote = "";
   if (caseId) {
-    const { data: cs } = await asUser.from("cases").select("id, office_num, title").eq("id", caseId).maybeSingle();
-    if (cs) caseNote = `\nهذه المحادثة عن ملف المكتب ${cs.office_num ?? ""} «${cs.title ?? ""}» (المعرّف ${cs.id}). ما يُسأل عنه هنا يخص هذا الملف ما لم يُذكر غيره: اقرأه بأداة get_case بمعرّفه قبل أي خطاب أو رأي، وابنِ على أطرافه ودراسته ووقائعه، ولا تختلق ما ليس فيها — اترك فراغاً (……) لما ينقص.`;
+    const { data: cs } = await asUser.from("cases").select("id, office_num, title, kind").eq("id", caseId).maybeSingle();
+    const kindAr: Record<string, string> = { case: "قضية", bankruptcy: "ملف إفلاس", legal_service: "خدمة قانونية", property: "إفراغ عقاري" };
+    if (cs) caseNote = `\nهذه المحادثة عن ملف المكتب ${cs.office_num ?? ""} «${cs.title ?? ""}» (${kindAr[cs.kind ?? ""] ?? "ملف"}، المعرّف ${cs.id}). ما يُسأل عنه هنا يخص هذا الملف ما لم يُذكر غيره: اقرأه بأداة get_case بمعرّفه قبل أي خطاب أو رأي، وابنِ على أطرافه ودراسته ووقائعه، ولا تختلق ما ليس فيها. وما ينقصك (رقم حكم، تاريخ، رقم سجل…) ابحث عنه في مستندات الملف بـcase_documents ثم read_document قبل أن تترك فراغاً (……).`;
   }
 
   const startedAt = Date.now();
@@ -504,7 +591,7 @@ Deno.serve(async (req) => {
           const uses = msg.content.filter((b) => b.type === "tool_use") as Anthropic.Beta.BetaToolUseBlock[];
           const results = await Promise.all(uses.map(async (tu) => {
             const r = await runSystemTool(asUser, tu.name, tu.input);
-            return { type: "tool_result" as const, tool_use_id: tu.id, content: r.text, is_error: r.isError || undefined };
+            return { type: "tool_result" as const, tool_use_id: tu.id, content: r.blocks ?? r.text, is_error: r.isError || undefined };
           }));
           if (stopped) break;
           messages.push({ role: "assistant", content: msg.content as Anthropic.Beta.BetaContentBlockParam[] });
