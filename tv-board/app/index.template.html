@@ -55,6 +55,7 @@ h2 .c{font-size:17px;color:var(--muted);font-weight:500}
 .time{flex:0 0 auto;background:var(--gold);color:#0e1832;border-radius:10px;padding:5px 12px;font-size:20px;font-weight:700;white-space:nowrap}
 .rb{min-width:0;flex:1}
 .rt{display:block;font-size:21px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.who{flex:0 0 auto;max-width:150px;font-size:17px;font-weight:600;color:var(--gold);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rs{display:block;font-size:16px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .empty{color:var(--ok);font-size:21px;font-weight:600;text-align:center;padding:10px 0}
 .tomorrow{font-size:16px;color:var(--muted);text-align:center;padding-top:8px}
@@ -228,7 +229,8 @@ function sessionRows(list, soft){
     var sub = s.court || ''; if (s.division) sub = sub ? sub + ' — ' + s.division : s.division;
     h += '<div class="row"><span class="time' + (soft ? ' soft' : '') + '">' + esc(fmtTime(s.time)) + '</span><span class="rb">' +
       '<span class="rt">' + (KIND[s.kind] || '⚖️') + ' ' + esc(s.office_num || 'جلسة') + '</span>' +
-      (sub ? '<span class="rs">' + esc(sub) + '</span>' : '') + '</span></div>';
+      (sub ? '<span class="rs">' + esc(sub) + '</span>' : '') + '</span>' +
+      (s.lawyer ? '<span class="who">👤 ' + esc(s.lawyer) + '</span>' : '') + '</div>';
   }
   return h;
 }

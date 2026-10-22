@@ -36,6 +36,14 @@ function riyadhToday(): string {
   return new Date(Date.now() + 3 * 3600 * 1000).toISOString().slice(0, 10);
 }
 
+/** «محمد الجندي» من الاسم الكامل: الأول والعائلة بلا لقب — short_name غير صالح للعرض (أسماء دخول لاتينية) */
+function displayName(full: string | null | undefined): string {
+  const name = String(full ?? "").trim();
+  const w = name.replace(/^(المستشار|المحامي|المحامية|أ\.|د\.)\s*:?\s*/, "").split(/\s+/).filter(Boolean);
+  const out = w.length > 1 ? `${w[0]} ${w[w.length - 1]}` : (w[0] ?? "");
+  return /[ء-ي]/.test(out) ? out : name;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
@@ -68,11 +76,11 @@ Deno.serve(async (req) => {
     const mmdd = today.slice(5);
     const [sessR, tomR, taskR, newsR, teamR, waR] = await Promise.all([
       admin.from("sessions")
-        .select("id, session_time, court, case:cases(office_num, kind, court, court_division)")
+        .select("id, session_time, court, case:cases(office_num, kind, court, court_division, assignee:team_members!cases_assignee_id_fkey(name))")
         .eq("session_date", today)
         .order("session_time", { ascending: true, nullsFirst: false }),
       admin.from("sessions")
-        .select("id, session_time, court, case:cases(office_num, kind, court, court_division)")
+        .select("id, session_time, court, case:cases(office_num, kind, court, court_division, assignee:team_members!cases_assignee_id_fkey(name))")
         .eq("session_date", tomorrow)
         .order("session_time", { ascending: true, nullsFirst: false }),
       admin.from("tasks")
@@ -95,6 +103,8 @@ Deno.serve(async (req) => {
         kind: s.case?.kind ?? "case",
         court: s.court || s.case?.court || "",
         division: s.case?.court_division || "",
+        // المسؤول عن الجلسة = مسؤول الملف (طلب المدير 2026-10-22) — اسم موظف لا موكّل
+        lawyer: displayName(s.case?.assignee?.name),
         title: s.case?.office_num ? `ملف ${s.case.office_num}` : "جلسة",   // توافق الصفحة القديمة — بلا أسماء
       }));
     const nextList = shape((tomR.data ?? []) as any[]);
@@ -110,7 +120,7 @@ Deno.serve(async (req) => {
       if (isLate) late++;
       if (t.is_urgent) urgent++;
       if (t.status === "review") review++;
-      const who = t.assignee?.short_name || t.assignee?.name || "بلا مسؤول";
+      const who = displayName(t.assignee?.name) || "بلا مسؤول";
       const m = perMember.get(who) ?? { open: 0, late: 0 };
       m.open++; if (isLate) m.late++;
       perMember.set(who, m);
