@@ -293,11 +293,11 @@ const AGENT_TOOLS = [
   },
   {
     name: "save_attachment",
-    description: "حفظ الملف الذي أرفقه الموظف في هذه المحادثة داخل النظام — بعد موافقته. خياران: target=case_document لحفظه في مستندات القضية، أو target=session_minutes لتسجيله محضرَ ضبط جلسة: يُقرأ الملف ويُغلق النظام الجلسة بنتيجتها ويُنشئ الخطوة التالية (الجلسة القادمة أو مهمة استلام الحكم) كما في «إغلاق الجلسة». القضية برقم المكتب. والجلسة: مرّر تاريخ الجلسة المذكور في المحضر (session_date_hijri كما ورد) فتُطابَق جلسة القضية في ذلك اليوم أو تُنشأ؛ أو session_id إن عرفته.",
+    description: "حفظ الملف الذي أرفقه الموظف في هذه المحادثة داخل النظام — بعد موافقته. ثلاثة خيارات: target=ruling لصك حكم أو قرار قضائي: يُقرأ ويُسجَّل في «الأحكام» برقمه وتاريخه ومحكمته ومنطوقه (فتُنشأ مهمة الاعتراض بمهلتها وتستحق دفعة الحكم في العقد) ويُحفظ في المستندات أيضاً؛ أو target=case_document لحفظه في مستندات القضية؛ أو target=session_minutes لتسجيله محضرَ ضبط جلسة: يُقرأ الملف ويُغلق النظام الجلسة بنتيجتها ويُنشئ الخطوة التالية (الجلسة القادمة أو مهمة استلام الحكم) كما في «إغلاق الجلسة». القضية برقم المكتب. والجلسة: مرّر تاريخ الجلسة المذكور في المحضر (session_date_hijri كما ورد) فتُطابَق جلسة القضية في ذلك اليوم أو تُنشأ؛ أو session_id إن عرفته.",
     input_schema: {
       type: "object",
       properties: {
-        target: { type: "string", enum: ["case_document", "session_minutes"], description: "وجهة الحفظ" },
+        target: { type: "string", enum: ["ruling", "case_document", "session_minutes"], description: "وجهة الحفظ — صك الحكم دائماً ruling لا case_document" },
         case_office_num: { type: "string", description: "رقم مكتب القضية مثل CASE26045" },
         session_id: { type: "string", description: "معرّف الجلسة (اختياري)" },
         session_date_hijri: { type: "string", description: "تاريخ الجلسة الهجري كما ورد في المحضر مثل 1448/04/23 — لا تحوّله" },
@@ -582,6 +582,68 @@ async function runAgentTool(name: string, input: any, userName: string, actions:
 
       const docName = String(input.name ?? attachment.name ?? "مستند");
 
+      // صك الحكم ← «الأحكام» (2026-10-27: «ليه ما سجلته في الأحكام!» — كان يُحفظ مستنداً فقط فلا تُنشأ
+      // مهمة الاعتراض ولا تستحق دفعة الحكم). يُقرأ بموجّه extract_ruling نفسه الذي يخدم «تعبئة من الصك» في الويب.
+      if (input.target === "ruling") {
+        let ex: any = null;
+        let note = "";
+        const doc = await fetchDocAsBase64(attachment.url);
+        if (doc) {
+          const block = buildDocBlock(doc);
+          const { system, user } = buildPrompt("extract_ruling", { has_doc: true });
+          const r = await fetch(ANTHROPIC_URL, {
+            method: "POST",
+            headers: { "x-api-key": ANTHROPIC_API_KEY!, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+            body: JSON.stringify({ model: await getAssistantModel(), max_tokens: 8000, system, messages: [{ role: "user", content: block ? [block, { type: "text", text: user }] : user }] }),
+          });
+          const d = await r.json();
+          if (r.ok) {
+            ex = parseLoose((d.content || []).filter((b: any) => b.type === "text").map((b: any) => b.text).join("\n").trim());
+            if (!ex) note = "تعذّر فهم الصك — سُجّل الحكم بلا بياناته، أكملها من تبويب الأحكام";
+          } else note = "تعذّر الاتصال بخدمة القراءة — سُجّل الحكم بلا بياناته";
+        } else note = "تعذّرت قراءة الملف — سُجّل الحكم بلا بياناته";
+        const rulingDate = pickDate(ex?.ruling_date, ex?.ruling_date_hijri);
+        const num = ex?.ruling_number ? String(ex.ruling_number).trim() : null;
+        // الحكم نفسه مسجّل من قبل (برقمه) ⇒ يُرفق صكه فقط ولا يُكرَّر
+        if (num) {
+          const { data: dup } = await admin.from("rulings").select("id, document_url").eq("case_id", caseRow.id).eq("ruling_number", num).limit(1);
+          if (dup?.[0]) {
+            if (!dup[0].document_url) await admin.from("rulings").update({ document_url: attachment.url, document_uploaded_at: new Date().toISOString(), uploaded_by_name: userName }).eq("id", dup[0].id);
+            return JSON.stringify({ ok: true, case_title: caseRow.title, already: true, ruling_number: num, note: "الحكم مسجّل من قبل برقمه — أُرفق صكه إن لم يكن مرفقاً" });
+          }
+        }
+        const { data: ins, error: rErr } = await admin.from("rulings").insert({
+          case_id: caseRow.id,
+          title: ex?.title ?? docName,
+          ruling_number: num,
+          ruling_date: rulingDate,
+          court_name: ex?.court_name ?? caseRow.court ?? null,
+          result: ex?.result ?? null,
+          summary: ex?.summary ?? null,
+          document_url: attachment.url,
+          document_uploaded_at: new Date().toISOString(),
+          uploaded_by_name: userName,
+        }).select("id").single();
+        if (rErr) return JSON.stringify({ ok: false, error: rErr.message });
+        // ويبقى الصك في مستندات القضية — تقرؤه دراسة القضية والباحث
+        const { data: hasDoc } = await admin.from("documents").select("id").eq("case_id", caseRow.id).eq("file_url", attachment.url).is("deleted_at", null).limit(1);
+        if (!hasDoc?.length) {
+          await admin.from("documents").insert({
+            case_id: caseRow.id, name: docName, file_url: attachment.url, file_type: attachment.type ?? null,
+            category: "حكم", description: "صك حكم — أُرفق عبر المساعد الذكي وسُجّل في الأحكام", uploaded_by_name: userName,
+          });
+        }
+        const { data: task } = await admin.from("tasks").select("title, due_date").eq("derived_key", `ruling:${ins.id}:objection`).maybeSingle();
+        actions.push(`سُجّل الحكم${num ? " رقم " + num : ""} في أحكام قضية ${caseRow.title}`);
+        return JSON.stringify({
+          ok: true, case_title: caseRow.title, ruling_id: ins.id, ruling_number: num, ruling_date: rulingDate,
+          court_name: ex?.court_name ?? null, result: ex?.result ? String(ex.result).slice(0, 400) : null,
+          objection_task: task ? { title: task.title, due_date: task.due_date } : null,
+          link: `https://app.redwan.sa/#/cases/${caseRow.id}`,
+          extract_note: note || undefined,
+        });
+      }
+
       if (input.target === "session_minutes") {
         // ١) قراءة المحضر أولاً — منه تاريخ الجلسة ونتيجتها وخطوتها التالية
         let extracted: any = null;
@@ -809,7 +871,7 @@ const AGENT_SYSTEM = `أنت المساعد الذكي لنظام ${FIRM_NAME}. 
   • حدّد نوعه (محضر ضبط جلسة، حكم، صحيفة دعوى، مستند…) وقضيته من داخله: ابحث بـ search_cases برقم القضية/الدعوى المذكور فيه (يُطابق رقم المحكمة court_num) ثم بأسماء الأطراف إن لم يُطابق. لا تسأل عن رقم القضية إلا إن لم تجدها بعد البحث.
   • ثم اعرض في سطرين ما فهمته (القضية برقم مكتبها، وتاريخ الجلسة، وما تمّ والخطوة التالية) واسأل سؤالاً واحداً للتأكيد، مثل: «أسجّله محضراً لجلسة 1448/04/23 في قضية CASE26045 وأُغلقها بنتيجتها؟». اجعل اقتراحات المتابعة إجابات جاهزة («نعم، سجّله» …).
   • لا تحفظ قبل موافقته — إلا إن طلب الحفظ صراحة في رسالته نفسها.
-  • عند الموافقة: محضر الجلسة ← save_attachment بـ target=session_minutes مع session_date_hijri كما ورد في المحضر؛ وغيره ← target=case_document. بعدها اذكر ما سُجّل (الجلسة، ونتيجتها، والجلسة القادمة أو مهمة الحكم)، وإن رجع extract_note فاذكره في سطر.
+  • عند الموافقة: محضر الجلسة ← save_attachment بـ target=session_minutes مع session_date_hijri كما ورد في المحضر؛ وصك الحكم أو القرار القضائي ← target=ruling (يُسجَّل في «الأحكام» لا في المستندات وحدها)؛ وغيرهما ← target=case_document. بعدها اذكر ما سُجّل (الجلسة، ونتيجتها، والجلسة القادمة أو مهمة الحكم)، وإن رجع extract_note فاذكره في سطر.
   • إن وصلك الملف سابقاً في المحادثة ولم يعد محتواه أمامك فاعتمد على ما ذكرتَه عنه في ردودك السابقة.
 - رسائل العملاء: عربية فصحى رسمية موجزة، تُختم بالاسم الرسمي الكامل: «${FIRM_NAME}» (لا تختصره أبداً).
 - الجلسات: إن وصل الموظف إشعار جلسة من ناجز أو المحكمة وطلب تسجيله، استخدم create_session. التواريخ في إشعارات ناجز هجرية غالباً — مرّرها في session_date_hijri كما وردت ولا تحوّلها بنفسك، واذكر في ردّك الميلادي الذي أعاده النظام ليتحقق منه الموظف.\n- إن تعدّدت النتائج المطابقة فاسأل أيّها المقصود قبل أي إجراء.

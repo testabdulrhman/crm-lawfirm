@@ -329,7 +329,7 @@ export async function runExtraTool(
     const q = String(input.query ?? "").trim();
     let qb = admin
       .from("documents")
-      .select("id, name, description, category, case_id, file_url, created_at, case:cases!documents_case_id_fkey(id, kind, office_num)")
+      .select("id, name, description, category, case_id, file_url, created_at, case:cases!documents_case_id_fkey(id, kind, office_num, title)")
       .is("deleted_at", null)
       .or(`name.ilike.%${q}%,description.ilike.%${q}%`)
       .limit(60);
@@ -341,7 +341,8 @@ export async function runExtraTool(
     const { data, error } = await qb;
     if (error) return JSON.stringify({ error: error.message });
     const rows = ((data ?? []) as any[]).filter((d) => canSeeCase(scope, d.case_id ? d.case : null)).slice(0, 10);
-    return JSON.stringify(rows.map(({ case: _c, ...d }) => d));
+    // رقم القضية وعنوانها مع كل مستند — كان يُحذف فلا يعرف المساعد قضية المستند (2026-10-27)
+    return JSON.stringify(rows.map(({ case: c, ...d }) => ({ ...d, case_office_num: c?.office_num ?? null, case_title: c?.title ?? null })));
   }
 
   if (name === "search_discussions") {
