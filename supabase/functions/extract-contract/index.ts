@@ -298,6 +298,11 @@ Deno.serve(async (req) => {
       };
     });
     const stages = (Array.isArray(parsed.stages_covered) ? parsed.stages_covered : []).filter((s: string) => STAGES.has(s));
+    // الأسماء كما تُنقل من نص العقد قد تحمل شَرطة القائمة أو جدولة أو نقطتين («-\tشركة…» — 2026-10-27)
+    const clean = (v: unknown) => typeof v === "string" ? v.replace(/^[\s\-–—:•*.،]+|[\s\-–—:•*.،]+$/g, "").trim() || null : v;
+    for (const k of ["title", "client_name", "client_rep_name", "client_rep_capacity", "beneficiary_name", "opponent_name"]) {
+      parsed[k] = clean(parsed[k]);
+    }
 
     return json({
       success: true,
