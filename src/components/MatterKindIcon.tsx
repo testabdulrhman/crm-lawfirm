@@ -8,8 +8,30 @@ import { cn } from '@/lib/utils'
 export const BANKRUPTCY_RING =
   'rounded-full bg-[#E6F6F4] ring-[2.5px] ring-[#14A99B] dark:bg-[#14A99B]/15'
 
-/** الرمز داخل السطر: للإفلاس دائرة صغيرة بحلقة خضراء، ولغيره الإيموجي كما هو */
-export function MatterKindIcon({ kind, className }: { kind: string | null | undefined; className?: string }) {
+/** الرمز داخل السطر: شعار المشروع إن وُضع (طلب المدير 2026-10-31)، وإلا للإفلاس دائرة صغيرة بحلقة خضراء،
+ *  ولغيره الإيموجي كما هو */
+export function MatterKindIcon({
+  kind,
+  className,
+  avatarUrl,
+}: {
+  kind: string | null | undefined
+  className?: string
+  avatarUrl?: string | null
+}) {
+  if (avatarUrl) {
+    return (
+      <img
+        src={avatarUrl}
+        alt=""
+        aria-hidden
+        className={cn(
+          'inline-block h-[1.5em] w-[1.5em] shrink-0 rounded-md bg-white object-cover align-middle ring-1 ring-border',
+          className
+        )}
+      />
+    )
+  }
   if (kind === 'bankruptcy') {
     return (
       <span

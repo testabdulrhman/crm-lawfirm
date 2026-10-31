@@ -137,7 +137,7 @@ export function CaseDetail({ id }: { id: string }) {
             <div className="flex items-center gap-2">
               <Scale className="h-5 w-5 shrink-0 text-gold" />
               <h2 className="text-2xl font-bold tracking-tight text-foreground">
-                <MatterKindIcon kind={c.kind} className="me-2" />
+                <MatterKindIcon kind={c.kind} avatarUrl={c.avatar_url} className="me-2" />
                 {c.title}
               </h2>
             </div>

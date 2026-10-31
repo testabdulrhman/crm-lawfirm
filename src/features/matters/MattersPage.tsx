@@ -279,15 +279,24 @@ export function MattersPage() {
                 onClick={() => navigate(m.href)}
                 className="flex w-full items-center gap-3.5 rounded-2xl border border-border/70 bg-card p-4 text-right transition-all hover:border-gold/50 hover:shadow-sm"
               >
-                <span
-                  className={cn(
-                    'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-xl',
-                    m.kind === 'bankruptcy' ? BANKRUPTCY_RING : meta.chip
-                  )}
-                  aria-label={meta.label}
-                >
-                  {matterKindEmoji(m.kind)}
-                </span>
+                {m.avatarUrl ? (
+                  // شعار المشروع إن وُضع (طلب المدير 2026-10-31) مكان رمز النوع
+                  <img
+                    src={m.avatarUrl}
+                    alt={meta.label}
+                    className="h-10 w-10 shrink-0 rounded-xl bg-white object-cover ring-1 ring-border"
+                  />
+                ) : (
+                  <span
+                    className={cn(
+                      'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-xl',
+                      m.kind === 'bankruptcy' ? BANKRUPTCY_RING : meta.chip
+                    )}
+                    aria-label={meta.label}
+                  >
+                    {matterKindEmoji(m.kind)}
+                  </span>
+                )}
 
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-2">

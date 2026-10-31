@@ -29,6 +29,8 @@ export interface MatterRow {
   assigneeId: string | null
   assigneeName: string | null
   href: string
+  /** شعار المشروع إن وُضع (cases.avatar_url) — يحلّ مكان رمز النوع */
+  avatarUrl?: string | null
 }
 
 export function useMatters() {
@@ -40,7 +42,7 @@ export function useMatters() {
         supabase
           .from('cases')
           .select(
-            'id, title, status, open_date, office_num, assignee_id, ' +
+            'id, title, status, open_date, office_num, assignee_id, avatar_url, ' +
               'contact:contacts(name), assignee:team_members!cases_assignee_id_fkey(name, short_name)'
           )
           .eq('kind', 'case')
@@ -62,7 +64,7 @@ export function useMatters() {
         supabase
           .from('cases')
           .select(
-            'id, title, status, type, open_date, office_num, assignee_id, ' +
+            'id, title, status, type, open_date, office_num, assignee_id, avatar_url, ' +
               'contact:contacts(name), assignee:team_members!cases_assignee_id_fkey(name, short_name)'
           )
           .eq('kind', 'bankruptcy')
@@ -87,6 +89,7 @@ export function useMatters() {
           assigneeId: c.assignee_id ?? null,
           assigneeName: c.assignee?.short_name ?? c.assignee?.name ?? null,
           href: `/cases/${c.id}`,
+          avatarUrl: c.avatar_url ?? null,
         })),
         ...(services.data ?? []).map((s: any) => ({
           key: `ls-${s.id}`,
@@ -128,6 +131,7 @@ export function useMatters() {
           ref: b.office_num,
           assigneeId: b.assignee_id ?? null,
           assigneeName: b.assignee?.short_name ?? b.assignee?.name ?? null,
+          avatarUrl: b.avatar_url ?? null,
           href: `/cases/${b.id}`,
         })),
       ]

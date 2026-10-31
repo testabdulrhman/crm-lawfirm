@@ -421,6 +421,8 @@ export interface Case {
   office_num: string | null
   /** نوع المشروع: case | legal_service | property | bankruptcy | channel */
   kind: string | null
+  /** صورة القناة أو شعار المشروع (20261008_channel_avatar، 20261031_matter_avatar) */
+  avatar_url?: string | null
   /** مرحلة إجراء الإفلاس — لغير الإفلاس تبقى null */
   bankruptcy_stage: string | null
   court_num: string | null

@@ -116,6 +116,8 @@ const QUICK_EMOJIS = ['👍', '❤️', '✅', '😂', '😮', '🙏']
 interface Mentionable {
   id: string
   label: string
+  /** الاسم الكامل — يُبحث فيه أيضاً، فتظهر «bayan» بكتابة «بيان» (طلب المدير 2026-10-31: «عربي + انجليزي») */
+  full?: string | null
   initial: string | null
   color: string | null
 }
@@ -136,6 +138,7 @@ function useMentionables(inCaseThread = false): Mentionable[] {
         .map((m) => ({
           id: m.id,
           label: (m.short_name ?? m.name).trim(),
+          full: m.name,
           initial: m.avatar_initial,
           color: m.avatar_color,
         }))
@@ -327,7 +330,7 @@ function MentionInput({
 }) {
   const people = useMentionables()
   const taRef = useRef<HTMLTextAreaElement>(null)
-  const [sug, setSug] = useState<{ items: { id: string | null; label: string; initial: string | null; color: string | null }[]; start: number } | null>(null)
+  const [sug, setSug] = useState<{ items: { id: string | null; label: string; full?: string | null; initial: string | null; color: string | null }[]; start: number } | null>(null)
   const [hi, setHi] = useState(0)
 
   const compute = (v: string, caret: number) => {
@@ -338,7 +341,10 @@ function MentionInput({
       { id: null, label: 'الذكاء', initial: null, color: null },
       ...people,
     ]
-    const items = pool.filter((p) => arNorm(p.label).includes(arNorm(q))).slice(0, 7)
+    const needle = arNorm(q)
+    const items = pool
+      .filter((p) => arNorm(p.label).includes(needle) || arNorm(('full' in p && p.full) || '').includes(needle))
+      .slice(0, 7)
     if (!items.length) return setSug(null)
     setSug({ items, start: caret - q.length - 1 })
     setHi(0)
@@ -387,7 +393,12 @@ function MentionInput({
                   {p.initial ?? p.label.charAt(0)}
                 </span>
               )}
-              <span className="truncate">{p.label}</span>
+              <span className="min-w-0 flex-1 truncate">
+                {p.label}
+                {p.full && arNorm(p.full) !== arNorm(p.label) && (
+                  <span className="ms-1.5 text-xs text-muted-foreground">{p.full}</span>
+                )}
+              </span>
             </button>
           ))}
         </div>
@@ -829,8 +840,8 @@ function ChannelList({
                       : 'hover:bg-muted/50'
                 )}
               >
-                {/* المحادثة المباشرة: صورة الزميل نفسه مكان الرمز (طلب المدير) */}
-                {isDm || (isChannel && c.peer_avatar_url) ? (
+                {/* المحادثة المباشرة: صورة الزميل نفسه مكان الرمز (طلب المدير)؛ وللقناة والمشروع صورته/شعاره إن وُضع */}
+                {isDm || c.peer_avatar_url ? (
                   <PeerAvatar
                     url={c.peer_avatar_url}
                     initial={c.peer_avatar_initial}
@@ -1141,7 +1152,7 @@ function StreamPane({
         </div>
       )}
       <div className="flex items-center gap-2 border-b border-border/60 px-4 py-3">
-        {kind === 'dm' || (kind === 'channel' && peerAvatarUrl) ? (
+        {kind === 'dm' || peerAvatarUrl ? (
           <PeerAvatar
             url={peerAvatarUrl}
             initial={peerAvatarInitial}
