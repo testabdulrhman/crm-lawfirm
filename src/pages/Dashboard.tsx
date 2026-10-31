@@ -27,6 +27,7 @@ import {
   ScopeBtn,
   WhileYouWereBusy,
 } from '@/features/dashboard/sections'
+import { PendingAsksCard } from '@/features/dashboard/PendingAsksCard'
 
 export default function Dashboard() {
   const { teamMember } = useAuth()
@@ -177,6 +178,9 @@ export default function Dashboard() {
       ) : (
         <>
           <BirthdayCard />
+
+          {/* ما طلبه الزملاء ولم يُرد عليه — للمدير الآن */}
+          {isDirector && <PendingAsksCard />}
 
           <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
             <ActionQueueCard
