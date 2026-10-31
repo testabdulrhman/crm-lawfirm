@@ -382,8 +382,8 @@ private struct DiscussionRowView: View {
             // المحادثة المباشرة: صورة الزميل نفسه مكان الرمز (طلب المدير 2026-09-22)
             if row.isDm {
                 AvatarCircle(member: row.peerMember, size: 38)
-            } else if row.kind == "channel", let s = row.peer_avatar_url, let u = URL(string: s) {
-                // صورة النقاش الخاص إن وُضعت (اقتراح المدير 2026-10-08)
+            } else if let s = row.peer_avatar_url, let u = URL(string: s) {
+                // صورة النقاش الخاص (اقتراح المدير 2026-10-08) أو شعار المشروع (طلبه 2026-10-31) إن وُضعت
                 AsyncImage(url: u) { p in
                     if case .success(let img) = p { img.resizable().scaledToFill() }
                     else { Theme.navy }
