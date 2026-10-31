@@ -67,10 +67,13 @@ struct MentionSuggestBar: View {
 
     private var matches: [String] {
         guard let q = query else { return [] }
-        var labels = staff.map(Mention.label).filter { !$0.isEmpty }
-        labels.append("الذكاء")
-        // arContains: كتابة «@احمد» تجد «أحمد»
-        return labels.filter { q.isEmpty || $0.arContains(q) }
+        // arContains: كتابة «@احمد» تجد «أحمد» — ويُبحث في الاسم الكامل أيضاً، فـ«@بيان» تجد «bayan»
+        // (طلب المدير 2026-10-31: «عربي + انجليزي»)
+        var labels = staff
+            .filter { q.isEmpty || Mention.label($0).arContains(q) || ($0.name ?? "").arContains(q) }
+            .map(Mention.label).filter { !$0.isEmpty }
+        if q.isEmpty || "الذكاء".arContains(q) { labels.append("الذكاء") }
+        return labels
     }
 
     var body: some View {
