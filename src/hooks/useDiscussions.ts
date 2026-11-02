@@ -48,6 +48,11 @@ export interface StreamMsg {
   last_reply_at: string | null
   reactions: Reaction[] | null
   bookmarked: boolean | null
+  /** ردٌّ على رسالة كالواتساب (2026-11-03): أصله في خيطه ومقتطفه فوق الفقاعة */
+  parent_id?: string | null
+  parent_author?: string | null
+  parent_body?: string | null
+  parent_doc_name?: string | null
 }
 
 export interface ThreadMsg {
@@ -319,6 +324,8 @@ export function usePostMessage() {
       alsoToStream?: boolean
       /** معرّفات الموظفين المذكورين بـ@ — القاعدة تُشعرهم (notify_mentions) */
       mentions?: string[]
+      /** الرد من المجرى (كالواتساب): مقتطف الأصل للعرض المتفائل في المجرى */
+      quote?: { author: string | null; body: string | null; docName: string | null }
     }) => {
       if (!teamMember?.id) throw new Error('لم يُحمَّل ملفك بعد — أعد تحميل الصفحة')
       const values: Record<string, unknown> = {
@@ -375,6 +382,27 @@ export function usePostMessage() {
           ...(old ?? []),
           optimistic,
         ])
+        // ردٌّ من المجرى يظهر فيه فوراً باقتباس أصله — والتسوية بعد الإرسال تجلبه حقيقياً
+        if (input.alsoToStream) {
+          qc.setQueryData<StreamMsg[]>(['disc_stream', input.caseId], (old) =>
+            old
+              ? [
+                  ...old,
+                  {
+                    ...optimistic,
+                    mentions: input.mentions ?? null,
+                    reply_count: 0,
+                    last_reply_at: null,
+                    reactions: [],
+                    parent_id: input.parentId,
+                    parent_author: input.quote?.author ?? null,
+                    parent_body: input.quote?.body ?? null,
+                    parent_doc_name: input.quote?.docName ?? null,
+                  } as StreamMsg,
+                ]
+              : old
+          )
+        }
         return { prev, key: ['disc_thread', input.parentId] as const }
       }
       await qc.cancelQueries({ queryKey: ['disc_stream', input.caseId] })

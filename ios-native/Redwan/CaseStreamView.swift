@@ -205,8 +205,12 @@ struct CaseStreamView: View {
     /// ملاحظة صوتية فشل إرسالها — تبقى لإعادة الإرسال بدل أن تُحذف (فحص 2026-10-19: كانت تضيع مع انقطاع الشبكة)
     @State private var unsentVoice: PendingVoice?
 
-    // المرفقات
-    @State private var photoItem: PhotosPickerItem?
+    // المرفقات — تُجهَّز أولاً ثم تُرسل بتعليقها كالواتساب (طلب المدير 2026-11-03: «مجرد ما احط الصورة ع طول يرسلها»)
+    @State private var photoItems: [PhotosPickerItem] = []
+    @State private var pending: [PendingAttachment] = []
+    /// الرسالة التي يُردّ عليها — الرد يُسجَّل في خيطها ويظهر في المجرى باقتباسها (2026-11-03)
+    @State private var replyTo: StreamMsg?
+    @FocusState private var composerFocused: Bool
     @State private var showPhotoPicker = false
     @State private var showFilePicker = false
     @State private var uploading = false
@@ -263,7 +267,16 @@ struct CaseStreamView: View {
                                     receipt: receipts[row.extras.last?.id ?? m.id] ?? receipts[m.id],
                                     highlighted: highlightId == m.id || row.extras.contains { $0.id == highlightId },
                                     albumExtras: row.extras,
-                                    continued: i > 0 && StreamRow.continues(rows[i - 1].head, m)
+                                    continued: i > 0 && StreamRow.continues(rows[i - 1].head, m),
+                                    onReply: {
+                                        replyTo = m
+                                        composerFocused = true
+                                    },
+                                    onOpenParent: {
+                                        // الاقتباس يفتح خيط الأصل مُبرَزاً فيه الرد
+                                        guard let pid = m.parent_id, let root = msgs.first(where: { $0.id == pid }) else { return }
+                                        threadJump = ThreadJump(root: root, focusId: m.id)
+                                    }
                                 )
                                 .id(m.id)
                             }
@@ -415,14 +428,12 @@ struct CaseStreamView: View {
                 }
             }
         }
-        .photosPicker(isPresented: $showPhotoPicker, selection: $photoItem, matching: .images)
+        .photosPicker(isPresented: $showPhotoPicker, selection: $photoItems, maxSelectionCount: 10, matching: .images)
         .fileImporter(
             isPresented: $showFilePicker,
             allowedContentTypes: [.pdf, .image, .data]
         ) { result in
-            if case .success(let url) = result {
-                Task { await uploadFile(url: url) }
-            }
+            if case .success(let url) = result { stageFile(url: url) }
         }
         // بلغ التسجيل خمس دقائق: يُرسل كما هو
         .onChange(of: recorder.limitReached) {
@@ -432,13 +443,16 @@ struct CaseStreamView: View {
             if recorder.isRecording { recorder.cancel() }
             VoicePlayer.shared.stop()
         }
-        .onChange(of: photoItem) {
-            guard let item = photoItem else { return }
+        .onChange(of: photoItems) {
+            let items = photoItems
+            guard !items.isEmpty else { return }
+            photoItems = []
             Task {
-                if let data = try? await item.loadTransferable(type: Data.self) {
-                    await uploadData(data, fileName: "صورة.jpg", mime: "image/jpeg")
+                for item in items {
+                    guard let data = try? await item.loadTransferable(type: Data.self) else { continue }
+                    stageImage(data, name: "صورة.jpg")
                 }
-                photoItem = nil
+                composerFocused = true
             }
         }
     }
@@ -472,9 +486,19 @@ struct CaseStreamView: View {
             }
             MentionSuggestBar(staff: staff, draft: $draft)
 
+            if let r = replyTo {
+                ReplyBanner(author: StreamQuote.author(r), snippet: StreamQuote.snippet(body: r.body, doc: r.document_name)) {
+                    replyTo = nil
+                }
+            }
+            if !pending.isEmpty {
+                PendingStrip(items: pending) { id in pending.removeAll { $0.id == id } }
+            }
+
             // صورة منسوخة من تطبيق آخر ← لصقها بضغطة (2026-09-27)
             PasteImageChip(disabled: uploading) { jpeg in
-                Task { await uploadData(jpeg, fileName: "صورة ملصقة.jpg", mime: "image/jpeg") }
+                stageImage(jpeg, name: "صورة ملصقة.jpg")
+                composerFocused = true
             }
 
             // ترتيب الواتساب حرفياً (طلب المستخدم 2026-08-22): الإرسال يمين
@@ -482,7 +506,7 @@ struct CaseStreamView: View {
             // في RTL أول عنصر بالكود يقع يميناً.
             HStack(spacing: 8) {
                 // الحقل فارغ؟ الميكروفون مكان الإرسال — كالواتساب (طلب المدير 2026-09-14)
-                if draft.trimmingCharacters(in: .whitespaces).isEmpty, !sending, !uploading {
+                if !canSend, !sending, !uploading {
                     MicButton { Task { await startRecording() } }
                 } else {
                     Button(action: send) {
@@ -499,11 +523,12 @@ struct CaseStreamView: View {
                         .background(Theme.gold)
                         .clipShape(Circle())
                     }
-                    .disabled(sending || draft.trimmingCharacters(in: .whitespaces).isEmpty)
-                    .opacity(sending || draft.trimmingCharacters(in: .whitespaces).isEmpty ? 0.5 : 1)
+                    .disabled(sending || uploading || !canSend)
+                    .opacity(sending || uploading || !canSend ? 0.5 : 1)
                 }
 
-                TextField("اكتب رسالة…", text: $draft, axis: .vertical)
+                TextField(pending.isEmpty ? "اكتب رسالة…" : "أضف تعليقاً…", text: $draft, axis: .vertical)
+                    .focused($composerFocused)
                     .font(.system(size: 14))
                     .lineLimit(1...4)
                     .padding(.horizontal, 12)
@@ -558,9 +583,16 @@ struct CaseStreamView: View {
         return (MatterDoor(caseId: caseId, officeNum: m?.office_num, kind: m?.kind), m?.kind)
     }
 
+    private var canSend: Bool { !pending.isEmpty || !draft.trimmingCharacters(in: .whitespaces).isEmpty }
+
+    /// جذر الخيط الذي يُسجَّل فيه الرد (الخيوط مستوى واحد: الرد على ردٍّ يذهب لخيط أصله)
+    private func replyRoot(_ m: StreamMsg?) -> String? { m.map { $0.parent_id ?? $0.id } }
+
     private func send() {
+        if !pending.isEmpty { sendPending(); return }
         let body = draft.trimmingCharacters(in: .whitespaces)
         guard !body.isEmpty else { return }
+        let reply = replyTo
         Usage.shared.action("رسالة نقاش")
         sendError = nil
 
@@ -577,15 +609,21 @@ struct CaseStreamView: View {
             mentions: nil,
             created_at: ISO8601DateFormatter().string(from: Date()),
             edited_at: nil, reply_count: 0, last_reply_at: nil,
-            reactions: [], bookmarked: false
+            reactions: [], bookmarked: false,
+            parent_id: replyRoot(reply),
+            parent_author: reply.map(StreamQuote.author),
+            parent_body: reply?.body,
+            parent_doc_name: reply?.document_name
         )
         msgs.append(optimistic)
         draft = ""
+        replyTo = nil
 
         Task {
             do {
                 try await sb.postMessage(
                     caseId: caseId, body: body,
+                    parentId: replyRoot(reply), alsoToStream: reply != nil,
                     mentions: Mention.extract(from: body, people: staff)
                 )
                 await load()
@@ -599,6 +637,7 @@ struct CaseStreamView: View {
                 // تراجع: أزل الرسالة المتفائلة وأعد النص للحقل كي لا يضيع
                 msgs.removeAll { $0.id == tempId }
                 draft = body
+                replyTo = reply
                 sendError = uiErrorText(error) ?? error.localizedDescription
             }
         }
@@ -641,19 +680,54 @@ struct CaseStreamView: View {
 
     // MARK: - المرفقات
 
-    private func uploadFile(url: URL) async {
+    /// صورة تُجهَّز للإرسال: JPEG دائماً (صور HEIC من الألبوم لا يعرضها الويب) ومعها مصغّرها
+    private func stageImage(_ data: Data, name: String) {
+        guard let img = UIImage(data: data) else { sendError = "تعذّرت قراءة الصورة"; return }
+        let jpeg = img.jpegData(compressionQuality: 0.85) ?? data
+        pending.append(PendingAttachment(data: jpeg, name: name, mime: "image/jpeg",
+                                         thumb: img.preparingThumbnail(of: CGSize(width: 160, height: 160)) ?? img))
+    }
+
+    private func stageFile(url: URL) {
         let scoped = url.startAccessingSecurityScopedResource()
         defer { if scoped { url.stopAccessingSecurityScopedResource() } }
         guard let data = try? Data(contentsOf: url) else {
             sendError = "تعذّرت قراءة الملف"
             return
         }
+        if ImageFile.isImage(url.lastPathComponent) { stageImage(data, name: url.lastPathComponent); return }
         let mime = url.pathExtension.lowercased() == "pdf" ? "application/pdf" : "application/octet-stream"
-        await uploadData(data, fileName: url.lastPathComponent, mime: mime)
+        pending.append(PendingAttachment(data: data, name: url.lastPathComponent, mime: mime, thumb: nil))
+        composerFocused = true
+    }
+
+    /// المرفقات المجهّزة بالتتابع (فتصل بترتيبها)، والتعليق على أولها — وما تعذّر يعود للشريط كي لا يضيع
+    private func sendPending() {
+        let items = pending
+        let caption = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        let reply = replyTo
+        pending = []
+        draft = ""
+        replyTo = nil
+        Usage.shared.action("مرفق نقاش")
+        Task {
+            for (i, a) in items.enumerated() {
+                let ok = await uploadData(a.data, fileName: a.name, mime: a.mime,
+                                          caption: i == 0 && !caption.isEmpty ? caption : nil, reply: reply)
+                if !ok {
+                    pending = Array(items[i...]) + pending
+                    if i == 0 { draft = caption; replyTo = reply }
+                    return
+                }
+            }
+        }
     }
 
     @discardableResult
-    private func uploadData(_ data: Data, fileName: String, mime: String, messageId: String? = nil) async -> Bool {
+    private func uploadData(
+        _ data: Data, fileName: String, mime: String, messageId: String? = nil,
+        caption: String? = nil, reply: StreamMsg? = nil
+    ) async -> Bool {
         guard data.count <= 15 * 1024 * 1024 else {
             sendError = "الملف أكبر من ١٥ ميغابايت"
             return false
@@ -664,15 +738,14 @@ struct CaseStreamView: View {
             let docId = try await sb.uploadAttachment(
                 data: data, fileName: fileName, mime: mime, caseId: caseId
             )
-            let caption = draft.trimmingCharacters(in: .whitespaces)
             try await sb.postMessage(
                 caseId: caseId,
-                body: caption.isEmpty ? nil : caption,
+                body: caption,
                 documentId: docId,
-                mentions: caption.isEmpty ? nil : Mention.extract(from: caption, people: staff),
+                parentId: replyRoot(reply), alsoToStream: reply != nil,
+                mentions: caption.map { Mention.extract(from: $0, people: staff) },
                 id: messageId
             )
-            draft = ""
             await load()
             uploading = false
             return true
@@ -797,9 +870,16 @@ private struct StreamBubble: View {
     var albumExtras: [StreamMsg] = []
     /// تتابع رسالة الكاتب نفسه السابقة خلال ٥ دقائق — بلا اسم، وأقرب إليها
     var continued: Bool = false
+    /// الرد عليها كالواتساب — بالسحب أو من قائمة الضغط المطوّل
+    var onReply: () -> Void = {}
+    /// لمسة الاقتباس تفتح خيط الأصل
+    var onOpenParent: () -> Void = {}
 
     @State private var openThread = false
     @State private var showReceipts = false
+    @State private var swipeX: CGFloat = 0
+    /// الإزاحة تنعكس في الواجهة العربية بينما السحب لا — فتُعكس هي لتتبع الإصبع
+    @Environment(\.layoutDirection) private var layoutDirection
 
     private var isAI: Bool { msg.kind == "ai" }
     private var isSystem: Bool { msg.kind == "system" }
@@ -817,6 +897,30 @@ private struct StreamBubble: View {
                 .frame(maxWidth: .infinity)
         } else {
             bubble
+                .offset(x: layoutDirection == .rightToLeft ? -swipeX : swipeX)
+                .background(alignment: .center) {
+                    // سهم الرد يظهر مع السحب
+                    if abs(swipeX) > 12 {
+                        Image(systemName: "arrowshape.turn.up.left.fill")
+                            .font(.system(size: 15))
+                            .foregroundStyle(Theme.goldDark)
+                            .opacity(min(1, abs(swipeX) / 55))
+                    }
+                }
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 18)
+                        .onChanged { g in
+                            // أفقي واضح فقط — لا يتنازع مع تمرير المحادثة
+                            guard abs(g.translation.width) > abs(g.translation.height) * 1.6 else { return }
+                            let x = max(-70, min(70, g.translation.width))
+                            if abs(x) >= 55 && abs(swipeX) < 55 { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
+                            swipeX = x
+                        }
+                        .onEnded { _ in
+                            if abs(swipeX) >= 55 { onReply() }
+                            withAnimation(.spring(response: 0.3)) { swipeX = 0 }
+                        }
+                )
         }
     }
 
@@ -842,6 +946,11 @@ private struct StreamBubble: View {
                 }
 
                 VStack(alignment: .leading, spacing: 6) {
+                if msg.parent_id != nil {
+                    ReplyQuote(author: msg.parent_author,
+                               snippet: StreamQuote.snippet(body: msg.parent_body, doc: msg.parent_doc_name),
+                               onTap: onOpenParent)
+                }
                 let voice = VoiceNote.isAudio(msg.document_name)
                 if !voice, let body = msg.body, !body.isEmpty {
                     Text(Mention.styled(body))
@@ -935,7 +1044,8 @@ private struct StreamBubble: View {
                     mine: mine,
                     createdAt: msg.created_at,
                     onChange: onChange,
-                    onEdit: mine ? onEdit : nil
+                    onEdit: mine ? onEdit : nil,
+                    onReply: onReply
                 )
 
                 ReactionsBar(commentId: msg.id, reactions: msg.reactions ?? [], onChange: onChange)
@@ -1549,6 +1659,7 @@ struct StreamRow: Identifiable {
             && ImageFile.isImage(m.document_name)
             && (m.body ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && (m.reply_count ?? 0) == 0
+            && m.parent_id == nil // الرد باقتباسه لا يذوب في ألبوم
     }
 
     /// وقت الرسالة كاملاً (Theme.date يقرأ اليوم وحده) — بمحلّل التطبيق نفسه لطوابع Postgres

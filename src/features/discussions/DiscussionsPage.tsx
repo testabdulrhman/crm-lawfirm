@@ -23,6 +23,8 @@ import {
   Users,
   X,
   MessageSquareReply,
+  Reply,
+  FileText,
   Image as ImageIcon,
   UserPlus,
   Lock,
@@ -51,7 +53,7 @@ import { FilePreviewDialog } from '@/components/FilePreviewDialog'
 import { useConfirm } from '@/components/ConfirmDialog'
 import { useAuth } from '@/stores/auth'
 import { useTeamMembers } from '@/hooks/useTeam'
-import { pickFile } from '@/lib/files'
+import { pickFile, pickFiles } from '@/lib/files'
 import { arNorm } from '@/lib/arabic'
 import { matterHref, matterKindEmoji } from '@/lib/matterHref'
 import { fmtNumber } from '@/lib/format'
@@ -1027,6 +1029,10 @@ function StreamPane({
   const post = usePostMessage()
   const postFile = usePostAttachment()
   const [draft, setDraft] = useState('')
+  /** الرد على رسالة كالواتساب (طلب المدير 2026-11-03) — يُسجَّل في خيطها ويظهر هنا باقتباسها */
+  const [replyTo, setReplyTo] = useState<StreamMsg | null>(null)
+  /** مرفقات تنتظر تعليقها قبل الإرسال («مجرد ما احط الصورة ع طول يرسلها») */
+  const [pendingFiles, setPendingFiles] = useState<File[]>([])
   const pendingSend = useRef<PendingSend | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
@@ -1041,18 +1047,42 @@ function StreamPane({
 
   const mentionGuard = useMentionGuard(caseId)
   const send = async () => {
+    if (pendingFiles.length) {
+      const files = pendingFiles
+      setPendingFiles([])
+      await sendFiles(files)
+      return
+    }
     const body = draft.trim()
     if (!body) return
     const mentions = extractMentions(body, people)
     if (!(await mentionGuard.guard(mentions))) return
     const id = sendId(pendingSend, body)
+    const reply = replyTo
     // تفريغ فوري + عرض متفائل في usePostMessage = إحساس الواتساب؛
     // الفشل يرجع النص للحقل كي لا يضيع
     setDraft('')
+    setReplyTo(null)
     post.mutate(
-      { id, caseId, body, mentions },
       {
-        onError: () => setDraft(body),
+        id,
+        caseId,
+        body,
+        mentions,
+        ...(reply
+          ? {
+              // الخيوط مستوى واحد: الرد على ردٍّ يذهب لخيط أصله
+              parentId: reply.parent_id ?? reply.id,
+              alsoToStream: true,
+              quote: { author: quoteAuthor(reply), body: reply.body, docName: reply.document_name },
+            }
+          : {}),
+      },
+      {
+        onError: () => {
+          setDraft(body)
+          setReplyTo(reply)
+        },
         onSuccess: () => {
           pendingSend.current = null
           // ردّ الذكاء يصل بعد ثوانٍ عبر الخادم
@@ -1064,10 +1094,12 @@ function StreamPane({
   }
 
   const attach = async () => {
-    const file = await pickFile({ accept: '.pdf,image/*,.docx,.xlsx' })
-    if (!file) return
-    await sendFiles([file])
+    const files = await pickFiles({ accept: '.pdf,image/*,.docx,.xlsx' })
+    if (files.length) stageFiles(files)
   }
+
+  /** المرفق يُجهَّز ولا يُرسل — يكتب تعليقه ثم يرسل (كالواتساب) */
+  const stageFiles = (files: File[]) => setPendingFiles((old) => [...old, ...files].slice(0, 10))
 
   /**
    * إرسال ملفات مُفلَتة أو ملصوقة (طلب المدير 2026-09-24: «ودي أقدر أفلت الملفات فيه»).
@@ -1087,7 +1119,9 @@ function StreamPane({
     const caption = draft.trim()
     const capMentions = caption ? extractMentions(caption, people) : []
     if (!(await mentionGuard.guard(capMentions))) return
+    const reply = replyTo
     setDraft('')
+    setReplyTo(null)
     for (const [i, file] of ok.entries()) {
       try {
         await postFile.mutateAsync({
@@ -1095,6 +1129,7 @@ function StreamPane({
           file,
           caption: i === 0 && caption ? caption : undefined,
           mentions: i === 0 && caption ? capMentions : undefined,
+          parentId: reply ? (reply.parent_id ?? reply.id) : undefined,
         })
       } catch {
         // الخطأ يعرضه الهوك نفسه — ونكمل البقية
@@ -1133,23 +1168,21 @@ function StreamPane({
         dragDepth.current = 0
         setDragging(false)
         const files = Array.from(e.dataTransfer.files ?? [])
-        if (files.length) void sendFiles(files)
+        if (files.length) stageFiles(files)
       }}
-      // لصق صورة أو ملف (لقطة شاشة مثلاً) في حقل الكتابة يرسلها كما لو أُفلتت
+      // لصق صورة أو ملف (لقطة شاشة مثلاً) في حقل الكتابة يجهّزها كما لو أُفلتت
       onPaste={(e) => {
         const files = Array.from(e.clipboardData?.files ?? [])
         if (!files.length) return
         e.preventDefault()
-        void sendFiles(files)
+        stageFiles(files)
       }}
     >
       {dragging && (
         <div className="pointer-events-none absolute inset-2 z-20 flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gold bg-card/90 backdrop-blur-sm">
           <Paperclip className="h-8 w-8 text-gold" />
-          <p className="text-sm font-semibold text-foreground">أفلت الملفات هنا لإرسالها</p>
-          <p className="text-xs text-muted-foreground">
-            {draft.trim() ? 'وما كتبتَه يصير تعليقاً على أولها' : 'تُرسل في هذا النقاش بترتيبها'}
-          </p>
+          <p className="text-sm font-semibold text-foreground">أفلت الملفات هنا</p>
+          <p className="text-xs text-muted-foreground">اكتب تعليقك ثم أرسلها — تُرسل بترتيبها</p>
         </div>
       )}
       <div className="flex items-center gap-2 border-b border-border/60 px-4 py-3">
@@ -1261,6 +1294,12 @@ function StreamPane({
               caseId={caseId}
               mine={m.author_id === teamMember?.id}
               onOpenThread={() => openThread(m)}
+              onReply={() => setReplyTo(m)}
+              onOpenParent={() => {
+                // الاقتباس يفتح خيط الأصل
+                const root = msgs.find((x) => x.id === m.parent_id)
+                if (root) openThread(root)
+              }}
               receipt={readCounts?.[extras[extras.length - 1]?.id ?? m.id] ?? readCounts?.[m.id]}
               flash={m.id === flashId || extras.some((x) => x.id === flashId)}
             />
@@ -1276,7 +1315,13 @@ function StreamPane({
         onAttach={attach}
         sending={post.isPending}
         uploading={postFile.isPending}
-        placeholder="اكتب رسالة… @ لمنشن زميل أو الذكاء"
+        placeholder={
+          pendingFiles.length ? 'أضف تعليقاً… ثم Enter للإرسال' : 'اكتب رسالة… @ لمنشن زميل أو الذكاء'
+        }
+        replyTo={replyTo}
+        onCancelReply={() => setReplyTo(null)}
+        pendingFiles={pendingFiles}
+        onRemoveFile={(i) => setPendingFiles((old) => old.filter((_, j) => j !== i))}
       />
     </div>
   )
@@ -1301,6 +1346,8 @@ function MessageBubble({
   caseId,
   mine,
   onOpenThread,
+  onReply,
+  onOpenParent,
   receipt,
   flash = false,
 }: {
@@ -1312,6 +1359,10 @@ function MessageBubble({
   caseId: string | null
   mine: boolean
   onOpenThread: () => void
+  /** «ردّ» كالواتساب — يقتبسها في حقل الكتابة */
+  onReply?: () => void
+  /** لمسة الاقتباس تفتح خيط الأصل */
+  onOpenParent?: () => void
   /** إيصال القراءة لرسالتي */
   receipt?: ReadCount
   /** وميض الوصول إليها من إشعار */
@@ -1363,9 +1414,16 @@ function MessageBubble({
               mine ? 'right-2' : 'left-2'
             )}
           >
-            <MessageActions msg={msg} caseId={caseId} mine={mine} onReply={onOpenThread} />
+            <MessageActions msg={msg} caseId={caseId} mine={mine} onReply={onOpenThread} onQuote={onReply} />
           </div>
 
+        {msg.parent_id && (
+          <QuoteBlock
+            author={msg.parent_author ?? null}
+            text={quoteSnippet(msg.parent_body ?? null, msg.parent_doc_name ?? null)}
+            onClick={onOpenParent}
+          />
+        )}
         {msg.body && !isAudioName(msg.document_name) && (
           <Body text={msg.body} className="whitespace-pre-wrap text-sm text-foreground" />
         )}
@@ -1549,6 +1607,7 @@ function MessageActions({
   caseId,
   mine,
   onReply,
+  onQuote,
 }: {
   msg: {
     id: string
@@ -1561,6 +1620,8 @@ function MessageActions({
   mine: boolean
   /** «ردّ في خيط» في شريط الأزرار — بدل سطر تحت الرسالة يمدّها عند المرور (طلب المدير 2026-09-29) */
   onReply?: () => void
+  /** «ردّ» كالواتساب: يقتبس الرسالة في حقل الكتابة، ويُسجَّل الرد في خيطها ويظهر في النقاش (2026-11-03) */
+  onQuote?: () => void
 }) {
   const react = useToggleReaction()
   const bookmark = useToggleBookmark()
@@ -1572,11 +1633,22 @@ function MessageActions({
 
   return (
     <span className="mr-auto flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+      {onQuote && (
+        <button
+          type="button"
+          title="ردّ — يظهر هنا باقتباسها ويُسجَّل في خيطها"
+          aria-label="ردّ"
+          onClick={onQuote}
+          className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-gold"
+        >
+          <Reply className="h-3.5 w-3.5" />
+        </button>
+      )}
       {onReply && (
         <button
           type="button"
-          title="ردّ في خيط"
-          aria-label="ردّ في خيط"
+          title="افتح الخيط"
+          aria-label="افتح الخيط"
           onClick={onReply}
           className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-gold"
         >
@@ -1987,6 +2059,10 @@ function Composer({
   sending,
   uploading,
   placeholder,
+  replyTo = null,
+  onCancelReply,
+  pendingFiles = [],
+  onRemoveFile,
 }: {
   draft: string
   setDraft: (v: string) => void
@@ -1995,9 +2071,34 @@ function Composer({
   sending: boolean
   uploading: boolean
   placeholder: string
+  replyTo?: StreamMsg | null
+  onCancelReply?: () => void
+  pendingFiles?: File[]
+  onRemoveFile?: (i: number) => void
 }) {
+  const canSend = !!draft.trim() || pendingFiles.length > 0
   return (
     <div className="border-t border-border/60 p-3">
+      {replyTo && (
+        <div className="mb-2 flex items-center gap-2">
+          <Reply className="h-4 w-4 shrink-0 text-gold" />
+          <div className="min-w-0 flex-1">
+            <QuoteBlock
+              author={`تردّ على ${quoteAuthor(replyTo) ?? '—'}`}
+              text={quoteSnippet(replyTo.body, replyTo.document_name)}
+            />
+          </div>
+          <button
+            type="button"
+            onClick={onCancelReply}
+            className="rounded-full p-1 text-muted-foreground hover:bg-muted"
+            aria-label="إلغاء الرد"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+      {pendingFiles.length > 0 && <PendingFiles files={pendingFiles} onRemove={(i) => onRemoveFile?.(i)} />}
       {uploading && (
         <p className="mb-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -2034,10 +2135,79 @@ function Composer({
           placeholder={placeholder}
           className="min-h-[42px] resize-none"
         />
-        <Button variant="gold" size="icon" disabled={!draft.trim() || sending} onClick={onSend}>
+        <Button variant="gold" size="icon" disabled={!canSend || sending || uploading} onClick={onSend}>
           {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
         </Button>
       </div>
+    </div>
+  )
+}
+
+/* ===================== الرد والمرفقات المجهّزة ===================== */
+
+function quoteAuthor(m: { kind: string | null; author_name: string | null }): string | null {
+  return m.kind === 'ai' ? 'الذكاء' : m.author_name
+}
+
+/** مقتطف الأصل: نصه، وإلا نوع مرفقه */
+function quoteSnippet(body: string | null, doc: string | null): string {
+  if (body?.trim()) return body.trim()
+  if (isAudioName(doc)) return '🎤 ملاحظة صوتية'
+  if (isImageName(doc)) return '📷 صورة'
+  if (doc) return `📎 ${doc}`
+  return 'رسالة'
+}
+
+/** اقتباس الأصل فوق الرد — بشريط ذهبي كالواتساب */
+function QuoteBlock({ author, text, onClick }: { author: string | null; text: string; onClick?: () => void }) {
+  const Tag = onClick ? 'button' : 'div'
+  return (
+    <Tag
+      type={onClick ? 'button' : undefined}
+      onClick={onClick}
+      title={onClick ? 'افتح الخيط' : undefined}
+      className={cn(
+        'mb-1.5 block w-full rounded-lg border-r-[3px] border-gold bg-navy/5 px-2.5 py-1.5 text-right dark:bg-navy-100/10',
+        onClick && 'transition-colors hover:bg-navy/10'
+      )}
+    >
+      <span className="block text-[11px] font-semibold text-gold-600 dark:text-gold-300">{author ?? '—'}</span>
+      <span className="line-clamp-2 text-xs text-muted-foreground">{text}</span>
+    </Tag>
+  )
+}
+
+/** المرفقات المجهّزة فوق الحقل — مصغّرات للصور، واسم للملفات، وإزالة لكلٍّ منها */
+function PendingFiles({ files, onRemove }: { files: File[]; onRemove: (i: number) => void }) {
+  // الروابط تُنشأ وتُلغى في الأثر نفسه — إنشاؤها في useMemo كان يُلغى قبل العرض (الأثر يُعاد مرتين في التطوير)
+  const [urls, setUrls] = useState<(string | null)[]>([])
+  useEffect(() => {
+    const made = files.map((f) => (f.type.startsWith('image/') ? URL.createObjectURL(f) : null))
+    setUrls(made)
+    return () => made.forEach((u) => u && URL.revokeObjectURL(u))
+  }, [files])
+  return (
+    <div className="mb-2 flex gap-2 overflow-x-auto pb-1 pt-1.5">
+      {files.map((f, i) => (
+        <div key={`${f.name}-${i}`} className="relative shrink-0">
+          {urls[i] ? (
+            <img src={urls[i]!} alt={f.name} className="h-16 w-16 rounded-lg border border-border/60 object-cover" />
+          ) : (
+            <div className="flex h-16 w-28 flex-col items-center justify-center gap-1 rounded-lg border border-border/60 bg-gold/5 px-1.5">
+              <FileText className="h-5 w-5 text-gold" />
+              <span className="line-clamp-2 w-full text-center text-[10px] leading-tight text-foreground">{f.name}</span>
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={() => onRemove(i)}
+            className="absolute -left-1.5 -top-1.5 rounded-full bg-navy p-0.5 text-white shadow"
+            aria-label={`إزالة ${f.name}`}
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </div>
+      ))}
     </div>
   )
 }

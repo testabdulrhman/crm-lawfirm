@@ -19,6 +19,8 @@ struct MessageActionsSheet: View {
     let createdAt: String?
     let onChange: () -> Void
     let onEdit: (() -> Void)?
+    /// «ردّ» كالواتساب — يقتبس الرسالة في حقل الكتابة (nil داخل الخيط: كل ما فيه ردّ أصلاً)
+    var onReply: (() -> Void)? = nil
 
     @EnvironmentObject private var sb: SB
     @Environment(\.dismiss) private var dismiss
@@ -40,6 +42,10 @@ struct MessageActionsSheet: View {
             Divider().overlay(Theme.line)
 
             VStack(spacing: 0) {
+                if let onReply {
+                    actionRow("ردّ", "arrowshape.turn.up.left") { onReply() }
+                    Divider().overlay(Theme.line).padding(.leading, 46)
+                }
                 actionRow(
                     bookmarked ? "إزالة من المحفوظات" : "حفظ للرجوع إليها",
                     bookmarked ? "bookmark.slash" : "bookmark"
@@ -79,7 +85,8 @@ struct MessageActionsSheet: View {
     // MARK: - صف التفاعل الأفقي
 
     private var reactionRow: some View {
-        HStack(spacing: 4) {
+        // سبعة تتسع في عرض المنبثقة (٣٠٠) — ٣٨ لكل واحد
+        HStack(spacing: 2) {
             ForEach(QUICK_EMOJIS, id: \.self) { e in
                 let isMine = reactions.first(where: { $0.e == e })?.me ?? false
                 Button {
@@ -92,8 +99,8 @@ struct MessageActionsSheet: View {
                     dismiss()
                 } label: {
                     Text(e)
-                        .font(.system(size: 23))
-                        .frame(width: 42, height: 42)
+                        .font(.system(size: 22))
+                        .frame(width: 38, height: 38)
                         .background(isMine ? Theme.goldPale : Color.clear)
                         .clipShape(Circle())
                         .overlay(
@@ -103,7 +110,7 @@ struct MessageActionsSheet: View {
                 .buttonStyle(.plain)
             }
         }
-        .padding(.horizontal, 10)
+        .padding(.horizontal, 8)
         .padding(.vertical, 8)
     }
 
@@ -145,6 +152,7 @@ private struct MessageActionsModifier: ViewModifier {
     let createdAt: String?
     let onChange: () -> Void
     let onEdit: (() -> Void)?
+    var onReply: (() -> Void)? = nil
 
     @State private var open = false
 
@@ -163,7 +171,8 @@ private struct MessageActionsModifier: ViewModifier {
                     mine: mine,
                     createdAt: createdAt,
                     onChange: onChange,
-                    onEdit: onEdit
+                    onEdit: onEdit,
+                    onReply: onReply
                 )
                 // منبثقة حقيقية بسهم على الآيفون لا ورقة تغطي الشاشة
                 .presentationCompactAdaptation(.popover)
@@ -181,12 +190,13 @@ extension View {
         mine: Bool,
         createdAt: String?,
         onChange: @escaping () -> Void,
-        onEdit: (() -> Void)?
+        onEdit: (() -> Void)?,
+        onReply: (() -> Void)? = nil
     ) -> some View {
         modifier(MessageActionsModifier(
             commentId: commentId, messageBody: messageBody, reactions: reactions,
             bookmarked: bookmarked, mine: mine, createdAt: createdAt,
-            onChange: onChange, onEdit: onEdit
+            onChange: onChange, onEdit: onEdit, onReply: onReply
         ))
     }
 }

@@ -238,6 +238,11 @@ struct StreamMsg: Codable, Identifiable {
     let last_reply_at: String?
     let reactions: [Reaction]?
     let bookmarked: Bool?
+    /// ردٌّ على رسالة (كالواتساب، 2026-11-03): أصله في خيطه ومقتطفه فوق الفقاعة
+    var parent_id: String? = nil
+    var parent_author: String? = nil
+    var parent_body: String? = nil
+    var parent_doc_name: String? = nil
 }
 
 /// ردّ داخل خيط — من دالة case_thread() (نفس تخصيب المجرى)

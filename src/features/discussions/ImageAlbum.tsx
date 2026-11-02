@@ -23,12 +23,14 @@ export function isLoneImage(m: {
   document_name?: string | null
   body?: string | null
   reply_count?: number | null
+  parent_id?: string | null
 }): boolean {
   return (
     (m.kind ?? 'user') === 'user' &&
     isImageName(m.document_name) &&
     !(m.body ?? '').trim() &&
-    (m.reply_count ?? 0) === 0
+    (m.reply_count ?? 0) === 0 &&
+    !m.parent_id // الرد باقتباسه لا يذوب في ألبوم
   )
 }
 
