@@ -17,6 +17,9 @@ import {
   Settings,
   LayoutDashboard,
   CornerDownLeft,
+  FileText,
+  ListChecks,
+  Gavel,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -31,11 +34,17 @@ import {
 } from '@/hooks/useGlobalSearch'
 import { caseStatusLabel, caseStatusBadge } from '@/lib/caseLabels'
 import { poaStatusLabel, poaStatusBadge } from '@/lib/poaLabels'
+import { matterHref } from '@/lib/matterHref'
+import { FilePreviewDialog } from '@/components/FilePreviewDialog'
 
 const GROUPS: { kind: SearchKind; label: string; icon: typeof Scale }[] = [
   { kind: 'case', label: 'القضايا', icon: Scale },
   { kind: 'contact', label: 'العملاء', icon: User },
   { kind: 'poa', label: 'الوكالات', icon: FileSignature },
+  { kind: 'document', label: 'المستندات', icon: FileText },
+  { kind: 'task', label: 'المهام', icon: ListChecks },
+  { kind: 'outgoing', label: 'الصادر', icon: Send },
+  { kind: 'ruling', label: 'الأحكام', icon: Gavel },
   { kind: 'discussion', label: 'النقاشات', icon: MessagesSquare },
 ]
 
@@ -55,8 +64,12 @@ const NAV_ACTIONS: { label: string; href: string; icon: LucideIcon }[] = [
 ]
 
 function hrefFor(r: GlobalSearchResult): string {
-  if (r.kind === 'case') return `/cases/${r.id}`
+  if (r.kind === 'case') return matterHref(r.matter_kind, r.id)
   if (r.kind === 'contact') return `/contacts/${r.id}`
+  if (r.kind === 'task') return `/tasks/${r.id}`
+  if (r.kind === 'outgoing') return `/outgoing/${r.id}`
+  // الحكم في ملفه، والمستند بلا رابط يفتح ملفه
+  if ((r.kind === 'ruling' || r.kind === 'document') && r.case_id) return matterHref(r.matter_kind, r.case_id)
   // نتيجة نقاش: id هو معرّف الملف (أو الرسالة للقناة العامة) — تفتح النقاشات
   if (r.kind === 'discussion') return '/discussions'
   return `/poa/${r.id}`
@@ -92,6 +105,10 @@ export function GlobalSearch() {
       case: [],
       contact: [],
       poa: [],
+      document: [],
+      task: [],
+      outgoing: [],
+      ruling: [],
       discussion: [],
     }
     for (const r of data ?? []) {
@@ -162,7 +179,16 @@ export function GlobalSearch() {
       ?.scrollIntoView({ block: 'nearest' })
   }, [highlight])
 
+  // المستند يُعاين مكانه (البحث في نصّه غايته الملف نفسه) — وبلا رابط يفتح ملفه
+  const [preview, setPreview] = useState<{ name: string; url: string } | null>(null)
+
   const goItem = (it: Item) => {
+    if (it.type === 'result' && it.r.kind === 'document' && it.r.url) {
+      setPreview({ name: it.r.title, url: it.r.url })
+      setOpen(false)
+      inputRef.current?.blur()
+      return
+    }
     navigate(it.type === 'nav' ? it.href : hrefFor(it.r))
     setOpen(false)
     setQuery('')
@@ -180,6 +206,14 @@ export function GlobalSearch() {
 
   return (
     <div ref={containerRef} className="relative w-full max-w-md">
+      {preview && (
+        <FilePreviewDialog
+          open
+          onOpenChange={(v) => !v && setPreview(null)}
+          fileName={preview.name}
+          fileUrl={preview.url}
+        />
+      )}
       <Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
       <input
         ref={inputRef}
@@ -207,7 +241,7 @@ export function GlobalSearch() {
             goItem(items[Math.min(highlight, items.length - 1)])
           }
         }}
-        placeholder="بحث أو انتقال…"
+        placeholder="ابحث في كل شيء… حتى داخل المستندات"
         role="combobox"
         aria-label="بحث عام"
         aria-expanded={showPanel}

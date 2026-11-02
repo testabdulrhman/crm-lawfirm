@@ -3,7 +3,8 @@ import { useQuery } from '@tanstack/react-query'
 
 import { supabase } from '@/lib/supabase'
 
-export type SearchKind = 'case' | 'contact' | 'poa' | 'discussion'
+// المستندات (حتى نصّها) والمهام والصادر والأحكام — طلب المدير 2026-11-03: «يبحث عن كل شيء»
+export type SearchKind = 'case' | 'contact' | 'poa' | 'document' | 'task' | 'outgoing' | 'ruling' | 'discussion'
 
 export interface GlobalSearchResult {
   kind: SearchKind
@@ -11,6 +12,12 @@ export interface GlobalSearchResult {
   title: string
   subtitle: string | null
   status: string | null
+  /** الملف المرتبط (للمستند والمهمة والحكم والنقاش) */
+  case_id: string | null
+  /** رابط الملف نفسه — المستند والخطاب والحكم */
+  url: string | null
+  /** نوع الملف — يحدّد صفحته (matterHref) */
+  matter_kind: string | null
 }
 
 // قيمة مؤجّلة (debounce)
