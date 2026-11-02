@@ -1338,6 +1338,12 @@ export interface StaffApplication {
   qualification_doc_url: string | null
   qualification_doc_name: string | null
   qualifications: string | null
+  /** ما كتبه المتقدّم في نموذج الموقع (2026-11-02) — المعدل من ٥ */
+  university: string | null
+  major: string | null
+  graduation_year: number | null
+  gpa: number | null
+  about_me: string | null
   bank_name: string | null
   bank_iban: string | null
   emergency_contact_name: string | null

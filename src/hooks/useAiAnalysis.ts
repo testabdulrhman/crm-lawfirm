@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { toast } from '@/hooks/use-toast'
 import { errMessage } from '@/lib/errors'
-import type { Engagement, EngagementInstallment } from '@/types/db'
+import type { Engagement, EngagementInstallment, StaffApplication } from '@/types/db'
 
 // نتيجة تحليل المتقدّم المحلَّلة (قد تكون null لو تعذّر تحليل JSON)
 export interface ApplicantAnalysis {
@@ -21,6 +21,20 @@ export interface AnalyzeResult {
   parsed: ApplicantAnalysis | null
   text: string
   used_cv: boolean
+}
+
+/** ما كتبه المتقدّم في نموذج الموقع يُرسل للتحليل مع المؤهل — ومنه نصّه «بطريقته» (2026-11-02) */
+export function applicantQualifications(a: StaffApplication): string {
+  return [
+    a.qualifications,
+    a.university && `الجامعة: ${a.university}`,
+    a.major && `التخصص: ${a.major}`,
+    a.gpa != null && `المعدل كما كتبه المتقدّم: ${a.gpa} من 5`,
+    a.graduation_year && `سنة التخرج: ${a.graduation_year}`,
+    a.about_me && `ما كتبه المتقدّم عن نفسه («تخيّل أن سيرتك لم تصلنا… ماذا تودّ أن تقول لنا؟»):\n${a.about_me.slice(0, 6000)}`,
+  ]
+    .filter(Boolean)
+    .join('\n')
 }
 
 interface AnalyzeArgs {

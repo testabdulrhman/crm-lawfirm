@@ -165,7 +165,7 @@ Deno.serve(async (req) => {
     }
 
     // ===== تقديم جديد (السلوك الأصلي) =====
-    const { full_name, phone, email, qualifications, website, cv_base64, cv_name } = body ?? {};
+    const { full_name, phone, email, qualifications, university, gpa, major, graduation_year, date_of_birth, about_me, website, cv_base64, cv_name } = body ?? {};
 
     if (website) return json({ success: true });
 
@@ -175,6 +175,18 @@ Deno.serve(async (req) => {
 
     const cleanName = String(full_name).trim();
     const cleanPhone = String(phone).trim();
+
+    // المعدل من ٥ (طلب المدير 2026-11-02) — يقبل الأرقام العربية والفاصلة العربية
+    let cleanGpa: number | null = null;
+    if (gpa !== undefined && gpa !== null && String(gpa).trim() !== "") {
+      const n = Number(String(gpa).trim().replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d))).replace(/[٫,]/g, "."));
+      if (!Number.isFinite(n) || n < 0 || n > 5) return json({ error: "المعدل يُكتب من 5 (مثال: 4.25)" }, 400);
+      cleanGpa = Math.round(n * 100) / 100;
+    }
+    const gradYear = Number(String(graduation_year ?? "").replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d))));
+    const cleanGradYear = Number.isInteger(gradYear) && gradYear >= 1960 && gradYear <= 2040 ? gradYear : null;
+    const dob = String(date_of_birth ?? "").trim();
+    const cleanDob = /^(19|20)\d\d-\d\d-\d\d$/.test(dob) && !isNaN(Date.parse(dob)) ? dob : null;
 
     let cv_url: string | null = null;
     let stored_cv_name: string | null = null;
@@ -195,6 +207,12 @@ Deno.serve(async (req) => {
       full_name: cleanName, phone: cleanPhone,
       email: email ? String(email).trim() : null,
       qualifications: qualifications ? String(qualifications).trim() : null,
+      university: university ? String(university).trim().slice(0, 200) : null,
+      gpa: cleanGpa,
+      major: major ? String(major).trim().slice(0, 200) : null,
+      graduation_year: cleanGradYear,
+      date_of_birth: cleanDob,
+      about_me: about_me ? String(about_me).trim().slice(0, 20000) : null,
       cv_url, cv_name: stored_cv_name, status: "pending",
     }).select("id").single();
     if (insErr) { await logError(supabase, "insert", insErr.message); return json({ error: "تعذّر حفظ الطلب" }, 500); }

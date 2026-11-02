@@ -63,6 +63,7 @@ import { toast } from '@/hooks/use-toast'
 import { useAuth } from '@/stores/auth'
 import { useIsDirector } from '@/hooks/useIsDirector'
 import {
+  applicantQualifications,
   useAnalyzeApplicant,
   useSavedApplicantAnalysis,
 } from '@/hooks/useAiAnalysis'
@@ -274,8 +275,18 @@ export function ApplicationDetail({ id }: { id: string }) {
       </Section>
 
       <Section title="المؤهلات">
+        <Row label="الجامعة" value={a.university} />
+        <Row label="التخصص" value={a.major} />
+        <Row label="المعدل" value={a.gpa != null ? `${fmtNumber(a.gpa)} من 5` : null} />
+        <Row label="سنة التخرج" value={a.graduation_year ? String(a.graduation_year) : null} />
         <Row label="المؤهلات" value={a.qualifications} full />
       </Section>
+
+      {a.about_me && (
+        <Section title="بطريقته — «ماذا تودّ أن تقول لنا؟»">
+          <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground sm:col-span-2">{a.about_me}</p>
+        </Section>
+      )}
 
       <Section title="البيانات البنكية">
         <Row label="اسم البنك" value={a.bank_name} />
@@ -599,7 +610,7 @@ function AiAnalysisCard({ app: a }: { app: StaffApplication }) {
       application_id: a.id,
       analyzed_by: teamMember?.name ?? null,
       full_name: a.full_name,
-      qualifications: a.qualifications,
+      qualifications: applicantQualifications(a),
       email: a.email,
       cv_url: a.cv_url,
     })

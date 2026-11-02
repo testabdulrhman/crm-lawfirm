@@ -26,7 +26,7 @@ import { fmtDatePref, fmtNumber } from '@/lib/format'
 import { toast } from '@/hooks/use-toast'
 import { useAuth } from '@/stores/auth'
 import { useStaffApplications } from '@/hooks/useStaffApplications'
-import { useAnalyzeApplicant, useApplicantAnalyses, type SavedAnalysis } from '@/hooks/useAiAnalysis'
+import { applicantQualifications, useAnalyzeApplicant, useApplicantAnalyses, type SavedAnalysis } from '@/hooks/useAiAnalysis'
 import { usePageState } from '@/hooks/usePageState'
 import {
   APP_STATUS_OPTIONS,
@@ -56,7 +56,14 @@ const FACETS: { key: FacetKey; label: string }[] = [
   { key: 'suggested_role', label: 'الوظيفة المقترحة' },
 ]
 const ANY = '__any'
-const sortValue = (an: SavedAnalysis | undefined, k: SortKey): number => {
+/** ما كتبه المتقدّم في النموذج يُقدَّم على قراءة الذكاء للجامعة والتخصص والمعدل وسنة التخرج (2026-11-02) */
+const declared = (a: StaffApplication, k: FacetKey): string | null =>
+  k === 'university' ? a.university : k === 'major' ? a.major : null
+const facetValue = (a: StaffApplication, an: SavedAnalysis | undefined, k: FacetKey) =>
+  (declared(a, k) || an?.[k] || '').trim()
+const sortValue = (a: StaffApplication, an: SavedAnalysis | undefined, k: SortKey): number => {
+  if (k === 'gpa' && a.gpa != null) return (a.gpa / 5) * 100
+  if (k === 'graduation' && a.graduation_year) return a.graduation_year
   if (!an) return -1
   if (k === 'fit') return an.fit_score ?? -1
   if (k === 'gpa') return an.gpa_pct ?? -1
@@ -111,7 +118,7 @@ export function StaffApplicationsPage() {
           application_id: a.id,
           analyzed_by: teamMember?.name ?? null,
           full_name: a.full_name,
-          qualifications: a.qualifications,
+          qualifications: applicantQualifications(a),
           email: a.email,
           cv_url: a.cv_url,
         })
@@ -148,19 +155,19 @@ export function StaffApplicationsPage() {
 
   const byApp = useMemo(() => new Map((analyses ?? []).map((x) => [x.application_id, x])), [analyses])
 
-  // قيم كل فلتر من التحليلات نفسها، بعددها — الأكثر أولاً
+  // قيم كل فلتر مما كتبه المتقدّم أو قرأه الذكاء، بعددها — الأكثر أولاً
   const facetOptions = useMemo(() => {
     const out = {} as Record<FacetKey, { value: string; count: number }[]>
     for (const f of FACETS) {
       const m = new Map<string, number>()
-      for (const x of analyses ?? []) {
-        const v = (x[f.key] ?? '').trim()
+      for (const a of data ?? []) {
+        const v = facetValue(a, byApp.get(a.id), f.key)
         if (v) m.set(v, (m.get(v) ?? 0) + 1)
       }
       out[f.key] = [...m].map(([value, count]) => ({ value, count })).sort((a, b) => b.count - a.count)
     }
     return out
-  }, [analyses])
+  }, [data, byApp])
 
   const facetActive = FACETS.some((f) => facet[f.key])
   const list = useMemo(() => {
@@ -168,11 +175,11 @@ export function StaffApplicationsPage() {
     if (facetActive) {
       rows = rows.filter((a) => {
         const an = byApp.get(a.id)
-        return FACETS.every((f) => !facet[f.key] || (an?.[f.key] ?? '').trim() === facet[f.key])
+        return FACETS.every((f) => !facet[f.key] || facetValue(a, an, f.key) === facet[f.key])
       })
     }
     if (sort !== 'newest') {
-      rows = [...rows].sort((x, y) => sortValue(byApp.get(y.id), sort) - sortValue(byApp.get(x.id), sort))
+      rows = [...rows].sort((x, y) => sortValue(y, byApp.get(y.id), sort) - sortValue(x, byApp.get(x.id), sort))
     }
     return rows
   }, [data, filter, facet, facetActive, sort, byApp])
@@ -248,7 +255,7 @@ export function StaffApplicationsPage() {
       {(analyses?.length ?? 0) > 0 && (
         <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-violet-200/70 bg-violet-50/40 p-2.5 dark:border-violet-900/50 dark:bg-violet-950/20">
           <span className="flex items-center gap-1.5 px-1 text-xs font-medium text-violet-700 dark:text-violet-300">
-            <Sparkles className="h-3.5 w-3.5" /> من قراءة السير
+            <Sparkles className="h-3.5 w-3.5" /> فرز وتصفية
           </span>
           <Select value={sort} onValueChange={(v) => setSort(v as SortKey)}>
             <SelectTrigger className="h-8 w-auto min-w-36 gap-1.5 bg-background text-xs">
@@ -377,7 +384,8 @@ function ApplicationCard({
   analysis?: SavedAnalysis
   onOpen: () => void
 }) {
-  const edu = [an?.degree, an?.major, an?.university].filter(Boolean).join(' · ')
+  const edu = [an?.degree, a.major || an?.major, a.university || an?.university].filter(Boolean).join(' · ')
+  const gradYear = a.graduation_year ?? an?.graduation_year
   return (
     <Card
       role="button"
@@ -417,18 +425,22 @@ function ApplicationCard({
           <span className="text-muted-foreground">{fmtDatePref(a.created_at)}</span>
         </div>
 
-        {an && (
+        {(an || edu || a.gpa != null) && (
           <div className="space-y-1 rounded-xl bg-violet-50/60 px-2.5 py-2 text-xs dark:bg-violet-950/25">
             {edu && (
               <p className="flex items-start gap-1.5 text-foreground">
                 <GraduationCap className="mt-0.5 h-3.5 w-3.5 shrink-0 text-violet-600 dark:text-violet-300" />
-                <span className="line-clamp-2">{edu}{an.graduation_year ? ` — ${an.graduation_year}` : ''}</span>
+                <span className="line-clamp-2">{edu}{gradYear ? ` — ${gradYear}` : ''}</span>
               </p>
             )}
             <p className="flex flex-wrap gap-x-3 gap-y-0.5 text-muted-foreground">
-              {an.fit_score != null && <span>الملاءمة <b className="text-foreground">{fmtNumber(an.fit_score)}/10</b></span>}
-              {an.gpa_pct != null && <span>المعدل <b className="text-foreground">{fmtNumber(an.gpa_pct)}٪</b></span>}
-              {an.experience_num != null && (
+              {an?.fit_score != null && <span>الملاءمة <b className="text-foreground">{fmtNumber(an.fit_score)}/10</b></span>}
+              {a.gpa != null ? (
+                <span>المعدل <b className="text-foreground">{fmtNumber(a.gpa)}</b> من 5</span>
+              ) : (
+                an?.gpa_pct != null && <span>المعدل <b className="text-foreground">{fmtNumber(an.gpa_pct)}٪</b></span>
+              )}
+              {an?.experience_num != null && (
                 <span>{an.experience_num === 0 ? 'حديث تخرج' : <>خبرة <b className="text-foreground">{fmtNumber(an.experience_num)}</b> سنة</>}</span>
               )}
             </p>
