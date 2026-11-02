@@ -269,6 +269,9 @@ struct NotificationsView: View {
                 // تذكير جلسة / ملخّص ما قبل الجلسة / أي إشعار مربوط بملف —
                 // يفتح ملف القضية (تبويب المشاريع) حيث الجلسات والملخّص
                 PushRouter.shared.route = "/cases/\(caseId)"
+            } else if n.type == "approval_request" {
+                // طلب اعتماد خطاب صادر — قائمة «بانتظار توقيعك» (كان النقر لا يفعل شيئاً)
+                PushRouter.shared.route = "/sign"
             } else if n.type == "hr_request" {
                 // طلب إجازة/استئذان من موظف — كان النقر لا يفعل شيئاً
                 PushRouter.shared.route = "/hr/approvals"

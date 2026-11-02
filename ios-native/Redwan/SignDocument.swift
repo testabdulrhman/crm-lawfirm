@@ -13,6 +13,35 @@ import UIKit
 
 // MARK: - البيانات
 
+/// طلب اعتماد خطاب من صفحة الصادر (outgoing_approvals) — كما يطلبه الموظف في الويب
+struct OutgoingApprovalRow: Codable, Identifiable {
+    struct Person: Codable { let id: String?; let name: String?; let short_name: String?; let phone: String? }
+    struct Letter: Codable {
+        let id: String
+        let letter_number: String?
+        let subject: String?
+        let letter_date: String?
+        let file_url: String?
+        let recipient: String?
+    }
+    struct Pos: Codable { let page: Int?; let x: Double; let y: Double }
+    let id: String
+    let letter_id: String
+    let note: String?
+    let requested_at: String?
+    let apply_mode: String?
+    let stamp_page: Int?
+    let stamp_x: Double?
+    let stamp_y: Double?
+    let sig_pos: Pos?
+    let extra_sigs: [Pos]?
+    let requester: Person?
+    let letter: Letter?
+
+    var requesterName: String { requester?.short_name ?? requester?.name ?? "موظف" }
+    var letterTitle: String { letter?.subject ?? letter?.letter_number ?? "خطاب" }
+}
+
 struct SignRequestRow: Codable, Identifiable {
     struct Requester: Codable { let name: String?; let short_name: String? }
     let id: String
@@ -152,7 +181,8 @@ enum SignedPdf {
         pdf: PDFDocument, pageIndex: Int,
         stamp: UIImage?, stampCenter: CGPoint,
         signature: UIImage?, sigCenter: CGPoint,
-        numberLines: [String]?
+        numberLines: [String]?,
+        extraSigs: [(page: Int, center: CGPoint)] = []
     ) throws -> Data {
         guard pdf.pageCount > 0 else { throw SBError(message: "الملف بلا صفحات") }
         let renderer = UIGraphicsPDFRenderer(bounds: CGRect(x: 0, y: 0, width: 595, height: 842))
@@ -177,6 +207,14 @@ enum SignedPdf {
                     }
                     if let signature, signature.size.width > 0 {
                         signature.draw(in: rect(center: sigCenter, width: signatureWidth,
+                                                aspect: signature.size.height / signature.size.width, page: size),
+                                       blendMode: .normal, alpha: 0.95)
+                    }
+                }
+                // تواقيع إضافية اختارها الطالب في الويب (extra_sigs) — كلٌّ في صفحته
+                if let signature, signature.size.width > 0 {
+                    for e in extraSigs where e.page == i {
+                        signature.draw(in: rect(center: e.center, width: signatureWidth,
                                                 aspect: signature.size.height / signature.size.width, page: size),
                                        blendMode: .normal, alpha: 0.95)
                     }
@@ -392,10 +430,14 @@ struct SignSheet: View {
     let parentId: String
     let request: SignRequestRow?
     let onDone: () async -> Void
+    /// طلب اعتماد خطاب من صفحة الصادر (2026-11-03) — رقمه قائم، والموافقة تعتمد الطلب لا تُنشئ خطاباً
+    var outgoing: OutgoingApprovalRow? = nil
 
     @EnvironmentObject private var sb: SB
     @Environment(\.dismiss) private var dismiss
 
+    @State private var rejecting = false
+    @State private var rejectNote = ""
     @State private var pdf: PDFDocument?
     @State private var stamp: UIImage?
     @State private var signature: UIImage?
@@ -412,11 +454,12 @@ struct SignSheet: View {
 
     private var useStamp: Bool { mode != .signature && stamp != nil }
     private var useSig: Bool { mode != .stamp && signature != nil }
-    private var modes: [SignMode] {
+    private var modes: [SignMode] { modes(stamp: stamp, sig: signature) }
+    private func modes(stamp: UIImage?, sig: UIImage?) -> [SignMode] {
         SignMode.allCases.filter {
             switch $0 {
-            case .both: return stamp != nil && signature != nil
-            case .signature: return signature != nil
+            case .both: return stamp != nil && sig != nil
+            case .signature: return sig != nil
             case .stamp: return stamp != nil
             }
         }
@@ -439,12 +482,26 @@ struct SignSheet: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Theme.ivory)
-            .navigationTitle("توقيع الخطاب")
+            .navigationTitle(outgoing == nil ? "توقيع الخطاب" : "اعتماد خطاب صادر")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("إلغاء") { dismiss() }.disabled(busy)
                 }
+                if outgoing != nil {
+                    ToolbarItem(placement: .destructiveAction) {
+                        Button("رفض") { rejecting = true }
+                            .tint(Theme.danger)
+                            .disabled(busy)
+                    }
+                }
+            }
+            .alert("رفض طلب الاعتماد", isPresented: $rejecting) {
+                TextField("السبب (اختياري)", text: $rejectNote)
+                Button("رفض الطلب", role: .destructive) { Task { await rejectOutgoing() } }
+                Button("تراجع", role: .cancel) {}
+            } message: {
+                Text("يصل الموظفَ إشعارٌ ورسالة بالرفض وسببه.")
             }
         }
         .interactiveDismissDisabled(busy)
@@ -455,6 +512,24 @@ struct SignSheet: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(spacing: 12) {
+                    if let o = outgoing {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(o.letter?.subject ?? "خطاب")
+                                .font(.system(size: 15, weight: .bold))
+                                .foregroundStyle(Theme.navy)
+                            Text([o.letter?.letter_number, o.letter?.recipient.map { "إلى \($0)" }]
+                                .compactMap { $0 }.joined(separator: " · "))
+                                .font(.system(size: 12))
+                                .foregroundStyle(Theme.muted)
+                            Text("طلب \(o.requesterName)\(o.note.map { " — \($0)" } ?? "")")
+                                .font(.system(size: 12))
+                                .foregroundStyle(Theme.amber)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(10)
+                        .background(Theme.amber.opacity(0.08))
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                    }
                     if let r = request {
                         HStack(alignment: .top, spacing: 6) {
                             Image(systemName: "clock").foregroundStyle(Theme.amber)
@@ -475,6 +550,7 @@ struct SignSheet: View {
                         .pickerStyle(.segmented)
                     }
 
+                    if outgoing == nil {
                     Toggle(isOn: $asLetter) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("خطاب صادر").font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.navy)
@@ -486,6 +562,7 @@ struct SignSheet: View {
                     .padding(12)
                     .background(Theme.card)
                     .clipShape(RoundedRectangle(cornerRadius: 12))
+                    }
 
                     pageEditor(pdf)
 
@@ -501,10 +578,10 @@ struct SignSheet: View {
                     Text(errorText).font(.system(size: 12)).foregroundStyle(Theme.danger)
                         .multilineTextAlignment(.center)
                 }
-                Button { Task { await confirm(pdf) } } label: {
+                Button { Task { outgoing != nil ? await approveOutgoing(pdf) : await confirm(pdf) } } label: {
                     HStack(spacing: 8) {
                         if busy { ProgressView().tint(.white) } else { Image(systemName: "signature") }
-                        Text(busy ? "يوقّع…" : (asLetter ? "وقّع وسجّل في الصادر" : "وقّع وأرسل في الخيط"))
+                        Text(busy ? "يوقّع…" : (outgoing != nil ? "اعتمد ووقّع" : (asLetter ? "وقّع وسجّل في الصادر" : "وقّع وأرسل في الخيط")))
                             .font(.system(size: 16, weight: .bold))
                     }
                     .frame(maxWidth: .infinity)
@@ -549,12 +626,10 @@ struct SignSheet: View {
                     } else {
                         Rectangle().fill(.white)
                     }
-                    if asLetter && pageIndex == 0 {
+                    if let lines = previewNumberLines, pageIndex == 0 {
                         let r = SignedPdf.numberRect(lines: 2)
                         VStack(alignment: .leading, spacing: 0) {
-                            // العزل الاتجاهي يمنع النقاط من التبعثر حول الرقم اللاتيني في السطر العربي
-                            Text("رقم الصادر: \u{2066}OUT-\(Self.yy)-···\u{2069}")
-                            Text("التاريخ: \(SignedPdf.hijriYMD(Date()))")
+                            ForEach(lines, id: \.self) { Text($0) }
                         }
                         .font(.system(size: SignedPdf.numberFont * k, weight: .semibold))
                         .foregroundStyle(Color(hex: 0x1F2937))
@@ -572,6 +647,17 @@ struct SignSheet: View {
                     }
                     if useSig, let signature {
                         overlay(signature, width: SignedPdf.signatureWidth, center: effectiveSigPos, k: k, pt: pt, opacity: 0.95) { sigPos = $0 }
+                        // التواقيع الإضافية من الويب — تُعرض في مكانها ولا تُسحب هنا
+                        ForEach(Array(extraSigs.enumerated()), id: \.offset) { _, e in
+                            if e.page == pageIndex {
+                                let r = SignedPdf.rect(center: e.center, width: SignedPdf.signatureWidth,
+                                                       aspect: signature.size.height / max(signature.size.width, 1), page: pt)
+                                Image(uiImage: signature).resizable().opacity(0.95)
+                                    .frame(width: r.width * k, height: r.height * k)
+                                    .position(x: e.center.x * pt.width * k, y: e.center.y * pt.height * k)
+                                    .allowsHitTesting(false)
+                            }
+                        }
                     }
                 }
                 .frame(width: geo.size.width, height: pt.height * k)
@@ -582,6 +668,21 @@ struct SignSheet: View {
             .overlay(Rectangle().stroke(Theme.line, lineWidth: 1))
             .shadow(color: .black.opacity(0.08), radius: 6, y: 2)
         }
+    }
+
+    /// سطرا الرقم في المعاينة: رقم الخطاب الفعلي في الصادر، أو رقمٌ يُعطى عند التوقيع
+    private var previewNumberLines: [String]? {
+        if let o = outgoing {
+            guard let n = o.letter?.letter_number, !n.isEmpty else { return nil }
+            return SignedPdf.numberLines("\u{2066}\(n)\u{2069}", date: Fmt.date(o.letter?.letter_date) ?? Date())
+        }
+        // العزل الاتجاهي يمنع النقاط من التبعثر حول الرقم اللاتيني في السطر العربي
+        return asLetter ? ["رقم الصادر: \u{2066}OUT-\(Self.yy)-···\u{2069}", "التاريخ: \(SignedPdf.hijriYMD(Date()))"] : nil
+    }
+
+    /// تواقيع الطلب الإضافية (extra_sigs) بصفحاتها — صفرية الأساس
+    private var extraSigs: [(page: Int, center: CGPoint)] {
+        (outgoing?.extra_sigs ?? []).map { (max(($0.page ?? 1) - 1, 0), CGPoint(x: $0.x, y: $0.y)) }
     }
 
     private static var yy: String {
@@ -651,6 +752,7 @@ struct SignSheet: View {
 
     private func load() async {
         do {
+            let url = outgoing?.letter?.file_url ?? url
             guard let u = URL(string: url) else { throw SBError(message: "رابط الملف غير صالح") }
             async let fileData = URLSession.shared.data(from: u)
             async let assets = SignAssets.load(sb: sb)
@@ -667,6 +769,13 @@ struct SignSheet: View {
             signature = a.signature
             mode = a.signature != nil ? (a.stamp != nil ? .both : .signature) : .stamp
             pageIndex = doc.pageCount - 1 // كتلة التوقيع في آخر صفحة عادةً
+            if let o = outgoing {
+                // ما اختاره الطالب في الويب: النوع والموضع والصفحة — والمدير يعدّل إن شاء
+                if let m = SignMode(rawValue: o.apply_mode ?? ""), modes(stamp: a.stamp, sig: a.signature).contains(m) { mode = m }
+                if let x = o.stamp_x, let y = o.stamp_y { stampPos = CGPoint(x: x, y: y) }
+                if let p = o.stamp_page { pageIndex = min(max(p - 1, 0), doc.pageCount - 1) }
+                if let sp = o.sig_pos { sigPos = CGPoint(x: sp.x, y: sp.y) }
+            }
             pdf = doc
             renderPage(doc)
         } catch {
@@ -752,6 +861,85 @@ struct SignSheet: View {
             }
             errorText = uiErrorText(error) ?? error.localizedDescription
             busy = false
+        }
+    }
+    // MARK: - اعتماد خطاب الصادر (نظير useApproveLetter / useRejectLetter في الويب)
+
+    private func approveOutgoing(_ pdf: PDFDocument) async {
+        guard let o = outgoing, let letter = o.letter else { return }
+        busy = true
+        errorText = nil
+        do {
+            guard let me = sb.member?.id else { throw SBError(message: "لم يُحمَّل ملفك بعد — أعد المحاولة") }
+            let signed = try SignedPdf.make(
+                pdf: pdf, pageIndex: pageIndex,
+                stamp: useStamp ? stamp : nil, stampCenter: stampPos,
+                signature: useSig ? signature : nil, sigCenter: effectiveSigPos,
+                numberLines: letter.letter_number.flatMap { $0.isEmpty ? nil : SignedPdf.numberLines($0, date: Fmt.date(letter.letter_date) ?? Date()) },
+                extraSigs: useSig ? extraSigs : []
+            )
+            // المسار ASCII (مفاتيح التخزين ترفض العربية) — كـ<رقم>_signed.pdf في الويب
+            let base = String((letter.letter_number ?? "letter").map { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-") ? $0 : "_" })
+            let signedUrl = try await sb.storageUpload(
+                bucket: "documents", path: "outgoing/\(Int(Date().timeIntervalSince1970 * 1000))_\(base)_signed.pdf",
+                data: signed, mime: "application/pdf"
+            )
+            let now = ISO8601DateFormatter().string(from: Date())
+            try await sb.patch("outgoing_approvals", query: [("id", "eq.\(o.id)")], values: [
+                "status": "approved",
+                "original_file_url": letter.file_url ?? NSNull(),
+                "signed_file_url": signedUrl,
+                "approved_by": me, "approved_at": now,
+                "apply_mode": useStamp && useSig ? "both" : (useSig ? "signature" : "stamp"),
+                "stamp_page": pageIndex + 1, "stamp_x": stampPos.x, "stamp_y": stampPos.y,
+                "sig_pos": useSig ? ["x": effectiveSigPos.x, "y": effectiveSigPos.y] : NSNull(),
+            ])
+            // الملف الرئيسي للخطاب يصبح النسخة الموقّعة
+            try await sb.patch("outgoing_letters", query: [("id", "eq.\(letter.id)")], values: ["file_url": signedUrl])
+            await tellRequester(o, title: "اعتُمد خطابك ووُقّع ✓",
+                                sms: "تم اعتماد وتوقيع الخطاب ✓\n\(o.letterTitle)\nhttps://app.redwan.sa/#/outgoing/\(letter.id)")
+            busy = false
+            await onDone()
+            dismiss()
+        } catch {
+            errorText = uiErrorText(error) ?? error.localizedDescription
+            busy = false
+        }
+    }
+
+    private func rejectOutgoing() async {
+        guard let o = outgoing else { return }
+        busy = true
+        errorText = nil
+        let note = rejectNote.trimmingCharacters(in: .whitespacesAndNewlines)
+        do {
+            try await sb.patch("outgoing_approvals", query: [("id", "eq.\(o.id)")], values: [
+                "status": "rejected",
+                "note": note.isEmpty ? NSNull() : note,
+                "approved_by": sb.member?.id ?? NSNull(),
+                "approved_at": ISO8601DateFormatter().string(from: Date()),
+            ])
+            await tellRequester(o, title: "رُفض طلب اعتماد خطابك",
+                                sms: "تم رفض طلب اعتماد الخطاب\n\(o.letterTitle)\(note.isEmpty ? "" : "\nالسبب: \(note)")\nhttps://app.redwan.sa/#/outgoing/\(o.letter_id)",
+                                message: note.isEmpty ? o.letterTitle : "\(o.letterTitle) — \(note)")
+            busy = false
+            await onDone()
+            dismiss()
+        } catch {
+            errorText = uiErrorText(error) ?? error.localizedDescription
+            busy = false
+        }
+    }
+
+    /// إشعار في التطبيق (يدفع للجوال من القاعدة) + رسالة نصية كما في الويب — فشلهما لا يُلغي الاعتماد
+    private func tellRequester(_ o: OutgoingApprovalRow, title: String, sms: String, message: String? = nil) async {
+        guard let rid = o.requester?.id else { return }
+        try? await sb.insertVoid("notifications", values: [
+            "recipient_id": rid, "type": "approval_result", "title": title,
+            "message": message ?? o.letterTitle, "is_read": false, "channels": ["app", "push"],
+        ])
+        if let phone = o.requester?.phone, !phone.isEmpty {
+            _ = await sb.sendSms(phone: phone, message: sms, recipientName: o.requester?.name)
         }
     }
 }

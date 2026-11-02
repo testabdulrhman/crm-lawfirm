@@ -215,7 +215,7 @@ struct MainTabs: View {
         else if r.hasPrefix("/discussions") || r.hasPrefix("/clients") { tab = 4 }   // العملاء مفتاحٌ داخل النقاشات
         else if r.hasPrefix("/cases/") { tab = 1 }
         else if r.hasPrefix("/appointments") { tab = 3 }   // التقويم يحمل قائمة المواعيد
-        else if r == "/me" || r.hasPrefix("/hr") || r == "/office-documents" { tab = 0 }  // صفحتي والاعتمادات ومستندات المكتب من الرئيسية
+        else if r == "/me" || r.hasPrefix("/hr") || r == "/office-documents" || r == "/sign" { tab = 0 }  // صفحتي والاعتمادات ومستندات المكتب و«بانتظار توقيعك» من الرئيسية
     }
 }
 

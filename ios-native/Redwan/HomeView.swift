@@ -34,6 +34,9 @@ struct HomeView: View {
     @AppStorage("home.news.dismissed") private var newsDismissed = ""
     @State private var greetingId: String?
     @State private var pendingHr = 0
+    /// ما ينتظر توقيع المدير: اعتمادات الصادر + طلبات التوقيع من النقاشات (2026-11-03)
+    @State private var pendingSign = 0
+    @State private var showSignQueue = false
     @State private var openedTask: TaskRow?
     @State private var openingTaskId: String?
     @ObservedObject private var router = PushRouter.shared
@@ -117,6 +120,7 @@ struct HomeView: View {
             .navigationDestination(isPresented: $showPrefs) { NotificationPrefsView() }
             .navigationDestination(isPresented: $showMyPage) { MyPageView() }
             .navigationDestination(isPresented: $showApprovals) { HrApprovalsView() }
+            .navigationDestination(isPresented: $showSignQueue) { SignQueueView() }
             .navigationDestination(isPresented: $showNotifications) { NotificationsView() }
             .navigationDestination(isPresented: $showOfficeDocs) { OfficeDocumentsView() }
             .navigationDestination(item: $openedTask) { TaskDetailView(task: $0) }
@@ -189,6 +193,11 @@ struct HomeView: View {
                     newsCard(news)
                         .padding(.top, 14)
                         .transition(.opacity)
+                }
+
+                if isDirector && pendingSign > 0 {
+                    signPendingCard
+                        .padding(.top, 14)
                 }
 
                 if isDirector && pendingHr > 0 {
@@ -722,9 +731,37 @@ struct HomeView: View {
         .buttonStyle(.plain)
     }
 
+    private var signPendingCard: some View {
+        Button { showSignQueue = true } label: {
+            HStack(spacing: 12) {
+                iconTile("signature", tint: Theme.goldDark)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("بانتظار توقيعك")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Theme.navy)
+                    Text("خطابات الصادر وملفات النقاشات")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.muted)
+                }
+                Spacer(minLength: 8)
+                Text("\(pendingSign)")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(Theme.goldDark)
+                    .frame(minWidth: 26, minHeight: 26)
+                    .background(Theme.brandGold.opacity(0.22), in: Capsule())
+            }
+            .padding(14)
+            .homeCard(radius: 20)
+        }
+        .buttonStyle(.plain)
+    }
+
     /// إشعار «طلب من موظف» ← الاعتمادات، و«اعتُمد/رُفض طلبك» ← صفحتي
     private func openFromPush() {
         switch router.route {
+        case "/sign":
+            router.clear()
+            showSignQueue = true
         case "/me":
             router.clear()
             showMyPage = true
@@ -875,6 +912,7 @@ struct HomeView: View {
         async let doneR = try? sb.doneTodayCount(scope: effectiveScope)
         async let notesR = try? sb.notifications(limit: 50)
         async let hrR = Self.pendingHr(sb, director: director)
+        async let signR = director ? try? await sb.pendingSignCount() : 0
 
         let closure = await closureR
         let done = await doneR
@@ -901,6 +939,7 @@ struct HomeView: View {
             try? await UNUserNotificationCenter.current().setBadgeCount(unreadCount)
         }
         if let hr { pendingHr = hr }
+        if let sign = await signR { pendingSign = sign }
 
         if let ov = overview, shownScope == effectiveScope {
             // أداة «يومي» تتبع ما تراه هنا (تجلب بنفسها؛ هذا يقدّم موعدها لا أكثر)
