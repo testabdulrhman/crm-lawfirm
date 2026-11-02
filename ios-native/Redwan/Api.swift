@@ -450,6 +450,14 @@ extension SB {
     func uploadAttachment(
         data: Data, fileName: String, mime: String, caseId: String?
     ) async throws -> String {
+        try await uploadAttachmentFull(data: data, fileName: fileName, mime: mime, caseId: caseId).id
+    }
+
+    /// كالسابق ويُرجع رابط الملف أيضاً — النسخة الموقّعة تصير ملف الصادر نفسه (SignDocument.swift)
+    func uploadAttachmentFull(
+        data: Data, fileName: String, mime: String, caseId: String?,
+        description: String = "أُرسل في النقاش"
+    ) async throws -> (id: String, url: String) {
         let ext = (fileName as NSString).pathExtension.lowercased()
         let safeExt = ext.isEmpty ? "bin" : ext.filter { $0.isASCII }
         let folder = caseId.map { "case_documents/\($0)" } ?? "discussion_general"
@@ -468,13 +476,13 @@ extension SB {
             "file_type": mime,
             "file_size": data.count,
             "uploaded_by_name": member?.name ?? NSNull(),
-            "description": "أُرسل في النقاش",
+            "description": description,
         ])
         let rows = try JSONDecoder().decode([DocRow].self, from: inserted)
         guard let doc = rows.first else {
             throw SBError(message: "رُفع الملف لكن تعذّر تسجيله مستنداً")
         }
-        return doc.id
+        return (doc.id, url)
     }
 
     func rawInsertReturning(_ table: String, values: [String: Any]) async throws -> Data {

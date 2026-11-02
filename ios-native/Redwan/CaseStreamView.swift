@@ -856,6 +856,8 @@ private struct StreamBubble: View {
                     })
                 } else if let name = msg.document_name {
                     MessageAttachment(name: name, url: msg.document_url)
+                    SignChip(name: name, url: msg.document_url, caseId: caseId, messageId: msg.id,
+                             parentId: msg.id, documentId: msg.document_id)
                 }
                 // الملاحظة الصوتية: نصها تحت المشغّل مطويّاً
                 if voice, let body = msg.body, !body.isEmpty {
@@ -1295,6 +1297,8 @@ private struct ThreadView: View {
                     }
                     if let name = r.document_name {
                         MessageAttachment(name: name, url: r.document_url)
+                        SignChip(name: name, url: r.document_url, caseId: caseId, messageId: r.id,
+                                 parentId: root.id, documentId: r.document_id)
                     }
                     if voice, let b = r.body, !b.isEmpty {
                         VoiceTranscriptView(text: b)

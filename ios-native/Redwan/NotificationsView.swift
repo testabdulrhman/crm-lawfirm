@@ -260,7 +260,8 @@ struct NotificationsView: View {
                 openingId = n.id
                 openedTask = try? await sb.task(id: taskId)
                 openingId = nil
-            } else if let caseId = n.case_id, n.type == "mention" {
+            } else if let caseId = n.case_id, n.type == "mention" || n.type == "approval_sign" {
+                // وطلب التوقيع (approval_sign) وقته وقت الرسالة — فيفتح الملف المطلوب توقيعه وتحته «وقّع»
                 // منشن في نقاش ملف — يقلب تبويب النقاشات ويفتح الرسالة نفسها (وخيطها إن كانت ردّاً)
                 PushRouter.shared.pendingFocus = DiscussionFocus(at: n.created_at)
                 PushRouter.shared.route = "/discussions?case=\(caseId)"
