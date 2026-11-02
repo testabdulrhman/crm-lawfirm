@@ -44,6 +44,14 @@ async function model(): Promise<string> {
 const ext = (name: string | null) => (name ?? "").toLowerCase().split(".").pop() ?? "";
 const IMAGE_MIME: Record<string, string> = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp", gif: "image/gif" };
 
+function sniffImage(u8: Uint8Array): string | null {
+  if (u8[0] === 0x89 && u8[1] === 0x50 && u8[2] === 0x4e && u8[3] === 0x47) return "image/png";
+  if (u8[0] === 0xff && u8[1] === 0xd8) return "image/jpeg";
+  if (u8[0] === 0x47 && u8[1] === 0x49 && u8[2] === 0x46) return "image/gif";
+  if (u8[8] === 0x57 && u8[9] === 0x45 && u8[10] === 0x42 && u8[11] === 0x50) return "image/webp";
+  return null;
+}
+
 function b64(u8: Uint8Array): string {
   let s = "";
   for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode(...u8.subarray(i, i + 0x8000));
@@ -81,6 +89,8 @@ async function aiTranscribe(block: Record<string, unknown>, mdl: string): Promis
     body: JSON.stringify({
       model: mdl,
       max_tokens: 16000,
+      // نسخ لا استنتاج — التفكير كان يضاعف الرموز الخارجة بلا فائدة (صورة نصّها رقم لوحة: ٤٩٨ رمزاً)
+      thinking: { type: "disabled" },
       messages: [{
         role: "user",
         content: [
@@ -113,7 +123,9 @@ async function extract(d: Doc, mdl: string): Promise<Result> {
   if (e === "xlsx") return { status: "done", content: await xlsxText(u8), source: "xlsx" };
 
   if (IMAGE_MIME[e]) {
-    const r = await aiTranscribe({ type: "image", source: { type: "base64", media_type: IMAGE_MIME[e], data: b64(u8) } }, mdl);
+    // النوع من محتوى الملف لا من اسمه — ‎.jpg‎ كان PNG فرفضه الذكاء
+    const mime = sniffImage(u8) ?? IMAGE_MIME[e];
+    const r = await aiTranscribe({ type: "image", source: { type: "base64", media_type: mime, data: b64(u8) } }, mdl);
     return { status: "done", content: r.text, source: "image", model: mdl, in_tokens: r.inTok, out_tokens: r.outTok };
   }
 
