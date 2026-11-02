@@ -7,7 +7,8 @@ import SwiftUI
 // بأيقونة وجه عامة — ضجيج بصري لا يشبه أي تطبيق محادثة. الحل: منبثقة مخصّصة
 // (popover حقيقية على الآيفون بـpresentationCompactAdaptation) نتحكم بتخطيطها.
 
-let QUICK_EMOJIS = ["👍", "❤️", "✅", "😂", "😮", "🙏"]
+// ❌ بجانب ✅ — ردّ سريع بصح أو خطأ (طلب المدير 2026-11-02)
+let QUICK_EMOJIS = ["👍", "❤️", "✅", "❌", "😂", "😮", "🙏"]
 
 struct MessageActionsSheet: View {
     let commentId: String

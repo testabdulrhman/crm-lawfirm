@@ -84,9 +84,12 @@ struct ImageAlbumView: View {
         .accessibilityLabel(items.count == 1 ? "صورة" : "\(items.count) صور")
     }
 
+    // لمسة لا زرّ: الزرّ يبتلع الضغط المطوّل فلا تصل التفاعلات وإجراءات الرسالة إلى صورة
+    // (بلاغ المدير 2026-11-02: «ودي اقدر ارد برمز مثل صح أو خطأ نفس طريقة الكتابة»)
     private func tile(_ i: Int) -> some View {
-        Button { openAt = i } label: { ImageTile(item: items[i]) }
-            .buttonStyle(.plain)
+        ImageTile(item: items[i])
+            .onTapGesture { openAt = i }
+            .accessibilityAddTraits(.isButton)
     }
 }
 

@@ -973,10 +973,8 @@ struct AttachmentChip: View {
     @State private var shareError: String?
 
     var body: some View {
-        Button {
-            showPreview = true
-        } label: {
-            HStack(spacing: 8) {
+        // لمسة لا زرّ — الزرّ يبتلع الضغط المطوّل فلا تصل التفاعلات إلى رسالة الملف (كالصورة، 2026-11-02)
+        HStack(spacing: 8) {
                 Image(systemName: "doc.text.fill")
                     .font(.system(size: 16))
                     .foregroundStyle(Theme.goldDark)
@@ -991,9 +989,10 @@ struct AttachmentChip: View {
                 }
                 Spacer(minLength: 0)
                 shareButton
-            }
         }
-        .buttonStyle(.plain)
+        .contentShape(Rectangle())
+        .onTapGesture { showPreview = true }
+        .accessibilityAddTraits(.isButton)
         .sheet(isPresented: $showPreview) {
             FilePreviewSheet(name: name, url: url)
         }
