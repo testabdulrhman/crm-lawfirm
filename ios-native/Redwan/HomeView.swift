@@ -27,6 +27,8 @@ struct HomeView: View {
     @State private var showMyPage = false
     @State private var showApprovals = false
     @State private var showNotifications = false
+    /// البحث الشامل — حتى داخل المستندات (طلب المدير 2026-11-03)
+    @State private var showSearch = false
     @State private var showOfficeDocs = false
     @State private var birthdays: [BirthdayPerson] = []
     /// «خبر اليوم» من أساب للنشر (2026-10-08) — يُغلق ليومه
@@ -122,6 +124,7 @@ struct HomeView: View {
             .navigationDestination(isPresented: $showApprovals) { HrApprovalsView() }
             .navigationDestination(isPresented: $showSignQueue) { SignQueueView() }
             .navigationDestination(isPresented: $showNotifications) { NotificationsView() }
+            .navigationDestination(isPresented: $showSearch) { GlobalSearchView() }
             .navigationDestination(isPresented: $showOfficeDocs) { OfficeDocumentsView() }
             .navigationDestination(item: $openedTask) { TaskDetailView(task: $0) }
             .onChange(of: router.route) { _, _ in openFromPush() }
@@ -285,6 +288,18 @@ struct HomeView: View {
             }
 
             Spacer(minLength: 8)
+
+            Button {
+                showSearch = true
+            } label: {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundStyle(Theme.navy)
+                    .frame(width: 44, height: 44)
+                    .glassCircle()
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("البحث")
 
             Button {
                 showNotifications = true
