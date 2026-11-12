@@ -101,12 +101,20 @@ function memoParagraphs(text: string | null | undefined): string[] {
 const OPENING =
   /^(بسم الله|السلام عليكم|أصحاب الفضيلة|صاحب الفضيلة|فضيلة|معالي|سعادة|الموضوع|إلى )/
 
+/** ديباجة الأطراف والإحالة للحكم: تعريف المحامي والخصوم ورقم الصك — ليست مضمون المذكرة */
+const PREAMBLE =
+  /^(مقدم[هة]|المدعي|المدعى|المستأنف|المعترض ضد|المستدعي|ضد[\s:]|ضد$|اعتراضا?ً? على الحكم|على الحكم الصادر|والصادر)/
+const IDENTITY = /(الهوية رقم|رقم الهوية|السجل المدني رقم|ترخيص محاماة|رخصة (محاماة|رقم|\d))/
+
+const isFrontMatter = (p: string) => OPENING.test(p) || PREAMBLE.test(p) || IDENTITY.test(p)
+
 /** أول فقرة تحمل مضمون المذكرة — للمقتطف في البطاقة */
 function memoExcerpt(text: string | null | undefined): string {
   const ps = memoParagraphs(text).map((p) =>
     p.replace(/^بسم الله الرحمن الرحيم\s*/, '')
   )
   return (
+    ps.find((p) => p.length >= 60 && !isFrontMatter(p)) ??
     ps.find((p) => p.length >= 60 && !OPENING.test(p)) ??
     ps.find((p) => !OPENING.test(p)) ??
     ps[0] ??
