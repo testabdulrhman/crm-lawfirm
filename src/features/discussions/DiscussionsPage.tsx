@@ -1424,7 +1424,8 @@ function MessageBubble({
             onClick={onOpenParent}
           />
         )}
-        {msg.body && !isAudioName(msg.document_name) && (
+        {/* بلا مرفق: النص وحده. ومع صورة أو ملف: التعليق تحته كالواتساب (بعد كتلة المرفق) */}
+        {msg.body && !msg.document_name && (
           <Body text={msg.body} className="whitespace-pre-wrap text-sm text-foreground" />
         )}
         {msg.document_name &&
@@ -1453,6 +1454,9 @@ function MessageBubble({
               />
             </div>
           ))}
+        {msg.body && msg.document_name && !isAudioName(msg.document_name) && (
+          <Body text={msg.body} className="mt-1.5 whitespace-pre-wrap text-sm text-foreground" />
+        )}
 
           {/* الوقت داخل الفقاعة أسفلها، وعلامات القراءة لرسائلي — كالواتساب */}
           <div className="mt-1 flex items-center justify-end gap-1 text-[10px] text-muted-foreground">
@@ -1967,7 +1971,7 @@ function ThreadReply({
               : 'border-border/60 bg-background/60'
         )}
       >
-        {r.body && !isAudioName(r.document_name) && (
+        {r.body && !r.document_name && (
           <Body text={r.body} className="whitespace-pre-wrap text-sm text-foreground" />
         )}
         {r.document_name &&
@@ -1992,6 +1996,9 @@ function ThreadReply({
               />
             </div>
           ))}
+        {r.body && r.document_name && !isAudioName(r.document_name) && (
+          <Body text={r.body} className="mt-1.5 whitespace-pre-wrap text-sm text-foreground" />
+        )}
       </div>
       <ReactionChips msg={r} caseId={caseId} />
     </div>

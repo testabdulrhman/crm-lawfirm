@@ -952,7 +952,8 @@ private struct StreamBubble: View {
                                onTap: onOpenParent)
                 }
                 let voice = VoiceNote.isAudio(msg.document_name)
-                if !voice, let body = msg.body, !body.isEmpty {
+                // بلا مرفق: النص وحده. ومع صورة أو ملف: التعليق تحته كالواتساب
+                if msg.document_name == nil, let body = msg.body, !body.isEmpty {
                     Text(Mention.styled(body))
                         .font(.system(size: 14))
                         .foregroundStyle(Theme.navy)
@@ -968,9 +969,16 @@ private struct StreamBubble: View {
                     SignChip(name: name, url: msg.document_url, caseId: caseId, messageId: msg.id,
                              parentId: msg.id, documentId: msg.document_id)
                 }
-                // الملاحظة الصوتية: نصها تحت المشغّل مطويّاً
-                if voice, let body = msg.body, !body.isEmpty {
-                    VoiceTranscriptView(text: body)
+                // التعليق تحت المرفق، والملاحظة الصوتية نصها تحت المشغّل مطويّاً
+                if msg.document_name != nil, let body = msg.body, !body.isEmpty {
+                    if voice {
+                        VoiceTranscriptView(text: body)
+                    } else {
+                        Text(Mention.styled(body))
+                            .font(.system(size: 14))
+                            .foregroundStyle(Theme.navy)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
                 }
 
                     // الوقت و«معدّلة» وعلامات القراءة — أسفل الفقاعة كالواتساب
@@ -1398,7 +1406,7 @@ private struct ThreadView: View {
                 }
                 VStack(alignment: .leading, spacing: 6) {
                     let voice = VoiceNote.isAudio(r.document_name)
-                    if !voice, let b = r.body, !b.isEmpty {
+                    if r.document_name == nil, let b = r.body, !b.isEmpty {
                         Text(Mention.styled(b))
                             .font(.system(size: 14))
                             .foregroundStyle(Theme.navy)
@@ -1409,8 +1417,15 @@ private struct ThreadView: View {
                         SignChip(name: name, url: r.document_url, caseId: caseId, messageId: r.id,
                                  parentId: root.id, documentId: r.document_id)
                     }
-                    if voice, let b = r.body, !b.isEmpty {
-                        VoiceTranscriptView(text: b)
+                    if r.document_name != nil, let b = r.body, !b.isEmpty {
+                        if voice {
+                            VoiceTranscriptView(text: b)
+                        } else {
+                            Text(Mention.styled(b))
+                                .font(.system(size: 14))
+                                .foregroundStyle(Theme.navy)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
                     }
                 }
                 .padding(10)
