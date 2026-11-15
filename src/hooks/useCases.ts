@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { supabase } from '@/lib/supabase'
+import { fetchAllRows } from '@/lib/fetchAll'
 import { toast } from '@/hooks/use-toast'
 import { todayISO } from '@/lib/format'
 import type { Case, CaseInput, CaseStatus } from '@/types/db'
@@ -30,15 +31,17 @@ export function useCases() {
   return useQuery({
     queryKey: LIST_KEY,
     queryFn: async (): Promise<Case[]> => {
-      const { data, error } = await supabase
-        .from('cases')
-        .select(SELECT)
-        // ⚠️ بعد توحيد «الملفات»: الجدول يضم الاستشارات والتوثيق أيضاً —
-        //    هذه القائمة (وكل منتقيات القضايا) قضايا محاكم حصراً
-        .eq('kind', 'case')
-        .order('created_at', { ascending: false })
-      if (error) throw error
-      return (data ?? []) as unknown as Case[]
+      // ⚠️ بعد توحيد «الملفات»: الجدول يضم الاستشارات والتوثيق أيضاً —
+      //    هذه القائمة (وكل منتقيات القضايا) قضايا محاكم حصراً
+      return fetchAllRows<Case>((a, b) =>
+        supabase
+          .from('cases')
+          .select(SELECT)
+          .eq('kind', 'case')
+          .order('created_at', { ascending: false })
+          .order('id')
+          .range(a, b)
+      )
     },
   })
 }

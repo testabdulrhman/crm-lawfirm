@@ -1,5 +1,5 @@
 // نموذج إضافة/تعديل عقد (اتفاقية أتعاب) — رقم تلقائي قابل للتعديل + تحقق تكرار لحظي
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -93,6 +93,10 @@ export function EngagementForm({
     }, 0)
     return `CTR-${yy}-${String(max + 1).padStart(3, '0')}`
   }, [engagements])
+
+  // الرقم الذي عُبّئ به النموذج عند الفتح (قد يسبق تحميل القائمة) — ليُعرف أنه مقترح لا مكتوب
+  const initialNumber = useRef<string | null>(null)
+  if (initialNumber.current === null) initialNumber.current = nextNumber
 
   const usedNumbers = useMemo(() => {
     const m = new Map<string, string>()
@@ -239,7 +243,15 @@ export function EngagementForm({
       if (isEdit && engagement) {
         await updateM.mutateAsync({ id: engagement.id, input: full })
       } else {
-        const created = await createM.mutateAsync({ ...full, created_by: teamMember?.id ?? null })
+        // الرقم المقترح (لم يغيّره المستخدم) يُترك للخادم: engagement_number_trg يرقّم بقفل — كان المتصفح يرسل
+        // «أكبر رقم + 1» من قائمته فيتكرر الرقم بين مستخدمَين أو قبل تحميل القائمة (مراجعة 2026-11-15)
+        const typed = full.engagement_number?.trim() ?? ''
+        const autoNo = /^CTR-\d{2}-\d+$/.test(typed) && (typed === nextNumber || typed === initialNumber.current)
+        const created = await createM.mutateAsync({
+          ...full,
+          engagement_number: autoNo ? null : full.engagement_number,
+          created_by: teamMember?.id ?? null,
+        })
         // الدفعات للمدير وحده (المال) — وتُحفظ مع العقد الجديد فقط
         const inst = r && keepTerms ? r.installments ?? [] : []
         if (inst.length && isDirector && created?.id) {

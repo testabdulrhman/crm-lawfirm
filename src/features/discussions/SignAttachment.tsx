@@ -266,36 +266,46 @@ export function SignAttachmentButton({
         caption: `✍️ نسخة ${verb} من «${name}»${letter ? ` — صادر ${letter.letter_number}` : ''}`,
         description: letter ? `صادر ${letter.letter_number} — نسخة ${verb}` : `نسخة موقّعة من «${name}»`,
       })
-      // ٤) النسخة الموقّعة هي النهائية في الصادر، والاعتماد مسجّل بمن طلب ومن وقّع
-      if (letter && posted) {
+      // ٤) النسخة الموقّعة هي النهائية في الصادر، والاعتماد مسجّل بمن طلب ومن وقّع، وطلب التوقيع يُغلق —
+      // نداء واحد ذرّي (finalize_signature) يُعاد حتى ٣ مرات؛ كانت ثلاث كتابات تُتجاهل أخطاؤها (مراجعة 2026-11-15)
+      if ((letter && posted) || request) {
         const now = new Date().toISOString()
-        await supabase
-          .from('outgoing_letters')
-          .update({ file_url: posted.fileUrl, document_id: posted.documentId })
-          .eq('id', letter.id)
-        await supabase.from('outgoing_approvals').insert({
-          letter_id: letter.id,
-          status: 'approved',
-          original_file_url: url,
-          signed_file_url: posted.fileUrl,
-          requested_by: request?.requested_by ?? teamMember?.id ?? null,
-          requested_at: now,
-          approved_by: teamMember?.id ?? null,
-          approved_at: now,
-          apply_mode: mode,
-          stamp_page: pos.page,
-          stamp_x: pos.x,
-          stamp_y: pos.y,
-          sig_pos: mode === 'stamp' ? null : sigPos,
-          extra_sigs: mode !== 'stamp' && sigs.length ? sigs : null,
-          note: request?.note ?? null,
-        })
-      }
-      if (request) {
-        await supabase
-          .from('sign_requests')
-          .update({ status: 'signed', letter_id: letter?.id ?? null, signed_at: new Date().toISOString() })
-          .eq('id', request.id)
+        const args = {
+          p_letter_id: letter && posted ? letter.id : null,
+          p_request_id: request?.id ?? null,
+          p_signed_url: posted?.fileUrl ?? null,
+          p_document_id: posted?.documentId ?? null,
+          p_approval: {
+            original_file_url: url,
+            requested_by: request?.requested_by ?? teamMember?.id ?? null,
+            requested_at: now,
+            apply_mode: mode,
+            stamp_page: pos.page,
+            stamp_x: pos.x,
+            stamp_y: pos.y,
+            sig_pos: mode === 'stamp' ? null : sigPos,
+            extra_sigs: mode !== 'stamp' && sigs.length ? sigs : null,
+            note: request?.note ?? null,
+          },
+        }
+        let finErr: unknown = null
+        for (let attempt = 0; attempt < 3; attempt++) {
+          const { error } = await supabase.rpc('finalize_signature', args)
+          finErr = error
+          if (!error) break
+          await new Promise((r) => setTimeout(r, 800 * (attempt + 1)))
+        }
+        if (finErr) {
+          // النسخة الموقّعة في النقاش، لكن الصادر/الاعتماد لم يُسجَّلا — قلها صراحة ولا تُظهر «سُجّل»
+          qc.invalidateQueries({ queryKey: ['sign_requests', caseId] })
+          toast({
+            variant: 'destructive',
+            title: 'وُقّعت النسخة ونُشرت في النقاش، لكن لم يُسجَّل اعتمادها',
+            description: `${letter ? `الصادر ${letter.letter_number} ما زال على النسخة غير الموقّعة. ` : ''}${errMessage(finErr)}`,
+          })
+          setOpen(false)
+          return
+        }
       }
       qc.invalidateQueries({ queryKey: ['sign_requests', caseId] })
       qc.invalidateQueries({ queryKey: ['outgoing_letters'] })

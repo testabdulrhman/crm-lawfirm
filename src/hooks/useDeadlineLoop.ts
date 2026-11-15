@@ -27,7 +27,8 @@ export function useConfirmDeadline() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['action_queue'] })
-      qc.invalidateQueries({ queryKey: ['task'] })
+      qc.invalidateQueries({ queryKey: ['task-room'] })
+      qc.invalidateQueries({ queryKey: ['tasks-board'] })
       toast({ title: 'اعتُمد احتساب المهلة' })
     },
     onError: (e) =>

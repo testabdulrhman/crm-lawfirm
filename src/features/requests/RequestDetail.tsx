@@ -64,7 +64,7 @@ import { FilePreviewDialog } from '@/components/FilePreviewDialog'
 import { QueryErrorState } from '@/components/QueryErrorState'
 import { useConfirm } from '@/components/ConfirmDialog'
 
-import { fmtDatePref, fmtNumber, todayISO, daysLabel, fmtCurrency, toLatinDigits } from '@/lib/format'
+import { fmtDatePref, fmtNumber, todayISO, daysLabel, fmtCurrency, toLatinDigits, normalizeSaudiPhone } from '@/lib/format'
 import { pickFile } from '@/lib/files'
 import { openExternal } from '@/lib/external'
 import { useAuth } from '@/stores/auth'
@@ -621,12 +621,16 @@ function DecisionCard({
   const ensureClient = async (): Promise<string | null> => {
     if (r.client_id) return r.client_id
     const phone = toLatinDigits(r.client_phone).replace(/\D/g, '')
+    // الجوال بالصيغة الموحّدة كما في «عميل سريع» — كان يُحفظ كما كُتب فيصير 05… و9665… عميلين (مراجعة 2026-11-15)
+    const saudi = /^(05\d{8}|5\d{8}|9665\d{8}|009665\d{8})$/.test(phone)
+    const storedPhone = !phone ? null : saudi ? normalizeSaudiPhone(phone) : `+${phone.replace(/^00/, '')}`
     if (phone.length >= 9) {
-      const { data: same } = await supabase
+      const { data: same, error: findErr } = await supabase
         .from('contacts')
         .select('id')
         .or(`phone.ilike.%${phone.slice(-9)},phone2.ilike.%${phone.slice(-9)}`)
         .limit(1)
+      if (findErr) throw findErr
       if (same?.[0]?.id) return same[0].id as string
     }
     if (!r.client_name?.trim()) return null
@@ -634,7 +638,7 @@ function DecisionCard({
       .from('contacts')
       .insert({
         name: r.client_name.trim(),
-        phone: r.client_phone || null,
+        phone: storedPhone,
         email: r.client_email || null,
         type: 'client',
         category: 'client',
@@ -643,7 +647,12 @@ function DecisionCard({
       })
       .select('id')
       .single()
-    if (error) throw error
+    if (error) {
+      // الجوال فريد: موجود لكن خارج صلاحيتك فلم يظهر في البحث — قلها بدل رمز الخطأ
+      if ((error as { code?: string }).code === '23505')
+        throw new Error('هذا الجوال مسجّل لعميل لا تظهر لك بطاقته — اطلب من المدير ربط الطلب به.')
+      throw error
+    }
     return data.id as string
   }
 

@@ -23,7 +23,7 @@ import { useContacts } from '@/hooks/useContacts'
 import { supabase } from '@/lib/supabase'
 import { arNorm } from '@/lib/arabic'
 import { errMessage } from '@/lib/errors'
-import { fmtDateTime, fmtHijri } from '@/lib/format'
+import { fmtDateTime, fmtHijri, todayISO } from '@/lib/format'
 import { toast } from '@/hooks/use-toast'
 import { useAuth } from '@/stores/auth'
 import type { Contact, PowerOfAttorney } from '@/types/db'
@@ -122,7 +122,7 @@ export function POAReissueDialog({
             lang: 'ar',
             params: [recipientName, poa.poa_number || '—', expiry],
           },
-          idempotency_key: `poa-reissue:${poa.id}:${new Date().toISOString().slice(0, 10)}`,
+          idempotency_key: `poa-reissue:${poa.id}:${todayISO()}`,
         },
       })
       if (error || data?.error || data?.status === 'failed') {

@@ -335,7 +335,7 @@ export function useCreateRequestFromAppointment() {
       return requestId
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['requests'] })
+      qc.invalidateQueries({ queryKey: ['incoming_requests'] })
       qc.invalidateQueries({ queryKey: ['appointments'] })
       toast({ variant: 'success', title: 'أُنشئ سجل الاستفسار وربط بالموعد' })
     },

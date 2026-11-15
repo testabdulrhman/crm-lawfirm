@@ -112,9 +112,12 @@ export function useMarkAwaitingRuling() {
       if (error) throw error
       return due
     },
-    onSuccess: () => {
+    onSuccess: (_d, vars) => {
       qc.invalidateQueries({ queryKey: CLEANUP_KEY })
-      qc.invalidateQueries({ queryKey: ['tasks'] })
+      qc.invalidateQueries({ queryKey: ['tasks-board'] })
+      qc.invalidateQueries({ queryKey: ['my-open-tasks'] })
+      qc.invalidateQueries({ queryKey: ['action_queue'] })
+      qc.invalidateQueries({ queryKey: ['case_tasks', vars.caseId] })
     },
   })
 }

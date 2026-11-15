@@ -69,11 +69,11 @@ export function QuotePdfDialog({
 
   // العرض يترك أثره على الطلب: رقمه ونطاقه ومبلغه وتاريخه — فتعرفه بطاقة
   // الستة، وينتقل نطاقه للملف عند الفتح (بدل تبويب «بطاقة المشروع»)
-  async function saveQuoteOnRequest() {
-    await supabase
+  async function saveQuoteOnRequest(no: string) {
+    const { error } = await supabase
       .from('incoming_requests')
       .update({
-        quote_no: quoteNo,
+        quote_no: no,
         quote_scope: scopeLines.length ? scopeLines.join('\n') : title.trim(),
         quote_amount: grossN,
         quote_sent_at: new Date().toISOString(),
@@ -82,6 +82,8 @@ export function QuotePdfDialog({
     qc.invalidateQueries({
       predicate: (q) => String(q.queryKey[0] ?? '').includes('request'),
     })
+    // العرض صدر فعلاً — فشل حفظ أثره على الطلب لا يُخفى
+    if (error) toast({ variant: 'destructive', title: `صدر العرض ${no} لكن لم يُحفظ على الطلب`, description: errMessage(error) })
   }
 
   const year = new Date().getFullYear()
@@ -147,19 +149,23 @@ export function QuotePdfDialog({
     })()
   }, [open, year])
 
-  async function bumpCounter() {
-    const label = String(year)
-    const { data } = await supabase
-      .from('lookup_values')
-      .select('id')
-      .eq('type', 'quote_counter')
-      .eq('label', label)
-      .maybeSingle()
-    if (data?.id) {
-      await supabase.from('lookup_values').update({ value: String(seq) }).eq('id', data.id)
-    } else {
-      await supabase.from('lookup_values').insert({ type: 'quote_counter', label, value: String(seq) })
+  // رقم العرض يُحجز من الخادم لحظة الإصدار (issue_quote_number بقفل) — كان يُقرأ عند فتح النافذة ويُكتب
+  // بعد الإصدار، فنافذتان مفتوحتان تعطيان عميلين الرقم نفسه (مراجعة 2026-11-15). مرة واحدة لكل فتح للنافذة.
+  const issuedRef = useRef<number | null>(null)
+  useEffect(() => {
+    if (open) issuedRef.current = null
+  }, [open])
+  const fmtNo = (n: number) => `${year} / ${String(n).padStart(3, '0')}`
+  async function issueNumber(): Promise<string> {
+    if (issuedRef.current == null) {
+      const { data, error } = await supabase.rpc('issue_quote_number', { p_year: year })
+      if (error) throw error
+      issuedRef.current = Number(data)
+      setSeq(Number(data))
+      // ليُرسم الرقم المحجوز في الصفحة قبل تصويرها PDF
+      await new Promise((r) => setTimeout(r, 150))
     }
+    return fmtNo(issuedRef.current)
   }
 
   const grossN = Number(toLatinDigits(gross).replace(/[^\d.]/g, '')) || 0
@@ -188,12 +194,12 @@ export function QuotePdfDialog({
     if (!ready) return
     setBusy('download')
     try {
+      const no = await issueNumber()
       const blob = await buildPdf()
-      await bumpCounter()
-      await saveQuoteOnRequest()
+      await saveQuoteOnRequest(no)
       const a = document.createElement('a')
       a.href = URL.createObjectURL(blob)
-      a.download = `عرض سعر ${quoteNo.replace(' / ', '-')} - ${r.client_name ?? ''}.pdf`
+      a.download = `عرض سعر ${no.replace(' / ', '-')} - ${r.client_name ?? ''}.pdf`
       a.click()
       URL.revokeObjectURL(a.href)
     } catch (e) {
@@ -212,6 +218,7 @@ export function QuotePdfDialog({
     }
     setBusy('send')
     try {
+      const no = await issueNumber()
       const blob = await buildPdf()
       const path = `quotes/${r.id}-${Date.now()}.pdf`
       const { error: upErr } = await supabase.storage
@@ -220,7 +227,7 @@ export function QuotePdfDialog({
       if (upErr) throw upErr
       const url = supabase.storage.from('documents').getPublicUrl(path).data.publicUrl
 
-      const fileName = `عرض سعر ${quoteNo.replace(' / ', '-')}.pdf`
+      const fileName = `عرض سعر ${no.replace(' / ', '-')}.pdf`
       const recipient = r.client_name ?? 'عميل'
 
       // ١) ملف حر — يمشي داخل نافذة الـ٢٤ ساعة (العميل راسلنا مؤخراً)
@@ -229,7 +236,7 @@ export function QuotePdfDialog({
           phone: intl,
           media_url: url,
           file_name: fileName,
-          message: `عرض سعر رقم ${quoteNo} — ${COMPANY}`,
+          message: `عرض سعر رقم ${no} — ${COMPANY}`,
           recipient_name: recipient,
         },
       })
@@ -247,7 +254,7 @@ export function QuotePdfDialog({
               // اسم القالب المعتمد في لوحة هاتف — لا يُغيَّر إلا بتغييره هناك
               name: 'crm_law_05',
               lang: 'ar',
-              params: [recipient, quoteNo, String(Number(validity) || 10)],
+              params: [recipient, no, String(Number(validity) || 10)],
               document: { url, name: fileName },
             },
           },
@@ -259,9 +266,8 @@ export function QuotePdfDialog({
       } else if (error || data?.error) {
         throw new Error(data?.detail || data?.error || errMessage(error))
       }
-      await bumpCounter()
-      await saveQuoteOnRequest()
-      toast({ variant: 'success', title: `أُرسل عرض السعر ${quoteNo} واتساباً 📄` })
+      await saveQuoteOnRequest(no)
+      toast({ variant: 'success', title: `أُرسل عرض السعر ${no} واتساباً 📄` })
       onOpenChange(false)
     } catch (e) {
       toast({ variant: 'destructive', title: 'تعذّر الإرسال', description: errMessage(e) })

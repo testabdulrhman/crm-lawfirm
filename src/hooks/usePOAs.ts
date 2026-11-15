@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { supabase } from '@/lib/supabase'
+import { fetchAllRows } from '@/lib/fetchAll'
 import { toast } from '@/hooks/use-toast'
 import { localISO, todayISO } from '@/lib/format'
 import { SOON_DAYS } from '@/lib/poaLabels'
@@ -69,13 +70,15 @@ export function usePOAs() {
   return useQuery({
     queryKey: LIST_KEY,
     queryFn: async (): Promise<PowerOfAttorney[]> => {
-      const { data, error } = await supabase
-        .from('powers_of_attorney')
-        .select(SELECT)
-        .is('deleted_at', null)
-        .order('poa_date', { ascending: false, nullsFirst: false })
-      if (error) throw error
-      return (data ?? []) as unknown as PowerOfAttorney[]
+      return fetchAllRows<PowerOfAttorney>((a, b) =>
+        supabase
+          .from('powers_of_attorney')
+          .select(SELECT)
+          .is('deleted_at', null)
+          .order('poa_date', { ascending: false, nullsFirst: false })
+          .order('id')
+          .range(a, b)
+      )
     },
   })
 }

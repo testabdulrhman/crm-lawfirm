@@ -38,6 +38,7 @@ import {
   CONTRACT_TYPE_OPTIONS,
 } from '@/lib/legalServiceLabels'
 import type { Contact, LegalService, LegalServiceInput } from '@/types/db'
+import { localISO } from '@/lib/format'
 
 const schema = z.object({
   type: z.string().min(1, 'النوع مطلوب'),
@@ -94,9 +95,9 @@ export function LegalServiceForm({
       party_first: service?.party_first ?? '',
       party_second: service?.party_second ?? '',
       service_date: service?.service_date ?? '',
-      received_date: service?.received_date ?? service?.received_at?.slice(0, 10) ?? '',
+      received_date: service?.received_date ?? (service?.received_at ? localISO(new Date(service.received_at)) : ''),
       delivered_date:
-        service?.delivered_date ?? service?.delivered_at?.slice(0, 10) ?? '',
+        service?.delivered_date ?? (service?.delivered_at ? localISO(new Date(service.delivered_at)) : ''),
       assignee_id: service?.assignee_id ?? '',
       status: service?.status ?? 'draft',
       notes: service?.notes ?? '',

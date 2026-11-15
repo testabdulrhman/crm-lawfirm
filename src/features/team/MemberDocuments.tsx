@@ -28,7 +28,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useConfirm } from '@/components/ConfirmDialog'
 import { cn } from '@/lib/utils'
-import { fmtDatePref, fmtNumber } from '@/lib/format'
+import { fmtDatePref, fmtNumber, localISO } from '@/lib/format'
 import { pickFile } from '@/lib/files'
 import { errMessage } from '@/lib/errors'
 import { toast } from '@/hooks/use-toast'
@@ -258,7 +258,7 @@ export function MemberDocumentsSection({
                       </p>
                       <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
                         {doc
-                          ? `رُفعت ${fmtDatePref(doc.created_at.slice(0, 10))}`
+                          ? `رُفعت ${fmtDatePref(localISO(new Date(doc.created_at)))}`
                           : legacyUrl
                             ? 'من طلب التوظيف'
                             : present
@@ -343,7 +343,7 @@ export function MemberDocumentsSection({
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-foreground">{MEMBER_DOC_LABELS[d.doc_type]}</p>
                     <p className="truncate text-xs text-muted-foreground">
-                      <bdi>{d.file_name}</bdi> · {fmtDatePref(d.created_at.slice(0, 10))}
+                      <bdi>{d.file_name}</bdi> · {fmtDatePref(localISO(new Date(d.created_at)))}
                     </p>
                   </div>
                   <Button variant="ghost" size="icon" className="h-8 w-8" title="معاينة" onClick={() => void open(d)}>

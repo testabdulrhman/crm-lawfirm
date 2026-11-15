@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { supabase } from '@/lib/supabase'
+import { fetchAllRows } from '@/lib/fetchAll'
 import { toast } from '@/hooks/use-toast'
 import type {
   Contact,
@@ -28,12 +29,9 @@ export function useContacts() {
   return useQuery({
     queryKey: KEY,
     queryFn: async (): Promise<Contact[]> => {
-      const { data, error } = await supabase
-        .from('contacts')
-        .select('*')
-        .order('name', { ascending: true })
-      if (error) throw error
-      return (data ?? []) as Contact[]
+      return fetchAllRows<Contact>((a, b) =>
+        supabase.from('contacts').select('*').order('name', { ascending: true }).order('id').range(a, b)
+      )
     },
   })
 }

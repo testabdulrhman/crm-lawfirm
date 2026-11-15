@@ -321,7 +321,10 @@ export function useDecideProposal(caseId: string) {
     },
     onSuccess: (decision) => {
       qc.invalidateQueries({ queryKey: [KEY, 'proposals', caseId] })
-      qc.invalidateQueries({ queryKey: ['tasks'] })
+      // المهمة المعتمدة تظهر فوراً في «المطلوب مني» ولوحة المهام وتبويب الملف
+      qc.invalidateQueries({ queryKey: ['tasks-board'] })
+      qc.invalidateQueries({ queryKey: ['my-open-tasks'] })
+      qc.invalidateQueries({ queryKey: ['action_queue'] })
       qc.invalidateQueries({ queryKey: ['case_tasks', caseId] })
       toast({
         variant: 'success',

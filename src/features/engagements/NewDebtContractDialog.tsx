@@ -111,7 +111,7 @@ export function NewDebtContractDialog({ onDone }: { onDone: () => void }) {
       // 3) رفع الملف وإنشاء العقد في النظام
       const { publicUrl } = await uploadFile(file, { folder: 'engagements' })
       const created = await createM.mutateAsync({
-        engagement_number: nextNumber,
+        engagement_number: null, // يرقّمه الخادم بقفل (engagement_number_trg) — المقترح للعرض فقط
         title: `عقد تحصيل ديون — ${name.trim()}`,
         type: 'collection',
         client_id: clientId,

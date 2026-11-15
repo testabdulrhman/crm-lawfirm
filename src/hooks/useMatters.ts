@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 
 import { supabase } from '@/lib/supabase'
+import { localISO } from '@/lib/format'
 
 // تبويب «المشاريع» الموحّد (نموذج Matter — قرار المستخدم 2026-08-21):
 // «ليه ما يكون تبويب واحد وكل مشروع له نموذج على حسب نوعه؟»
@@ -98,7 +99,7 @@ export function useMatters() {
           title: s.title || 'استشارة / لائحة',
           client: s.client_name,
           status: s.status,
-          date: s.received_at || s.created_at?.slice(0, 10) || null,
+          date: s.received_at || (s.created_at ? localISO(new Date(s.created_at)) : null),
           ref: null,
           assigneeId: s.assignee_id ?? null,
           assigneeName: s.assignee_name ?? null,
@@ -113,7 +114,7 @@ export function useMatters() {
             'توثيق عقاري',
           client: p.seller_name,
           status: p.status,
-          date: p.transfer_date || p.created_at?.slice(0, 10) || null,
+          date: p.transfer_date || (p.created_at ? localISO(new Date(p.created_at)) : null),
           ref: null,
           // عرض property_transfers لا يكشف الإسناد بعد
           assigneeId: null,

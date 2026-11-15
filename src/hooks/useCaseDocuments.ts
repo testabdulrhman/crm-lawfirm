@@ -5,6 +5,7 @@ import { toast } from '@/hooks/use-toast'
 import { uploadFile } from '@/lib/files'
 import type { CaseDocument, DocumentFolder, DocumentVersion } from '@/types/db'
 import { errMessage } from '@/lib/errors'
+import { localISO } from '@/lib/format'
 
 function errToast(title: string) {
   return (e: unknown) =>
@@ -30,7 +31,7 @@ export function useCaseDocuments(caseId: string) {
       // يأخذ تاريخ رفعه بدل أن يهبط آخر القائمة مهما كان حديثاً — فتبقى
       // القائمة زمنية متصلة بلا مستندات شاردة في الذيل.
       const dateOf = (d: CaseDocument) =>
-        (d.document_date ?? d.created_at ?? '').slice(0, 10)
+        d.document_date ?? (d.created_at ? localISO(new Date(d.created_at)) : '')
       return ((data ?? []) as CaseDocument[]).sort((a, b) => {
         const c = dateOf(b).localeCompare(dateOf(a))
         return c !== 0 ? c : (b.created_at ?? '').localeCompare(a.created_at ?? '')

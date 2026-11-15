@@ -16,7 +16,7 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { QueryErrorState } from '@/components/QueryErrorState'
 import { EmptyState } from '@/components/EmptyState'
-import { fmtDatePref } from '@/lib/format'
+import { fmtDatePref, localISO } from '@/lib/format'
 import { useTrashItems, useRestoreItem, type TrashItem } from '@/hooks/useTrash'
 
 // سلة الاسترجاع (نمط Clio Recovery Bin): كل محذوفات النظام الناعمة في
@@ -98,7 +98,7 @@ export function TrashTab() {
                     <p className="mt-0.5 truncate text-xs text-muted-foreground">
                       {[
                         it.context,
-                        it.deleted_at ? `حُذف ${fmtDatePref(it.deleted_at.slice(0, 10))}` : null,
+                        it.deleted_at ? `حُذف ${fmtDatePref(localISO(new Date(it.deleted_at)))}` : null,
                         it.deleted_by ? `بواسطة ${it.deleted_by}` : null,
                       ]
                         .filter(Boolean)
