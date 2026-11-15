@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { lazy, Suspense, useEffect, useRef } from 'react'
 import { Route, Switch, Redirect, Router, useLocation, Link } from 'wouter'
 import { useHashLocation } from 'wouter/use-hash-location'
 import { Loader2 } from 'lucide-react'
@@ -11,50 +11,54 @@ import Login from '@/pages/Login'
 import Booking from '@/pages/Booking'
 import Privacy from '@/pages/Privacy'
 import Dashboard from '@/pages/Dashboard'
-import { SettingsPage } from '@/features/settings/SettingsPage'
-import { TeamPage } from '@/features/team/TeamPage'
-import { IncomingMessagesPage } from '@/features/inbox/IncomingMessagesPage'
-import { MailPage } from '@/features/mail/MailPage'
-import { TeamMemberDetail } from '@/features/team/TeamMemberDetail'
-import { RequestsPage } from '@/features/requests/RequestsPage'
-import { RequestDetail } from '@/features/requests/RequestDetail'
-import { StaffApplicationsPage } from '@/features/staff-applications/StaffApplicationsPage'
-import { ApplicationDetail } from '@/features/staff-applications/ApplicationDetail'
-import { ContactsPage } from '@/features/contacts/ContactsPage'
-import { ContactDetail } from '@/features/contacts/ContactDetail'
-import { CasesPage } from '@/features/cases/CasesPage'
-import { TasksPage } from '@/features/tasks/TasksPage'
-import { TaskRoomPage } from '@/features/tasks/TaskRoomPage'
-import { EngagementsPage } from '@/features/engagements/EngagementsPage'
-import { EngagementDetail } from '@/features/engagements/EngagementDetail'
-import { CaseDetail } from '@/features/cases/CaseDetail'
-import CaseNewPage from '@/features/cases/CaseNewPage'
-import { CalendarPage } from '@/features/calendar/CalendarPage'
-import { MattersPage } from '@/features/matters/MattersPage'
-import { DiscussionsPage } from '@/features/discussions/DiscussionsPage'
-import { ClientChatsPage } from '@/features/clients/ClientChatsPage'
-import { SessionsPage } from '@/features/sessions/SessionsPage'
-import { POAsPage } from '@/features/poa/POAsPage'
-import { POADetail } from '@/features/poa/POADetail'
-import { LegalServicesPage } from '@/features/legal-services/LegalServicesPage'
-import { LegalServiceDetail } from '@/features/legal-services/LegalServiceDetail'
-import { PropertyTransfersPage } from '@/features/property/PropertyTransfersPage'
-import { PropertyTransferDetail } from '@/features/property/PropertyTransferDetail'
-import { AppointmentsPage } from '@/features/appointments/AppointmentsPage'
-import { AppointmentDetail } from '@/features/appointments/AppointmentDetail'
-import { OutgoingLettersPage } from '@/features/outgoing/OutgoingLettersPage'
-import { OutgoingLetterDetail } from '@/features/outgoing/OutgoingLetterDetail'
-import { ReportsPage, UsagePage } from '@/features/reports/ReportsPage'
-import { ErrorLogPage } from '@/features/settings/ErrorLogPage'
-import { AssistantLogPage } from '@/features/settings/AssistantLogPage'
-import { ChangeRequestsPage } from '@/features/change-requests/ChangeRequestsPage'
-import { NotificationsPage } from '@/features/notifications/NotificationsPage'
-import { OfficeDocumentsPage } from '@/features/office-docs/OfficeDocumentsPage'
-import { ResearchPage } from '@/features/research/ResearchPage'
-import { CleanupPage } from '@/features/cleanup/CleanupPage'
-import { HrRequestsPage } from '@/features/hr/HrRequestsPage'
-import { HubMonitorPage } from '@/features/hub/HubMonitorPage'
 import { MonitorShell } from '@/components/layout/MonitorShell'
+
+// كل صفحة تُحمَّل حين تُفتح (المراجعة الشاملة 2026-11-15، الدفعة ٤): كانت الخمسون صفحة ومكتباتها في ملف واحد
+// ٣٫٦ م.ب يُنزَّل قبل أن يظهر شيء. الرئيسية وصفحات ما قبل الدخول تبقى فورية؛ وجزء نسخة قديمة يعالجه staleBuild.
+const SettingsPage = lazy(() => import('@/features/settings/SettingsPage').then((m) => ({ default: m.SettingsPage })))
+const TeamPage = lazy(() => import('@/features/team/TeamPage').then((m) => ({ default: m.TeamPage })))
+const IncomingMessagesPage = lazy(() => import('@/features/inbox/IncomingMessagesPage').then((m) => ({ default: m.IncomingMessagesPage })))
+const MailPage = lazy(() => import('@/features/mail/MailPage').then((m) => ({ default: m.MailPage })))
+const TeamMemberDetail = lazy(() => import('@/features/team/TeamMemberDetail').then((m) => ({ default: m.TeamMemberDetail })))
+const RequestsPage = lazy(() => import('@/features/requests/RequestsPage').then((m) => ({ default: m.RequestsPage })))
+const RequestDetail = lazy(() => import('@/features/requests/RequestDetail').then((m) => ({ default: m.RequestDetail })))
+const StaffApplicationsPage = lazy(() => import('@/features/staff-applications/StaffApplicationsPage').then((m) => ({ default: m.StaffApplicationsPage })))
+const ApplicationDetail = lazy(() => import('@/features/staff-applications/ApplicationDetail').then((m) => ({ default: m.ApplicationDetail })))
+const ContactsPage = lazy(() => import('@/features/contacts/ContactsPage').then((m) => ({ default: m.ContactsPage })))
+const ContactDetail = lazy(() => import('@/features/contacts/ContactDetail').then((m) => ({ default: m.ContactDetail })))
+const CasesPage = lazy(() => import('@/features/cases/CasesPage').then((m) => ({ default: m.CasesPage })))
+const TasksPage = lazy(() => import('@/features/tasks/TasksPage').then((m) => ({ default: m.TasksPage })))
+const TaskRoomPage = lazy(() => import('@/features/tasks/TaskRoomPage').then((m) => ({ default: m.TaskRoomPage })))
+const EngagementsPage = lazy(() => import('@/features/engagements/EngagementsPage').then((m) => ({ default: m.EngagementsPage })))
+const EngagementDetail = lazy(() => import('@/features/engagements/EngagementDetail').then((m) => ({ default: m.EngagementDetail })))
+const CaseDetail = lazy(() => import('@/features/cases/CaseDetail').then((m) => ({ default: m.CaseDetail })))
+const CaseNewPage = lazy(() => import('@/features/cases/CaseNewPage'))
+const CalendarPage = lazy(() => import('@/features/calendar/CalendarPage').then((m) => ({ default: m.CalendarPage })))
+const MattersPage = lazy(() => import('@/features/matters/MattersPage').then((m) => ({ default: m.MattersPage })))
+const DiscussionsPage = lazy(() => import('@/features/discussions/DiscussionsPage').then((m) => ({ default: m.DiscussionsPage })))
+const ClientChatsPage = lazy(() => import('@/features/clients/ClientChatsPage').then((m) => ({ default: m.ClientChatsPage })))
+const SessionsPage = lazy(() => import('@/features/sessions/SessionsPage').then((m) => ({ default: m.SessionsPage })))
+const POAsPage = lazy(() => import('@/features/poa/POAsPage').then((m) => ({ default: m.POAsPage })))
+const POADetail = lazy(() => import('@/features/poa/POADetail').then((m) => ({ default: m.POADetail })))
+const LegalServicesPage = lazy(() => import('@/features/legal-services/LegalServicesPage').then((m) => ({ default: m.LegalServicesPage })))
+const LegalServiceDetail = lazy(() => import('@/features/legal-services/LegalServiceDetail').then((m) => ({ default: m.LegalServiceDetail })))
+const PropertyTransfersPage = lazy(() => import('@/features/property/PropertyTransfersPage').then((m) => ({ default: m.PropertyTransfersPage })))
+const PropertyTransferDetail = lazy(() => import('@/features/property/PropertyTransferDetail').then((m) => ({ default: m.PropertyTransferDetail })))
+const AppointmentsPage = lazy(() => import('@/features/appointments/AppointmentsPage').then((m) => ({ default: m.AppointmentsPage })))
+const AppointmentDetail = lazy(() => import('@/features/appointments/AppointmentDetail').then((m) => ({ default: m.AppointmentDetail })))
+const OutgoingLettersPage = lazy(() => import('@/features/outgoing/OutgoingLettersPage').then((m) => ({ default: m.OutgoingLettersPage })))
+const OutgoingLetterDetail = lazy(() => import('@/features/outgoing/OutgoingLetterDetail').then((m) => ({ default: m.OutgoingLetterDetail })))
+const ReportsPage = lazy(() => import('@/features/reports/ReportsPage').then((m) => ({ default: m.ReportsPage })))
+const UsagePage = lazy(() => import('@/features/reports/ReportsPage').then((m) => ({ default: m.UsagePage })))
+const ErrorLogPage = lazy(() => import('@/features/settings/ErrorLogPage').then((m) => ({ default: m.ErrorLogPage })))
+const AssistantLogPage = lazy(() => import('@/features/settings/AssistantLogPage').then((m) => ({ default: m.AssistantLogPage })))
+const ChangeRequestsPage = lazy(() => import('@/features/change-requests/ChangeRequestsPage').then((m) => ({ default: m.ChangeRequestsPage })))
+const NotificationsPage = lazy(() => import('@/features/notifications/NotificationsPage').then((m) => ({ default: m.NotificationsPage })))
+const OfficeDocumentsPage = lazy(() => import('@/features/office-docs/OfficeDocumentsPage').then((m) => ({ default: m.OfficeDocumentsPage })))
+const ResearchPage = lazy(() => import('@/features/research/ResearchPage').then((m) => ({ default: m.ResearchPage })))
+const CleanupPage = lazy(() => import('@/features/cleanup/CleanupPage').then((m) => ({ default: m.CleanupPage })))
+const HrRequestsPage = lazy(() => import('@/features/hr/HrRequestsPage').then((m) => ({ default: m.HrRequestsPage })))
+const HubMonitorPage = lazy(() => import('@/features/hub/HubMonitorPage').then((m) => ({ default: m.HubMonitorPage })))
 
 function FullScreenLoader() {
   return (
@@ -84,11 +88,21 @@ function CollaboratorGuard() {
   return null
 }
 
+/** أثناء تحميل جزء الصفحة لأول مرة — داخل الإطار فلا يومض الشريط الجانبي */
+function PageLoading() {
+  return (
+    <div className="flex min-h-[40vh] items-center justify-center text-muted-foreground">
+      <Loader2 className="h-6 w-6 animate-spin" />
+    </div>
+  )
+}
+
 // المسارات المحمية داخل الإطار
 function ProtectedRoutes() {
   return (
     <AppLayout>
       <CollaboratorGuard />
+      <Suspense fallback={<PageLoading />}>
       <Switch>
         <Route path="/" component={Dashboard} />
         {/* قبل /cases/:id ضرورةً — وإلا فُهمت «new» معرّف قضية */}
@@ -167,6 +181,7 @@ function ProtectedRoutes() {
           <NotFoundPage />
         </Route>
       </Switch>
+      </Suspense>
     </AppLayout>
   )
 }

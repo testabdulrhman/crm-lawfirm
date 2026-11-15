@@ -3,7 +3,6 @@
 // النافذة نفسها فوق الصفحة. ومعها مسار الصفحة وعنوانها فلا يحتاج صاحب الطلب وصف «أين كنت».
 import { useState } from 'react'
 import { useLocation } from 'wouter'
-import html2canvas from 'html2canvas'
 import { Lightbulb, Loader2, MapPin, Send } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -31,6 +30,7 @@ function pageTitleOf(path: string): string {
 /** ما يراه الموظف الآن فقط (لا الصفحة كلها) — مصغّراً وJPEG ليبقى خفيفاً */
 async function captureViewport(): Promise<Blob | null> {
   try {
+    const { default: html2canvas } = await import('html2canvas')
     const canvas = await html2canvas(document.body, {
       x: window.scrollX,
       y: window.scrollY,

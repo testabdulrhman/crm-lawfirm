@@ -9,6 +9,10 @@
 // =============================================================
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { docxText } from "../_shared/docx.ts";
+import { guardFetch } from "../_shared/fetchGuard.ts";
+
+// مهلة وإعادة محاولة وتسجيل لكل نداء خارجي (المراجعة الشاملة 2026-11-15)
+guardFetch("research-source");
 
 const URL_ = Deno.env.get("SUPABASE_URL")!;
 const admin = createClient(URL_, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {

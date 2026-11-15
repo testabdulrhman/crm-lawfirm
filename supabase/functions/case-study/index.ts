@@ -21,6 +21,11 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { cachedText, logCacheUsage } from "../_shared/prompt-cache.ts";
 import { docxText } from "../_shared/docx.ts";
 import { riyadhToday } from "../_shared/riyadh.ts";
+import { guardFetch } from "../_shared/fetchGuard.ts";
+import { logFnError } from "../_shared/errorLog.ts";
+
+// مهلة وإعادة محاولة وتسجيل لكل نداء خارجي (المراجعة الشاملة 2026-11-15)
+guardFetch("case-study");
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
@@ -628,7 +633,7 @@ Deno.serve(async (req) => {
         .order("generated_at", { ascending: false }).limit(5);
       const work = (async () => {
         for (const m of missing ?? []) {
-          await generateSummaries(m.case_id).catch((e) => console.error("summaries backfill", m.case_id, e?.message || e));
+          await generateSummaries(m.case_id).catch(async (e) => { console.error("summaries backfill", m.case_id, e?.message || e); await logFnError("case-study", "summaries backfill", `ملف ${m.case_id}: ${e?.message || e}`); });
         }
         for (const st of stale ?? []) {
           const why = (st.stale_reasons ?? []).map((r: any) => r.kind).join("، ");

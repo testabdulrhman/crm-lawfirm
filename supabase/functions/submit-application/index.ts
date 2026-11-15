@@ -1,4 +1,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { guardFetch } from "../_shared/fetchGuard.ts";
+
+// مهلة وإعادة محاولة وتسجيل لكل نداء خارجي (المراجعة الشاملة 2026-11-15)
+guardFetch("submit-application");
 
 // submit-application — تقديم الوظيفة من redwan.sa/careers واستكمال مستنداته (/careers/complete?id=).
 // 2026-10-18: أُدخل المستودع (كان منشوراً فقط)، وتأكيد الاستلام يصل واتساب أيضاً مع الـSMS (طلب المدير):

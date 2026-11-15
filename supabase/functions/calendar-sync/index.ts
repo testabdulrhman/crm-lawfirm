@@ -1,6 +1,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { canSeeCase, isOfficeStaff, loadScope, type AiScope } from "../_shared/aiScope.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { guardFetch } from "../_shared/fetchGuard.ts";
+
+// مهلة وإعادة محاولة وتسجيل لكل نداء خارجي (المراجعة الشاملة 2026-11-15)
+guardFetch("calendar-sync");
 
 // كل الأسرار تُقرأ من Supabase Secrets (لا تُكتب في الكود).
 const GOOGLE_CLIENT_ID     = Deno.env.get("GOOGLE_CLIENT_ID")     ?? "";

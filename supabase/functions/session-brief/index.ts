@@ -8,6 +8,11 @@
 import { staffServiceOrInternal } from "../_shared/staffGuard.ts";
 import { canSeeCase, loadScope } from "../_shared/aiScope.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { guardFetch } from "../_shared/fetchGuard.ts";
+import { logFnError } from "../_shared/errorLog.ts";
+
+// مهلة وإعادة محاولة وتسجيل لكل نداء خارجي (المراجعة الشاملة 2026-11-15)
+guardFetch("session-brief");
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
@@ -141,7 +146,7 @@ Deno.serve(async (req) => {
       const { data: sessions } = await admin.from("sessions").select("id")
         .gte("session_date", iso(d1)).lte("session_date", iso(d2)).is("closed_at", null).not("case_id", "is", null).limit(20);
       const work = (async () => {
-        for (const s of sessions ?? []) await buildBrief(s.id, "صباحي").catch((e) => console.error("brief", s.id, e?.message || e));
+        for (const s of sessions ?? []) await buildBrief(s.id, "صباحي").catch(async (e) => { console.error("brief", s.id, e?.message || e); await logFnError("session-brief", "cron", `جلسة ${s.id}: ${e?.message || e}`); });
       })();
       const er: any = (globalThis as any).EdgeRuntime; if (er?.waitUntil) er.waitUntil(work);
       return json({ ok: true, queued: (sessions ?? []).length }, 202);

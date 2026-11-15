@@ -9,6 +9,10 @@ import * as JSZipNS from "https://esm.sh/jszip@3.10.1";
 // deno-lint-ignore no-explicit-any
 const JSZip: any = (JSZipNS as any).default ?? JSZipNS;
 import { HIJRI_RULE, pickDate } from "../_shared/hijri.ts";
+import { guardFetch } from "../_shared/fetchGuard.ts";
+
+// مهلة وإعادة محاولة وتسجيل لكل نداء خارجي (المراجعة الشاملة 2026-11-15)
+guardFetch("request-summary");
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";

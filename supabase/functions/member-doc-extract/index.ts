@@ -6,6 +6,10 @@
 // أو بدا أن الهوية لشخص آخر، لا يُكتب شيء ويُبلَّغ المدير ليحسم.
 // الهجري يُحوَّل هنا بأم القرى لا بتقدير النموذج (درس office-doc-extract).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { guardFetch } from "../_shared/fetchGuard.ts";
+
+// مهلة وإعادة محاولة وتسجيل لكل نداء خارجي (المراجعة الشاملة 2026-11-15)
+guardFetch("member-doc-extract");
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";

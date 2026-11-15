@@ -1,5 +1,10 @@
 import { staffServiceOrInternal } from "../_shared/staffGuard.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { guardFetch } from "../_shared/fetchGuard.ts";
+import { logFnError } from "../_shared/errorLog.ts";
+
+// مهلة وإعادة محاولة وتسجيل لكل نداء خارجي (المراجعة الشاملة 2026-11-15)
+guardFetch("session-reminders");
 
 // =============================================================
 // session-reminders — تذكير المحامين بالجلسات
@@ -73,10 +78,13 @@ Deno.serve(async (req) => {
         results.sent++;
         results.details.push(`✓ ${s.lawyer_name}: ${s.case_title}`);
         // الوسم يمنع التكرار — فقط بعد نجاح الإدراج
-        await supabase.from("sessions").update({ [stampCol]: new Date().toISOString() }).eq("id", s.session_id);
+        const { error: stampErr } = await supabase.from("sessions").update({ [stampCol]: new Date().toISOString() }).eq("id", s.session_id);
+        // بلا الوسم يتكرر التذكير في الدورة التالية — يُسجَّل ليُعرف
+        if (stampErr) await logFnError("session-reminders", "stamp", `جلسة ${s.session_id}: ${stampErr.message}`);
       } else {
         results.failed++;
         results.details.push(`✗ ${s.lawyer_name}: ${insErr.message}`);
+        await logFnError("session-reminders", "insert", `${s.lawyer_name}: ${insErr.message}`);
       }
     }
 

@@ -1,5 +1,10 @@
 import { staffServiceOrInternal } from "../_shared/staffGuard.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { guardFetch } from "../_shared/fetchGuard.ts";
+import { logFnError } from "../_shared/errorLog.ts";
+
+// مهلة وإعادة محاولة وتسجيل لكل نداء خارجي (المراجعة الشاملة 2026-11-15)
+guardFetch("notify-engine");
 
 // =============================================================
 // notify-engine — محرك الإشعارات العام (طلب المدير 2026-09-22).
@@ -283,6 +288,9 @@ Deno.serve(async (req) => {
           const { error: insErr } = await supabase
             .from("notification_sends").insert(row).select("id").maybeSingle();
           if (!insErr) inserted++;
+          // التكرار (23505) متوقع عند إعادة التشغيل؛ غيره عطل حقيقي كان يُبلع
+          else if ((insErr as { code?: string }).code !== "23505")
+            await logFnError("notify-engine", "insert", `${rule.key}: ${insErr.message}`);
         }
       }
     }

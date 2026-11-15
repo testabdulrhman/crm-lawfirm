@@ -12,6 +12,10 @@
 // =============================================================
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { guardFetch } from "../_shared/fetchGuard.ts";
+
+// مهلة وإعادة محاولة وتسجيل لكل نداء خارجي (المراجعة الشاملة 2026-11-15)
+guardFetch("hub-monitor");
 
 const cors = {
   'Access-Control-Allow-Origin': '*',

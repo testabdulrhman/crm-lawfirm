@@ -1,5 +1,9 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { staffOrService } from "../_shared/staffGuard.ts";
+import { guardFetch } from "../_shared/fetchGuard.ts";
+
+// مهلة وإعادة محاولة وتسجيل لكل نداء خارجي (المراجعة الشاملة 2026-11-15)
+guardFetch("whatsapp-send");
 
 // =============================================================
 // whatsapp-send — إرسال واتساب للمحاماة.

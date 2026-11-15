@@ -15,6 +15,10 @@
 // الحماية: verify_jwt. المشغّل يستدعيها بمفتاح service_role من داخل القاعدة.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { staffServiceOrInternal } from "../_shared/staffGuard.ts";
+import { guardFetch } from "../_shared/fetchGuard.ts";
+
+// مهلة وإعادة محاولة وتسجيل لكل نداء خارجي (المراجعة الشاملة 2026-11-15)
+guardFetch("appointment-confirm");
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 /** قالب واتساب معتمد في الـHub لتأكيد الموعد عن بُعد (٤ متغيّرات) */

@@ -14,6 +14,10 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { HIJRI_RULE, pickDate } from "../_shared/hijri.ts";
 import { staffOrService } from "../_shared/staffGuard.ts";
+import { guardFetch } from "../_shared/fetchGuard.ts";
+
+// مهلة وإعادة محاولة وتسجيل لكل نداء خارجي (المراجعة الشاملة 2026-11-15)
+guardFetch("extract-case");
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";

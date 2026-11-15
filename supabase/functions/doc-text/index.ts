@@ -11,6 +11,11 @@ import { extractText, getDocumentProxy } from "npm:unpdf@0.12.1";
 import * as JSZipNS from "https://esm.sh/jszip@3.10.1";
 import { staffServiceOrInternal } from "../_shared/staffGuard.ts";
 import { docxText } from "../_shared/docx.ts";
+import { guardFetch } from "../_shared/fetchGuard.ts";
+import { logFnError } from "../_shared/errorLog.ts";
+
+// مهلة وإعادة محاولة وتسجيل لكل نداء خارجي (المراجعة الشاملة 2026-11-15)
+guardFetch("doc-text");
 
 // deno-lint-ignore no-explicit-any
 const JSZip: any = (JSZipNS as any).default ?? JSZipNS;
@@ -151,13 +156,28 @@ async function extract(d: Doc, mdl: string): Promise<Result> {
   };
 }
 
+// نص PDF قد يحمل محرف NUL (\u0000) أو نصف زوج UTF-16 — Postgres يرفضهما فيفشل الحفظ كله
+const clean = (t: string | undefined) =>
+  t == null ? null : t.replace(/\u0000/g, "").replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, "");
+
 async function save(d: Doc, r: Result) {
   const { data: prev } = await admin.from("document_texts").select("attempts").eq("document_id", d.id).maybeSingle();
-  await admin.from("document_texts").upsert({
-    document_id: d.id, status: r.status, content: r.content ?? null, source: r.source ?? null, pages: r.pages ?? null,
+  const attempts = (prev?.attempts ?? 0) + 1;
+  const now = new Date().toISOString();
+  const { error } = await admin.from("document_texts").upsert({
+    document_id: d.id, status: r.status, content: clean(r.content), source: r.source ?? null, pages: r.pages ?? null,
     error: r.error ?? null, model: r.model ?? null, in_tokens: r.in_tokens ?? null, out_tokens: r.out_tokens ?? null,
-    attempts: (prev?.attempts ?? 0) + 1, extracted_at: new Date().toISOString(),
+    attempts, extracted_at: now,
   });
+  if (error) {
+    // مراجعة 2026-11-15: خطأ الحفظ كان يُتجاهل، فيبقى المستند «فاشلاً» بتاريخ قديم ويعود للطابور كل ٣ دقائق
+    // ويُقرأ بالذكاء من جديد (٤٨٠ نداءً في اليوم لثلاثة مستندات). الآن: فشل مسجّل يحترم حدّ المحاولات والمهلة.
+    await admin.from("document_texts").upsert({
+      document_id: d.id, status: "failed", content: null, attempts, extracted_at: now,
+      error: `تعذّر حفظ النص: ${error.message}`.slice(0, 300),
+    });
+    await logFnError("doc-text", "save", `${d.id}: ${error.message}`);
+  }
 }
 
 Deno.serve(async (req) => {

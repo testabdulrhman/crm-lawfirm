@@ -7,6 +7,10 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { staffServiceOrInternal } from "../_shared/staffGuard.ts";
 import { riyadhToday } from "../_shared/riyadh.ts";
+import { guardFetch } from "../_shared/fetchGuard.ts";
+
+// مهلة وإعادة محاولة وتسجيل لكل نداء خارجي (المراجعة الشاملة 2026-11-15)
+guardFetch("pending-asks");
 
 const admin = createClient(Deno.env.get("SUPABASE_URL") ?? "", Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "", {
   auth: { persistSession: false, autoRefreshToken: false },

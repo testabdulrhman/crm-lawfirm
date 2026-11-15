@@ -21,6 +21,10 @@ import { BrainOutput, think, vet } from './brain.ts';
 import { ConvSnapshot, decide, FlowOutput, LEAD_FOLLOWUP_DAYS, Match } from './flow.ts';
 import { isBusinessHours } from './hours.ts';
 import { REQUEST_TYPES, T } from './texts.ts';
+import { guardFetch } from "../_shared/fetchGuard.ts";
+
+// مهلة وإعادة محاولة وتسجيل لكل نداء خارجي (المراجعة الشاملة 2026-11-15)
+guardFetch("wa-reception");
 
 const supa = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
   auth: { persistSession: false, autoRefreshToken: false },

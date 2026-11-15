@@ -15,6 +15,10 @@ import { loadScope, type AiScope } from "../_shared/aiScope.ts";
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { cachedText, ephemeral, logCacheUsage } from "../_shared/prompt-cache.ts";
 import { riyadhToday } from "../_shared/riyadh.ts";
+import { guardFetch } from "../_shared/fetchGuard.ts";
+
+// مهلة وإعادة محاولة وتسجيل لكل نداء خارجي (المراجعة الشاملة 2026-11-15)
+guardFetch("ai-assistant");
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";

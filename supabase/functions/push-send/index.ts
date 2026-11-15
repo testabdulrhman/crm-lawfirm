@@ -10,6 +10,10 @@
 // بدل الصمت (درس فشل الرسائل الصامت في اعتمادات الصادر).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { create, getNumericDate } from "https://deno.land/x/djwt@v3.0.2/mod.ts";
+import { guardFetch } from "../_shared/fetchGuard.ts";
+
+// مهلة وإعادة محاولة وتسجيل لكل نداء خارجي (المراجعة الشاملة 2026-11-15)
+guardFetch("push-send");
 
 const admin = createClient(
   Deno.env.get("SUPABASE_URL") ?? "",

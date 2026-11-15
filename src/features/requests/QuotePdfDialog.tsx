@@ -6,8 +6,6 @@
 // ليصلح الرابط لواجهة هاتف، والإرسال عبر whatsapp-send.
 import { useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import html2canvas from 'html2canvas'
-import { jsPDF } from 'jspdf'
 import { Download, Loader2, Send, Sparkles } from 'lucide-react'
 
 import {
@@ -180,6 +178,7 @@ export function QuotePdfDialog({
   const dateStr = `${today.getFullYear()}/${String(today.getMonth() + 1).padStart(2, '0')}/${String(today.getDate()).padStart(2, '0')}م`
 
   async function buildPdf(): Promise<Blob> {
+    const [{ default: html2canvas }, { jsPDF }] = await Promise.all([import('html2canvas'), import('jspdf')])
     const canvas = await html2canvas(pageRef.current!, {
       scale: 2,
       useCORS: true,

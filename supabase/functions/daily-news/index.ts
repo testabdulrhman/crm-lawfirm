@@ -4,6 +4,10 @@
 // خبر واحد في اليوم (day فريد) فالنداء المكرر لا يكلّف شيئاً. ولا نعرض نص المصدر: العنوان وسطرنا ورابطه.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { staffServiceOrInternal } from "../_shared/staffGuard.ts";
+import { guardFetch } from "../_shared/fetchGuard.ts";
+
+// مهلة وإعادة محاولة وتسجيل لكل نداء خارجي (المراجعة الشاملة 2026-11-15)
+guardFetch("daily-news");
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
 const MODEL = "claude-haiku-5-5"; // اختيار من قائمة قصيرة مرة في اليوم — الأرخص يكفي

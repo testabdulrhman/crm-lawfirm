@@ -23,6 +23,10 @@ import { EXTRA_TOOLS, runExtraTool, EXTRA_SYSTEM_RULES } from "../_shared/agent-
 import { canSeeCase, loadScope, type AiScope } from "../_shared/aiScope.ts";
 import { ephemeral, logCacheUsage, withCachedLastTool } from "../_shared/prompt-cache.ts";
 import { riyadhToday as riyadhPlus } from "../_shared/riyadh.ts";
+import { guardFetch } from "../_shared/fetchGuard.ts";
+
+// مهلة وإعادة محاولة وتسجيل لكل نداء خارجي (المراجعة الشاملة 2026-11-15)
+guardFetch("discussion-ai");
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";

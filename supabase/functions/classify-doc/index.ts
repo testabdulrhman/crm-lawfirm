@@ -6,6 +6,10 @@
 // في خيط رسالته في النقاش إن وُجدت. نفس حراسة discussion-ai: سر داخلي،
 // والتصنيف يحدث مرة واحدة (category موجود = تخطٍّ).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { guardFetch } from "../_shared/fetchGuard.ts";
+
+// مهلة وإعادة محاولة وتسجيل لكل نداء خارجي (المراجعة الشاملة 2026-11-15)
+guardFetch("classify-doc");
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
