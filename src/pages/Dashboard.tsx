@@ -28,6 +28,7 @@ import {
   WhileYouWereBusy,
 } from '@/features/dashboard/sections'
 import { PendingAsksCard } from '@/features/dashboard/PendingAsksCard'
+import { CleanupBanner } from '@/features/dashboard/CleanupBanner'
 
 export default function Dashboard() {
   const { teamMember } = useAuth()
@@ -178,6 +179,9 @@ export default function Dashboard() {
       ) : (
         <>
           <BirthdayCard />
+
+          {/* «نظّف ملفاتك»: جلسات مضت بلا إغلاق وقضايا بلا خطوة تالية — يختفي حين لا شيء */}
+          {!isAll && <CleanupBanner />}
 
           {/* ما طلبه الزملاء ولم يُرد عليه — للمدير الآن */}
           {isDirector && <PendingAsksCard />}

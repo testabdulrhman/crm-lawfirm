@@ -78,6 +78,7 @@ import { useExtractSessionMinutes } from '@/hooks/useAiAnalysis'
 import { toast } from '@/hooks/use-toast'
 import { supabase } from '@/lib/supabase'
 import { errMessage } from '@/lib/errors'
+import { clearQueryParam, queryParam } from '@/lib/queryParam'
 import {
   useCaseSessions,
   useAddSession,
@@ -134,6 +135,20 @@ export function SessionsTab({
   const [postponeFor, setPostponeFor] = useState<CaseSession | null>(null)
   const [preview, setPreview] = useState<CaseSession | null>(null)
   const [resendFor, setResendFor] = useState<CaseSession | null>(null)
+
+  // من «نظّف ملفاتك»: ?session=<id>&session_action=close|postpone يفتح نافذة الإغلاق أو التأجيل مرة واحدة
+  useEffect(() => {
+    if (!data) return
+    const sid = queryParam('session')
+    if (!sid) return
+    const action = queryParam('session_action')
+    clearQueryParam('session')
+    clearQueryParam('session_action')
+    const s = data.find((x) => x.id === sid)
+    if (!s) return
+    if (action === 'postpone') setPostponeFor(s)
+    else if (!s.closed_at) setCloseFor(s)
+  }, [data])
 
   const { upcoming, past } = useMemo(() => {
     const grp = (data ?? []).map((s) => ({ s, st: sessionDisplayStatus(s) }))

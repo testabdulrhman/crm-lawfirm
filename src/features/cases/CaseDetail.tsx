@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { MatterKindIcon } from '@/components/MatterKindIcon'
 import { Link, useLocation } from 'wouter'
 import { ArrowRight, ChevronDown, Handshake, Pencil, Scale, Sparkles } from 'lucide-react'
@@ -32,6 +32,7 @@ import { useCaseMemos } from '@/hooks/useCaseMemos'
 import { CaseJourney } from './CaseJourney'
 import { CaseNowStrip } from './CaseNowStrip'
 import { usePageState } from '@/hooks/usePageState'
+import { queryParam } from '@/lib/queryParam'
 import {
   BANKRUPTCY_STAGES,
   CASE_STATUS_OPTIONS,
@@ -75,6 +76,11 @@ export function CaseDetail({ id }: { id: string }) {
   // التبويب المفتوح يدوم للرجوع/التحديث (لكل قضية على حدة)
   const [savedTab, setTab] = usePageState('case-tab:' + id, 'summary')
   const tab = LEGACY_TAB[savedTab] ?? savedTab
+  // من «نظّف ملفاتك»: ?session=…&session_action=close|postpone يفتح تبويب الجلسات ونافذة الجلسة مباشرة
+  useEffect(() => {
+    if (queryParam('session')) setTab('sessions')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id])
   const [allFacts, setAllFacts] = useState(false)
   const openStory = () => {
     setTab('summary')
