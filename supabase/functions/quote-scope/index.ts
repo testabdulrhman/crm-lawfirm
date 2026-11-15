@@ -8,6 +8,7 @@
 // تقرأ ولا تكتب: الموظف يراجع الصياغة قبل إدراجها في العرض — الصياغة
 // الآلية تخطئ ولا يصح أن تدخل مستنداً يُرسل لعميل دون إقرار بشري.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { staffOrService } from "../_shared/staffGuard.ts";
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
@@ -81,6 +82,7 @@ const TOOL = {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "method not allowed" }, 405);
+  if (!(await staffOrService(req))) return json({ error: "لموظف نشط فقط" }, 401);
 
   try {
     if (!ANTHROPIC_API_KEY) return json({ error: "مفتاح الذكاء غير مضبوط — راجع مدير النظام" }, 500);

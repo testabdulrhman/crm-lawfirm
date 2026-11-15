@@ -23,7 +23,7 @@ import { ContactPicker } from '@/components/ContactPicker'
 import { DualDatePicker } from '@/components/DualDatePicker'
 import { Ltr } from '@/components/Ltr'
 
-import { todayISO } from '@/lib/format'
+import { todayISO, toLatinDigits } from '@/lib/format'
 import { uploadFile } from '@/lib/files'
 import { errMessage } from '@/lib/errors'
 import { toast } from '@/hooks/use-toast'
@@ -75,7 +75,7 @@ export function NewDebtContractDialog({ onDone }: { onDone: () => void }) {
   }
 
   const submit = async () => {
-    const pctNum = Number(pct.replace(/[^\d]/g, ''))
+    const pctNum = Number(toLatinDigits(pct).replace(/[^\d]/g, ''))
     if (!name.trim()) return setError('اسم الطرف الأول مطلوب.')
     if (!idNum.trim()) return setError('رقم الهوية/السجل مطلوب.')
     if (!phone.trim()) return setError('رقم الجوال مطلوب.')

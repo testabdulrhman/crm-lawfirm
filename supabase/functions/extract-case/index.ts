@@ -13,6 +13,7 @@
 // فالاستخراج الآلي يخطئ ولا يصح أن يفتح قضية دون إقرار موظف.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { HIJRI_RULE, pickDate } from "../_shared/hijri.ts";
+import { staffOrService } from "../_shared/staffGuard.ts";
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
@@ -66,7 +67,14 @@ function classify(mediaType: string, hint = ""): Doc["kind"] | null {
   return null;
 }
 
+// مراجعة 2026-11-15: كانت تجلب أي رابط يُرسل لها (طريق لاستكشاف الشبكة) — المسموح مخزن المشروع وحده
+function isOwnStorage(url: string): boolean {
+  const base = (Deno.env.get("SUPABASE_URL") ?? "").replace(/\/$/, "");
+  return !!base && url.startsWith(`${base}/storage/v1/`);
+}
+
 async function fetchDoc(url: string): Promise<Doc | null> {
+  if (!isOwnStorage(url)) return null;
   try {
     const res = await fetch(url);
     if (!res.ok) return null;
@@ -156,6 +164,7 @@ ${HIJRI_RULE}
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "POST only" }, 405);
+  if (!(await staffOrService(req))) return json({ error: "لموظف نشط فقط" }, 401);
   if (!ANTHROPIC_API_KEY) {
     return json({ error: "مفتاح Anthropic غير مُعدّ على الخادم." }, 500);
   }

@@ -14,6 +14,13 @@ function forceLatinDigits(s: string): string {
   ).replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 0x06f0))
 }
 
+/**
+ * مدخلات المستخدم: الأرقام العربية-الهندية (٠-٩ و۰-۹) والفاصلتان العربيتان إلى لاتينية — مراجعة 2026-11-15:
+ * كان ‎\D‎ و‎[^\d.]‎ يحذفانها، فمن كتب الأتعاب «١٥٠٠٠» بلوحة عربية حُفظ بلا مبلغ، والجوال «٠٥٥…» صار فارغاً.
+ */
+export const toLatinDigits = (s: string | null | undefined): string =>
+  forceLatinDigits(s ?? '').replace(/٫/g, '.').replace(/٬/g, ',')
+
 function safeFormat(fn: () => string, fallbackInput: number | string): string {
   try {
     return forceLatinDigits(fn())
@@ -146,7 +153,7 @@ export const fmtFileSize = (bytes: number | null | undefined): string => {
 // تطبيع رقم جوال سعودي لصيغة Msegat (9665XXXXXXXX):
 // أزل غير الأرقام؛ إن بدأ بـ 0 استبدله بـ 966؛ إن لم يبدأ بـ 966 أضِفها.
 export const normalizeSaudiPhone = (raw: string): string => {
-  let n = (raw ?? '').replace(/\D/g, '')
+  let n = toLatinDigits(raw).replace(/\D/g, '')
   if (!n) return ''
   if (n.startsWith('00966')) n = n.slice(2)
   if (n.startsWith('0')) n = '966' + n.slice(1)

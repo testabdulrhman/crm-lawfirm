@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 import { COMPANY_NAME } from '@/lib/constants'
+import { toLatinDigits } from '@/lib/format'
 
 const loginSchema = z.object({
   email: z
@@ -212,7 +213,7 @@ function OtpForm() {
     setError(null)
     setInfo(null)
     const p = (raw ?? phone).trim()
-    if (p.replace(/\D/g, '').length < 9) {
+    if (toLatinDigits(p).replace(/\D/g, '').length < 9) {
       setError('أدخل رقم جوال صحيح.')
       return
     }
@@ -279,7 +280,7 @@ function OtpForm() {
               const v = e.target.value
               setPhone(v)
               // اكتمل الرقم؟ أرسل وانتقل — بلا زر (طلب المستخدم 2026-08-30)
-              const digits = v.replace(/\D/g, '')
+              const digits = toLatinDigits(v).replace(/\D/g, '')
               if (digits.length >= 10 && !busy && autoSentFor.current !== digits) {
                 autoSentFor.current = digits
                 void sendCode(v)
@@ -328,7 +329,7 @@ function OtpForm() {
           autoFocus
           value={code}
           onChange={(e) => {
-            const v = e.target.value.replace(/\D/g, '')
+            const v = toLatinDigits(e.target.value).replace(/\D/g, '')
             setCode(v)
             // 6 أرقام = الرمز كامل — تحقّق فوري بلا زر
             if (v.length >= 6 && !busy && autoVerifiedFor.current !== v) {

@@ -3,6 +3,7 @@ import { FunctionRegion } from '@supabase/supabase-js'
 
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/stores/auth'
+import { toLatinDigits } from '@/lib/format'
 
 // صندوق «العملاء» — محادثات الواتساب مع العملاء (قرار المدير 2026-10-06).
 // الفهرس والربط من القاعدة (wa_threads)، والنص نفسه من الـHub عبر دالة wa-inbox عند الفتح.
@@ -260,7 +261,7 @@ export function useWaRequestLinks() {
 
 /** محادثات رقم عميل الطلب (مطابقة آخر ٩ أرقام) — بطاقة في صفحة الطلب */
 export function useRequestClientThreads(phone: string | null | undefined) {
-  const key = (phone ?? '').replace(/\D/g, '').slice(-9)
+  const key = toLatinDigits(phone).replace(/\D/g, '').slice(-9)
   return useQuery({
     queryKey: ['client_threads_of_request', key],
     enabled: key.length === 9,

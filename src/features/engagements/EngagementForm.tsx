@@ -25,7 +25,7 @@ import { ContactPicker } from '@/components/ContactPicker'
 import { DualDatePicker } from '@/components/DualDatePicker'
 import { toast } from '@/hooks/use-toast'
 import { errMessage } from '@/lib/errors'
-import { fmtDatePref, fmtNumber, todayISO } from '@/lib/format'
+import { fmtDatePref, fmtNumber, todayISO, toLatinDigits } from '@/lib/format'
 import { arNorm } from '@/lib/arabic'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/stores/auth'
@@ -183,7 +183,7 @@ export function EngagementForm({
     const pdf = (ok.find((f) => f.kind === 'pdf') ?? ok.find((f) => f.kind === 'image'))?.url ?? null
     const fileUrl = word ?? pdf ?? ok[0]?.url ?? null
 
-    const feesRaw = (values.fees_total ?? '').replace(/[^\d.]/g, '')
+    const feesRaw = toLatinDigits(values.fees_total).replace(/[^\d.]/g, '')
     const input: EngagementInput = {
       engagement_number: t(values.engagement_number),
       title: values.title.trim(),

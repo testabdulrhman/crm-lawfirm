@@ -92,13 +92,33 @@ async function sendApplicantSMS(supabase: any, name: string, phone: string, appI
     const msg = String(tplRow.body).replace(/\{name\}/g, name || "");
     const num = normalizeSaudiPhone(phone);
     if (num.replace(/\D/g, "").length < 11) return;
+
+    // مراجعة 2026-11-15: النموذج عام، فكان كل إرسال يطلق SMS وواتساب لأي رقم بلا حدّ (استنزاف الرصيد).
+    // الطلب يُحفظ دائماً؛ لكن لا رسالة ثانية للرقم نفسه خلال ٢٤ ساعة، ولا رسائل إن تجاوزت الطلبات ٢٠ في الساعة.
+    const key9 = num.replace(/\D/g, "").slice(-9);
+    const dayAgo = new Date(Date.now() - 24 * 3600_000).toISOString();
+    const hourAgo = new Date(Date.now() - 3600_000).toISOString();
+    const [{ count: samePhone }, { count: lastHour }] = await Promise.all([
+      supabase.from("staff_applications").select("id", { count: "exact", head: true })
+        .ilike("phone", `%${key9}`).gte("created_at", dayAgo).neq("id", appId ?? ""),
+      supabase.from("staff_applications").select("id", { count: "exact", head: true }).gte("created_at", hourAgo),
+    ]);
+    if ((samePhone ?? 0) > 0 || (lastHour ?? 0) > 20) {
+      await logEvent(supabase, appId, "received_msg", {
+        channel: "sms", ok: false,
+        detail: (samePhone ?? 0) > 0 ? "لم يُرسل: وصلته رسالة استلام خلال ٢٤ ساعة" : "لم يُرسل: تجاوز حدّ الطلبات في الساعة",
+      });
+      return;
+    }
     const wa = sendApplicantWhatsApp(name, num, msg);
     const res = await fetch("https://www.msegat.com/gw/sendsms.php", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ userName: cfg.userName, apiKey: cfg.apiKey, userSender: cfg.sender, numbers: num, msg }),
     });
     const out = await res.text();
-    const smsOk = out.includes("\"code\":\"1\"") || out.includes("1");
+    // كان الفحص out.includes("1") فيُحسب كل ردّ فيه الرقم ١ نجاحاً — نقرأ code كما ترجعه مسجات
+    let smsOk = false;
+    try { const j = JSON.parse(out); smsOk = res.ok && ["1", "M0000"].includes(String(j?.code)); } catch (_) { smsOk = false; }
     await supabase.from("sms_log").insert({
       recipient_name: name, phone: num, message: msg,
       status: smsOk ? "sent" : "failed",

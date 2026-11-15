@@ -14,6 +14,7 @@
 //
 // الحماية: verify_jwt. المشغّل يستدعيها بمفتاح service_role من داخل القاعدة.
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { staffServiceOrInternal } from "../_shared/staffGuard.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 /** قالب واتساب معتمد في الـHub لتأكيد الموعد عن بُعد (٤ متغيّرات) */
@@ -79,6 +80,9 @@ async function getLocation(): Promise<string> {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST") return json({ error: "POST only" }, 405);
+  // مراجعة 2026-11-15: كانت تقبل المفتاح العام فيُعاد إرسال SMS لأي موعد بلا حدّ —
+  // المقبول: ترقر الإدراج (بالسر الداخلي) أو موظف نشط (زرّ «إرسال رابط الاجتماع») أو مفتاح الخادم
+  if (!(await staffServiceOrInternal(req))) return json({ error: "لموظف نشط فقط" }, 401);
 
   let body: any;
   try { body = await req.json(); } catch { return json({ error: "JSON غير صالح" }, 400); }

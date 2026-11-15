@@ -47,7 +47,7 @@ import {
 } from '@/hooks/useClientChats'
 import { requestDiscussionJump } from '@/lib/discussionJump'
 import { errMessage } from '@/lib/errors'
-import { fmtDate, localISO, todayISO } from '@/lib/format'
+import { fmtDate, localISO, todayISO, toLatinDigits } from '@/lib/format'
 import { RequestForm } from '@/features/requests/RequestForm'
 import { useWaChatToRequest } from '@/hooks/useRequests'
 import { matterHref } from '@/lib/matterHref'
@@ -97,7 +97,7 @@ export function ClientChatsPage() {
       if (!s) return true
       return (
         threadName(t).includes(s) ||
-        t.phone_e164.includes(s.replace(/\D/g, '') || '§') ||
+        t.phone_e164.includes(toLatinDigits(s).replace(/\D/g, '') || '§') ||
         localPhone(t.phone_e164).includes(s) ||
         (t.matter?.office_num ?? '').toLowerCase().includes(s.toLowerCase())
       )

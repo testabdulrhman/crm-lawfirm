@@ -3,6 +3,7 @@
 // المكتب ويكتب له سطر «لماذا يهمّنا» بصياغتنا — أو لا يختار شيئاً إن لم يكن في اليوم ما يخصنا (تختفي البطاقة).
 // خبر واحد في اليوم (day فريد) فالنداء المكرر لا يكلّف شيئاً. ولا نعرض نص المصدر: العنوان وسطرنا ورابطه.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { staffServiceOrInternal } from "../_shared/staffGuard.ts";
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
 const MODEL = "claude-haiku-5-5"; // اختيار من قائمة قصيرة مرة في اليوم — الأرخص يكفي
@@ -115,6 +116,8 @@ async function pick(force = false) {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST") return json({ error: "method not allowed" }, 405);
+  // المجدول الصباحي يحمل السر الداخلي؛ وموظف نشط لإعادة الاختيار يدوياً
+  if (!(await staffServiceOrInternal(req))) return json({ error: "غير مصرّح" }, 401);
   if (!ANTHROPIC_API_KEY) return json({ error: "مفتاح الذكاء غير مضبوط" }, 500);
   const body = await req.json().catch(() => ({}));
   if (body?.mode !== "pick") return json({ error: "mode غير معروف" }, 400);

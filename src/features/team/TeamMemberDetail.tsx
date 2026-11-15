@@ -51,7 +51,7 @@ import { DualDatePicker } from '@/components/DualDatePicker'
 import { FilePreviewDialog } from '@/components/FilePreviewDialog'
 
 import { cn } from '@/lib/utils'
-import { fmtNumber, fmtDatePref, todayISO } from '@/lib/format'
+import { fmtNumber, fmtDatePref, todayISO, toLatinDigits } from '@/lib/format'
 import { pickFile, uploadFile } from '@/lib/files'
 import { errMessage } from '@/lib/errors'
 import { toast } from '@/hooks/use-toast'
@@ -509,7 +509,7 @@ function AddEntryForm({
   const [error, setError] = useState<string | null>(null)
 
   const submit = async () => {
-    const num = Number(amount.replace(/[^\d.]/g, ''))
+    const num = Number(toLatinDigits(amount).replace(/[^\d.]/g, ''))
     if (!num || num <= 0) {
       setError('أدخل مبلغاً صحيحاً أكبر من صفر.')
       return

@@ -24,7 +24,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { supabase } from '@/lib/supabase'
 import { toast } from '@/hooks/use-toast'
 import { errMessage } from '@/lib/errors'
-import { normalizeSaudiPhone } from '@/lib/format'
+import { normalizeSaudiPhone, toLatinDigits } from '@/lib/format'
 import { tafqitSAR } from '@/lib/tafqit'
 import { useOfficeInfo } from '@/hooks/useSettings'
 import { typeLabel } from './labels'
@@ -162,7 +162,7 @@ export function QuotePdfDialog({
     }
   }
 
-  const grossN = Number(gross.replace(/[^\d.]/g, '')) || 0
+  const grossN = Number(toLatinDigits(gross).replace(/[^\d.]/g, '')) || 0
   const netN = grossN / (1 + VAT)
   const vatN = grossN - netN
   const scopeLines = scope.split('\n').map((l) => l.trim()).filter(Boolean)

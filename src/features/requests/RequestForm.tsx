@@ -21,7 +21,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { useAuth } from '@/stores/auth'
-import { todayISO } from '@/lib/format'
+import { todayISO, toLatinDigits } from '@/lib/format'
 import { useContacts } from '@/hooks/useContacts'
 import { useCreateRequest, useUpdateRequest } from '@/hooks/useRequests'
 import { ContactPicker } from '@/components/ContactPicker'
@@ -115,10 +115,10 @@ export function RequestForm({
       : ''
   // رقم المحادثة مسجّل لعميل في السجل ⇒ يُختار تلقائياً (آخر ٩ أرقام — 05 أو 966 سواء)
   useEffect(() => {
-    const key = (initial?.client_phone ?? '').replace(/\D/g, '').slice(-9)
+    const key = toLatinDigits(initial?.client_phone).replace(/\D/g, '').slice(-9)
     if (isEdit || key.length !== 9 || (watchedClientId && watchedClientId !== NONE)) return
     const hits = (contacts ?? []).filter((c) =>
-      [c.phone, c.phone2].some((p) => (p ?? '').replace(/\D/g, '').slice(-9) === key)
+      [c.phone, c.phone2].some((p) => toLatinDigits(p).replace(/\D/g, '').slice(-9) === key)
     )
     if (hits.length === 1) {
       setValue('client_id', hits[0].id)

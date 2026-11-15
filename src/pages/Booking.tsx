@@ -19,7 +19,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
-import { fmtHijri, fmtGregorian, fmtNumber } from '@/lib/format'
+import { fmtHijri, fmtGregorian, fmtNumber, toLatinDigits } from '@/lib/format'
 import { errMessage } from '@/lib/errors'
 
 const HIJRI_LOCALE = 'ar-SA-u-ca-islamic-umalqura-nu-latn'
@@ -137,7 +137,7 @@ export default function Booking() {
 
   const submit = async () => {
     if (!name.trim() || name.trim().length < 3) return setError('اكتب اسمك الكامل.')
-    if (phone.replace(/\D/g, '').length < 9) return setError('رقم الجوال غير صحيح.')
+    if (toLatinDigits(phone).replace(/\D/g, '').length < 9) return setError('رقم الجوال غير صحيح.')
     if (!selectedDate || !selectedTime) return setError('اختر اليوم والوقت.')
     setError(null)
     setSaving(true)

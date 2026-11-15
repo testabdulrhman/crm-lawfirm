@@ -64,7 +64,7 @@ import { FilePreviewDialog } from '@/components/FilePreviewDialog'
 import { QueryErrorState } from '@/components/QueryErrorState'
 import { useConfirm } from '@/components/ConfirmDialog'
 
-import { fmtDatePref, fmtNumber, todayISO, daysLabel, fmtCurrency } from '@/lib/format'
+import { fmtDatePref, fmtNumber, todayISO, daysLabel, fmtCurrency, toLatinDigits } from '@/lib/format'
 import { pickFile } from '@/lib/files'
 import { openExternal } from '@/lib/external'
 import { useAuth } from '@/stores/auth'
@@ -432,7 +432,7 @@ function OnboardingGateCard({ request: r }: { request: IncomingRequest }) {
             <span className="flex shrink-0 items-center gap-1.5">
               <Input
                 value={amount}
-                onChange={(e) => setAmount(e.target.value.replace(/[^\d.]/g, ''))}
+                onChange={(e) => setAmount(toLatinDigits(e.target.value).replace(/[^\d.]/g, ''))}
                 placeholder="المبلغ"
                 dir="ltr"
                 inputMode="decimal"
@@ -620,7 +620,7 @@ function DecisionCard({
   // يُنشأ العميل عند التحويل لملف من اسم الطلب وجواله، ويُربط به الطلب. ويُعاد استعمال عميلٍ بالجوال نفسه.
   const ensureClient = async (): Promise<string | null> => {
     if (r.client_id) return r.client_id
-    const phone = (r.client_phone ?? '').replace(/\D/g, '')
+    const phone = toLatinDigits(r.client_phone).replace(/\D/g, '')
     if (phone.length >= 9) {
       const { data: same } = await supabase
         .from('contacts')
