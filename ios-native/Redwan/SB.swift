@@ -84,12 +84,43 @@ final class SB: ObservableObject {
     }
 
     func logout() {
+        // الخروج الكامل (مراجعة 2026-11-15): كان يمسح الجلسة من الجهاز وحده — فيبقى الجهاز مسجّلاً للإشعارات
+        // فتصل معاينات رسائل الحساب السابق على شاشة القفل، ويبقى رمز التجديد صالحاً، والمستندات المفتوحة في الجهاز
+        let oldToken = session?.accessToken
+        let pushToken = UserDefaults.standard.string(forKey: "push_token")
         session = nil
         member = nil
         Keychain.clear()
         WidgetCenter.shared.reloadAllTimelines()   // الأداة تعرض «سجّل الدخول» لا بيانات من خرج
         // نقاشات الحساب المحفوظة على الجهاز تُمسح مع الخروج — لا يرثها من يدخل بعده
         DiscussionCache.clearAll()
+        Usage.shared.reset()
+        UNUserNotificationCenter.current().removeAllDeliveredNotifications()
+        UNUserNotificationCenter.current().setBadgeCount(0)
+        try? FileManager.default.removeItem(
+            at: FileManager.default.temporaryDirectory.appendingPathComponent("share", isDirectory: true))
+        // في الخادم (بالرمز القديم، دون انتظار): فكّ الجهاز من إشعارات الحساب، وإبطال الجلسة
+        if let oldToken {
+            let base = baseURL, key = anonKey
+            Task.detached {
+                func send(_ path: String, _ method: String, _ query: [URLQueryItem]) async {
+                    guard var c = URLComponents(url: base.appendingPathComponent(path), resolvingAgainstBaseURL: false) else { return }
+                    c.queryItems = query
+                    guard let url = c.url else { return }
+                    var req = URLRequest(url: url)
+                    req.httpMethod = method
+                    req.timeoutInterval = 10
+                    req.setValue(key, forHTTPHeaderField: "apikey")
+                    req.setValue("Bearer \(oldToken)", forHTTPHeaderField: "Authorization")
+                    _ = try? await URLSession.shared.data(for: req)
+                }
+                if let pushToken {
+                    await send("rest/v1/push_devices", "DELETE", [URLQueryItem(name: "token", value: "eq.\(pushToken)")])
+                }
+                // scope=local: هذا الجهاز وحده — الافتراضي (global) كان سيُخرجه من الويب وبقية أجهزته أيضاً
+                await send("auth/v1/logout", "POST", [URLQueryItem(name: "scope", value: "local")])
+            }
+        }
     }
 
     // MARK: - إشعارات الدفع
@@ -108,6 +139,7 @@ final class SB: ObservableObject {
         // العضو قد لا يكون حُمّل بعد لحظة وصول التوكن
         if member == nil { await loadMember() }
         guard let me = member?.id else { return }
+        UserDefaults.standard.set(token, forKey: "push_token")   // ليُفكّ الجهاز من الإشعارات عند الخروج
         try? await upsert(
             table: "push_devices",
             values: [

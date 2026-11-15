@@ -461,7 +461,7 @@ extension SB {
         let ext = (fileName as NSString).pathExtension.lowercased()
         let safeExt = ext.isEmpty ? "bin" : ext.filter { $0.isASCII }
         let folder = caseId.map { "case_documents/\($0)" } ?? "discussion_general"
-        let path = "\(folder)/\(Int(Date().timeIntervalSince1970))_att.\(safeExt)"
+        let path = "\(folder)/\(Int(Date().timeIntervalSince1970))_\(UUID().uuidString.prefix(8).lowercased())_att.\(safeExt)"
 
         let url = try await storageUpload(
             bucket: "documents", path: path, data: data, mime: mime

@@ -451,6 +451,8 @@ struct SignSheet: View {
     @State private var dragStart: CGPoint?
     @State private var busy = false
     @State private var errorText: String?
+    /// وُقّعت النسخة ونُشرت لكن لم يُسجَّل اعتمادها — لا يُعاد التوقيع (كان سيُنشئ خطاباً ثانياً)
+    @State private var signedUnrecorded = false
 
     private var useStamp: Bool { mode != .signature && stamp != nil }
     private var useSig: Bool { mode != .stamp && signature != nil }
@@ -590,7 +592,7 @@ struct SignSheet: View {
                     .background(Theme.navy)
                     .clipShape(RoundedRectangle(cornerRadius: 14))
                 }
-                .disabled(busy || (!useStamp && !useSig))
+                .disabled(busy || signedUnrecorded || (!useStamp && !useSig))
             }
             .padding(.horizontal, 14)
             .padding(.top, 8)
@@ -826,27 +828,46 @@ struct SignSheet: View {
                 documentId: doc.id, parentId: parentId, alsoToStream: true
             )
             posted = true
-            // ٤) النسخة الموقّعة هي النهائية في الصادر، والاعتماد مسجّل بمن طلب ومن وقّع
-            let now = ISO8601DateFormatter().string(from: Date())
-            if let letter {
-                try? await sb.patch("outgoing_letters", query: [("id", "eq.\(letter.id)")],
-                                    values: ["file_url": doc.url, "document_id": doc.id])
+            // ٤) النسخة الموقّعة هي النهائية في الصادر، والاعتماد مسجّل، وطلب التوقيع يُغلق — نداء واحد ذرّي
+            //    (finalize_signature) يُعاد ٣ مرات؛ كانت ثلاث كتابات بـtry? تُبلع أخطاؤها (مراجعة 2026-11-15)
+            if letter != nil || request != nil {
+                let now = ISO8601DateFormatter().string(from: Date())
                 var approval: [String: Any] = [
-                    "letter_id": letter.id, "status": "approved",
-                    "original_file_url": url, "signed_file_url": doc.url,
+                    "original_file_url": url,
                     "requested_by": request?.requested_by ?? me, "requested_at": now,
-                    "approved_by": me, "approved_at": now,
                     "apply_mode": useStamp && useSig ? "both" : (useSig ? "signature" : "stamp"),
                     "stamp_page": pageIndex + 1, "stamp_x": stampPos.x, "stamp_y": stampPos.y,
                     "note": request?.note ?? NSNull(),
                 ]
                 approval["sig_pos"] = useSig ? ["x": effectiveSigPos.x, "y": effectiveSigPos.y] : NSNull()
-                try? await sb.insertVoid("outgoing_approvals", values: approval)
-            }
-            if let request {
-                try? await sb.patch("sign_requests", query: [("id", "eq.\(request.id)")], values: [
-                    "status": "signed", "letter_id": letter?.id ?? NSNull(), "signed_at": now,
-                ])
+                let params: [String: Any] = [
+                    "p_letter_id": letter?.id ?? NSNull(),
+                    "p_request_id": request?.id ?? NSNull(),
+                    "p_signed_url": doc.url,
+                    "p_document_id": doc.id,
+                    "p_approval": approval,
+                ]
+                let body = try JSONSerialization.data(withJSONObject: params)
+                var lastError: Error?
+                for attempt in 0..<3 {
+                    do {
+                        _ = try await sb.raw(path: "rest/v1/rpc/finalize_signature", method: "POST", query: [], body: body)
+                        lastError = nil
+                        break
+                    } catch {
+                        lastError = error
+                        try? await Task.sleep(nanoseconds: UInt64(800_000_000 * (attempt + 1)))
+                    }
+                }
+                if let lastError {
+                    signedUnrecorded = true
+                    errorText = "وُقّعت النسخة ونُشرت في النقاش، لكن لم يُسجَّل اعتمادها"
+                        + (letter.map { " — الصادر \($0.letter_number) ما زال على النسخة غير الموقّعة" } ?? "")
+                        + ".\n" + (uiErrorText(lastError) ?? lastError.localizedDescription)
+                    busy = false
+                    await onDone()
+                    return
+                }
             }
             busy = false
             await onDone()

@@ -42,6 +42,16 @@ final class Usage {
 
     // MARK: - الواجهة العامة
 
+    /// عند الخروج: يُصفَّر العدّاد كي لا تُحسب دقائق من يدخل بعده في جلسة الحساب السابق
+    func reset() {
+        timer?.invalidate()
+        timer = nil
+        sessionId = nil
+        activeMinutes = 0
+        flushCounter = 0
+        buf = [:]
+    }
+
     /// تبدأ بعد توفر العضو — تُستدعى من RootView عند الدخول
     func start() {
         guard sessionId == nil, timer == nil, let m = SB.shared.member else { return }

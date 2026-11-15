@@ -369,9 +369,9 @@ struct TaskDetailView: View {
     private func postpone(days: Int = 0, label: String? = nil, date: Date? = nil) async {
         Usage.shared.action("تأجيل مهمة")
         let target = date ?? Calendar.current.date(byAdding: .day, value: days, to: Date())!
-        let df = DateFormatter()
-        df.dateFormat = "yyyy-MM-dd"
-        let iso = df.string(from: target)
+        // تقويم ميلادي صريح: DateFormatter بلا تقويم يتبع الجهاز، فجوال على التقويم الهجري كان يرسل 1448-…
+        // فيُحفظ موعد المهمة سنة ١٤٤٨ ميلادية، والأرقام الهندية تُرفض (مراجعة 2026-11-15)
+        let iso = Fmt.iso(target)
         postponing = true
         completeError = nil
         do {

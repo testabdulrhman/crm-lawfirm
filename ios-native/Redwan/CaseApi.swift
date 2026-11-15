@@ -162,7 +162,7 @@ extension SB {
     func uploadDocument(data: Data, name: String, mime: String, caseId: String?) async throws -> String {
         let ext = mime == "application/pdf" ? "pdf" : "jpg"
         let folder = caseId.map { "case_documents/\($0)" } ?? "scans"
-        let path = "\(folder)/\(Int(Date().timeIntervalSince1970))_scan.\(ext)"
+        let path = "\(folder)/\(Int(Date().timeIntervalSince1970))_\(UUID().uuidString.prefix(8).lowercased())_scan.\(ext)"
         let url = try await storageUpload(bucket: "documents", path: path, data: data, mime: mime)
         struct DocRow: Codable { let id: String }
         let inserted = try await rawInsertReturning("documents", values: [

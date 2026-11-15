@@ -47,6 +47,8 @@ struct SessionCloseSheet: View {
     @State private var busy = false
     @State private var error: String?
     @State private var summary: String?
+    /// قنوات وصلت فعلاً في هذه النافذة — إعادة المحاولة بعد فشل جزئي ترسل الفاشلة وحدها (كانت تكرّر الواتساب الناجح)
+    @State private var sentOK: Set<String> = []
 
     private var hasPhone: Bool { normalizeSaudiPhone(phone) != nil }
 
@@ -203,19 +205,24 @@ struct SessionCloseSheet: View {
         var channels: [String] = []
         var failures: [String] = []
         if hasPhone {
-            if sendWa {
+            if sendWa, !sentOK.contains("whatsapp") {
                 if let e = await sb.sendWhatsApp(phone: phone, message: reportValue, recipientName: clientName) {
                     failures.append("واتساب: \(e)")
-                } else { channels.append("whatsapp") }
+                } else { channels.append("whatsapp"); sentOK.insert("whatsapp") }
             }
-            if sendSms {
+            if sendSms, !sentOK.contains("sms") {
                 if let e = await sb.sendSms(phone: phone, message: reportValue, recipientName: clientName) {
                     failures.append("SMS: \(e)")
-                } else { channels.append("sms") }
+                } else { channels.append("sms"); sentOK.insert("sms") }
             }
             if !channels.isEmpty {
-                try? await sb.markSessionReportSent(sessionId: target.id, via: channels.joined(separator: ","))
                 lines.append("أُرسل التقرير عبر " + channels.map { $0 == "sms" ? "SMS" : "واتساب" }.joined(separator: " و"))
+                // وسم الإرسال على الجلسة: فشله كان يُبلع فتبدو الجلسة بلا تقرير ويُعاد إرساله للموكّل
+                do {
+                    try await sb.markSessionReportSent(sessionId: target.id, via: sentOK.sorted().joined(separator: ","))
+                } catch {
+                    failures.append("وصل التقرير لكن لم يُسجَّل على الجلسة: \(uiErrorText(error) ?? error.localizedDescription)")
+                }
             }
         }
 
