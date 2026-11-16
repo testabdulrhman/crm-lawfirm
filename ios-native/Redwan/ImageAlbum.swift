@@ -25,7 +25,7 @@ private struct ImageTile: View {
         // الحجم يأتي من الإطار الخارجي، والصورة تملؤه من فوق دون أن تدفعه (وإلا تفيض فتتفاوت الأعمدة)
         Color.clear
             .overlay {
-                AsyncImage(url: item.url.flatMap(URL.init(string:))) { phase in
+                StoredAsyncImage(url: item.url) { phase in
                     switch phase {
                     case .success(let img):
                         img.resizable().scaledToFill()
@@ -109,7 +109,7 @@ private struct ImageViewer: View {
             Color.black.ignoresSafeArea()
             TabView(selection: $page) {
                 ForEach(Array(items.enumerated()), id: \.element.id) { i, item in
-                    AsyncImage(url: item.url.flatMap(URL.init(string:))) { phase in
+                    StoredAsyncImage(url: item.url) { phase in
                         if case .success(let img) = phase {
                             img.resizable().scaledToFit()
                         } else {

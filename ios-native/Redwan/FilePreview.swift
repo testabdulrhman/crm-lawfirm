@@ -32,8 +32,10 @@ struct FilePreviewSheet: View {
                             .font(.system(size: 14))
                             .foregroundStyle(Theme.muted)
                             .multilineTextAlignment(.center)
-                        if let url, let u = URL(string: url) {
-                            Button("فتح في المتصفح") { UIApplication.shared.open(u) }
+                        if let url, URL(string: url) != nil {
+                            Button("فتح في المتصفح") {
+                                Task { if let u = await StoredURL.resolve(url) { await UIApplication.shared.open(u) } }
+                            }
                                 .buttonStyle(.borderedProminent)
                                 .tint(Theme.gold)
                         }
@@ -88,7 +90,9 @@ enum FileFetch {
         guard let url, let remote = URL(string: url) else {
             throw SBError(message: "رابط الملف غير صالح")
         }
-        let (data, response) = try await URLSession.shared.data(from: remote)
+        // روابط المخزن تُجلب موقّعة (المخزن الخاص) — والأصلي يبقى للامتداد ومفتاح المجلد
+        let fetchURL = await StoredURL.resolve(url) ?? remote
+        let (data, response) = try await URLSession.shared.data(from: fetchURL)
         if let http = response as? HTTPURLResponse, http.statusCode >= 400 {
             throw SBError(message: "تعذّر تحميل الملف (\(http.statusCode))")
         }

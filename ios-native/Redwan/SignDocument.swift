@@ -101,7 +101,7 @@ enum SignAssets {
     }
 
     private static func image(_ url: String?) async -> UIImage? {
-        guard let url, !url.isEmpty, let u = URL(string: url),
+        guard let u = await StoredURL.resolve(url),
               let (data, _) = try? await URLSession.shared.data(from: u) else { return nil }
         return UIImage(data: data)
     }
@@ -755,7 +755,7 @@ struct SignSheet: View {
     private func load() async {
         do {
             let url = outgoing?.letter?.file_url ?? url
-            guard let u = URL(string: url) else { throw SBError(message: "رابط الملف غير صالح") }
+            guard let u = await StoredURL.resolve(url) else { throw SBError(message: "رابط الملف غير صالح") }
             async let fileData = URLSession.shared.data(from: u)
             async let assets = SignAssets.load(sb: sb)
             let ((data, resp), a) = try await (fileData, assets)

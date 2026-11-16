@@ -95,6 +95,7 @@ final class SB: ObservableObject {
         // نقاشات الحساب المحفوظة على الجهاز تُمسح مع الخروج — لا يرثها من يدخل بعده
         DiscussionCache.clearAll()
         Usage.shared.reset()
+        StoredURL.clear()   // روابط الملفات الموقّعة لهذا الحساب
         UNUserNotificationCenter.current().removeAllDeliveredNotifications()
         UNUserNotificationCenter.current().setBadgeCount(0)
         try? FileManager.default.removeItem(

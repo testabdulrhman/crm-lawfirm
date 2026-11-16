@@ -163,18 +163,29 @@ final class VoicePlayer: ObservableObject {
             }
             return
         }
+        // ضغطة ثانية أثناء التوقيع لا تبدأ تحميلاً آخر
+        if currentURL == url, player == nil, loading { return }
         stop()
-        guard let remote = URL(string: url) else { return }
+        guard URL(string: url) != nil else { return }
         activateSession()
         failedURL = nil
-
-        let item = AVPlayerItem(url: remote)
-        let p = AVPlayer(playerItem: item)
-        player = p
         currentURL = url
         position = 0
         duration = Double(knownDuration ?? 0)
         loading = true
+        // روابط المخزن تُوقَّع قبل التشغيل (المخزن الخاص)؛ وإن تغيّر المطلوب أثناءها تُترك
+        Task { [weak self] in
+            let signed = await StoredURL.sign(url)
+            guard let self, self.currentURL == url, self.player == nil,
+                  let remote = URL(string: signed) else { return }
+            self.start(url: url, remote: remote)
+        }
+    }
+
+    private func start(url: String, remote: URL) {
+        let item = AVPlayerItem(url: remote)
+        let p = AVPlayer(playerItem: item)
+        player = p
 
         timeObserver = p.addPeriodicTimeObserver(
             forInterval: CMTime(seconds: 0.1, preferredTimescale: 600), queue: .main
