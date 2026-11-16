@@ -14,6 +14,9 @@ import { Button } from '@/components/ui/button'
 import { openExternal } from '@/lib/external'
 import { toast } from '@/hooks/use-toast'
 import { errMessage } from '@/lib/errors'
+import { fetchStored } from '@/lib/storedUrl'
+import { StoredImg } from '@/components/StoredLink'
+import { useStoredUrl } from '@/lib/storedUrl'
 
 type FileKind = 'pdf' | 'image' | 'other'
 
@@ -49,6 +52,8 @@ export function FilePreviewDialog({
   // لا نعرض الـ URL الكامل كعنوان — يُقص من بدايته المهمة في RTL
   const name = fileName || 'ملف'
   const kind = fileUrl ? detectKind(fileUrl, fileName) : 'other'
+  // الإطار يعرض الرابط الموقّع مؤقتاً (المخزن الخاص)
+  const shownUrl = useStoredUrl(fileUrl)
   // WKWebView (تطبيق الآيفون) يعرض من PDF داخل iframe الصفحة الأولى فقط —
   // نستبدل المعاينة بزر فتح بارز عبر المتصفح
   const isNativeIos = Capacitor.getPlatform() === 'ios'
@@ -66,7 +71,7 @@ export function FilePreviewDialog({
     }
     setDownloading(true)
     try {
-      const res = await fetch(fileUrl)
+      const res = await fetchStored(fileUrl)
       if (!res.ok) throw new Error(`فشل التنزيل (HTTP ${res.status})`)
       const blob = await res.blob()
       const obj = URL.createObjectURL(blob)
@@ -129,13 +134,13 @@ export function FilePreviewDialog({
           </div>
         ) : kind === 'pdf' ? (
           <iframe
-            src={fileUrl}
+            src={shownUrl}
             title={name}
             className="h-[70vh] w-full rounded-md border md:h-[75vh]"
           />
         ) : kind === 'image' ? (
           <div className="flex max-h-[70vh] justify-center overflow-auto md:max-h-[75vh]">
-            <img
+            <StoredImg
               src={fileUrl}
               alt={name}
               className="mx-auto max-h-[70vh] object-contain md:max-h-[75vh]"

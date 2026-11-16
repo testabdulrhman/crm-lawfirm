@@ -5,6 +5,7 @@ import { Loader2, Mic, Pause, Play, Quote } from 'lucide-react'
 
 import { Ltr } from '@/components/Ltr'
 import { cn } from '@/lib/utils'
+import { useStoredUrl } from '@/lib/storedUrl'
 
 const AUDIO_EXT = ['m4a', 'mp3', 'aac', 'wav']
 
@@ -38,6 +39,7 @@ export function VoiceNotePlayer({
   compact?: boolean
 }) {
   const audioRef = useRef<HTMLAudioElement>(null)
+  const playUrl = useStoredUrl(url)
   const [state, setState] = useState<PlayState>('idle')
   const [pos, setPos] = useState(0)
   const [dur, setDur] = useState(() => durationFromName(name))
@@ -130,7 +132,7 @@ export function VoiceNotePlayer({
 
       <audio
         ref={audioRef}
-        src={url ?? undefined}
+        src={playUrl}
         preload="metadata"
         className="hidden"
         onLoadedMetadata={(e) => {

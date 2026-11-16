@@ -72,6 +72,7 @@ import { EngagementForm } from './EngagementForm'
 import { ExtractContractDialog } from './ExtractContractDialog'
 import { GenerateFromTemplateDialog } from './GenerateFromTemplateDialog'
 import { ENG_STATUS_OPTIONS, engStatusBadge, engStatusLabel, engTypeLabel } from './labels'
+import { StoredLink } from '@/components/StoredLink'
 
 export function EngagementDetail({ id }: { id: string }) {
   const [, navigate] = useLocation()
@@ -267,10 +268,10 @@ export function EngagementDetail({ id }: { id: string }) {
                 معاينة العقد
               </Button>
               <Button variant="ghost" size="sm" asChild>
-                <a href={e.file_url} target="_blank" rel="noopener noreferrer">
+                <StoredLink href={e.file_url} target="_blank" rel="noopener noreferrer">
                   <ExternalLink className="h-4 w-4" />
                   فتح/تنزيل
-                </a>
+                </StoredLink>
               </Button>
               <Button
                 variant="gold"

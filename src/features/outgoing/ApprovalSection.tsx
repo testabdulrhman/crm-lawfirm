@@ -48,6 +48,8 @@ import { SIGNATURE_CONFIG_KEY } from '@/features/settings/OfficeInfoTab'
 import { StampPlacementDialog } from './StampPlacementDialog'
 import type { OutgoingLetter } from '@/types/db'
 import { errMessage } from '@/lib/errors'
+import { signStoredUrl } from '@/lib/storedUrl'
+import { StoredLink } from '@/components/StoredLink'
 
 const isPdf = (url: string | null | undefined) =>
   !!url && url.toLowerCase().includes('.pdf')
@@ -264,14 +266,14 @@ export function ApprovalSection({ letter: l }: { letter: OutgoingLetter }) {
             </p>
             {a.original_file_url && (
               <Button variant="ghost" size="sm" className="mt-2" asChild>
-                <a
+                <StoredLink
                   href={a.original_file_url}
                   target="_blank"
                   rel="noopener noreferrer"
                 >
                   <ExternalLink className="h-4 w-4" />
                   النسخة الأصلية (قبل التوقيع)
-                </a>
+                </StoredLink>
               </Button>
             )}
           </div>
@@ -475,7 +477,7 @@ function PdfPagesPreview({ url }: { url: string }) {
         // disableFontFace: تُرسم الحروف أشكالاً من خط الخطاب نفسه. بدونه يمرّرها pdf.js نصاً إلى
         // المتصفح فيعيد تشكيل كل حرف عربي منفرداً — خطابات Word كانت تظهر بحروف مفككة
         // مقلوبة في «معاينة واعتماد» وسليمة في «معاينة ملف» (بلاغ المدير 2026-09-17)
-        const doc = await pdfjs.getDocument({ url, disableFontFace: true }).promise
+        const doc = await pdfjs.getDocument({ url: await signStoredUrl(url), disableFontFace: true }).promise
         if (cancelled || !holder) return
         holder.innerHTML = ''
         const width = holder.clientWidth || 640

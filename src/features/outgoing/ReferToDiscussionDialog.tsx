@@ -18,6 +18,7 @@ import { errMessage } from '@/lib/errors'
 import { toast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
 import type { OutgoingLetter } from '@/types/db'
+import { fetchStored } from '@/lib/storedUrl'
 
 export function ReferToDiscussionDialog({
   letter: l,
@@ -40,7 +41,7 @@ export function ReferToDiscussionDialog({
     if (!picked || !l.file_url) return
     setBusy(true)
     try {
-      const res = await fetch(l.file_url)
+      const res = await fetchStored(l.file_url)
       if (!res.ok) throw new Error('تعذّر جلب ملف الخطاب')
       const blob = await res.blob()
       const num = l.letter_number ?? ''

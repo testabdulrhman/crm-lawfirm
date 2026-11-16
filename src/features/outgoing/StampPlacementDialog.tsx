@@ -31,6 +31,7 @@ import {
   type ApplyMode,
 } from '@/lib/pdfStamp'
 import { errMessage } from '@/lib/errors'
+import { signStoredUrl } from '@/lib/storedUrl'
 
 // نسبة ارتفاع الصورة إلى عرضها (لحساب المواضع بدقة الدمج النهائي)
 function useImageAspect(url: string | null): number | null {
@@ -148,7 +149,7 @@ export function StampPlacementDialog({
         const worker = await import('pdfjs-dist/build/pdf.worker.min.mjs?url')
         pdfjs.GlobalWorkerOptions.workerSrc = worker.default
         // disableFontFace: الحروف العربية أشكالاً من خط الخطاب — بدونه تظهر مفككة (انظر ApprovalSection)
-        const doc = await pdfjs.getDocument({ url: fileUrl, disableFontFace: true }).promise
+        const doc = await pdfjs.getDocument({ url: await signStoredUrl(fileUrl), disableFontFace: true }).promise
         if (cancelled) return
         setPageCount(doc.numPages)
         const target = page === 0 ? doc.numPages : Math.min(page, doc.numPages)

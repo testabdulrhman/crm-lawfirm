@@ -42,6 +42,7 @@ import { OutgoingDocumentsSection } from './OutgoingDocumentsSection'
 import { SendLetterDialog } from './SendLetterDialog'
 import { ReferToDiscussionDialog } from './ReferToDiscussionDialog'
 import { requestDiscussionJump } from '@/lib/discussionJump'
+import { StoredLink } from '@/components/StoredLink'
 
 export function OutgoingLetterDetail({ id }: { id: string }) {
   const [, navigate] = useLocation()
@@ -161,10 +162,10 @@ export function OutgoingLetterDetail({ id }: { id: string }) {
                   أحِل للنقاش
                 </Button>
                 <Button variant="ghost" size="sm" asChild>
-                  <a href={l.file_url} target="_blank" rel="noopener noreferrer">
+                  <StoredLink href={l.file_url} target="_blank" rel="noopener noreferrer">
                     <ExternalLink className="h-4 w-4" />
                     فتح/تنزيل
-                  </a>
+                  </StoredLink>
                 </Button>
               </>
             )}

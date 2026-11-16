@@ -97,6 +97,7 @@ import {
   type TimelineItem,
 } from '@/hooks/useTaskRoom'
 import { TaskFormDialog } from './TaskFormDialog'
+import { StoredLink } from '@/components/StoredLink'
 
 export function TaskRoomPage({ id }: { id: string }) {
   const [, navigate] = useLocation()
@@ -688,9 +689,9 @@ function WorkFileCard({
                 </p>
               </div>
               <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" asChild>
-                <a href={latest.file_url} target="_blank" rel="noopener noreferrer" title="فتح/تنزيل">
+                <StoredLink href={latest.file_url} target="_blank" rel="noopener noreferrer" title="فتح/تنزيل">
                   <Download className="h-4 w-4" />
-                </a>
+                </StoredLink>
               </Button>
             </div>
 
@@ -721,7 +722,7 @@ function WorkFileCard({
                             {fmtDateTime(f.created_at)}
                           </p>
                         </div>
-                        <a
+                        <StoredLink
                           href={f.file_url}
                           target="_blank"
                           rel="noopener noreferrer"
@@ -729,7 +730,7 @@ function WorkFileCard({
                           title="فتح/تنزيل"
                         >
                           <Download className="h-3.5 w-3.5" />
-                        </a>
+                        </StoredLink>
                       </li>
                     ))}
                   </ul>
@@ -1096,14 +1097,14 @@ function TimelineRow({
         <FileUp className="h-3.5 w-3.5 shrink-0 text-gold" />
         <span>
           رفع {f.uploader?.short_name || f.uploader?.name || 'موظف'}{' '}
-          <a
+          <StoredLink
             href={f.file_url}
             target="_blank"
             rel="noopener noreferrer"
             className="font-medium text-foreground hover:text-gold"
           >
             النسخة {fmtNumber(f.version)}
-          </a>
+          </StoredLink>
           {f.note && ` — ${f.note}`}
         </span>
         <span className="mr-auto shrink-0">{fmtDateTime(f.created_at)}</span>

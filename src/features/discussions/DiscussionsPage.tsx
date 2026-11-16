@@ -105,6 +105,7 @@ import {
   takeDiscussionJump,
   type DiscussionJump,
 } from '@/lib/discussionJump'
+import { StoredImg } from '@/components/StoredLink'
 
 // «النقاشات» في الويب — نفس بنية التطبيق (مجرى بخيوط + ذكاء + قناة عامة)
 // بأسلوب سلاك المكتبي: ثلاث لوحات — القنوات، المجرى، والخيط المفتوح.
@@ -708,7 +709,7 @@ function PeerAvatar({
       )}
     >
       {url ? (
-        <img src={url} alt={name ?? ''} className="h-full w-full object-cover" />
+        <StoredImg src={url} alt={name ?? ''} className="h-full w-full object-cover" />
       ) : (
         (initial || name?.charAt(0) || '؟')
       )}

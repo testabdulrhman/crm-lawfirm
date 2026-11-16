@@ -64,6 +64,7 @@ import {
 } from '@/lib/poaLabels'
 import { POAReissueDialog } from './POAReissueDialog'
 import { errMessage } from '@/lib/errors'
+import { StoredLink } from '@/components/StoredLink'
 
 export function POADetail({ id }: { id: string }) {
   const [, navigate] = useLocation()
@@ -269,10 +270,10 @@ export function POADetail({ id }: { id: string }) {
                   معاينة المستند
                 </Button>
                 <Button variant="ghost" size="sm" asChild>
-                  <a href={poa.document_url} target="_blank" rel="noopener noreferrer">
+                  <StoredLink href={poa.document_url} target="_blank" rel="noopener noreferrer">
                     <ExternalLink className="h-4 w-4" />
                     فتح/تنزيل
-                  </a>
+                  </StoredLink>
                 </Button>
               </div>
             )}

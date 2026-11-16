@@ -21,6 +21,7 @@ import {
 } from '@/hooks/useChangeRequests'
 import { fmtDateTime, fmtNumber } from '@/lib/format'
 import { cn } from '@/lib/utils'
+import { StoredImg } from '@/components/StoredLink'
 
 const STATUS: Record<ChangeRequestStatus, { label: string; className: string }> = {
   new: { label: 'جديد', className: 'bg-gold/15 text-gold-600 dark:text-gold-300' },
@@ -150,7 +151,7 @@ function RequestCard({ r, isDirector }: { r: ChangeRequest; isDirector: boolean 
               className="shrink-0 overflow-hidden rounded-lg border transition-opacity hover:opacity-80"
               title="اللقطة كاملة"
             >
-              <img src={r.screenshot_url} alt="لقطة الصفحة" className="h-20 w-32 object-cover object-top" />
+              <StoredImg src={r.screenshot_url} alt="لقطة الصفحة" className="h-20 w-32 object-cover object-top" />
             </button>
           )}
         </div>

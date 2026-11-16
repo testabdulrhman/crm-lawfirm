@@ -38,6 +38,7 @@ import { cn } from '@/lib/utils'
 import { stamp, fullStamp } from './stamps'
 import { VoiceNotePlayer, isAudioName } from './VoiceNote'
 import { URL_RE, extractLinks, hostOf, hrefOf } from './links'
+import { StoredImg } from '@/components/StoredLink'
 
 type Scope = 'here' | 'all'
 type Tab = 'files' | 'links'
@@ -392,7 +393,7 @@ function FileRow({
           title="معاينة"
         >
           {kind === 'image' ? (
-            <img
+            <StoredImg
               src={f.url}
               alt=""
               loading="lazy"

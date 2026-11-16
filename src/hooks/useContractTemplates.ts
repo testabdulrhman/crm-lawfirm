@@ -6,6 +6,7 @@ import { toast } from '@/hooks/use-toast'
 import { errMessage } from '@/lib/errors'
 import { uploadFile } from '@/lib/files'
 import { scanPlaceholders, suggestLabel } from '@/lib/docxTemplate'
+import { fetchStored } from '@/lib/storedUrl'
 
 const KEY = 'contract_templates'
 
@@ -161,7 +162,7 @@ export function useDeleteContractTemplate() {
 
 /** جلب ملف القالب من التخزين للتعبئة. */
 export async function fetchTemplateFile(url: string): Promise<ArrayBuffer> {
-  const res = await fetch(url)
+  const res = await fetchStored(url)
   if (!res.ok) throw new Error('تعذّر تحميل ملف القالب من التخزين')
   return res.arrayBuffer()
 }

@@ -7,6 +7,7 @@ import { ChevronLeft, ChevronRight, Download, X } from 'lucide-react'
 
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
+import { StoredImg, StoredLink } from '@/components/StoredLink'
 
 export const isImageName = (name: string | null | undefined) =>
   /\.(jpe?g|png|heic|heif|webp|gif)$/i.test(name ?? '')
@@ -83,7 +84,7 @@ export function ImageAlbum({ images, compact = false }: { images: AlbumImage[]; 
             title={img.name}
           >
             {img.url && (
-              <img src={img.url} alt={img.name} loading="lazy" className="h-full w-full object-cover transition-transform hover:scale-[1.02]" />
+              <StoredImg src={img.url} alt={img.name} loading="lazy" className="h-full w-full object-cover transition-transform hover:scale-[1.02]" />
             )}
             {i === 3 && images.length > 4 && (
               <span className="absolute inset-0 grid place-items-center bg-black/45 text-2xl font-bold text-white">
@@ -125,15 +126,15 @@ function Viewer({ images, start, onClose }: { images: AlbumImage[]; start: numbe
             {img.name}
           </span>
           {img.url ? (
-            <a href={img.url} target="_blank" rel="noreferrer" download className="rounded-full p-1.5 hover:bg-white/10" aria-label="تنزيل">
+            <StoredLink href={img.url} target="_blank" rel="noreferrer" download className="rounded-full p-1.5 hover:bg-white/10" aria-label="تنزيل">
               <Download className="h-5 w-5" />
-            </a>
+            </StoredLink>
           ) : (
             <span className="w-8" />
           )}
         </div>
         <div className="relative flex h-[75vh] items-center justify-center px-12 pb-6">
-          {img.url && <img src={img.url} alt={img.name} className="max-h-full max-w-full object-contain" />}
+          {img.url && <StoredImg src={img.url} alt={img.name} className="max-h-full max-w-full object-contain" />}
           {images.length > 1 && (
             <>
               <button type="button" onClick={() => go(-1)} className="absolute right-3 rounded-full bg-white/10 p-2 hover:bg-white/20" aria-label="السابقة">

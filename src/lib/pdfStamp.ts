@@ -1,9 +1,10 @@
 // دمج التوقيع/الختم داخل ملف PDF في المتصفح (pdf-lib) — لا يغادر الملف النظام.
 // الموضع: كتلة التوقيع أسفل يسار آخر صفحة (مكان اسم الشركة في خطاباتنا).
 // المكتبة تُحمَّل ديناميكياً عند أول استخدام كي لا تُثقل حزمة التطبيق.
+import { fetchStored } from '@/lib/storedUrl'
 
 async function fetchBytes(url: string): Promise<ArrayBuffer> {
-  const res = await fetch(url)
+  const res = await fetchStored(url)
   if (!res.ok) throw new Error('تعذّر جلب الملف')
   return res.arrayBuffer()
 }

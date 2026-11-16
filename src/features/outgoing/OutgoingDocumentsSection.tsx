@@ -26,6 +26,7 @@ import {
   useDeleteOutgoingDocument,
   type OutgoingDocument,
 } from '@/hooks/useOutgoingDocuments'
+import { StoredLink } from '@/components/StoredLink'
 
 const fmtSize = (bytes: number | null): string => {
   if (!bytes) return ''
@@ -129,14 +130,14 @@ export function OutgoingDocumentsSection({ letterId }: { letterId: string }) {
                     className="-m-1 h-10 w-10"
                     asChild
                   >
-                    <a
+                    <StoredLink
                       href={d.file_url}
                       target="_blank"
                       rel="noopener noreferrer"
                       title="فتح/تنزيل"
                     >
                       <ExternalLink className="h-4 w-4" />
-                    </a>
+                    </StoredLink>
                   </Button>
                 )}
                 {isDirector && (
