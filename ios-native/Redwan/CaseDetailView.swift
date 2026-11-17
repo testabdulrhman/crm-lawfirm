@@ -38,6 +38,8 @@ struct CaseDetailView: View {
     // مشاركة مستند من صفّه بلا فتح المعاينة (طلب الموظفين 2026-09-10)
     @State private var sharing: ShareFile?
     @State private var sharingId: String?
+    // حذف جلسة من الآيفون (اقتراح يسرى 2026-10-23: «ما اقدر احذف جلسة») — الضغط المطوّل على بطاقتها
+    @State private var deletingSession: CaseSession?
     @State private var showScan = false
     // فريق الملف — الإشراك من الجوال (طلب المدير 2026-09-09)
     @State private var members: [CaseMemberRow] = []
@@ -155,6 +157,16 @@ struct CaseDetailView: View {
         } message: {
             Text("\(removing?.member?.short_name ?? removing?.member?.name ?? "العضو") لن يعود يرى هذا الملف ولا جلساته ولا مستنداته.")
         }
+        .alert("حذف الجلسة؟", isPresented: Binding(get: { deletingSession != nil }, set: { if !$0 { deletingSession = nil } })) {
+            Button("حذف", role: .destructive) {
+                guard let s = deletingSession else { return }
+                deletingSession = nil
+                Task { await deleteSession(s) }
+            }
+            Button("إلغاء", role: .cancel) { deletingSession = nil }
+        } message: {
+            Text("«\(deletingSession?.title ?? "الجلسة")» تُحذف نهائياً مع نتيجتها وحدثها في التقويم.")
+        }
         .alert("تنبيه", isPresented: Binding(get: { toast != nil }, set: { if !$0 { toast = nil } })) {
             Button("حسناً") { toast = nil }
         } message: { Text(toast ?? "") }
@@ -167,6 +179,12 @@ struct CaseDetailView: View {
             Text(c?.title ?? "ملف")
                 .font(.system(size: 18, weight: .bold))
                 .foregroundStyle(Theme.navy)
+                // «ما اقدر انسخ رقم القضية» (طلب المدير 2026-11-17) — الضغط المطوّل على العنوان أو الرقم
+                .contextMenu {
+                    if let o = c?.office_num, !o.isEmpty { CopyButton(label: "نسخ رقم الملف \(o)", value: o) }
+                    if let n = c?.court_num, !n.isEmpty { CopyButton(label: "نسخ رقم القضية", value: n) }
+                    if let t = c?.title, !t.isEmpty { CopyButton(label: "نسخ العنوان", value: t) }
+                }
             HStack(spacing: 8) {
                 StatusChip(status: c?.status)
                 // وسم النوع لغير القضايا — الشاشة صارت تفتح كل أنواع المشاريع
@@ -182,6 +200,7 @@ struct CaseDetailView: View {
                 }
                 if let n = c?.court_num, !n.isEmpty {
                     Text("قضية \(n)").font(.system(size: 12)).foregroundStyle(Theme.muted)
+                        .contextMenu { CopyButton(label: "نسخ رقم القضية", value: n) }
                 }
             }
             // سير الإجراء — «متابعة سير المشروع» (الديون والدائنون في نظام الإفلاس)
@@ -332,7 +351,36 @@ struct CaseDetailView: View {
                     onReport: { reporting = target(s) },
                     onBrief: { Task { await generateBrief(s) } }
                 )
+                .contextMenu {
+                    Button(role: .destructive) { deletingSession = s } label: {
+                        Label("حذف الجلسة", systemImage: "trash")
+                    }
+                }
             }
+            if !sessions.isEmpty {
+                Text("اضغط مطوّلاً على الجلسة لحذفها")
+                    .font(.system(size: 11)).foregroundStyle(Theme.muted)
+            }
+        }
+    }
+
+    /// كالويب (useDeleteSession): حدث التقويم أولاً — غير قاتل — ثم الجلسة. الصلاحية من القاعدة
+    /// (فريق الملف والمدير)، والرفض يُقال بسببه
+    private func deleteSession(_ s: CaseSession) async {
+        struct Gcal: Decodable { let gcal_event_id: String? }
+        if let rows: [Gcal] = try? await sb.get("sessions", query: [("id", "eq.\(s.id)"), ("select", "gcal_event_id")]),
+           let ev = rows.first?.gcal_event_id, !ev.isEmpty {
+            _ = await sb.callFunctionAuthed("calendar-sync", body: ["action": "delete", "googleEventId": ev])
+        }
+        do {
+            try await sb.delete("sessions", query: [("id", "eq.\(s.id)")])
+            let left: [Gcal] = (try? await sb.get("sessions", query: [("id", "eq.\(s.id)"), ("select", "gcal_event_id")])) ?? []
+            if !left.isEmpty { toast = "لم تُحذف الجلسة — لا صلاحية لك على هذا الملف"; return }
+            sessions.removeAll { $0.id == s.id }
+        } catch let e as SBError {
+            toast = "تعذّر حذف الجلسة — \(e.message)"
+        } catch {
+            toast = uiErrorText(error) ?? "تعذّر حذف الجلسة — تحقق من الاتصال"
         }
     }
 
@@ -759,6 +807,18 @@ struct InfoCard<Content: View>: View {
     }
 }
 
+/// زرّ نسخ لقوائم الضغط المطوّل — مع اهتزاز خفيف يؤكد النسخ
+struct CopyButton: View {
+    let label: String
+    let value: String
+    var body: some View {
+        Button {
+            UIPasteboard.general.string = value
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+        } label: { Label(label, systemImage: "doc.on.doc") }
+    }
+}
+
 struct InfoRow: View {
     let label: String
     let value: String?
@@ -768,6 +828,7 @@ struct InfoRow: View {
             HStack(alignment: .top, spacing: 8) {
                 Text(label).font(.system(size: 12)).foregroundStyle(Theme.muted).frame(width: 84, alignment: .leading)
                 Text(v).font(.system(size: 14)).foregroundStyle(Theme.navy)
+                    .contextMenu { CopyButton(label: "نسخ", value: v) }
                 Spacer(minLength: 0)
             }
         }
