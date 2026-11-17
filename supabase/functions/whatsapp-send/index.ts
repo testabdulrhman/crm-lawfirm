@@ -7,6 +7,7 @@ guardFetch("whatsapp-send");
 
 // =============================================================
 // whatsapp-send — إرسال واتساب للمحاماة.
+// v17 (2026-11-17): dedup_key = مفتاح الرسالة الخارجة، فبلاغ الـHub بالفشل يصحّح السجل.
 // v16 (2026-10-18): fallback_template {name, lang?, params?} — يُرسل النص الحر أولاً، فإن كانت نافذة الـ٢٤ ساعة
 //   مغلقة أُرسل القالب في النداء نفسه (رسائل المتقدّمين للوظائف). وlog_message نصٌّ بديل للسجل
 //   (رسالة بيانات الدخول: كلمة المرور لا تُحفظ في sms_log).
@@ -102,6 +103,10 @@ Deno.serve(async (req) => {
     let detail = "";
     let errCode = "";
     let queued = false;
+    // مفتاح الرسالة التي خرجت فعلاً — يُحفظ في sms_log.dedup_key فيطابقه بلاغ التسليم من الـHub
+    // (hub_ingest delivery_status) فيقلب السطر «فشلت» إن لم تصل. كان يُهمل، فوصلنا ٢٤٣ بلاغاً لم يطابق
+    // أياً منها شيءٌ، وبقيت رسائل فاشلة (قوالب المتقدمين) مسجّلة «نجحت» — فحص 2026-11-17، CRM-12.
+    let usedIdem = "";
 
     const idem = String(body?.idempotency_key ?? "").trim() || `whatsapp-send:${crypto.randomUUID()}`;
     // deno-lint-ignore no-explicit-any
@@ -130,10 +135,12 @@ Deno.serve(async (req) => {
       hubReq = { body: String(message) };
     }
     try {
+      usedIdem = idem;
       let r = await viaHub({ phone_e164: num, idempotency_key: idem, ...hubReq });
       // النافذة مغلقة والمستدعي أعطى قالباً احتياطياً: يُرسل في النداء نفسه بمفتاح مستقل
       if (r.status === "failed" && r.code === WINDOW_CODE && !template?.name && fallback_template?.name) {
         usedTemplate = fallback_template;
+        usedIdem = `${idem}:tpl`;
         r = await viaHub({ phone_e164: num, idempotency_key: `${idem}:tpl`, ...templateReq(fallback_template) });
       }
       status = r.status;
@@ -154,6 +161,7 @@ Deno.serve(async (req) => {
           : media_url ? `[ملف: ${file_name || "مستند"}] ${log_message || message || ""}`.trim() : (log_message || message),
         status,
         sent_by: "whatsapp",
+        ...(usedIdem ? { dedup_key: usedIdem } : {}),
       });
     } catch (_) { /* تجاهل */ }
 

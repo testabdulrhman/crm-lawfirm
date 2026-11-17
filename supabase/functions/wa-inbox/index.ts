@@ -310,21 +310,39 @@ Deno.serve(async (req) => {
       const mode = b.mode === 'template' ? 'template' : 'text';
       const clientKey = String(b.client_id ?? '').replace(/[^\w-]/g, '').slice(0, 64) || crypto.randomUUID();
       const idem = `inbox:${clientKey}`;
+      // المفتاح المرسَل للـHub: مفتاح الرسالة نفسه، إلا إعادةَ رسالة فشلت فعلاً فبمفتاح جديد
+      let hubIdem = idem;
       const payload = mode === 'template'
         ? { template: FOLLOWUP, params: [flatten(body).slice(0, 1000)] }
         : { body };
 
-      const { data: row, error: insErr } = await admin.from('wa_outbox').upsert({
+      let { data: row, error: insErr } = await admin.from('wa_outbox').upsert({
         phone_e164: phone, member_id: me.id, body, template: mode === 'template' ? FOLLOWUP : null,
         idempotency_key: idem, status: 'sending',
       }, { onConflict: 'idempotency_key', ignoreDuplicates: true }).select('id').maybeSingle();
       if (insErr) throw new Error(insErr.message);
-      if (!row) return json({ ok: true, duplicate: true });
+      if (!row) {
+        // إعادة بالمعرّف نفسه (انقطاع/مهلة): لا تُعدّ نجاحاً إلا إن كانت الأولى قد أُرسلت فعلاً —
+        // كانت تُرجع ok لكل تكرار ولو فشلت الأولى أو بقيت معلّقة (فحص 2026-11-17، CRM-12)
+        const { data: prev } = await admin.from('wa_outbox')
+          .select('id, status, created_at, phone_e164').eq('idempotency_key', idem).maybeSingle();
+        if (!prev || prev.phone_e164 !== phone) return fail(409, 'تعذّر التحقق من الرسالة السابقة — أعد الإرسال');
+        if (prev.status === 'sent') return json({ ok: true, duplicate: true });
+        const ageMs = Date.now() - Date.parse(prev.created_at);
+        if (prev.status === 'sending' && ageMs < 60_000) {
+          return fail(409, 'الرسالة السابقة ما زالت تُرسل — انتظر لحظة ثم تحقق من المحادثة');
+        }
+        // فشلت: تُعاد بمفتاح جديد. بقيت «تُرسل» دقيقةً فأكثر (انقطع النداء): المفتاح نفسه، فالـHub
+        // لا يُخرجها ثانية إن كان قبلها
+        if (prev.status === 'failed') hubIdem = `${idem}:r${Date.now()}`;
+        await admin.from('wa_outbox').update({ status: 'sending', error: null }).eq('id', prev.id);
+        row = { id: prev.id };
+      }
 
       const res = await fetch(`${env('HUB_URL')}/functions/v1/send-message`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-hub-key': env('HUB_SEND_KEY') },
-        body: JSON.stringify({ system: 'law', phone_e164: phone, idempotency_key: idem, ...payload }),
+        body: JSON.stringify({ system: 'law', phone_e164: phone, idempotency_key: hubIdem, ...payload }),
         signal: AbortSignal.timeout(25_000),
       });
       const out = await res.json().catch(() => ({}));

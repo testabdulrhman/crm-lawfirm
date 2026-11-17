@@ -250,7 +250,7 @@ function ChatPane({ thread, viewer, onBack }: { thread: ClientThread; viewer: bo
   const [reqOpen, setReqOpen] = useState(false)
   const toRequest = useWaChatToRequest()
   const [, navigate] = useLocation()
-  const pendingId = useRef<string | null>(null)
+  const pendingId = useRef<{ id: string; body: string } | null>(null)
   const endRef = useRef<HTMLDivElement>(null)
 
   const msgs = data?.messages ?? []
@@ -263,12 +263,12 @@ function ChatPane({ thread, viewer, onBack }: { thread: ClientThread; viewer: bo
   const submit = () => {
     const body = text.trim()
     if (!body || send.isPending) return
-    // معرّفٌ ثابت للنص نفسه: إعادة المحاولة بعد انقطاع لا تُرسل نسخة ثانية
-    pendingId.current ??= newId()
+    // معرّفٌ ثابت للنص نفسه: إعادة المحاولة بعد انقطاع لا تُرسل نسخة ثانية (ونصٌّ مختلف = رسالة جديدة)
+    if (!pendingId.current || pendingId.current.body !== body) pendingId.current = { id: newId(), body }
     // الرسالة تظهر في المحادثة فوراً — فيُفرَّغ الحقل الآن ويُعاد نصها إن فشل الإرسال
     setText('')
     send.mutate(
-      { body, mode: windowOpen ? 'text' : 'template', clientId: pendingId.current },
+      { body, mode: windowOpen ? 'text' : 'template', clientId: pendingId.current.id },
       {
         onSuccess: () => {
           pendingId.current = null
@@ -276,8 +276,10 @@ function ChatPane({ thread, viewer, onBack }: { thread: ClientThread; viewer: bo
         onError: (e) => {
           setText((cur) => cur || body)
           toast({ variant: 'destructive', title: 'لم تُرسل الرسالة', description: errMessage(e) })
-          // الرفض النهائي (النافذة/الإيقاف) لا يُعاد بالمعرّف نفسه
-          pendingId.current = null
+          // الرفض النهائي (النافذة/الإيقاف/المدخلات) لا يُعاد بالمعرّف نفسه؛ أما الانقطاع والمهلة وخطأ
+          // الخادم فيُبقي المعرّف — قد تكون الأولى خرجت، فالإعادة به لا تُرسل نسخة ثانية (CRM-12)
+          const st = (e as { context?: { status?: number } })?.context?.status
+          if (st === 400 || st === 403 || st === 422) pendingId.current = null
         },
       }
     )
