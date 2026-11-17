@@ -16,6 +16,7 @@ import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { cachedText, ephemeral, logCacheUsage } from "../_shared/prompt-cache.ts";
 import { riyadhToday } from "../_shared/riyadh.ts";
 import { guardFetch } from "../_shared/fetchGuard.ts";
+import { storedUrlAllowed } from "../_shared/storedAccess.ts";
 
 // مهلة وإعادة محاولة وتسجيل لكل نداء خارجي (المراجعة الشاملة 2026-11-15)
 guardFetch("ai-assistant");
@@ -1170,7 +1171,19 @@ Deno.serve(async (req) => {
     if (!task) return json({ error: "task مطلوب" }, 400);
     if (isService && task !== "analyze_applicant") return json({ error: "غير مسموح" }, 403);
 
-    if (task === "agent") return await runAgent(payload ?? {}, caller!);
+    // CRM-1 (فحص 2026-11-17): رابط ملف يرسله المتصل لا يُنزَّل بمفتاح الخادم ولا يُحفظ في ملف إلا إن جاز
+    // له قراءته (رفعه هو أو يرى سجلاً يشير إليه) — كان مسار مستند محجوب يكفي لتحليله أو نسخه لملف آخر
+    const authHeader = isService ? null : req.headers.get("Authorization");
+    const denied = async (...urls: unknown[]) => {
+      for (const u of urls) {
+        if (typeof u === "string" && u.trim() && !(await storedUrlAllowed(u.trim(), authHeader))) return true;
+      }
+      return false;
+    };
+    if (task === "agent") {
+      if (await denied(payload?.attachment?.url)) return json({ error: "لا تملك صلاحية على هذا الملف" }, 403);
+      return await runAgent(payload ?? {}, caller!);
+    }
     if (task === "ruling_outcomes") return await rulingOutcomes(payload ?? {}, req.headers.get("Authorization") ?? "");
 
     const p = payload ?? {};
@@ -1188,6 +1201,9 @@ Deno.serve(async (req) => {
         p.qualification_doc_url = p.qualification_doc_url || ap.qualification_doc_url;
         p.lawyer_license_url = p.lawyer_license_url || ap.lawyer_license_url;
       }
+    }
+    if (await denied(p.doc_url, p.cv_url, p.qualification_doc_url, p.lawyer_license_url)) {
+      return json({ error: "لا تملك صلاحية على هذا الملف" }, 403);
     }
     if (task === "analyze_applicant" && p.lawyer_license_url) {
       license = await fetchDocAsBase64(p.lawyer_license_url);

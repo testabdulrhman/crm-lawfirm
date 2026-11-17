@@ -12,6 +12,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { HIJRI_RULE, pickDate } from "../_shared/hijri.ts";
 import { docxText } from "../_shared/docx.ts";
 import { guardFetch } from "../_shared/fetchGuard.ts";
+import { storedUrlAllowed } from "../_shared/storedAccess.ts";
 
 // مهلة وإعادة محاولة وتسجيل لكل نداء خارجي (المراجعة الشاملة 2026-11-15)
 guardFetch("extract-contract");
@@ -213,7 +214,8 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "POST only" }, 405);
   // موظف نشط فقط — كان مفتاح anon العام يكفي لاستهلاك الذكاء على حساب المكتب (فحص 2026-10-19)
-  if (!(await staffOrService(req))) return json({ error: "لموظف نشط فقط" }, 401);
+  const caller = await staffOrService(req);
+  if (!caller) return json({ error: "لموظف نشط فقط" }, 401);
   if (!ANTHROPIC_API_KEY) {
     return json({ error: "مفتاح Anthropic غير مُعدّ على الخادم." }, 500);
   }
@@ -229,6 +231,12 @@ Deno.serve(async (req) => {
   const urls: string[] = (Array.isArray(body?.doc_urls) ? body.doc_urls : [body?.doc_url])
     .map((u: unknown) => String(u ?? "").trim()).filter(Boolean).slice(0, 4);
   if (!urls.length) return json({ error: "لا يوجد ملف مرفوع لهذا العقد" }, 400);
+
+  // CRM-1 (فحص 2026-11-17): لا يُنزَّل بمفتاح الخادم ملفٌ لا يحق للموظف قراءته
+  const authHeader = caller.kind === "staff" ? req.headers.get("Authorization") : null;
+  for (const u of urls) {
+    if (!(await storedUrlAllowed(u, authHeader))) return json({ error: "لا تملك صلاحية على هذا الملف" }, 403);
+  }
 
   const loaded = await Promise.all(urls.map(loadDoc));
   // deno-lint-ignore no-explicit-any
