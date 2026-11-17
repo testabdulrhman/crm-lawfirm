@@ -47,6 +47,8 @@ export interface HubAlerts {
   last_full_sync: string | null
   full_sync_hours_ago: number | null
   index_rows: number
+  /** قوالب معتمدة في ميتا لا تراها هاتف («name:lang») — فحص الـ Hub كل ساعة */
+  hatif_missing_templates?: string[]
 }
 
 export interface HubSummary {

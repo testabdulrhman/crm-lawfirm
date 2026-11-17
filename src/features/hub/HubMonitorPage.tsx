@@ -89,6 +89,9 @@ function Alerts({ s }: { s: HubSummary }) {
   if (a.pending_notifications_old > 0) items.push({ label: 'إخطارات معلّقة أكثر من ربع ساعة', value: n(a.pending_notifications_old) })
   if (a.failed_outbound > 0) items.push({ label: 'رسائل صادرة فاشلة (24 ساعة)', value: n(a.failed_outbound) })
   if (a.stuck_outbound > 0) items.push({ label: 'رسائل عالقة في الطابور', value: n(a.stuck_outbound) })
+  if (a.hatif_missing_templates?.length) {
+    items.push({ label: 'قوالب معتمدة لا تراها هاتف — زامنها من لوحة هاتف', value: a.hatif_missing_templates.map((t) => t.split(':')[0]).join('، ') })
+  }
   if (a.rate_limited_phones > 0) items.push({ label: 'أرقام ضربت حد الرسائل الآلية', value: n(a.rate_limited_phones) })
   if (a.worker_minutes_ago != null && a.worker_minutes_ago > 5) {
     items.push({ label: 'العامل المجدول متأخر', value: `${n(a.worker_minutes_ago)} دقيقة` })
@@ -452,15 +455,15 @@ function TemplatesSection() {
           <p className="text-sm text-destructive">{errMessage(error)}</p>
         ) : data ? (
           <>
-            {data.alerts.filter((a) => a.status === 'rejected' || a.category === 'MARKETING').length ? (
+            {data.alerts.filter((a) => a.status === 'rejected' || a.status === 'hatif_missing' || a.category === 'MARKETING').length ? (
               <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm">
                 <p className="mb-1 flex items-center gap-2 font-semibold text-destructive">
                   <AlertTriangle className="h-4 w-4" /> قوالب تحتاج قراراً
                 </p>
                 <ul className="space-y-1 text-xs">
-                  {data.alerts.filter((a) => a.status === 'rejected' || a.category === 'MARKETING').slice(0, 6).map((a, k) => (
+                  {data.alerts.filter((a) => a.status === 'rejected' || a.status === 'hatif_missing' || a.category === 'MARKETING').slice(0, 6).map((a, k) => (
                     <li key={k}>
-                      <Ltr>{a.template}</Ltr> — {a.category === 'MARKETING' ? 'صُنّف تسويقياً' : 'رُفض'}
+                      <Ltr>{a.template}</Ltr> — {a.status === 'hatif_missing' ? 'لا تراه هاتف' : a.category === 'MARKETING' ? 'صُنّف تسويقياً' : 'رُفض'}
                       {a.reason ? <> · {a.reason}</> : null}
                       <span className="text-muted-foreground"> · <Ltr>{a.at}</Ltr></span>
                     </li>
