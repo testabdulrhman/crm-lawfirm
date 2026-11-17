@@ -59,7 +59,24 @@ interface OfficeBranding {
   address?: string | null
 }
 
+// صفحة الحجز هذه قديمة: دالة booking صارت تشترط الموافقة ونوع الخدمة وطريقة الاجتماع، وهي لا ترسلها
+// فكل حجز منها كان يُرفض (400). الحجز الحيّ في الموقع (redwan.sa/appointments عبر وسيط Netlify)،
+// فرابط app.redwan.sa/#/book — الذي ما زال في رسائل سابقة — يحوّل إليه.
+const SITE_BOOKING = 'https://redwan.sa/appointments'
+
 export default function Booking() {
+  useEffect(() => {
+    window.location.replace(SITE_BOOKING)
+  }, [])
+  return (
+    <div dir="rtl" className="flex min-h-screen items-center justify-center p-6 text-center text-sm text-muted-foreground">
+      <a href={SITE_BOOKING} className="underline">جارٍ تحويلك إلى صفحة حجز المواعيد…</a>
+    </div>
+  )
+}
+
+/** النموذج القديم — لم يعد يُعرض؛ يُبقى مرجعاً حتى يُحسم مصيره */
+export function LegacyBooking() {
   const [office, setOffice] = useState<OfficeBranding | null>(null)
 
   const [days, setDays] = useState<DayInfo[]>([])
