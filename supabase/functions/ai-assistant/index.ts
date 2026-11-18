@@ -663,7 +663,7 @@ async function runAgentTool(name: string, input: any, userName: string, actions:
             headers: { "x-api-key": ANTHROPIC_API_KEY!, "anthropic-version": "2023-06-01", "content-type": "application/json" },
             // ⚠️ 8000 لا 2000: التفكير الداخلي يستهلك من نفس الميزانية، فكان
             //    الجواب يُقطع في منتصفه ويفشل تحليله بصمت.
-            body: JSON.stringify({ model, max_tokens: 8000, system, messages: [{ role: "user", content: block ? [block, { type: "text", text: user }] : user }] }),
+            body: JSON.stringify({ model, max_tokens: 16000, system, messages: [{ role: "user", content: block ? [block, { type: "text", text: user }] : user }] }),
           });
           const d = await r.json();
           if (r.ok) {

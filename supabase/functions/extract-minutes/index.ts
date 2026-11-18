@@ -17,7 +17,9 @@ const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const FALLBACK_MODEL = "claude-sonnet-5";
 
 // ⚠️ واسع عمداً: التفكير الداخلي يأكل من نفس الميزانية.
-const MAX_TOKENS = 8000;
+// 2026-11-18: ٨٠٠٠ لم تكفِ محضراً طويلاً (راكان، «المحضر طويل ولم يكتمل التحليل») — صارت ٢٠٠٠٠ مع بثّ
+// الرد (النداء الطويل بلا بثّ يُقطع بالمهلة)، والنقاط مضغوطة المضمون لا منسوخة حرفاً.
+const MAX_TOKENS = 20000;
 
 const admin = createClient(
   Deno.env.get("SUPABASE_URL") ?? "",
@@ -47,6 +49,37 @@ async function getModel(): Promise<string> {
 }
 
 type Doc = { base64: string; mediaType: string; kind: "pdf" | "image" };
+
+/** بثّ رسائل Anthropic (SSE) ← النص كاملاً وسبب التوقف */
+// deno-lint-ignore no-explicit-any
+async function readStream(res: Response): Promise<{ text: string; stop_reason: string | null; usage: any; error?: string }> {
+  const reader = res.body!.pipeThrough(new TextDecoderStream()).getReader();
+  let buf = "", text = "", stop: string | null = null, error: string | undefined;
+  // deno-lint-ignore no-explicit-any
+  const usage: any = {};
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buf += value;
+    let i: number;
+    while ((i = buf.indexOf("\n")) >= 0) {
+      const line = buf.slice(0, i).trim();
+      buf = buf.slice(i + 1);
+      if (!line.startsWith("data:")) continue;
+      // deno-lint-ignore no-explicit-any
+      let ev: any;
+      try { ev = JSON.parse(line.slice(5)); } catch { continue; }
+      if (ev.type === "content_block_delta" && ev.delta?.type === "text_delta") text += ev.delta.text;
+      else if (ev.type === "message_start") Object.assign(usage, ev.message?.usage ?? {});
+      else if (ev.type === "message_delta") {
+        if (ev.delta?.stop_reason) stop = ev.delta.stop_reason;
+        Object.assign(usage, ev.usage ?? {});
+      }
+      else if (ev.type === "error") error = ev.error?.message ?? "خطأ في البث";
+    }
+  }
+  return { text, stop_reason: stop, usage, error };
+}
 
 // مراجعة 2026-11-15: كانت تجلب أي رابط يُرسل لها (طريق لاستكشاف الشبكة) — المسموح مخزن المشروع وحده
 function isOwnStorage(url: string): boolean {
@@ -118,7 +151,8 @@ function userPrompt(ctx: { client?: string | null; matter?: string | null }) {
   return `استخرج بيانات هذه الجلسة من محضر الجلسة المرفق أدناه. ${who}
 
 القواعد:
-- انقل ما ورد في المحضر كاملاً وبدقة ولا تختصر مضمونه — كل طلب أو دفع أو مستند أو قرار يُذكر. لا تضف شيئاً ليس في المحضر.
+- انقل مضمون كل ما ورد في المحضر بدقة ولا تُسقط منه شيئاً — كل طلب أو دفع أو مستند أو قرار يُذكر. لا تضف شيئاً ليس في المحضر.
+- النقطة تحمل المضمون لا النص: لا تنسخ المذكرات والأقوال حرفياً، بل اكتب لكل طلب أو دفع جملة واحدة مركّزة (لا تتجاوز ٤٠ كلمة) تذكر ما طُلب أو دُفع به وسنده إن ذُكر.
 - كل قسم نقاط قصيرة واضحة (كل نقطة جملة)، بلا مقدمات. القسم الذي لا يرد له شيء في المحضر = [].
 - لا تذكر الحضور والغياب.
 - «المطلوب منا»: كل ما كلّفت به الدائرةُ طرفَنا أو يلزمنا فعله قبل الموعد القادم (تقديم مذكرة، إحضار مستند، رد على طلب، سداد…)، مع موعده إن ذُكر أو كان هو موعد الجلسة القادمة.
@@ -244,20 +278,19 @@ Deno.serve(async (req) => {
       body: JSON.stringify({
         model,
         max_tokens: MAX_TOKENS,
+        stream: true,
         system: SYSTEM,
         messages: [{ role: "user", content: [block, { type: "text", text: userPrompt(ctx) }] }],
       }),
     });
 
-    const data = await res.json();
-    if (!res.ok)
-      return json({ error: `خطأ من مزوّد الذكاء الاصطناعي: ${data?.error?.message ?? "غير معروف"}` }, 502);
-
-    const text = (data.content || [])
-      .filter((b: any) => b.type === "text")
-      .map((b: any) => b.text)
-      .join("\n")
-      .trim();
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      return json({ error: `خطأ من مزوّد الذكاء الاصطناعي: ${err?.error?.message ?? res.status}` }, 502);
+    }
+    const data = await readStream(res);
+    if (data.error) return json({ error: `خطأ من مزوّد الذكاء الاصطناعي: ${data.error}` }, 502);
+    const text = data.text.trim();
 
     const parsed = parseLoose(text);
 
