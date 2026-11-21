@@ -41,8 +41,17 @@ const daysUntil = (iso: string | null | undefined) =>
 
 /** جملة «وش يبي العميل»: عنوان ملخص الذكاء، وإلا الوصف، وإلا النوع */
 function needLine(r: IncomingRequest): string {
-  const t = r.docs_summary?.headline || r.description || r.case_type || ''
-  return t.replace(/\s+/g, ' ').trim()
+  if (r.docs_summary?.headline) return r.docs_summary.headline.replace(/\s+/g, ' ').trim()
+  const d = r.description ?? ''
+  // وصف التأهيل الآلي من الواتساب يبدأ بسطر النظام — يُؤخذ منه نوع الطلب والرسالة الأولى لا السطر الأول
+  if (/^طلب وارد عبر الواتساب/.test(d)) {
+    const pick = (label: string) => d.match(new RegExp(`^${label}:\\s*(.+)$`, 'm'))?.[1]?.trim()
+    const parts = [pick('نوع الطلب'), pick('الرسالة الأولى')].filter(Boolean)
+    if (parts.length) return parts.join(' — ')
+    return /غير مكتمل/.test(d) ? 'راسلنا على الواتساب ولم يكمل الأسئلة' : 'راسلنا على الواتساب'
+  }
+  const t = d || r.case_type || ''
+  return t.split('\n').filter((l) => l.trim() && !l.trim().startsWith('📎')).join(' ').replace(/\s+/g, ' ').trim()
 }
 
 type Buckets = {
