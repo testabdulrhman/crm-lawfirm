@@ -365,6 +365,14 @@ Deno.serve(async (req) => {
       if (msg.superseded || msg.decision?.done) return json({ ok: true, duplicate: true });
     }
 
+    // اسم صاحب الواتساب (من الـHub) آخرُ احتياط لاسم المحادثة في صندوق «واتساب» — لا يغلب اسماً نعرفه
+    // من طلب أو موعد أو جهة اتصال (تملؤه القاعدة: wa_known_name)، ولا يُكتب إن كان رقماً لا اسماً
+    const waName = String(ev.contact_name ?? '').trim();
+    if (!test && waName.length >= 2 && waName.length <= 60 && !/^[\d\s+\-()]+$/.test(waName)) {
+      await supa.from('wa_threads').update({ display_name: waName })
+        .eq('phone_e164', key).is('display_name', null).then(() => {}, () => {});
+    }
+
     // ⏸ إيقاف الردود الآلية بأمر المدير (2026-10-04: «ودي أوقف الرد عبر الذكاء الاصطناعي الآن لحين
     // إشعار آخر») — lookup wa_reception_config/replies = off. الوارد يُسجَّل كما هو، ولا يُرسَل أي ردّ
     // (لا ذكاء ولا قواعد). ورسالة الدائن تبقى تُمرَّر لنظام الإفلاس — ردّه هو لا ردّنا.
