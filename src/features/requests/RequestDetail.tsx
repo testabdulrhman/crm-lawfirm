@@ -316,13 +316,19 @@ function OnboardingGateCard({ request: r }: { request: IncomingRequest }) {
           <div className="min-w-0 flex-1">
             <p className="text-sm font-medium">عرض السعر</p>
             <p className="text-xs text-muted-foreground">
-              {r.quote_sent_at ? (
+              {r.quote_sent_at && r.quote_no ? (
                 <>
                   رقم <Ltr>{r.quote_no}</Ltr> · {fmtNumber(Number(r.quote_amount ?? 0))} ريال ·{' '}
                   {fmtDatePref(r.quote_sent_at)} — نطاقه ينتقل للملف عند فتحه
                 </>
+              ) : r.quote_sent_at ? (
+                // أُرسل من خارج النظام — لا رقم ولا نطاق
+                <>
+                  أُرسل {fmtDatePref(r.quote_sent_at)}
+                  {r.quote_amount != null ? ` · ${fmtNumber(Number(r.quote_amount))} ريال` : ''} — من خارج النظام
+                </>
               ) : (
-                'لم يُصدر بعد — زر «عرض سعر PDF» أعلى الصفحة'
+                'لم يُصدر بعد — زر «عرض سعر PDF» أعلى الصفحة، أو «أرسلنا العرض من قبل» إن أُرسل من خارج النظام'
               )}
             </p>
           </div>

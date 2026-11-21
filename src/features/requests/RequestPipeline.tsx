@@ -24,6 +24,7 @@ import { useSetRequestStage, useSummarizeRequest, useUploadAndSummarize } from '
 import type { GateState } from '@/hooks/useIntakeGates'
 import type { IncomingRequest, RequestDocument, RequestStage } from '@/types/db'
 import { STAGES, staleDays } from './labels'
+import { QuoteSentDialog } from './RequestsInbox'
 
 /* ===================== شريط المراحل ===================== */
 
@@ -42,6 +43,8 @@ export function StageBar({
   const idx = STAGES.findIndex((s) => s.value === stage)
   const rejected = r.status === 'rejected'
   const idle = staleDays(r.last_activity_at)
+  // عرض أُرسل من خارج النظام (واتساب يدوي/PDF قديم) — بلاغ المدير 2026-11-21: «انا مرسل له عرض السعر، والنظام يبيني اضيف عرض سعر»
+  const [markSent, setMarkSent] = useState(false)
 
   const next = () => {
     switch (stage) {
@@ -103,6 +106,11 @@ export function StageBar({
               الخطوة التالية: {STAGES[idx]?.next}
               <ArrowLeft className="h-4 w-4" />
             </Button>
+            {(stage === 'new' || stage === 'contacted') && (
+              <Button variant="outline" onClick={() => setMarkSent(true)}>
+                أرسلنا العرض من قبل
+              </Button>
+            )}
             {stage !== 'opened' && (
               <Button variant="outline" className="text-destructive" onClick={onReject}>
                 <X className="h-4 w-4" />
@@ -114,6 +122,7 @@ export function StageBar({
             )}
           </div>
         )}
+        {markSent && <QuoteSentDialog r={r} onClose={() => setMarkSent(false)} />}
       </CardContent>
     </Card>
   )

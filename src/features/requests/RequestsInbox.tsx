@@ -409,7 +409,7 @@ export function ClosedList({ list, navigate }: { list: IncomingRequest[]; naviga
 
 /* ===================== النوافذ ===================== */
 
-function QuoteSentDialog({ r, onClose }: { r: IncomingRequest; onClose: () => void }) {
+export function QuoteSentDialog({ r, onClose }: { r: IncomingRequest; onClose: () => void }) {
   const m = useMarkQuoteSent()
   const [date, setDate] = useState(todayISO())
   const [amount, setAmount] = useState(r.quote_amount != null ? String(r.quote_amount) : '')
