@@ -7,7 +7,7 @@ import {
 import { supabase } from '@/lib/supabase'
 import { toast } from '@/hooks/use-toast'
 import { uploadFile } from '@/lib/files'
-import { arPlural, todayISO } from '@/lib/format'
+import { arPlural, todayISO, normalizeSaudiPhone } from '@/lib/format'
 import type {
   IncomingRequest,
   IncomingRequestInput,
@@ -515,6 +515,97 @@ export function useSetRequestStage() {
     },
     onSuccess: () => invalidateAll(qc),
     onError: errToast('تعذّر نقل الطلب'),
+  })
+}
+
+/* ===================== صندوق الطلبات (2026-11-21) ===================== */
+
+/** «أرسلنا العرض» — لعرض أُرسل من خارج النظام (الواتساب يدوياً أو PDF)؛ المرحلة تصير «عرض سعر» */
+export function useMarkQuoteSent() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, sentAt, amount }: { id: string; sentAt: string; amount: number | null }) => {
+      const { error } = await supabase
+        .from('incoming_requests')
+        .update({
+          quote_sent_at: new Date(`${sentAt}T12:00:00`).toISOString(),
+          ...(amount != null ? { quote_amount: amount } : {}),
+          stage: 'quoted',
+        })
+        .eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      invalidateAll(qc)
+      toast({ variant: 'success', title: 'سُجّل إرسال العرض — صار في «بانتظار رد العميل»' })
+    },
+    onError: errToast('تعذّر تسجيل العرض'),
+  })
+}
+
+/** إغلاق الطلب: «اعتذرنا» أو «العميل ما رجع» — كلاهما status=rejected ويفرّقهما close_reason */
+export function useCloseRequest() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      id,
+      reason,
+      note,
+      decisionBy,
+    }: {
+      id: string
+      reason: 'declined' | 'no_response'
+      note: string | null
+      decisionBy: string
+    }) => {
+      const { error } = await supabase
+        .from('incoming_requests')
+        .update({
+          status: 'rejected',
+          close_reason: reason,
+          rejection_reason: note?.trim() || (reason === 'no_response' ? 'لم يرد العميل على العرض' : null),
+          decision_at: todayISO(),
+          decision_by: decisionBy,
+        })
+        .eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: (_d, v) => {
+      invalidateAll(qc)
+      toast({ variant: 'success', title: v.reason === 'no_response' ? 'أُغلق — العميل ما رجع' : 'سُجّل الاعتذار' })
+    },
+    onError: errToast('تعذّر إغلاق الطلب'),
+  })
+}
+
+/** «ذكّره» — رسالة متابعة على الواتساب (نص حر داخل النافذة، وإلا قالب followup المعتمد) ثم يُعدّ التذكير */
+export function useFollowUpRequest() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ r, message }: { r: IncomingRequest; message: string }) => {
+      const phone = normalizeSaudiPhone(r.client_phone ?? '')
+      if (!phone) throw new Error('رقم جوال العميل غير صحيح أو غير مسجّل في الطلب')
+      const flat = message.replace(/\s+/g, ' ').trim()
+      const { data, error } = await supabase.functions.invoke('whatsapp-send', {
+        body: {
+          phone,
+          message,
+          recipient_name: r.client_name ?? 'عميل',
+          fallback_template: { name: 'followup', lang: 'ar', params: [flat.slice(0, 1000)] },
+        },
+      })
+      if (error || !data?.success) throw new Error(data?.detail || data?.error || errMessage(error) || 'تعذّر الإرسال')
+      const { error: e2 } = await supabase
+        .from('incoming_requests')
+        .update({ followup_count: (r.followup_count ?? 0) + 1, last_followup_at: new Date().toISOString() })
+        .eq('id', r.id)
+      if (e2) throw e2
+    },
+    onSuccess: () => {
+      invalidateAll(qc)
+      toast({ variant: 'success', title: 'أُرسل التذكير على الواتساب' })
+    },
+    onError: errToast('لم يُرسل التذكير'),
   })
 }
 

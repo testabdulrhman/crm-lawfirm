@@ -233,6 +233,10 @@ export interface IncomingRequest {
   last_activity_at: string | null
   docs_summary: RequestDocsSummary | null
   docs_summary_at: string | null
+  // صندوق الطلبات (2026-11-21): سبب الإغلاق (اعتذرنا/ما رجع) وتذكيرات العرض
+  close_reason?: 'declined' | 'no_response' | null
+  followup_count?: number
+  last_followup_at?: string | null
 }
 
 export type RequestStage = 'new' | 'contacted' | 'quoted' | 'contracted' | 'opened'
