@@ -119,16 +119,39 @@ func memberCompleteness(_ m: MemberFull, _ docs: [MemberDoc]) -> MemberCompleten
 }
 
 extension SB {
+    /// بيانات الموظف الحساسة (الهوية والآيبان والعنوان والطوارئ والمرفقات) لا تُطلب من الجدول بعد 2026-11-22
+    /// («ليه الموظفين تطلع للكل؟»): الأعمدة العامة من team_members، والحساس من team_member_private — للمدير
+    /// الكل ولصاحبها نفسه — يُدمج في الصف بالمعرّف. فتبقى البُنى (MemberFull · MyProfile) كما هي.
+    static let teamPublicColumns =
+        "id,name,short_name,role,email,phone,is_director,is_active,is_reviewer,member_type,avatar_url," +
+        "avatar_initial,date_of_birth,join_date,qualifications"
+
+    func teamWithPrivate<T: Decodable>(query: [(String, String)], id: String? = nil) async throws -> [T] {
+        let pubData = try await raw(path: "rest/v1/team_members", method: "GET",
+                                    query: [("select", SB.teamPublicColumns)] + query)
+        var rows = (try JSONSerialization.jsonObject(with: pubData) as? [[String: Any]]) ?? []
+        let params: [String: Any] = id.map { ["p_id": $0] } ?? [:]
+        let body = try JSONSerialization.data(withJSONObject: params)
+        if let privData = try? await raw(path: "rest/v1/rpc/team_member_private", method: "POST", query: [], body: body),
+           let priv = (try? JSONSerialization.jsonObject(with: privData)) as? [[String: Any]] {
+            var byId: [String: [String: Any]] = [:]
+            for p in priv { if let pid = p["id"] as? String { byId[pid] = p } }
+            rows = rows.map { r in
+                guard let rid = r["id"] as? String, let p = byId[rid] else { return r }
+                return r.merging(p) { _, new in new }
+            }
+        }
+        return try JSONDecoder().decode([T].self, from: JSONSerialization.data(withJSONObject: rows))
+    }
+
     func memberFull(id: String) async throws -> MemberFull? {
-        let rows: [MemberFull] = try await get("team_members", query: [
-            ("select", MemberFull.select), ("id", "eq.\(id)"), ("limit", "1")])
+        let rows: [MemberFull] = try await teamWithPrivate(query: [("id", "eq.\(id)"), ("limit", "1")], id: id)
         return rows.first
     }
 
     func teamFull() async throws -> [MemberFull] {
-        try await get("team_members", query: [
-            ("select", MemberFull.select), ("is_active", "eq.true"),
-            ("or", "(is_reviewer.is.null,is_reviewer.eq.false)"), ("order", "name")])
+        try await teamWithPrivate(query: [
+            ("is_active", "eq.true"), ("or", "(is_reviewer.is.null,is_reviewer.eq.false)"), ("order", "name")])
     }
 
     /// memberId فارغ = كل ما يُسمح لي برؤيته (المدير: الكل)

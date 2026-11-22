@@ -681,10 +681,8 @@ extension SB {
 
     func myProfile() async throws -> MyProfile? {
         guard let id = member?.id else { return nil }
-        let rows: [MyProfile] = try await get("team_members", query: [
-            ("select", "id,name,role,email,phone,join_date,national_address,bank_name,bank_iban,qualifications," +
-                       "emergency_contact_name,emergency_contact_phone,emergency_contact_relation"),
-            ("id", "eq.\(id)"), ("limit", "1")])
+        // الحساس من team_member_private لا من الجدول (2026-11-22) — انظر teamWithPrivate
+        let rows: [MyProfile] = try await teamWithPrivate(query: [("id", "eq.\(id)"), ("limit", "1")], id: id)
         return rows.first
     }
 
