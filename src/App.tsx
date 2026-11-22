@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef } from 'react'
+import { lazy, Suspense, useEffect, useRef, type ReactNode } from 'react'
 import { Route, Switch, Redirect, Router, useLocation, Link } from 'wouter'
 import { useHashLocation } from 'wouter/use-hash-location'
 import { Loader2 } from 'lucide-react'
@@ -6,6 +6,7 @@ import { Loader2 } from 'lucide-react'
 import { useAuth } from '@/stores/auth'
 import { hasNewBuild, reloadForNewBuild } from '@/lib/staleBuild'
 import { useIsCollaborator } from '@/hooks/useIsCollaborator'
+import { useCanViewOffice } from '@/hooks/useIsDirector'
 import { AppLayout } from '@/components/layout/AppLayout'
 import Login from '@/pages/Login'
 import Booking from '@/pages/Booking'
@@ -77,6 +78,17 @@ const COLLAB_BLOCKED = [
   '/engagements', '/poa', '/appointments', '/outgoing', '/team',
   '/reports', '/settings', '/hr', '/errors', '/hub', '/change-requests', '/usage',
 ]
+
+/** طلبات التوظيف للمدير وراكان وحدهما (2026-11-22) — غيرهما يُعاد إلى «الموظفون» لا صفحةٍ فارغة */
+function ApplicantsOnly({ children }: { children: ReactNode }) {
+  const canView = useCanViewOffice()
+  const loaded = useAuth((s) => !!s.teamMember)
+  const [, navigate] = useLocation()
+  useEffect(() => {
+    if (loaded && !canView) navigate('/team')
+  }, [loaded, canView, navigate])
+  return loaded && canView ? <>{children}</> : null
+}
 
 function CollaboratorGuard() {
   const isCollaborator = useIsCollaborator()
@@ -172,9 +184,11 @@ function ProtectedRoutes() {
         </Route>
         <Route path="/requests" component={RequestsPage} />
         <Route path="/staff-applications/:id">
-          {(params) => <ApplicationDetail id={params.id} />}
+          {(params) => <ApplicantsOnly><ApplicationDetail id={params.id} /></ApplicantsOnly>}
         </Route>
-        <Route path="/staff-applications" component={StaffApplicationsPage} />
+        <Route path="/staff-applications">
+          <ApplicantsOnly><StaffApplicationsPage /></ApplicantsOnly>
+        </Route>
         <Route path="/settings" component={SettingsPage} />
         {/* مسار غير معروف: تفسير + مخرج — روابط SMS القديمة كانت تحوَّل بصمت */}
         <Route>

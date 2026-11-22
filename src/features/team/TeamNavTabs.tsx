@@ -6,10 +6,14 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { fmtNumber } from '@/lib/format'
 import { usePendingApplicationsCount } from '@/hooks/useStaffApplications'
+import { useCanViewOffice } from '@/hooks/useIsDirector'
 
 export function TeamNavTabs({ active }: { active: 'team' | 'applications' }) {
   const [, navigate] = useLocation()
   const { data: pending } = usePendingApplicationsCount()
+  // طلبات التوظيف للمدير وراكان وحدهما (قرار المدير 2026-11-22) — والقاعدة تحجبها عن غيرهما
+  const canSeeApplicants = useCanViewOffice()
+  if (!canSeeApplicants) return null
 
   return (
     <div className="flex flex-wrap gap-2">
