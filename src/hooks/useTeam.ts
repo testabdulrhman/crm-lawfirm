@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { toast } from '@/hooks/use-toast'
 import type { TeamMember, TeamMemberInput } from '@/types/db'
 import { errMessage } from '@/lib/errors'
+import { TEAM_PUBLIC_COLUMNS, withPrivate } from '@/lib/teamColumns'
 
 const KEY = ['team_members'] as const
 
@@ -13,10 +14,10 @@ export function useTeamMembers() {
     queryFn: async (): Promise<TeamMember[]> => {
       const { data, error } = await supabase
         .from('team_members')
-        .select('*')
+        .select(TEAM_PUBLIC_COLUMNS)
         .order('name', { ascending: true })
       if (error) throw error
-      return (data ?? []) as TeamMember[]
+      return withPrivate((data ?? []) as unknown as TeamMember[])
     },
   })
 }
@@ -87,10 +88,10 @@ export function useCreateTeamMember() {
       const { data, error } = await supabase
         .from('team_members')
         .insert(input)
-        .select()
+        .select(TEAM_PUBLIC_COLUMNS)
         .single()
       if (error) throw error
-      return data as TeamMember
+      return data as unknown as TeamMember
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: KEY })
@@ -120,10 +121,10 @@ export function useUpdateTeamMember() {
         .from('team_members')
         .update(input)
         .eq('id', id)
-        .select()
+        .select(TEAM_PUBLIC_COLUMNS)
         .single()
       if (error) throw error
-      return data as TeamMember
+      return data as unknown as TeamMember
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: KEY })

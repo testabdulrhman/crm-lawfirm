@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { supabase } from '@/lib/supabase'
 import type { User, Session } from '@supabase/supabase-js'
 import type { TeamMember } from '@/types/db'
+import { TEAM_PUBLIC_COLUMNS, withPrivate } from '@/lib/teamColumns'
 
 interface AuthState {
   user: User | null
@@ -90,12 +91,13 @@ export const useAuth = create<AuthState>((set, get) => ({
   },
   fetchTeamMember: async (userId) => {
     // الربط عبر العمود auth_id في جدول team_members
+    // الأعمدة العامة + حقول الموظف الحساسة من team_member_private (لا تُطلب من الجدول — 2026-11-22)
     const { data } = await supabase
       .from('team_members')
-      .select('*')
+      .select(TEAM_PUBLIC_COLUMNS)
       .eq('auth_id', userId)
       .maybeSingle()
-    const member = data as TeamMember | null
+    const member = data ? ((await withPrivate([data as unknown as TeamMember]))[0] ?? null) : null
     // الموظف الموقوف (is_active=false) لا يدخل — إنهاء الجلسة فوراً
     if (member && member.is_active === false) {
       await supabase.auth.signOut()
