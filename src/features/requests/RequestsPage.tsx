@@ -19,6 +19,7 @@ import { cn } from '@/lib/utils'
 import { fmtDatePref, fmtNumber } from '@/lib/format'
 import { arNorm } from '@/lib/arabic'
 import { useRequests, useSetRequestStage } from '@/hooks/useRequests'
+import { useUpcomingRequestAppointments } from '@/hooks/useIntakeGates'
 import { usePageState } from '@/hooks/usePageState'
 import { RequestForm } from './RequestForm'
 import { ClosedList, RequestsInbox } from './RequestsInbox'
@@ -33,10 +34,12 @@ export function RequestsPage() {
   const [search, setSearch] = usePageState('req:q', '')
   const [view, setView] = usePageState<'inbox' | 'board'>('req:view', 'inbox')
   const [newOpen, setNewOpen] = useState(false)
+  const { data: appts } = useUpcomingRequestAppointments()
 
   const all = data ?? []
   const open = all.filter((r) => r.status !== 'rejected' && r.stage !== 'opened')
-  const needDecision = open.filter((r) => !r.assigned_to_id && r.stage !== 'quoted' && staleDays(r.last_activity_at) < 30).length
+  const withAppt = open.filter((r) => appts?.has(r.id)).length
+  const needDecision = open.filter((r) => !appts?.has(r.id) && !r.assigned_to_id && r.stage !== 'quoted' && staleDays(r.last_activity_at) < 30).length
   const awaiting = open.filter((r) => r.stage === 'quoted').length
 
   return (
@@ -46,6 +49,7 @@ export function RequestsPage() {
           <h2 className="text-2xl font-bold tracking-tight text-foreground">الطلبات الواردة</h2>
           <p className="mt-1 text-sm text-muted-foreground">
             {needDecision > 0 ? `${fmtNumber(needDecision)} تحتاج قرارك` : 'لا جديد ينتظر قرارك'}
+            {withAppt > 0 && ` · ${fmtNumber(withAppt)} لهم موعد قادم`}
             {awaiting > 0 && ` · ${fmtNumber(awaiting)} بانتظار رد العميل`}
           </p>
         </div>

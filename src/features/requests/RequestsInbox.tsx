@@ -338,7 +338,7 @@ function SourceMeta({ r }: { r: IncomingRequest }) {
 function ApptMeta({ a, r }: { a: UpcomingRequestAppointment; r: IncomingRequest }) {
   const left = daysUntil(`${a.appointment_date}T00:00:00+03:00`)
   const day = left != null && left <= 0 ? 'اليوم' : left === 1 ? 'غداً' : fmtDatePref(a.appointment_date)
-  const who = a.assignee?.name ?? r.assigned_to_name
+  const who = a.assignee?.short_name || a.assignee?.name || r.assigned_to_name
   return (
     <span className={cn(left != null && left <= 1 && 'font-medium text-foreground')}>
       {day}

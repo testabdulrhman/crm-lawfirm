@@ -288,7 +288,7 @@ export type UpcomingRequestAppointment = {
   appointment_date: string
   appointment_time: string | null
   meeting_method: string | null
-  assignee: { name: string | null } | null
+  assignee: { name: string | null; short_name: string | null } | null
 }
 
 /** أقرب موعد قادم لكل طلب — قسم «لهم موعد» في صندوق الطلبات */
@@ -299,7 +299,7 @@ export function useUpcomingRequestAppointments() {
       const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Riyadh' })
       const { data, error } = await supabase
         .from('appointments')
-        .select('id, request_id, appointment_date, appointment_time, meeting_method, assignee:team_members!appointments_assignee_id_fkey(name)')
+        .select('id, request_id, appointment_date, appointment_time, meeting_method, assignee:team_members!appointments_assignee_id_fkey(name, short_name)')
         .not('request_id', 'is', null)
         .gte('appointment_date', today)
         .not('status', 'in', '(cancelled,no_show,completed)')
