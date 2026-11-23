@@ -14,6 +14,7 @@ import {
   Video,
   MapPin,
   Hash,
+  Inbox,
   UserCircle2,
   UserX,
 } from 'lucide-react'
@@ -332,6 +333,13 @@ function AppointmentRow({
                     · {fmtNumber(a.members!.length)} مشارك
                   </span>
                 )}
+              </span>
+            )}
+            {a.request?.ref_no && (
+              /* المتابعة في الطلب — الموعد جدول متى ومع من */
+              <span className="flex items-center gap-1 text-gold">
+                <Inbox className="h-3 w-3 shrink-0" />
+                طلب <span dir="ltr">{a.request.ref_no}</span>
               </span>
             )}
             {a.reference_no && (

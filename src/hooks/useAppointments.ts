@@ -21,7 +21,8 @@ function calendarWarn() {
 const SELECT =
   '*, client:contacts(id,name,phone),' +
   ' assignee:team_members!appointments_assignee_id_fkey(id,name),' +
-  ' members:appointment_members(member_id)'
+  ' members:appointment_members(member_id),' +
+  ' request:incoming_requests!appointments_request_id_fkey(id,ref_no)'
 
 // احتياط فقط — النص الحيّ في message_templates ويُحرَّر من الإعدادات ← قوالب الرسائل
 const DEFAULT_CONFIRMATION =

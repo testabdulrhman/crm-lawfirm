@@ -175,7 +175,7 @@ export function AppointmentDetail({ id }: { id: string }) {
               onClick={() => navigate(`/requests/${a.request_id}`)}
             >
               <FilePlus2 className="h-4 w-4" />
-              سجل الاستفسار
+              {a.request?.ref_no ? `الطلب ${a.request.ref_no}` : 'افتح الطلب'}
             </Button>
           )}
           <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>

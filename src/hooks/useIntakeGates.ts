@@ -282,6 +282,39 @@ export interface LinkedAppointment {
   notes: string | null
 }
 
+export type UpcomingRequestAppointment = {
+  id: string
+  request_id: string
+  appointment_date: string
+  appointment_time: string | null
+  meeting_method: string | null
+  assignee: { name: string | null } | null
+}
+
+/** أقرب موعد قادم لكل طلب — قسم «لهم موعد» في صندوق الطلبات */
+export function useUpcomingRequestAppointments() {
+  return useQuery({
+    queryKey: ['appointments', 'upcoming_by_request'],
+    queryFn: async (): Promise<Map<string, UpcomingRequestAppointment>> => {
+      const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Riyadh' })
+      const { data, error } = await supabase
+        .from('appointments')
+        .select('id, request_id, appointment_date, appointment_time, meeting_method, assignee:team_members!appointments_assignee_id_fkey(name)')
+        .not('request_id', 'is', null)
+        .gte('appointment_date', today)
+        .not('status', 'in', '(cancelled,no_show,completed)')
+        .order('appointment_date')
+        .order('appointment_time', { nullsFirst: false })
+      if (error) throw error
+      const map = new Map<string, UpcomingRequestAppointment>()
+      for (const a of (data ?? []) as unknown as UpcomingRequestAppointment[]) {
+        if (!map.has(a.request_id)) map.set(a.request_id, a)
+      }
+      return map
+    },
+  })
+}
+
 export function useRequestAppointments(requestId: string | null) {
   return useQuery({
     queryKey: ['request_appointments', requestId],

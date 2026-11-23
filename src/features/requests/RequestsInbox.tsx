@@ -1,8 +1,8 @@
 // صندوق الطلبات الواردة (طلب المدير 2026-11-21) — أقسام بدل أعمدة، وكل طلب سطر واحد بأفعاله:
-//   يحتاج قرارك (جديد بلا مسؤول) · عند المحامي · بانتظار رد العميل (أُرسل العرض) · راكد ٣٠ يوماً (مطوي) · مُغلقة (مطوية)
+//   لهم موعد قادم (2026-11-23: الموعد خطوة داخل الطلب لا قائمة ثانية) · يحتاج قرارك (جديد بلا مسؤول) · عند المحامي · بانتظار رد العميل (أُرسل العرض) · راكد ٣٠ يوماً (مطوي) · مُغلقة (مطوية)
 // الأحمر للمهلة القريبة وحدها، والكهرماني لعرض تجاوز ١٠ أيام بلا رد. «ما رجع» (no_response) غير «اعتذرنا» (declined).
 import { useMemo, useState } from 'react'
-import { BellRing, Check, ChevronDown, Hourglass, Inbox, Loader2, Send, UserCheck, UserPlus, X } from 'lucide-react'
+import { BellRing, CalendarClock, Check, ChevronDown, Hourglass, Inbox, Loader2, Send, UserCheck, UserPlus, X } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -16,7 +16,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
-import { daysLabel, fmtDatePref, fmtNumber, todayISO, toLatinDigits } from '@/lib/format'
+import { daysLabel, fmtDatePref, fmtNumber, fmtTime, todayISO, toLatinDigits } from '@/lib/format'
 import { arNorm } from '@/lib/arabic'
 import { useAuth } from '@/stores/auth'
 import { useTeamMembers } from '@/hooks/useTeam'
@@ -27,6 +27,7 @@ import {
   useMarkQuoteSent,
   useSetRequestStage,
 } from '@/hooks/useRequests'
+import { useUpcomingRequestAppointments, type UpcomingRequestAppointment } from '@/hooks/useIntakeGates'
 import type { IncomingRequest } from '@/types/db'
 import { criticalKindLabel, sourceLabel, staleDays } from './labels'
 
@@ -55,6 +56,7 @@ function needLine(r: IncomingRequest): string {
 }
 
 type Buckets = {
+  appt: IncomingRequest[]
   decide: IncomingRequest[]
   lawyer: IncomingRequest[]
   awaiting: IncomingRequest[]
@@ -76,16 +78,18 @@ export function RequestsInbox({
   const [quoteFor, setQuoteFor] = useState<IncomingRequest | null>(null)
   const [remindFor, setRemindFor] = useState<IncomingRequest | null>(null)
   const [closeFor, setCloseFor] = useState<{ r: IncomingRequest; reason: 'declined' | 'no_response' } | null>(null)
+  const { data: appts } = useUpcomingRequestAppointments()
 
   const b = useMemo<Buckets>(() => {
     const q = arNorm(search.trim())
     const match = (r: IncomingRequest) =>
       !q || arNorm([r.client_name, r.client_phone, r.opponent_name, r.ref_no].filter(Boolean).join(' ')).includes(q)
-    const out: Buckets = { decide: [], lawyer: [], awaiting: [], stale: [], closed: [] }
+    const out: Buckets = { appt: [], decide: [], lawyer: [], awaiting: [], stale: [], closed: [] }
     for (const r of data) {
       if (!match(r)) continue
       if (r.status === 'rejected') { out.closed.push(r); continue }
       if (r.stage === 'opened') continue // صار ملفاً — يُرى في المشاريع
+      if (appts?.has(r.id)) { out.appt.push(r); continue } // موعده القادم هو خطوته التالية
       const urgent = (daysUntil(r.critical_date) ?? Infinity) <= URGENT_DAYS
       if (r.stage === 'quoted') { out.awaiting.push(r); continue }
       if (!urgent && staleDays(r.last_activity_at) >= STALE_DAYS) { out.stale.push(r); continue }
@@ -95,6 +99,11 @@ export function RequestsInbox({
     const crit = (r: IncomingRequest) => (r.critical_date ? Date.parse(r.critical_date) : Infinity)
     const newest = (a: IncomingRequest, b: IncomingRequest) =>
       String(b.created_at ?? '').localeCompare(String(a.created_at ?? ''))
+    const when = (r: IncomingRequest) => {
+      const a = appts?.get(r.id)
+      return a ? `${a.appointment_date} ${a.appointment_time ?? '99'}` : ''
+    }
+    out.appt.sort((a, b) => when(a).localeCompare(when(b)))
     out.decide.sort((a, b) => crit(a) - crit(b) || newest(a, b))
     out.lawyer.sort((a, b) => crit(a) - crit(b) || newest(a, b))
     // الأطول انتظاراً أولاً — هو الأحوج للتذكير
@@ -102,7 +111,7 @@ export function RequestsInbox({
     out.stale.sort((a, b) => String(b.last_activity_at ?? '').localeCompare(String(a.last_activity_at ?? '')))
     out.closed.sort((a, b) => String(b.decision_at ?? b.updated_at ?? '').localeCompare(String(a.decision_at ?? a.updated_at ?? '')))
     return out
-  }, [data, search])
+  }, [data, search, appts])
 
   // آخر ٣٠ يوماً: كم وافق، وكم ما رجع، وكم اعتذرنا
   const tally = useMemo(() => {
@@ -114,7 +123,7 @@ export function RequestsInbox({
     }
   }, [data])
 
-  const empty = !b.decide.length && !b.lawyer.length && !b.awaiting.length
+  const empty = !b.appt.length && !b.decide.length && !b.lawyer.length && !b.awaiting.length
 
   return (
     <div className="space-y-6">
@@ -123,6 +132,21 @@ export function RequestsInbox({
           لا شيء ينتظرك الآن — كل الطلبات المفتوحة إما راكدة أو مغلقة.
         </p>
       )}
+
+      <Section icon={CalendarClock} title="لهم موعد قادم" hint="حجزوا موعداً — جهّز له ثم يعود الطلب لمكانه بعد الموعد" list={b.appt}>
+        {(r) => {
+          const a = appts!.get(r.id)!
+          return (
+            <Row key={r.id} r={r} onOpen={() => navigate(`/requests/${r.id}`)} meta={<ApptMeta a={a} r={r} />}>
+              <Button size="sm" variant="outline" onClick={() => navigate(`/appointments/${a.id}`)}>
+                <CalendarClock className="h-3.5 w-3.5" />
+                الموعد
+              </Button>
+              <AssignButton r={r} primary={!r.assigned_to_id} />
+            </Row>
+          )
+        }}
+      </Section>
 
       <Section icon={Inbox} title="يحتاج قرارك" hint="جديد ولم يُسند لأحد" list={b.decide}>
         {(r) => (
@@ -307,6 +331,21 @@ function SourceMeta({ r }: { r: IncomingRequest }) {
   return (
     <span>
       {sourceLabel(r.source)} · {d === 0 ? 'اليوم' : d === 1 ? 'أمس' : `قبل ${daysLabel(d ?? 0)}`}
+    </span>
+  )
+}
+
+function ApptMeta({ a, r }: { a: UpcomingRequestAppointment; r: IncomingRequest }) {
+  const left = daysUntil(`${a.appointment_date}T00:00:00+03:00`)
+  const day = left != null && left <= 0 ? 'اليوم' : left === 1 ? 'غداً' : fmtDatePref(a.appointment_date)
+  const who = a.assignee?.name ?? r.assigned_to_name
+  return (
+    <span className={cn(left != null && left <= 1 && 'font-medium text-foreground')}>
+      {day}
+      {a.appointment_time ? ` · ${fmtTime(a.appointment_time)}` : ''}
+      {a.meeting_method === 'remote' ? ' · عن بُعد' : ''}
+      {who ? ` · مع ${who}` : ' · بلا مسؤول'}
+      {` · ${sourceLabel(r.source)}`}
     </span>
   )
 }

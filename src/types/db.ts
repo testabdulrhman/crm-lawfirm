@@ -1008,6 +1008,8 @@ export interface Appointment {
   assignee?: { id: string; name: string | null } | null
   /** المشاركون مع المسؤول — للعدّ في القائمة */
   members?: { member_id: string }[] | null
+  /** طلب العميل الذي يتبعه الموعد — المتابعة كلها فيه */
+  request?: { id: string; ref_no: string | null } | null
 }
 
 export interface AppointmentInput {
