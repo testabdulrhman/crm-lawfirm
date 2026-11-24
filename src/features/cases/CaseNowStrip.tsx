@@ -11,6 +11,7 @@ import { useCaseTasks } from '@/hooks/useCaseTasks'
 import { useCasePOAs } from '@/hooks/usePOAs'
 import { useMatterEvents } from '@/hooks/useMatterEvents'
 import { useTeamMembers } from '@/hooks/useTeam'
+import type { PowerOfAttorney } from '@/types/db'
 
 /** الفرق بالأيام بين تاريخين YYYY-MM-DD (موجب = في المستقبل) */
 const dayDiff = (iso: string, today: string) =>
@@ -73,7 +74,7 @@ function Line({ text, sub, warn }: { text: string; sub?: string; warn?: boolean 
 
 const Empty = ({ text }: { text: string }) => <p className="py-0.5 text-[12px] text-muted-foreground">{text}</p>
 
-export function CaseNowStrip({ caseId, onOpenStory }: { caseId: string; onOpenStory: () => void }) {
+export function CaseNowStrip({ caseId, closed, onOpenStory }: { caseId: string; closed?: boolean; onOpenStory: () => void }) {
   const today = todayISO()
   const { data: sessions } = useCaseSessions(caseId)
   const { data: tasks } = useCaseTasks(caseId)
@@ -104,11 +105,15 @@ export function CaseNowStrip({ caseId, onOpenStory }: { caseId: string; onOpenSt
       warn: d != null && d < 0,
     }
   })
-  const poa = (poas ?? []).find((p) => {
-    if (!p.expiry_date) return false
-    const d = dayDiff(p.expiry_date, today)
-    return d <= 60
-  })
+  // تُنبَّه على **أحدث** وكالة وحدها: القائمة مرتّبة بالأقرب انتهاءً، فكانت المنتهية تُعرض «انتهت» وبجانبها
+  // بديلتها السارية (بلاغ المدير 2026-11-24 على CASE26021). ولا تنبيه على ملف منتهٍ — كما تفعل القاعدة.
+  const latest = (poas ?? [])
+    .filter((p) => p.expiry_date)
+    .reduce<PowerOfAttorney | null>(
+      (a, p) => (!a || p.expiry_date! > a.expiry_date! ? p : a),
+      null
+    )
+  const poa = !closed && latest && dayDiff(latest.expiry_date!, today) <= 60 ? latest : null
   if (poa && lines.length < 3) {
     const d = dayDiff(poa.expiry_date!, today)
     lines.push({

@@ -278,7 +278,11 @@ export function CaseDetail({ id }: { id: string }) {
       )}
 
       {/* «الآن»: الجلسة القادمة · المطلوب · آخر ما حدث */}
-      <CaseNowStrip caseId={c.id} onOpenStory={openStory} />
+      <CaseNowStrip
+        caseId={c.id}
+        closed={c.status === 'muntahia' || c.status === 'delivered' || c.status === 'مكتملة'}
+        onOpenStory={openStory}
+      />
 
       {/* التبويبات (RTL — تبدأ من اليمين) */}
       <Tabs value={tab} onValueChange={setTab} dir="rtl">
